@@ -1,0 +1,148 @@
+<html><head>
+<title>Recipe 8.17. Testing a File for Trustworthiness</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:38:55Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch08_01.htm" title="8. File Contents"><link rel="prev" href="ch08_17.htm" title="8.16. Reading Configuration Files"><link rel="next" href="ch08_19.htm" title="8.18. Program: tailwtmp"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch08_17.htm" title="8.16. Reading Configuration Files"><img src="../gifs/txtpreva.gif" alt="Previous: 8.16. Reading Configuration Files" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch08_01.htm" title="8. File Contents">Chapter 8<br>File Contents</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch08_19.htm" title="8.18. Program: tailwtmp"><img src="../gifs/txtnexta.gif" alt="Next: 8.18. Program: tailwtmp" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch08-27276">8.17. Testing a File for Trustworthiness</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch08-pgfId-1594">Problem<a class="indexterm" name="ch08-idx-1000004720-0"></A
+><a class="indexterm" name="ch08-idx-1000004720-1"></A
+><a class="indexterm" name="ch08-idx-1000004720-2"></A
+></A
+></H3
+><p class="para">You want to read from a file, perhaps because it has configuration information. You only want to use the file if it can't be written to (or perhaps not even be read from) by anyone else than its owner.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch08-pgfId-1600">Solution</A
+></H3
+><p class="para">Use the <code class="literal">stat</CODE
+><a class="indexterm" name="ch08-idx-1000004728-0"></A
+> call to retrieve ownership and file permissions information. You can use the built-in version, which returns a list:</P
+><pre class="programlisting">( $dev, $ino, $mode, $nlink, 
+  $uid, $gid, $rdev, $size, 
+  $atime, $mtime, $ctime, 
+  $blksize, $blocks )       = stat($filename)
+        or die &quot;no $filename: $!&quot;;
+
+$mode &amp;= 07777;             # discard file type info</PRE
+><p class="para">Or you can use the by-name interface in:</P
+><pre class="programlisting">$info = stat($filename)     or die &quot;no $filename: $!&quot;;
+if ($info-&gt;uid == 0) {
+    print &quot;Superuser owns $filename\n&quot;;
+} 
+if ($info-&gt;atime &gt; $info-&gt;mtime) {
+    print &quot;$filename has been read since it was written.\n&quot;;
+} </PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch08-pgfId-1636">Discussion</A
+></H3
+><p class="para">Usually you trust users to set file permissions as they wish. If they want others to read their files, or even to write to them, that's their business. Applications like editors, mailers, and shells are often more discerning, though, refusing to evaluate code in configuration files if anyone but the owner can write to them. This helps avoid Trojan horses attacks. Security-minded programs like <em class="emphasis">ftp</EM
+> and <em class="emphasis">rlogin</EM
+> may even reject config files that can be read by anyone but their owner.</P
+><p class="para">If the file is writable by someone other than the owner or is owned by someone other than the current user or the superuser, it shouldn't be trusted. To figure out file ownership and permissions, the <code class="literal">stat</CODE
+> function is used. The following function returns true if the file is deemed safe and false otherwise. If the <code class="literal">stat</CODE
+> fails, <code class="literal">undef</CODE
+> is returned.</P
+><pre class="programlisting">use File::stat;
+
+sub is_safe {
+    my $path = shift;
+    my $info = stat($path);
+    return unless $info;
+
+    # owner neither superuser nor me 
+    # the real uid is in stored in the $&lt; variable
+    if (($info-&gt;uid != 0) &amp;&amp; ($info-&gt;uid != $&lt;)) {
+        return 0;
+    }
+
+    # check whether group or other can write file.
+    # use 066 to detect either reading or writing
+    if ($info-&gt;mode &amp; 022) {   # someone else can write this
+        return 0 unless -d _;  # non-directories aren't safe
+            # but directories with the sticky bit (01000) are
+        return 0 unless $info-&gt;mode &amp; 01000;        
+    }
+    return 1;
+}</PRE
+><p class="para">A directory is considered safe even if others can write to it, provided that its mode 01000 (owner delete only) bit is set.</P
+><p class="para">Careful programmers also ensure that no enclosing directory is writable. This is due to systems with the "<code class="literal">chown</CODE
+> giveaway" problem in which any user can give away a file they own and make it owned by someone else. The following function handles that by using the <code class="literal">is_safe</CODE
+><a class="indexterm" name="ch08-idx-1000004726-0"></A
+> function to check every enclosing directory up to the root if it detects that you have the <code class="literal">chown</CODE
+> problem, for which it queries the <code class="literal">POSIX::sysconf</CODE
+>. If you don't have an unrestricted version of <code class="literal">chown</CODE
+>, the <code class="literal">is_verysafe</CODE
+><a class="indexterm" name="ch08-idx-1000004727-0"></A
+> subroutine just calls <code class="literal">is_safe</CODE
+>. If you do have the problem, it walks up the filesystem tree until it reaches the root.</P
+><pre class="programlisting">use Cwd;
+use POSIX qw(sysconf _PC_CHOWN_RESTRICTED);
+sub is_verysafe {
+    my $path = shift;
+    return is_safe($path) if sysconf(_PC_CHOWN_RESTRICTED);
+    $path = getcwd() . '/' . $path if $path !~ m{^/};
+    do {
+        return unless is_safe($path);
+        $path =~ s#([^/]+|/)$##;               # dirname
+        $path =~ s#/$## if length($path) &gt; 1;  # last slash
+    } while length $path;
+
+    return 1;
+}</PRE
+><p class="para">To use this in a program, try something like this:</P
+><pre class="programlisting">$file = &quot;$ENV{HOME}/.myprogrc&quot;;
+readconfig($file) if is_safe($file);</PRE
+><p class="para">This has potential for a race condition, because it's presumed that the hypothetical <code class="literal">readconfig</CODE
+> function will open the file. Between the time when <code class="literal">is_safe</CODE
+> checks the file's stats and when <code class="literal">readconfig</CODE
+> opens it, something wicked could theoretically occur. To avoid this, pass <code class="literal">is_safe</CODE
+> the already open filehandle, which is set up to handle this:</P
+><pre class="programlisting">$file = &quot;$ENV{HOME}/.myprogrc&quot;;
+if (open(FILE, &quot;&lt; $file&quot;)) { 
+    readconfig(*FILE) if is_safe(*FILE);
+}</PRE
+><p class="para">You would still have to arrange for <code class="literal">readconfig</CODE
+> to accept a filehandle instead of a filename, though.<a class="indexterm" name="ch08-idx-1000004722-0"></A
+><a class="indexterm" name="ch08-idx-1000004722-1"></A
+><a class="indexterm" name="ch08-idx-1000004722-2"></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch08_17.htm" title="8.16. Reading Configuration Files"><img src="../gifs/txtpreva.gif" alt="Previous: 8.16. Reading Configuration Files" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch08_19.htm" title="8.18. Program: tailwtmp"><img src="../gifs/txtnexta.gif" alt="Next: 8.18. Program: tailwtmp" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">8.16. Reading Configuration Files</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">8.18. Program: tailwtmp</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

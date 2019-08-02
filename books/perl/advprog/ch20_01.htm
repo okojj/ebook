@@ -1,0 +1,136 @@
+<html><head>
+<title>[Chapter 20] Perl Internals</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:40:44Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="index.htm" title="Advanced Perl Programming"><link rel="prev" href="ch19_05.htm" title="19.5 Resources"><link rel="next" href="ch20_02.htm" title="20.2 Architecture"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch19_05.htm" title="19.5 Resources"><img src="../gifs/txtpreva.gif" alt="Previous: 19.5 Resources" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 20</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch20_02.htm" title="20.2 Architecture"><img src="../gifs/txtnexta.gif" alt="Next: 20.2 Architecture" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="chapter"><h1 class="chapter"><a class="title" name="ch20-16870">20. Perl Internals</A
+></H1
+><div class="htmltoc"><p><b>Contents:</B
+><br><a class="sect1" href="#ch20-30315" title="20.1 Reading the Source">Reading the Source</A
+><br><a class="sect1" href="ch20_02.htm" title="20.2 Architecture">Architecture</A
+><br><a class="sect1" href="ch20_03.htm" title="20.3 Perl Value Types">Perl Value Types</A
+><br><a class="sect1" href="ch20_04.htm" title="20.4 Stacks and Messaging Protocol">Stacks and Messaging Protocol</A
+><br><a class="sect1" href="ch20_05.htm" title="20.5 Meaty Extensions">Meaty Extensions</A
+><br><a class="sect1" href="ch20_06.htm" title="20.6 Easy Embedding API">Easy Embedding API</A
+><br><a class="sect1" href="ch20_07.htm" title="20.7 A Peek into the Future">A Peek into the Future</A
+><br><a class="sect1" href="ch20_08.htm" title="20.8 Resources">Resources</A
+></P
+><p></P
+></DIV
+><div class="epigraph" align="right"><p class="para" align="right"><i>It cannot be seen, cannot be felt,<br>Cannot be heard, cannot be smelt.<br>It lies behind stars and under hills,<br>And empty holes it fills.[<a class="footnote" href="#ch20-pgfId-961804">1</A
+>]</I
+></P
+><p class="attribution" align="right">-&nbsp;J.R.R. Tolkien, <cite class="citetitle">The Hobbit</CITE
+></P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch20-pgfId-961804">[1]</A
+> Answer: dark.</P
+></DIV
+></BLOCKQUOTE
+></DIV
+><p class="para">This chapter is a modest attempt to shed light on most of the critical data structures and functions of the Perl interpreter. Getting a handle on such (admittedly dry) detail will give you the confidence to write powerful extensions, and will inform your judgment about how (and how much) Perl should be used in a given application. The mark of a good Perl programmer is the ability to answer questions that <em class="emphasis">don't</EM
+> figure in the Frequently Asked Questions list, such as these:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para"><a class="listitem" name="ch20-pgfId-945833"></A
+>Why are objects so much preferable to closures?</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch20-pgfId-945834"></A
+>Why is <kbd class="command">my</KBD
+> faster than <kbd class="command">local</KBD
+>?</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch20-pgfId-945835"></A
+>The easy-embedding API presented in the last chapter isn't convenient enough. How can I roll my own?</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch20-pgfId-945836"></A
+>What do <em class="emphasis">xsubpp</EM
+> and SWIG really produce?</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch20-pgfId-950120"></A
+>Why not join the Java revolution by making the Perl interpreter output Java byte-code?</P
+></LI
+></UL
+><p class="para">And so on. All you require is fluency in C, an enquiring mind, and a comfortable chair. </P
+><p class="para">If you are into instant gratification and can't wait to churn out a cool extension, you may opt for the low-fat thread running through this chapter; read the following sections: <a class="xref" href="ch20_03.htm" title="Perl Value Types">Section 20.3, "Perl Value Types</A
+>," <a class="xref" href="ch20_04.htm" title="Stacks and Messaging Protocol">Section 20.4, "Stacks and Messaging Protocol</A
+>," and <a class="xref" href="ch20_05.htm" title="Meaty Extensions">Section 20.5, "Meaty Extensions</A
+>." You can definitely skip all sections entitled "Inside..." on a first reading without loss of continuity.</P
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch20-30315">20.1 Reading the Source</A
+></H2
+><p class="para">There was this programmer, the story goes, who was deeply mystified by a piece of code. It had no comments at all, and he couldn't for the life of him figure out how it did what it did. For years, he cursed the author of that code, but it continued to fascinate and trouble him. One day, it came to him in a flash. He understood it all. In fact, it was so obvious that he also understood why it didn't need any comments!</P
+><p class="para">While the Perl source may be the final repository of all answers, it is a fairly reluctant informant. A lack of comments, generous use of macros, and some breath-taking optimizations make for a rather forbidding task of understanding the code, even for the true die-hard. If you are one of those who just wants to hack it and achieve all kinds of greatness, this chapter should get you adequately primed. In addition, here are some ways of understanding the system better:</P
+><dl class="variablelist"><dt class="term">The -D option</DT
+><dd class="listitem"><p class="para"><a class="indexterm" name="ch20-idx-972872-0"></A
+>Perl can be optionally compiled with the <em class="emphasis">-DDEBUGGING</EM
+> option, which enables the <em class="emphasis">-D</EM
+> command-line switch. This takes several flags, all of which are documented in the <i class="filename">perlrun</I
+> document. Like a CAT scan, these flags provide unobtrusive snapshots of important structures at run time. For example, invoking Perl as <kbd class="command">perl</KBD
+> -<kbd class="command">Dts</KBD
+> tells it to display a trace of opcode execution (<kbd class="command">-t</KBD
+>) and to dump the argument stack before each opcode is executed (<kbd class="command">-s</KBD
+>).</P
+></DD
+><dt class="term">Devel tools</DT
+><dd class="listitem"><p class="para"><a class="indexterm" name="ch20-idx-972873-0"></A
+><a class="indexterm" name="ch20-idx-972873-1"></A
+><a class="indexterm" name="ch20-idx-972873-2"></A
+><a class="indexterm" name="ch20-idx-972873-3"></A
+><a class="indexterm" name="ch20-idx-972873-4"></A
+><a class="indexterm" name="ch20-idx-972873-5"></A
+>Three modules available under the <i class="filename">Devel</I
+> hierarchy on CPAN provide script-level access to some important data structures. These are Devel::Peek (to dump internal information associated with a variable), Devel::Symdump (to dump the symbol table), and Devel::RegExp (to examine a regular expression). We will use the Devel::Peek module often in this chapter.</P
+></DD
+><dt class="term">Debugger (gdb, dbx, Microsoft Developer Studio)</DT
+><dd class="listitem"><p class="para">Examining Perl under a <a class="indexterm" name="ch20-idx-972874-0"></A
+><a class="indexterm" name="ch20-idx-972874-1"></A
+>debugger gives a firsthand view of the entire process. At run-time, the process goes through three major phases: initialization, parsing, and execution; these can be examined quite independently. I suggest that you understand Perl value types and the stack protocol first, then attempt to understand the execution phase by setting a breakpoint at <kbd class="command">run.c:runops</KBD
+>,[<a class="footnote" href="#ch20-pgfId-960442">2</A
+>] and proceed from there. The parser and code generator are the most complex part of the tool; I recommend that you attempt to understand them only after you are comfortable with the rest of the system. Incidentally, tools such as <em class="emphasis">cxref</EM
+> do not help much because most interesting accesses are hidden by macros, casts, and pointer indirections, so single-stepping with a source-level debugger is often the sole option.<a class="indexterm" name="ch20-idx-972879-0"></A
+><a class="indexterm" name="ch20-idx-972879-1"></A
+></P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch20-pgfId-960442">[2]</A
+> I did mean <em class="emphasis">true </EM
+>die-hard.</P
+></DIV
+></BLOCKQUOTE
+></DD
+></DL
+><p class="para">This chapter makes frequent references to source files, and while you may find it handy to have them in front of you, it is by no means necessary to do so.</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch19_05.htm" title="19.5 Resources"><img src="../gifs/txtpreva.gif" alt="Previous: 19.5 Resources" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch20_02.htm" title="20.2 Architecture"><img src="../gifs/txtnexta.gif" alt="Next: 20.2 Architecture" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">19.5 Resources</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">20.2 Architecture</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

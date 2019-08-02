@@ -1,0 +1,406 @@
+<!doctype html public "-//ORA//DTD CD HTML 3.2//EN">
+<html>
+<head>
+<title>[Chapter 9] 9.2 Datagram Sockets</TITLE>
+<meta name="author" content="Pat Niemeyer and Josh Peck">
+<meta name="date" content="Thu Jul 24 12:08:36 1997">
+<meta name="form" content="html">
+<meta name="metadata" content="dublincore.0.1">
+<meta name="objecttype" content="book part">
+<meta name="otheragent" content="gmat dbtohtml">
+<meta name="publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="source" content="SGML">
+<meta name="subject" content="Java">
+<meta name="title" content="Exploring Java">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+</HEAD>
+<body bgcolor="#FFFFFF">
+
+<div class=htmlnav>
+<h1><a href='index.htm'><img src="gifs/smbanner.gif" alt="Exploring Java" border=0></a></H1>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch09_01.htm"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 9<br>Network Programming</FONT></B></TD>
+<td width=172 align=right valign=top><a href="ch09_03.htm"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+</table>
+
+&nbsp;
+<hr align=left width=515>
+</DIV>
+<div class=sect1>
+<h2 class=sect1><a class="TITLE" name="EXJ-CH-9-SECT-2">9.2 Datagram Sockets</A></h2>
+
+<p class=para>
+<a name="CH09.DS1"></A><a name="CH09.DS2"></A><tt class=literal>TinyHttpd</tt> used a <tt class=literal>Socket</tt> to
+create a connection to the client using the TCP
+protocol. In that example, TCP itself took care of
+data integrity; we didn't have to worry about data arriving out
+of order or incorrect. Now we'll take a walk on the wild
+side. We'll build an applet that uses a
+<tt class=literal>java.net.DatagramSocket</tt>, which uses the
+UDP protocol. A datagram is sort of like a
+"data telegram": it's a discrete chunk of data transmitted
+in one packet. Unlike the previous example, where we could get a
+convenient <tt class=literal>OutputStream</tt> from our
+<tt class=literal>Socket</tt> and write the data as if writing to
+a file, with a <tt class=literal>DatagramSocket</tt> we have to work one
+datagram at a time. (Of course, the TCP protocol was
+taking our <tt class=literal>OutputStream</tt> and slicing the data into
+packets, but we didn't have to worry about those details).
+
+<p class=para>
+UDP doesn't guarantee that the data
+will get through. If the data do get through, it may not arrive in
+the right order; it's even possible for duplicate datagrams to
+arrive. Using UDP is something like cutting the
+pages out of the encyclopedia, putting them into separate envelopes,
+and mailing them to your friend. If your friend wants to read the
+encyclopedia, it's his or her job to put the pages in order. If
+some pages got lost in the mail, your friend has to send you a letter
+asking for replacements.
+
+<p class=para>
+Obviously, you wouldn't use UDP to
+send a huge amount of data. But it's significantly more efficient
+than TCP, particularly if you don't care
+about the order in which messages arrive, or whether the data arrive
+at all. For example, in a database lookup, the client can send a
+query; the server's response itself constitutes an
+acknowledgment. If the response doesn't arrive within a
+certain time, the client can send another query. It shouldn't be
+hard for the client to match responses to its original queries. Some
+important applications that use UDP are the Domain
+Name System (DNS) and Sun's Network
+Filesystem (NFS).
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="EXJ-CH-9-SECT-2.1">The HeartBeat Applet</A></h3>
+
+<p class=para>
+In this section we'll build a simple applet,
+<tt class=literal>HeartBeat</tt>, that sends a datagram to its server each
+time it's started and stopped. (See <a href="ch10_01.htm">Chapter 10, <i>Understand the Abstract Windowing Toolkit</i></A> for a
+complete discussion of the <tt class=literal>Applet</tt> class.)
+We'll also build a simple standalone server application,
+<tt class=literal>Pulse</tt>, that receives that datagrams and prints
+them. By tracking the output, you could have a crude measure of who is
+currently looking at your Web page at any given time. This is an ideal
+application for UDP: we don't want the
+overhead of a TCP socket, and if datagrams get
+lost, it's no big deal.
+
+<p class=para>
+First, the <tt class=literal>HeartBeat</tt> applet: 
+
+<div class=programlisting>
+<p>
+<pre>
+import java.net.*; 
+import java.io.*; 
+ 
+public class HeartBeat extends java.applet.Applet { 
+    String myHost; 
+    int myPort; 
+ 
+    public void init() { 
+        myHost = getCodeBase().getHost(); 
+        myPort = Integer.parseInt( getParameter("myPort") ); 
+    } 
+ 
+    private void sendMessage( String message ) { 
+        try { 
+            byte [] data = new byte [ message.length() ]; 
+            message.getBytes(0, data.length, data, 0); 
+            InetAddress addr = InetAddress.getByName( myHost ); 
+            DatagramPacket pack = 
+               new DatagramPacket(data, data.length, addr, myPort); 
+ 
+            DatagramSocket ds = new DatagramSocket(); 
+            ds.send( pack ); 
+            ds.close(); 
+        }  
+        catch ( IOException e )    
+            System.out.println( e ); 
+    } 
+ 
+    public void start() { 
+        sendMessage("Arrived"); 
+    } 
+    public void stop() { 
+        sendMessage("Departed"); 
+    } 
+} 
+</PRE>
+</DIV>
+
+<p class=para>
+Compile the applet and include it in an HTML
+document with an <tt class=literal>&lt;applet&gt;</tt> tag:
+
+<div class=programlisting>
+<p>
+<pre>
+&lt;applet height=10 width=10 code=HeartBeat&gt;  
+    &lt;param name="myPort" value="1234"&gt; 
+&lt;/applet&gt; 
+</PRE>
+</DIV>
+
+<p class=para>
+The <tt class=literal>myPort</tt> parameter should specify the port 
+number on which our server application listens for data. 
+
+<p class=para>
+Next, the server-side application, <tt class=literal>Pulse</tt>: 
+
+<div class=programlisting>
+<p>
+<pre>
+import java.net.*; 
+import java.io.*; 
+ 
+public class Pulse { 
+    public static void main( String [] argv ) throws IOException { 
+ 
+        DatagramSocket s = 
+           new DatagramSocket(Integer.parseInt(argv[0])); 
+        while ( true ) { 
+            DatagramPacket packet = new DatagramPacket(new byte
+                                                      [1024], 1024); 
+            s.receive( packet ); 
+            String message = new String(packet.getData(), 0, 0, 
+                                        packet.getLength()); 
+            System.out.println( "Heartbeat from: " +  
+                packet.getAddress().getHostName() + " - " + message ); 
+        } 
+    } 
+} 
+</PRE>
+</DIV>
+
+<p class=para>
+Compile <tt class=literal>Pulse</tt> and run it on your Web server, 
+specifying a port number as an argument: 
+
+<div class=screen>
+<p>
+<pre>
+% java Pulse 1234
+</PRE>
+</DIV>
+
+<p class=para>
+The port number should be the same as the one you used in the
+<tt class=literal>myPort</tt> parameter of the
+<tt class=literal>&lt;applet&gt;</tt> tag for
+<tt class=literal>HeartBeat</tt>.
+
+<p class=para>
+Now, pull up the Web page in your browser. You won't see
+anything there (a better application might do something visual as
+well), but you should get a blip from the <tt class=literal>Pulse</tt>
+application. Leave the page and return to it a few times. Each time
+the applet is started or stopped, it sends a message:
+
+<div class=screen>
+<p>
+<pre>
+Heartbeat from: foo.bar.com - Arrived 
+Heartbeat from: foo.bar.com - Departed 
+Heartbeat from: foo.bar.com - Arrived 
+Heartbeat from: foo.bar.com - Departed 
+... 
+</PRE>
+</DIV>
+
+<p class=para>
+Cool, eh? Just remember the datagrams are not guaranteed to arrive 
+(although it's unlikely you'll see them fail), and it's possible 
+that you could miss an arrival or a departure. Now let's look at 
+the code. 
+
+<div class=sect3>
+<h4 class=sect3><a class="TITLE" name="EXJ-CH-9-SECT-2.1.1">HeartBeat</A></h4>
+
+<p class=para>
+<tt class=literal>HeartBeat</tt> overrides the <tt class=literal>init()</tt>,
+<tt class=literal>start()</tt>, and <tt class=literal>stop()</tt> methods of
+the <tt class=literal>Applet</tt> class, and implements one private method
+of its own, <tt class=literal>sendMessage()</tt>, that sends a
+datagram. <tt class=literal>HeartBeat</tt> begins its life in
+<tt class=literal>init()</tt>, where it determines the destination for its
+messages. 
+It uses the
+<tt class=literal>Applet</tt> <tt class=literal>getCodeBase()</tt> and
+<tt class=literal>getHost()</tt> methods to find the name of its
+originating host and fetches the correct port number from the
+<tt class=literal>myPort</tt> parameter of the HTML
+tag. After <tt class=literal>init()</tt> has finished, the
+<tt class=literal>start()</tt> and <tt class=literal>stop()</tt> methods are
+called whenever the applet is started or stopped. These methods merely
+call <tt class=literal>sendMessage()</tt> with the appropriate message.
+
+<p class=para>
+<tt class=literal>sendMessage()</tt> is responsible for sending a
+<tt class=literal>String</tt> message to the server as a datagram. It
+takes the text as an argument, constructs a datagram packet containing
+the message, and then sends the datagram. All of the datagram
+information, including the destination and port number, are packed
+into a <tt class=literal>java.net.DatagramPacket</tt> object. The
+<tt class=literal>DatagramPacket</tt> is like an addressed envelope,
+stuffed with our bytes. After the <tt class=literal>DatagramPacket</tt> is
+created, <tt class=literal>sendMessage()</tt> simply has to open a
+<tt class=literal>DatagramSocket</tt> and send it.
+
+<p class=para>
+The first four lines of <tt class=literal>sendMessage()</tt> build the 
+<tt class=literal>DatagramPacket</tt>: 
+
+<div class=programlisting>
+<p>
+<pre>
+try { 
+    byte [] data = new byte [ message.length() ]; 
+    message.getBytes(0, data.length, data, 0); 
+    InetAddress addr = InetAddress.getByName( myHost ); 
+    DatagramPacket pack = 
+       new DatagramPacket(data, data.length, addr, myPort ); 
+</PRE>
+</DIV>
+
+<p class=para>
+First, the contents of <tt class=literal>message</tt> are placed into an
+array of bytes called <tt class=literal>data</tt>. Next a
+<tt class=literal>java.net.InetAddress</tt> object is created from the
+name <tt class=literal>myHost</tt>. An <tt class=literal>InetAddress</tt>
+simply holds the network address information for a host in a special
+format. We get an <tt class=literal>InetAddress</tt> object for our host
+by using the static <tt class=literal>getByName()</tt> method of the
+<tt class=literal>InetAddress</tt> class. (We can't construct an
+<tt class=literal>InetAddress</tt> object directly.) Finally, we call the
+<tt class=literal>DatagramPacket</tt> constructor with four arguments: the
+byte array containing our data, the length of the data, the
+destination address object, and the port number.
+
+<p class=para>
+The remaining lines construct a default client
+<tt class=literal>DatagramSocket</tt> and call its
+<tt class=literal>send()</tt> method to transmit the
+<tt class=literal>DatagramPacket</tt>; after sending the datagram, we
+close the socket:
+
+<div class=programlisting>
+<p>
+<pre>
+DatagramSocket ds = new DatagramSocket(); 
+ds.send( pack ); 
+ds.close(); 
+</PRE>
+</DIV>
+
+<p class=para>
+Two operations throw a type of <tt class=literal>IOException</tt>: the
+<tt class=literal>InetAddress.getByName()</tt> lookup and the
+<tt class=literal>DatagramSocket</tt>
+<tt class=literal>send()</tt>. <tt class=literal>InetAddress.getByName()</tt>
+can throw an <tt class=literal>UnknownHostException</tt>, which is a type
+of <tt class=literal>IOException</tt> that indicates that the host name
+can't be resolved. If <tt class=literal>send()</tt> throws an
+<tt class=literal>IOException</tt>, it implies a serious client side
+problem in talking to the network. We need to catch these exceptions;
+our <tt class=literal>catch</tt> block simply prints a message telling us
+that something went wrong. If we get one of these exceptions, we can
+assume the datagram never arrived. However, we can't assume the
+converse. Even if we don't get an exception, we still
+don't know that the host is actually accessible or that the data
+actually arrived; with a <tt class=literal>DatagramSocket</tt>, we never
+find out.
+
+</DIV>
+
+<div class=sect3>
+<h4 class=sect3><a class="TITLE" name="EXJ-CH-9-SECT-2.1.2">Pulse</A></h4>
+
+<p class=para>
+The <tt class=literal>Pulse</tt> server corresponds to the
+<tt class=literal>HeartBeat</tt> applet. First, it creates a
+<tt class=literal>DatagramSocket</tt> to listen on our prearranged
+port. This time, we specify a port number in the constructor; we get
+the port number from the command line as a string
+(<tt class=literal>argv[0]</tt>) and convert it to an integer with
+<tt class=literal>Integer.parseInt()</tt>. Note the difference between
+this call to the constructor and the call in
+<tt class=literal>HeartBeat</tt>. In the server, we need to listen for
+incoming datagrams on a prearranged port, so we need to specify the
+port when creating the <tt class=literal>DatagramSocket</tt>. In the
+client, we need only to send datagrams, so we don't have to
+specify the port in advance; we build the port number into the
+<tt class=literal>DatagramPacket</tt> itself.
+
+<p class=para>
+Second, <tt class=literal>Pulse</tt> creates an empty
+<tt class=literal>DatagramPacket</tt> of a fixed size to receive an
+incoming datagram. This alternative constructor for
+<tt class=literal>DatagramPacket</tt> takes a byte array and a length as
+arguments. As much data as possible is stored in the byte array when
+it's received. (A practical limit on the size of a
+UDP datagram is 8K.)  Finally,
+<tt class=literal>Pulse</tt> calls the
+<tt class=literal>DatagramSocket</tt>'s <tt class=literal>receive()</tt>
+method to wait for a packet to arrive. When a packet arrives, its
+contents are printed.
+
+<p class=para>
+As you can see, working with <tt class=literal>DatagramSocket</tt>
+is slightly more tedious than working with
+<tt class=literal>Socket</tt>s. With datagrams, it's harder to spackle
+over the messiness of the socket interface. However, the Java
+API rather slavishly follows the
+UNIX interface, and that doesn't help. I
+don't see any reason why we have to prepare a datagram to hand
+to <tt class=literal>receive()</tt> (at least for the current
+functionality); <tt class=literal>receive()</tt> ought to
+create an appropriate object on its own and hand it to us, saving us
+the effort of building the datagram in advance and unpacking the data
+from it afterwards. It's easy to imagine other conveniences; perhaps
+we'll have them in a future release.
+
+</DIV>
+
+</DIV>
+
+</DIV>
+
+
+<div class=htmlnav>
+
+<p>
+<hr align=left width=515>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch09_01.htm"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><a href="index.htm"><img src='gifs/txthome.gif' border=0 alt='Home'></a></td>
+<td width=172 align=right valign=top><a href="ch09_03.htm"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+<tr>
+<td width=172 align=left valign=top>Sockets</td>
+<td width=171 align=center valign=top><a href="index/idx_0.htm"><img src='gifs/index.gif' alt='Book Index' border=0></a></td>
+<td width=172 align=right valign=top>Working with URLs</td>
+</tr>
+</table>
+<hr align=left width=515>
+
+<img src="gifs/smnavbar.gif" usemap="#map" border=0> 
+<map name="map"> 
+<area shape=RECT coords="0,0,108,15" href="../javanut/index.htm" alt="Java in a Nutshell"> 
+<area shape=RECT coords="109,0,200,15" href="../langref/index.htm" alt="Java Language Reference"> 
+<area shape=RECT coords="203,0,290,15" href="../awt/index.htm" alt="Java AWT"> 
+<area shape=RECT coords="291,0,419,15" href="../fclass/index.htm" alt="Java Fundamental Classes"> 
+<area shape=RECT coords="421,0,514,15" href="index.htm" alt="Exploring Java"> 
+</MAP>
+</DIV>
+
+</BODY>
+</HTML>

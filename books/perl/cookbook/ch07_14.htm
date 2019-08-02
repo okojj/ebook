@@ -1,0 +1,142 @@
+<html><head>
+<title>Recipe 7.13. Reading from Many Filehandles Without Blocking</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:37:14Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch07_01.htm" title="7. File Access"><link rel="prev" href="ch07_13.htm" title="7.12. Flushing Output"><link rel="next" href="ch07_15.htm" title="7.14. Doing Non-Blocking I/O"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_13.htm" title="7.12. Flushing Output"><img src="../gifs/txtpreva.gif" alt="Previous: 7.12. Flushing Output" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch07_01.htm" title="7. File Access">Chapter 7<br>File Access</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch07_15.htm" title="7.14. Doing Non-Blocking I/O"><img src="../gifs/txtnexta.gif" alt="Next: 7.14. Doing Non-Blocking I/O" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch07-18871">7.13. Reading from Many Filehandles Without Blocking</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-1304">Problem<a class="indexterm" name="ch07-idx-1000009716-0"></A
+><a class="indexterm" name="ch07-idx-1000009716-1"></A
+><a class="indexterm" name="ch07-idx-1000009716-2"></A
+><a class="indexterm" name="ch07-idx-1000009716-3"></A
+><a class="indexterm" name="ch07-idx-1000009716-4"></A
+></A
+></H3
+><p class="para">You want to learn whether input is available to be read, rather than blocking for input as &lt; &gt; does. This is useful when reading from pipes, sockets, devices, and other programs.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-1310">Solution</A
+></H3
+><p class="para">Use <code class="literal">select</CODE
+> with a timeout value of 0 seconds, if you're comfortable with manipulating bit-vectors representing file descriptor sets:</P
+><pre class="programlisting">$rin = '';
+# repeat next line for all filehandles to poll
+vec($rin, fileno(FH1), 1) = 1;
+vec($rin, fileno(FH2), 1) = 1;
+vec($rin, fileno(FH3), 1) = 1;
+
+$nfound = select($rout=$rin, undef, undef, 0);
+if ($nfound) {
+  # input waiting on one or more of those 3 filehandles
+  if (vec($rout,fileno(FH1),1)) { 
+      # do something with FH1
+  }
+  if (vec($rout,fileno(FH2),1)) {
+      # do something with FH2
+  }
+  if (vec($rout,fileno(FH3),1)) {
+      # do something with FH3
+  }
+}</PRE
+><p class="para">The IO::Select module provides an abstraction to hide the bit-vector operations:</P
+><pre class="programlisting">use IO::Select;
+
+$select = IO::Select-&gt;new();
+# repeat next line for all filehandles to poll
+$select-&gt;add(*FILEHANDLE);
+if (@ready = $select-&gt;can_read(0)) {
+    # input waiting on the filehandles in @ready
+}</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-1370">Discussion</A
+></H3
+><p class="para">The <code class="literal">select</CODE
+> function is really two functions in one. If you call it with one argument, you change the current default output filehandle (see <a class="xref" href="ch07_13.htm" title="Flushing Output">Recipe 7.12</A
+>). If you call it with four arguments, it tells you which filehandles have input waiting or are ready to receive output. This recipe only deals with four-argument <code class="literal">select</CODE
+>.</P
+><p class="para">The first three arguments to <code class="literal">select</CODE
+> are strings containing bit-vectors. Each bit-vector represents a set of file descriptors to inspect for pending input, pending output, and pending expedited data (like out-of-band or urgent data on a socket), respectively. The final argument is the timeout &nbsp;-  how long <code class="literal">select</CODE
+> should spend waiting for status to change. A timeout value of 0 indicates a poll. Timeout can also be a floating-point number of seconds, or <code class="literal">undef</CODE
+> to wait (block) until status changes:</P
+><pre class="programlisting">$rin = '';
+vec($rin, fileno(FILEHANDLE), 1) = 1;
+$nfound = select($rin, undef, undef, 0);    # just check
+if ($nfound) {
+    $line = &lt;FILEHANDLE&gt;;
+    print &quot;I read $line&quot;;
+}</PRE
+><p class="para">This code isn't perfect, though. If someone connects and sends a character but never sends a newline, your program will block in the <code class="literal">&lt;FILE&gt;</CODE
+>. We get around this by reading characters one at a time and processing completed lines when we read a <code class="literal">&quot;\n&quot;</CODE
+>. This removes the need for the blocking <code class="literal">&lt;FILE&gt;</CODE
+> call. Another solution (if you're not testing files) is detailed in <a class="xref" href="ch07_16.htm" title="Determining the Number of Bytes to Read">Recipe 7.15</A
+>.</P
+><p class="para">The IO::Select module hides the bit-vectors from you. <code class="literal">IO::Select-&gt;new()</CODE
+> returns a new object on which you call the <code class="literal">add</CODE
+> method to add one or more filehandles to the set. When you've added all the filehandles you are interested in, call <code class="literal">can_read</CODE
+>, <code class="literal">can_write</CODE
+>, or <code class="literal">has_exception</CODE
+>. These functions return a list of filehandles you can safely read from, write to, or that have unread exceptional data (TCP out-of-band data, for example).</P
+><p class="para">Don't mix calls to four-argument <code class="literal">select</CODE
+> with calls to any of the buffered I/O functions listed in this chapter's Introduction (<code class="literal">read</CODE
+>, &lt;&gt;, <code class="literal">seek</CODE
+>, <code class="literal">tell</CODE
+>, etc.). Instead, you must use <code class="literal">sysread </CODE
+>&nbsp;-  and <code class="literal">sysseek</CODE
+> if you want to reposition the filehandle within the file.</P
+><p class="para">If you want to read whatever is available on a socket or pipe and return immediately, see Recipe 7.14. If you're trying to do non-blocking reads on a terminal, see Recipes <a class="xref" href="ch15_07.htm" title="Reading from the Keyboard">Recipe 15.6</A
+> and <a class="xref" href="ch15_09.htm" title="Using POSIX termios">Recipe 15.8</A
+>. <a class="indexterm" name="ch07-idx-1000009718-0"></A
+><a class="indexterm" name="ch07-idx-1000009718-1"></A
+><a class="indexterm" name="ch07-idx-1000009718-2"></A
+><a class="indexterm" name="ch07-idx-1000009718-3"></A
+><a class="indexterm" name="ch07-idx-1000009718-4"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-1400">See Also</A
+></H3
+><p class="para">The <code class="literal">select</CODE
+> function in <i class="filename">perlfunc </I
+>(1) and in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; the documentation for the standard module IO::Select; <a class="xref" href="ch07_15.htm" title="Doing Non-Blocking I/O">Recipe 7.14</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_13.htm" title="7.12. Flushing Output"><img src="../gifs/txtpreva.gif" alt="Previous: 7.12. Flushing Output" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch07_15.htm" title="7.14. Doing Non-Blocking I/O"><img src="../gifs/txtnexta.gif" alt="Next: 7.14. Doing Non-Blocking I/O" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">7.12. Flushing Output</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">7.14. Doing Non-Blocking I/O</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

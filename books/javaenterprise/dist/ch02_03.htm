@@ -1,0 +1,412 @@
+<html>
+<head>
+<title>The ClassLoader (Java Distributed Computing)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jim Farley">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-206-9E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="The ClassLoader">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm" alt="Java Distributed Computing"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch02_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch02_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch02_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch02_01.htm">Chapter 2: Networking in Java</a></td><td align="right" valign="top" width="172"><a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch03_01.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">2.3. The ClassLoader</h2>
+
+<p>
+<a name="INDEX-249"></a><a name="INDEX-250"></a><a name="INDEX-251"></a><a name="INDEX-252"></a>The Java runtime environment is based
+upon a virtual machine that interprets, verifies, and executes
+classes in the form of platform-independent bytecodes. In addition,
+the Java API includes a mechanism for you to load class definitions
+in their bytecode form, and integrate them into the runtime
+environment so that instances of the classes can be constructed and
+used. When your Java files are compiled, a similar mechanism is
+invoked whenever an
+<tt class="literal">import</tt><a name="INDEX-253"></a> statement is encountered. The
+referenced class or package of classes is loaded from files in
+bytecode format, using the CLASSPATH environment variable to locate
+them on the local file system.
+</p>
+
+<p>In addition to this default policy for loading classes, the
+<tt class="literal">java.lang.ClassLoader</tt> class allows the user to
+define custom policies and mechanisms for locating and loading
+classes into the runtime environment. The
+<tt class="literal">ClassLoader</tt> is an abstract class. Subclasses
+must define an implementation for the
+<tt class="literal">loadClass()</tt><a name="INDEX-254"></a> method, which is responsible for
+locating the class based upon the given string name, loading the
+bytecodes comprising the class definition, and (optionally) resolving
+the class. A class has to be resolved before it can be constructed or
+before any of its methods can be called. Resolving a class includes
+finding all of the other classes that it depends on, and loading them
+into the runtime as well.
+</p>
+
+<p>The <tt class="literal">ClassLoader</tt> is an important element of the
+network support in the Java API. It's used as the basis for
+supporting Java applets in most Java-enabled web browsers, for
+example. When an HTML page includes an <tt class="literal">APPLET</tt>
+tag that references a Java class on the HTTP server, a
+<tt class="literal">ClassLoader</tt> instance within the browser's
+Java runtime is used to load the bytecodes of the class into the
+virtual machine, create an instance of the class, and then execute
+methods on the new object. Note that this is different from the
+concept of distributing <em class="emphasis">objects</em> using RMI or
+CORBA. Rather than creating an object on one host and allowing a
+process on a remote host to call methods on that object, the
+<tt class="literal">ClassLoader</tt> lets an agent read the bytecodes
+making up a class definition, and then create an object within its
+own process. In the rest of this section we'll look at how we
+can directly use the <tt class="literal">ClassLoader</tt> interface to
+distribute <em class="emphasis">classes</em> in a network environment.
+</p>
+
+<a name="JDP-CH-2-SECT-3.1"></a>
+<h3 class="sect2">2.3.1. Loading Classes from the Network</h3>
+
+<p>Now, in looking at the overall object model defined by the Java API,
+we can think of the
+<tt class="literal">java.lang</tt>.<tt class="literal">ClassLoader</tt> class
+as an abstract interface for the loading of classes into the runtime
+environment, and the
+<tt class="literal">java.io</tt>.<tt class="literal">InputStream</tt> class
+as the basis for loading data into the runtime environment from
+different sources and in different formats. An obvious next step
+would seem to be to put them together, and form the basis for loading
+classes from all of the sources accessible from subclasses of
+<tt class="literal">InputStream</tt>. So that's just what
+we've done, and the result is the
+<tt class="literal">StreamClassLoader</tt><a name="INDEX-255"></a> shown in <a href="#JDP-CH-2-EX-10">Example 2-9</a>.
+</p>
+
+<a name="JDP-CH-2-EX-10"></a>
+<div class="example">
+<h4 class="objtitle">Example 2-9. A Network ClassLoader</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util;
+
+import java.lang.*;
+import java.net.*;
+import java.io.*;
+import java.util.Hashtable;
+
+public abstract class StreamClassLoader extends ClassLoader
+{
+  // Instance variables and default initializations
+  Hashtable classCache = new Hashtable();
+  InputStream source = null;
+
+  // Constructor
+  public StreamClassLoader()
+  { }
+
+  // Parse a class name from a class locator (URL, filename, etc.)
+  protected abstract String  parseClassName(String classLoc)
+    throws ClassNotFoundException;
+
+  // Initialize the input stream from a class locator
+  protected abstract void    initStream(String classLoc) 
+    throws IOException;
+
+  // Read a class from the input stream
+  protected abstract Class   readClass(String classLoc, String className)
+    throws IOException, ClassNotFoundException;
+
+  // Implement the ClassLoader loadClass() method.
+  // First argument is now interpreted as a class locator, rather than
+  // simply a class name.
+  public Class loadClass(String classLoc, boolean resolve)
+    throws ClassNotFoundException
+    {
+      String className = parseClassName(classLoc);
+      Class c = (Class)classCache.get(className);
+
+      // If class is not in cache...
+      if (c == null)
+        {
+          // ...try initializing our stream to its location
+          try { initStream(classLoc); }
+          catch (IOException e)
+            {
+              throw new ClassNotFoundException(
+                          "Failed opening stream to URL.");
+            }
+
+          // Read the class from the input stream
+          try { c = readClass(classLoc, className); }
+          catch (IOException e)
+            {
+              throw new ClassNotFoundException(
+                          "Failed reading class from stream: " + e);
+            }
+        }
+
+      // Add the new class to the cache for the next reference.
+      // Note that we cache based on the class name, not locator.
+      classCache.put(className, c);
+
+      // Resolve the class, if requested.
+      if (resolve)
+        resolveClass(c);
+
+      return c;
+    }
+}</pre>
+</blockquote>
+</div>
+
+<p>The abstract <tt class="literal">StreamClassLoader</tt> class provides a
+generic interface for implementing and using stream-based class
+loaders. It accomplishes this in part by changing the semantics of
+the string argument to the <tt class="literal">loadClass()</tt> method on
+<tt class="literal">ClassLoader</tt>. Whereas
+<tt class="literal">ClassLoader</tt> defines this argument as the name of
+the class being sought, the <tt class="literal">StreamClassLoader</tt>
+broadens the definition to include class "locators" in
+general. A class locator may be a URL, a host/port/filename
+combination, or some other means for addressing a class located on
+the network, or anywhere else accessible via an input stream.
+Subclasses of <tt class="literal">StreamClassLoader</tt> must define the
+class locator format they expect, by implementing the
+<tt class="literal">parseClassName()</tt><a name="INDEX-256"></a>
+method.
+</p>
+
+<p>The other element of the <tt class="literal">StreamClassLoader</tt>
+framework is an implementation of <tt class="literal">loadClass()</tt>
+which allows subclasses to initialize and read their input streams to
+bring the requested class into the local environment. If the class
+locator string is successfully parsed by
+<tt class="literal">parseClassName()</tt>, then the
+<tt class="literal">StreamClassLoader</tt> calls
+<tt class="literal">initStream()</tt><a name="INDEX-257"></a>,
+passing the class locator. This method should attempt to initialize
+the stream to the class specified by the locator. If successful, the
+<tt class="literal">StreamClassLoader</tt> next calls its
+<tt class="literal">readClass()</tt><a name="INDEX-258"></a>
+method, passing the class locator and class name. This returns the
+newly constructed <tt class="literal">Class</tt> object, which is then
+optionally resolved and returned to the caller.<tt class="literal"></tt>
+</p>
+
+<p>To demonstrate a practical extension of the
+<tt class="literal">StreamClassLoader</tt>, <a href="#JDP-CH-2-EX-11">Example 2-10</a>
+shows a <tt class="literal">URLClassLoader</tt><a name="INDEX-259"></a><a name="INDEX-260"></a>, which loads classes that are
+located at URLs on HTTP servers. In this case, a class locator is
+expected to be in the form of a valid URL. The
+<tt class="literal">URLClassLoader</tt> utilizes the
+<tt class="literal">URL</tt> and <tt class="literal">URLConnection</tt>
+classes to implement the <tt class="literal">parseClassName()</tt>,
+<tt class="literal">initStream()</tt>, and
+<tt class="literal">readClass()</tt> methods, as you might expect.
+</p>
+
+<a name="JDP-CH-2-EX-11"></a>
+<div class="example">
+<h4 class="objtitle">Example 2-10. A URL-based ClassLoader</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util;
+
+import java.lang.*;
+import java.net.*;
+import java.io.*;
+import java.util.Hashtable;
+
+public class URLClassLoader extends StreamClassLoader
+{
+  URL classURL = null;
+  InputStream classStream = null;
+
+  protected String parseClassName(String classLoc)
+    throws ClassNotFoundException
+  {
+    String className = null;
+
+    // Try constructing a URL around the class locator
+    try { classURL = new URL(classLoc); }
+    catch (MalformedURLException e)
+      {
+        throw new ClassNotFoundException("Bad URL \"" + classLoc +
+                                         "\" given: " + e);
+      }
+
+    System.out.println("File = " + classURL.getFile());
+    System.out.println("Host = " + classURL.getHost());
+
+    // Get the file name from the URL
+    String filename = classURL.getFile();
+
+    // Make sure we're referencing a class file, then parse the class name
+    if (! filename.endsWith(".class"))
+      throw new ClassNotFoundException("Non-class URL given.");
+    else
+      className = filename.substring(0, filename.lastIndexOf(".class"));
+
+    System.out.println("Classname = " + className);
+
+    return className;
+  }
+
+  protected void initStream(String classLoc) throws IOException
+  {
+    // Ask the URL to open a stream to the class object
+    classStream = classURL.openStream();
+  }
+
+  protected Class readClass(String classLoc, String className)
+       throws IOException, ClassNotFoundException
+  {
+    // See how large the class file is...
+    URLConnection conn = classURL.openConnection();
+    int classSize = conn.getContentLength();
+    System.out.println("Class file is " + classSize + " bytes.");
+
+    // Read the class bytecodes from the stream
+    DataInputStream dataIn = new DataInputStream(classStream);
+    int avail = dataIn.available();
+    System.out.println("Available = " + avail);
+    System.out.println("URLClassLoader: Reading class from stream...");
+    byte[] classData = new byte[classSize];
+    dataIn.readFully(classData);
+
+    // Parse the class definition from the bytecodes
+    Class c = null;
+    System.out.println("URLClassLoader: Defining class...");
+    try { c = defineClass(classData, 0, classData.length); }
+    catch (ClassFormatError e)
+      {
+        throw new ClassNotFoundException(
+          "Format error found in class data.");
+      }
+
+    return c;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>The <tt class="literal">parseClassName()</tt> implementation attempts to
+construct a <tt class="literal">URL</tt> object from the class locator.
+If an exception is raised, then an invalid URL has been passed in,
+and a <tt class="literal">ClassNotFoundException</tt><a name="INDEX-261"></a>
+is thrown by the method. If the <tt class="literal">URL</tt> is
+successfully constructed, it is queried for the file name portion of
+the URL. The file suffix is checked to ensure that a
+".class" file is being referenced, then the base of the
+file name is returned as the class
+name.<tt class="literal"></tt><a name="INDEX-262"></a> The <tt class="literal">initStream()</tt>
+implementation simply calls <tt class="literal">openStream()</tt> on the
+<tt class="literal">URL</tt> object constructed from the class
+locator.<tt class="literal"></tt><a name="INDEX-263"></a> If an <tt class="literal">IOException</tt>
+results, it is allowed to propagate up the call stack to
+<tt class="literal">loadClass()</tt><a name="INDEX-264"></a>, which assumes that the class file
+addressed by the URL is inaccessible, and throws a
+<tt class="literal">ClassNotFoundException</tt>. Finally, the
+<tt class="literal">readClass()</tt> method reads the class bytecodes
+into a buffer by calling <tt class="literal">readFully()</tt> on the
+<tt class="literal">InputStream</tt> from the <tt class="literal">URL</tt>.
+An <tt class="literal">IOException</tt> will be allowed to propagate up
+to <tt class="literal">loadClass()</tt>, which throws a
+<tt class="literal">ClassNotFound-Exception</tt>. After successfully
+reading the bytecodes, <tt class="literal">readClass()</tt><tt class="literal"></tt><a name="INDEX-265"></a> next calls
+<tt class="literal">defineClass()</tt> to parse the class definition into
+a <tt class="literal">Class</tt> object, which is returned to the caller.
+If <tt class="literal">defineClass()</tt> generates a
+<tt class="literal">ClassFormatError</tt>, then a
+<tt class="literal">ClassNotFoundException</tt> is thrown, which
+<tt class="literal">loadClass()</tt><a name="INDEX-266"></a> allows to propagate to the caller.
+Although catching an error, as opposed to an exception, goes against
+Java design doctrine, in this particular situation it may be a useful
+thing to do. Notice, however, that we've chosen to
+"convert" the error into a
+<tt class="literal">ClassNotFoundException</tt>.
+<tt class="literal"></tt><a name="INDEX-267"></a> By doing this, we're saying that
+a format error in the loaded class should be considered as a missing
+class in the next level up the call
+stack.<tt class="literal"></tt><a name="INDEX-268"></a><a name="INDEX-269"></a>
+</p>
+
+<p>We could implement other subclasses of the
+<tt class="literal">StreamClassLoader</tt> that use other network
+protocols to import Java bytecodes into the local runtime. This,
+however, is left as an exercise for the reader.<a href="#FOOTNOTE-4">[4]</a> We should note here that a Java-enabled browser
+uses something like our <tt class="literal">URLClassLoader</tt> to load
+classes for applets referenced in Web pages. A relative or absolute
+URL referring to a main applet class is passed to a network class
+loader, which does something along the lines of what happens in our
+<tt class="literal">readClass()</tt><tt class="literal"></tt><a name="INDEX-270"></a> method.<a name="INDEX-271"></a><a name="INDEX-272"></a><a name="INDEX-273"></a><a name="INDEX-274"></a>
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-4"></a>
+<p>[4]:
+)</p> </blockquote>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch02_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch02_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch03_01.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">2.2. URLs, URLConnections, and ContentHandlers</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">3. Distributing Objects</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

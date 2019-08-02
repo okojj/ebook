@@ -1,0 +1,459 @@
+<html><head>
+<title>[Chapter 21] 21.2 How sendmail Uses DNS</TITLE>
+<meta name="DC.title" content="sendmail"><meta name="DC.creator" content="Bryan Costales &amp; Eric Allman"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-01-06T19:27:39Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-222-0" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch21_01.htm" title="21. DNS and sendmail"><link rel="prev" href="ch21_01.htm" title="21.1 Overview"><link rel="next" href="ch21_03.htm" title="21.3 Set Up MX Records"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="sendmail" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="sendmail"><area shape="RECT" coords="467,0,514,18" href="../search/ssrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch21_01.htm" title="21.1 Overview"><img src="../gifs/txtpreva.gif" alt="Previous: 21.1 Overview" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 21<br>DNS and sendmail</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch21_03.htm" title="21.3 Set Up MX Records"><img src="../gifs/txtnexta.gif" alt="Next: 21.3 Set Up MX Records" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="SML2-CH-21-SECT-2">21.2 How sendmail Uses DNS</A
+></H2
+><p class="para">The <em class="emphasis">sendmail</EM
+> program uses DNS in four different ways:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para">When <em class="emphasis">sendmail</EM
+> first starts, it may use DNS to get the
+canonical name for the local host. That name is then assigned
+to the <code class="literal">$j</CODE
+> macro (see <a class="xref" href="ch31_10.htm#SML2-CH-31-SECT-10-20" title="">Section 31.10.20, $j</A
+>).
+[8]
+If DNS returns additional names for
+the local host, those names are assigned to the class <code class="literal">$=w</CODE
+>
+(see <a class="xref" href="ch32_05.htm#SML2-CH-32-SECT-5-8" title="">Section 32.5.8, $=w</A
+>).</P
+><blockquote class="footnote"><p class="para">[8] Prior to V8 <em class="emphasis">sendmail</EM
+>, the canonical name was stored
+in the <code class="literal">$w</CODE
+> macro (see <a class="xref" href="ch31_10.htm#SML2-CH-31-SECT-10-40" title="">Section 31.10.40, $w</A
+>) and <em class="emphasis">sendmail</EM
+>
+initialized only the <code class="literal">$j</CODE
+> macro (see <a class="xref" href="ch31_10.htm#SML2-CH-31-SECT-10-20" title="">Section 31.10.20</A
+>).
+Beginning with V8 <em class="emphasis">sendmail</EM
+>, <em class="emphasis">sendmail</EM
+> initializes both
+of those variables, among others (see <a class="xref" href="ch31_01.htm#SML2-CH-31-SECT-1" title="Preassigned Macros">Section 31.1, "Preassigned Macros"</A
+>).</P
+></BLOCKQUOTE
+></LI
+><li class="listitem"><p class="para">When another host connects to the local host to transfer mail, 
+the local <em class="emphasis">sendmail</EM
+> looks up the other host with DNS to find
+the other host's canonical name.</P
+></LI
+><li class="listitem"><p class="para">When delivering network SMTP mail, <em class="emphasis">sendmail</EM
+> uses DNS
+to find the address (or addresses) to which it should
+connect.</P
+></LI
+><li class="listitem"><p class="para">When <em class="emphasis">sendmail</EM
+> expands <code class="literal">$[</CODE
+> and <code class="literal">$]</CODE
+> in the RHS of a rule,
+it looks up the hostname (or IP number) between them.</P
+></LI
+></UL
+><p class="para">We discuss each of these uses individually later in this chapter.&#13;</P
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-21-SECT-2-1">21.2.1 Determine the Local Canonical Name</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-17276"></A
+><a class="indexterm" name="AUTOID-17279"></A
+><a class="indexterm" name="AUTOID-17282"></A
+><a class="indexterm" name="AUTOID-17284"></A
+>All versions of <em class="emphasis">sendmail</EM
+> use more or less the same logical process
+to obtain the canonical name of the local host. 
+As illustrated in the sample program below, <em class="emphasis">sendmail</EM
+> first calls 
+<em class="emphasis">gethostname</EM
+>(3) to obtain the local host's name.
+That name may either be a short name
+or a fully qualified one depending on which comes first in the
+<em class="emphasis">/etc/hosts</EM
+> file. If the call 
+
+to <em class="emphasis">gethostname</EM
+>(3) fails,
+the name of the local host is set to <em class="emphasis">localhost</EM
+>:</P
+><p class="para"><blockquote class="screen"><pre class="screen">#include &lt;sys/types.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;sys/param.h&gt;
+#include &lt;netdb.h&gt;
+#include &lt;stdio.h&gt;
+
+main()
+{
+        char hostbuf[MAXHOSTNAMELEN];
+        struct hostent *hp;
+
+        /* Get the local hostname */
+        if (gethostname(hostbuf, sizeof(hostbuf)) &lt; 0)
+                strcpy(hostbuf, &quot;localhost&quot;);
+        printf(&quot;hostname = \&quot;%s\&quot;\n&quot;, hostbuf);
+
+        /* canonicalize it and get aliases */
+        if((hp = gethostbyname(hostbuf)) == NULL)
+                perror(&quot;gethostbyname&quot;), exit(2);
+        printf(&quot;canonical = \&quot;%s\&quot;\n&quot;, hp-&gt;h_name);
+        while (*hp-&gt;h_aliases != NULL)
+        {
+                printf(&quot;alias: \&quot;%s\&quot;\n&quot;, *hp-&gt;h_aliases);
+                ++hp-&gt;h_aliases;
+        }
+}</PRE
+></BLOCKQUOTE
+></P
+><p class="para">The local hostname is then given to the <em class="emphasis">gethostbyname</EM
+>
+routine (see <a class="xref" href="ch37_05.htm#SML2-CH-37-SECT-5-186" title="">Section 37.5.186, -d61.10</A
+>) to obtain the canonical name for the local
+host. That same routine also returns any aliases (other
+names for the local host).</P
+><p class="para">On some Sun and Ultrix machines that are set up to use NIS services, the
+canonical name is the short name, and a fully qualified
+name that should have been the canonical name
+appears as an alias. For such systems you must link with
+the BIND library (<em class="emphasis">libresolv.a</EM
+>) when compiling this program
+or compiling <em class="emphasis">sendmail</EM
+>. That library gets its information from
+DNS rather than from NIS.
+But note that V8.7 and above versions of <em class="emphasis">sendmail</EM
+> do the intelligent thing and use 
+the canonical name that was found as the aliases if it exists.</P
+><p class="para"><a class="indexterm" name="AUTOID-17303"></A
+>If a good BIND library is not available, or if it is not convenient
+to compile and install a new version of <em class="emphasis">sendmail</EM
+>,
+you can circumvent the short name assigned to <code class="literal">$j</CODE
+> by defining
+<code class="literal">$j</CODE
+> like this:</P
+><p class="para"><blockquote class="screen"><pre class="screen">Dm<i class="lineannotation">your domain here</I
+>
+Dj$w.$m</PRE
+></BLOCKQUOTE
+></P
+><p class="para">&#13;The <em class="emphasis">canonical name</EM
+> is your site's hostname with a dot and
+your domain name appended. These two lines cause
+<code class="literal">$j</CODE
+> to have your host's fully qualified (and canonical)
+name assigned to it.</P
+><p class="para"><a class="indexterm" name="AUTOID-17315"></A
+>The canonical name found by <em class="emphasis">gethostbyname</EM
+>(3) is assigned as the
+value of the <code class="literal">$w</CODE
+> macro. The short name and any aliases
+are added to the class <code class="literal">$=w</CODE
+>. </P
+><p class="para">The result of all these lookups can be viewed by running <em class="emphasis">sendmail</EM
+>
+with a <code class="literal">-d0.4</CODE
+> debugging switch (see <a class="xref" href="ch37_05.htm#SML2-CH-37-SECT-5-2" title="">Section 37.5.2, -d0.4</A
+>).
+The actual DNS lookups can be watched with the <code class="literal">-d8.8</CODE
+> debugging
+switch (see <a class="xref" href="ch37_05.htm#SML2-CH-37-SECT-5-35" title="">Section 37.5.35, -d8.8</A
+>).&#13;</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-21-SECT-2-2">21.2.2 Look Up a Remote Host's Name</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-17329"></A
+><a class="indexterm" name="AUTOID-17331"></A
+><a class="indexterm" name="AUTOID-17333"></A
+>When <em class="emphasis">sendmail</EM
+> begins to run as a daemon, it creates a socket,
+binds to that socket, and listens for incoming SMTP connections.
+When a remote host connects to the local host, <em class="emphasis">sendmail</EM
+> uses
+the <em class="emphasis">accept</EM
+>(2) library routine to accept the connection.
+The <em class="emphasis">accept</EM
+>(2) routine provides the IP
+address of the remote machine to <em class="emphasis">sendmail</EM
+>.
+The <em class="emphasis">sendmail</EM
+> program then
+calls <em class="emphasis">gethostbyaddr</EM
+>(2) to convert that IP address to
+a canonical (official) hostname.</P
+><p class="para">The <em class="emphasis">sendmail</EM
+> program needs the canonical hostname for four
+reasons:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para">The remote hostname is compared to the local hostname to prevent
+<em class="emphasis">sendmail</EM
+> from connecting to itself.</P
+></LI
+><li class="listitem"><p class="para">The remote hostname claimed in the HELO SMTP line is compared
+to the canonical name. If they differ, <em class="emphasis">sendmail</EM
+> complains.</P
+></LI
+><li class="listitem"><p class="para">The macro <code class="literal">$s</CODE
+> is assigned the canonical hostname as
+its value.</P
+></LI
+><li class="listitem"><p class="para">The canonical name is included in many log messages produced
+by the setting of the <code class="literal">LogLevel</CODE
+> (<code class="literal">L</CODE
+>) option (see <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-33" title="">Section 34.8.33, LogLevel (L)</A
+>)
+and is available for inclusion
+in <code class="literal">Received:</CODE
+> header (see <a class="xref" href="ch35_10.htm#SML2-CH-35-SECT-10-25" title="">Section 35.10.25, Received:</A
+>) lines.</P
+></LI
+></UL
+><p class="para">If the <code class="literal">Timeout.ident</CODE
+> (<code class="literal">r</CODE
+>) option
+(see <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-70-10" title="Timeout.ident">Section 34.8.70.10, "Timeout.ident"</A
+>) is greater than zero,
+the local host also connects to the <em class="emphasis">identd</EM
+>(8) daemon
+at the sending host to discover who opened the connection. If available,
+that user and host information is assigned to the <code class="literal">$_</CODE
+> macro
+(see <a class="xref" href="ch31_10.htm#SML2-CH-31-SECT-10-1" title="">Section 31.10.1, $-</A
+>).&#13;</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-21-SECT-2-3">21.2.3 Look Up Addresses for Delivery</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-17371"></A
+><a class="indexterm" name="AUTOID-17374"></A
+>When <em class="emphasis">sendmail</EM
+> prepares to connect to a remote host for transfer
+of mail, it first performs a series of checks that vary from version to
+version. All versions accept an IP address surrounded with square brackets
+as a literal address and use it as is.</P
+><p class="para">Beginning with V8.1, <em class="emphasis">sendmail</EM
+>
+checks to see whether the host part of the address is surrounded
+with square brackets. If so, it skips looking up MX records.
+(We'll elaborate on MX records soon.)</P
+><p class="para">Beginning with V8.8, <em class="emphasis">sendmail</EM
+> first checks to see
+whether the <code class="literal">F=0</CODE
+> flag (see <a class="xref" href="ch30_08.htm#SML2-CH-30-SECT-8-1" title="">Section 30.8.1, F=0</A
+>) is set for the selected
+delivery agent.
+If it is set, <em class="emphasis">sendmail</EM
+> skips looking up MX records.</P
+><p class="para"><a class="indexterm" name="AUTOID-17386"></A
+><a class="indexterm" name="AUTOID-17388"></A
+>If <em class="emphasis">sendmail</EM
+> is allowed to look up MX records,
+it calls the <em class="emphasis">res_search</EM
+>(3) BIND library routine
+[9]
+to find all the MX records for the host.
+If it finds any MX records, it sorts them in order of cost, selecting
+the least cost first.
+If V8 <em class="emphasis">sendmail</EM
+> finds two costs that are the same,
+it randomizes the selection between the two when sorting.
+[10]
+After all MX records are found, or if
+no MX records were found, <em class="emphasis">sendmail</EM
+> adds the host
+specified by the <code class="literal">FallbackMXhost</CODE
+> (<code class="literal">V</CODE
+>) option (see <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-25" title="">Section 34.8.25, FallbackMXhost (V)</A
+>),
+if there was one, to that list.</P
+><blockquote class="footnote"><p class="para">[9] If the <code class="literal">ServiceSwitchFile</CODE
+> option (see <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-61" title="">Section 34.8.61, ServiceSwitchFile</A
+>)
+lists a file that defines hosts as
+being looked up with NIS, all DNS lookups are skipped.<a class="indexterm" name="AUTOID-17397"></A
+></P
+><p class="para">[10] Note that this is broken in many older versions of <em class="emphasis">sendmail</EM
+>.
+Also note that when the MX record points to the local host,
+all MX records with a cost greater than the local host are
+tossed. (See <a class="xref" href="ch31_10.htm#SML2-CH-31-SECT-10-40" title="">Section 31.10.40</A
+> for a description of this process.)</P
+></BLOCKQUOTE
+><p class="para">The <em class="emphasis">sendmail</EM
+> program then tries to deliver the message to each
+host in the list of MX hosts,
+one at a time, until one of them succeeds or until they all fail.
+Beginning with V8.8 <em class="emphasis">sendmail</EM
+>, any host in the list that returns a
+<code class="literal">5</CODE
+><code class="replaceable"><i>xy</I
+></CODE
+> SMTP code (permanent failure) causes all subsequent
+MX hosts to be ignored (but temporary and connect failures
+continue to the next MX host as usual).</P
+><p class="para">If no MX records are found, <em class="emphasis">sendmail</EM
+> tries to deliver
+the message to the single original host.
+If all else fails, <em class="emphasis">sendmail</EM
+> attempts to deliver to the host
+listed with the <code class="literal">FallbackMXhost</CODE
+> (<code class="literal">V</CODE
+>) option.<a class="indexterm" name="AUTOID-17418"></A
+></P
+><p class="para">Whether <em class="emphasis">sendmail</EM
+> tries to connect to the original host
+or to a list of MX hosts, it calls <em class="emphasis">gethostbyname</EM
+>(2) to
+get the network address for each. It then opens a network connection
+to that address and attempts to send SMTP mail.&#13;</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-21-SECT-2-4">21.2.4 The $[ and $] Operators</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-17426"></A
+><a class="indexterm" name="AUTOID-17429"></A
+>The <code class="literal">$[</CODE
+> and <code class="literal">$]</CODE
+> operators (see <a class="xref" href="ch28_06.htm#SML2-CH-28-SECT-6-6" title="Canonicalize Hostname: $[ and $]">Section 28.6.6, "Canonicalize Hostname: $[ and $]"</A
+>)
+are used to canonicalize
+a hostname.
+Here is a simplified description of the process.</P
+><p class="para">Each lookup is actually composed of many lookups that occur in the form
+of a loop within a loop.
+In the outermost loop, the following logic is used:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para">If the address has at least one dot somewhere in it, <em class="emphasis">sendmail</EM
+>
+looks up that address unmodified first.</P
+></LI
+><li class="listitem"><p class="para"><a class="indexterm" name="AUTOID-17442"></A
+><a class="indexterm" name="AUTOID-17444"></A
+>If the unmodified address is not found and the RES_DNSRCH
+bit is set (see the <code class="literal">ResolverOptions</CODE
+> (<code class="literal">I</CODE
+>) option, <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-55" title="">Section 34.8.55</A
+>),
+<em class="emphasis">sendmail</EM
+> looks up variations on the domain part
+of the address. The default domain is tried first (for a host
+in the <em class="emphasis">sub</EM
+> subdomain at <em class="emphasis">dc.gov</EM
+>, 
+that would be <em class="emphasis">sub.dc.gov</EM
+>,
+thus looking up <em class="emphasis">host.sub.dc.gov</EM
+>).
+If that fails, BIND 4.8 then throws away the lowest part of
+the domain and tries again (looks up <em class="emphasis">host.dc.gov</EM
+>).
+BIND 4.9 uses the <code class="literal">search</CODE
+> attribute, if given,
+and tries that list of possible domains.</P
+></LI
+><li class="listitem"><p class="para">If the address has no dots and the RES_DEFNAMES bit is set
+(see the <code class="literal">ResolverOptions</CODE
+> (<code class="literal">I</CODE
+>) option, <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-55" title="">Section 34.8.55</A
+>),
+<em class="emphasis">sendmail</EM
+> tries the single default domain (looks up
+<em class="emphasis">host.sub.dc.gov</EM
+>).  This is for compatibility
+with older versions of DNS.</P
+></LI
+></UL
+><p class="para">Each lookup described above is performed by using the following steps:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para">Try the hostname with a T_ANY query that requests all the cached
+DNS records for that host.
+If it succeeds, A records
+and/or MX records may be among those returned.
+However, success is not guaranteed,
+because sometimes only NS (<b class="emphasis.bold">n</B
+>ame <b class="emphasis.bold">s</B
+>erver) records are returned.
+In that instance the following steps are also taken.</P
+></LI
+><li class="listitem"><p class="para">Try the hostname with a T_A query that requests the A
+record for that host.</P
+></LI
+><li class="listitem"><p class="para">Try the hostname with a T_MX query that requests MX records
+for the host.</P
+></LI
+></UL
+><p class="para">Each query searches the data returned as follows:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para">Search for a CNAME (alias) record.
+If one is found, replace the initial hostname (the alias) with
+the canonical name returned and start over.</P
+></LI
+><li class="listitem"><p class="para">Search for an A record (the IP address).
+If one is found, the hostname that was just used to query
+is considered the canonical address.</P
+></LI
+><li class="listitem"><p class="para">Search for an MX record.
+If one is found and a default domain has not been added, 
+treat the MX record like an A record.  For example, if the
+input hostname is <em class="emphasis">sub.dc.gov</EM
+> and an
+MX record is found the MX record is considered official.  
+If, on the other hand, the input hostname has no domain
+added (is <em class="emphasis">sub</EM
+>)
+and the query happens to stumble across <em class="emphasis">sub.dc.gov</EM
+> as
+the MX record, the following searches are also tried.</P
+></LI
+><li class="listitem"><p class="para">If an MX record is found and no MX record has been previously
+found, the looked-up hostname is saved for future use.
+For example, if the query was for <em class="emphasis">sub.dc.gov</EM
+> and two
+MX records were returned (<em class="emphasis">hostA.sub.dc.gov</EM
+> and
+<em class="emphasis">hostB.sub.dc.gov</EM
+>), <em class="emphasis">sub.dc.gov</EM
+> is saved for future use.</P
+></LI
+><li class="listitem"><p class="para">If no MX record is found, but one was found previously, 
+the previous one is used.  This assumes that the search is normally
+from most to least complex (<em class="emphasis">sub.sub.dc.gov</EM
+>, 
+<em class="emphasis">sub.dc.gov</EM
+>, <em class="emphasis">dc.gov</EM
+>).</P
+></LI
+></UL
+><p class="para">All this apparent complexity is necessary to deal with wildcard MX records
+(see <a class="xref" href="ch21_03.htm#SML2-CH-21-SECT-3-4" title="Wildcard MX Records">Section 21.3.4, "Wildcard MX Records"</A
+>) in a reasonable and successful way.&#13;</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch21_01.htm" title="21.1 Overview"><img src="../gifs/txtpreva.gif" alt="Previous: 21.1 Overview" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="sendmail"><img src="../gifs/txthome.gif" alt="sendmail" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch21_03.htm" title="21.3 Set Up MX Records"><img src="../gifs/txtnexta.gif" alt="Next: 21.3 Set Up MX Records" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">21.1 Overview</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">21.3 Set Up MX Records</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.htm" title="The Networking CD Bookshelf">Library Home</A
+> | <a href="../dnsbind/index.htm" title="DNS &amp; BIND">DNS &amp; BIND</A
+> | <a href="../tcpip/index.htm" title="TCP/IP Network Administration">TCP/IP</A
+> | <a href="index.htm" title="sendmail">sendmail</A
+> | <a href="../smdref/index.htm" title="sendmail Desktop Reference">sendmail Reference</A
+> | <a href="../firewall/index.htm" title="Building Internet Firewalls">Firewalls</A
+> | <a href="../puis/index.htm" title="Practical UNIX &amp; Internet Security">Practical Security</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

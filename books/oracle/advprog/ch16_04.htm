@@ -1,0 +1,2282 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 16] 16.4 Implementing PLVgen</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T18:29:38Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates-1-56592-238-7E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-238-7E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="PL/SQL SQL Oracle Packages"><META
+NAME="DC.Title"
+CONTENT="Advanced Oracle PL/SQL Programming with Packages"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch16_01.htm"
+TITLE="16. PLVgen: Generating PL/SQL Programs"><LINK
+REL="prev"
+HREF="ch16_03.htm"
+TITLE="16.3 Modifying PLVgen Behavior"><LINK
+REL="next"
+HREF="ch17_01.htm"
+TITLE="17. PLVhlp: Online Help for PL/SQL Programs"></HEAD>
+<BODY><DIV CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Advanced Oracle PL/SQL Programming with Packages"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Advanced Oracle PL/SQL Programming with Packages"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch16_03.htm"
+TITLE="16.3 Modifying PLVgen Behavior"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 16.3 Modifying PLVgen Behavior"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch16_01.htm"
+TITLE="16. PLVgen: Generating PL/SQL Programs"
+>Chapter 16<BR>PLVgen: Generating PL/SQL Programs</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch17_01.htm"
+TITLE="17. PLVhlp: Online Help for PL/SQL Programs"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 17. PLVhlp: Online Help for PL/SQL Programs"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch16-14504"
+>16.4 Implementing PLVgen</A
+></H2
+><P
+CLASS="para"
+>The PLVgen package is a large package. The body alone contains more than 20,000 characters spread over 1,390 lines of code. It is not, however, a terribly complicated package. Each of the "public" programs (the code generators) is, at heart, a sequence of commands to output various combinations of text.</P
+><P
+CLASS="para"
+>The biggest challenge in constructing PLVgen was to minimize the amount of redundant code. There are many common lines of text, for example, between the template for a function and procedure. And my package allows you to generate many different kinds of functions and procedures. If I simply hard-coded the lines of text to be output for each different program unit, the PLVgen package would run into two problems:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>It would grow to monstrous proportions and eventually (soon?) hit the upper limit for code size in <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+>.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>It would be difficult to maintain and enhance. I would have to constantly cut and paste to build new generator procedures, since there would be little shared code. And what if I discovered a mistake in all of my different function generators? Or, even more likely, what if I want to add another toggle to fine-tune the look-and-feel of the generated code? I would have to make changes across many different program units in the package.</P
+></LI
+></OL
+><P
+CLASS="para"
+>PLVgen is definitely one of those packages where a building-block approach was absolutely critical to a successful implementation. To explain PLVgen, I first review some of the best practices and coding styles I support through the package. Then I show the implementation of the high-level procedure generator (the <KBD
+CLASS="command"
+>proc</KBD
+> procedure). Finally, I shift down to the lowest level of the package (the <KBD
+CLASS="command"
+>put_line</KBD
+> procedure) and build my way up from there.</P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch16-SECT-4.1"
+>16.4.1 PLVgen Coding Guidelines</A
+></H3
+><P
+CLASS="para"
+>You will find implemented in PLVgen the following <A
+CLASS="indexterm"
+NAME="ch16-idx-1000290-0"
+></A
+>best practices and coding styles:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Use consistent indentation to reveal the logical flow of the program and delineate the different sections of the block structure.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Include in all programs an exception section to handle abnormal behaviors. Taking this guideline to the next level of reusability, PLVgen offers programs (implemented through the PLVexc package) to call in the exception handlers.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Code all reserved words in the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> language in uppercase. Use lowercase for all application-specific identifiers. Generally, this is accomplished with hard-coded literals and the use of UPPER and LOWER. This guideline presents more of a challenge when applied to complex expressions passed to PLVgen as default values.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Employ a "template" approach to functions in which there is a single successful RETURN statement that returns a locally declared variable of the same datatype as the function.</P
+></LI
+></UL
+><P
+CLASS="para"
+>Keep these guidelines in mind as you examine the program units of PLVgen. </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch16-SECT-4.2"
+>16.4.2 Implementing the Procedure Generator</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch16-idx-1000291-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-1000291-1"
+></A
+>This <KBD
+CLASS="command"
+>proc</KBD
+> program generates a procedure as described in <A
+CLASS="xref"
+HREF="ch16_02.htm#ch16-SECT-2.2"
+>Section 16.2.2</A
+>. Let's now go over the implementation of <KBD
+CLASS="command"
+>proc</KBD
+>, as shown in <A
+CLASS="xref"
+HREF="ch16_04.htm#ch16-15914"
+>Example 16.1</A
+>.</P
+><DIV
+CLASS="example"
+><H4
+CLASS="example"
+><A
+CLASS="title"
+NAME="ch16-15914"
+>Example 16.1: The Code for the proc Procedure </A
+></H4
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+> 1   PROCEDURE proc
+ 2      (name_in IN VARCHAR2,
+ 3       params_in IN VARCHAR2 := NULL, 
+ 4       exec_in IN VARCHAR2 := NULL,
+ 5       incl_exc_in IN BOOLEAN := TRUE,
+ 6       indent_in IN INTEGER := 0,
+ 7       blank_lines_in IN VARCHAR2 := c_before)
+ 8   IS
+ 9      v_name PLV.plsql_identifier%TYPE := LOWER (name_in);
+10   BEGIN
+11      initln;
+12      put_line
+13         (cor_start || proc_header (v_name, params_in), 
+14          indent_in,
+15          blank_lines_in);
+16
+17      put_header_cmnt (v_name, indent_in);
+18
+19      put_all_help (indent_in);
+20
+21      put_is_begin (v_name, indent_in);
+22
+23      IF exec_in IS NOT NULL
+24      THEN
+25         put_line 
+26            (RTRIM (exec_in, ';') || ';', 
+27             indent_in + v_incr_indent);
+28      END IF;
+29
+30      put_terminate (v_name, indent_in + v_incr_indent);
+31
+32      IF incl_exc_in
+33      THEN
+34         put_when_others (v_name, indent_in + v_incr_indent);
+35     END IF;
+36
+37     put_end (v_name, indent_in);
+38   END;</PRE
+></BLOCKQUOTE
+></DIV
+><P
+CLASS="para"
+>The very first thing I do is declare a local variable, <KBD
+CLASS="command"
+>v_name</KBD
+>, and set it to the lower-casing of the specified program name:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>   v_name PLV.plsql_identifier%TYPE := LOWER (name_in);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This step enforces the style guide in which application-specific identifiers are entered in lowercase. It also takes advantage of the predefined datatype for <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> identifier variables. </P
+><P
+CLASS="para"
+>From this point onwards, the body of <KBD
+CLASS="command"
+>proc</KBD
+> is composed of calls to a series of highly specialized procedures and functions defined in the body of the package. These programs are:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+>Procedure <KBD
+CLASS="command"
+>put_line</KBD
+> (line 12)<KBD
+CLASS="command"
+></KBD
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Puts out a line of generated code.</P
+></DD
+><DT
+CLASS="term"
+>Function <KBD
+CLASS="command"
+>cor_start</KBD
+> (line 13)</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Returns the CREATE OR REPLACE syntax if <KBD
+CLASS="command"
+>using_cor</KBD
+> returns TRUE. Otherwise, returns NULL.</P
+></DD
+><DT
+CLASS="term"
+>Function <KBD
+CLASS="command"
+>proc_header</KBD
+> (line 13)</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Returns a string with the header for the specified procedure. The header is all of the definition of the procedure up to the IS keyword.</P
+></DD
+><DT
+CLASS="term"
+>Procedure <KBD
+CLASS="command"
+>put_header_cmnt</KBD
+> (line 17)</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Puts a program header (comment block with author, program name, etc.) after the procedure header.</P
+></DD
+><DT
+CLASS="term"
+>Procedure <KBD
+CLASS="command"
+>put_all_help</KBD
+> (line 19)</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Puts in all current comment blocks for online help.</P
+></DD
+><DT
+CLASS="term"
+>Procedure <KBD
+CLASS="command"
+>put_is_begin</KBD
+> (line 21)</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Puts the IS and BEGIN keywords in the procedure definition. This procedure also adds a call to the <KBD
+CLASS="command"
+>PLVtrc.startup</KBD
+> procedure if <KBD
+CLASS="command"
+>using_trc</KBD
+> returns TRUE.</P
+></DD
+><DT
+CLASS="term"
+>Procedure <KBD
+CLASS="command"
+>put_terminate</KBD
+> (line 30)</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Puts a call to <KBD
+CLASS="command"
+>PLVtrc.terminate</KBD
+> at the end of the procedure if <KBD
+CLASS="command"
+>using_trc</KBD
+> returns TRUE.</P
+></DD
+><DT
+CLASS="term"
+>Procedure <KBD
+CLASS="command"
+>put_when_others</KBD
+> (line 34)</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Puts an exception section with a WHEN OTHERS clause if the <KBD
+CLASS="command"
+>incl_exc_in</KBD
+> argument is TRUE. </P
+></DD
+><DT
+CLASS="term"
+>Procedure <KBD
+CLASS="command"
+>put_end</KBD
+> (line 37)</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Puts the END statement at the, well, the end of the procedure. </P
+></DD
+></DL
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch16-SECT-4.2.1"
+>16.4.2.1 <A
+CLASS="indexterm"
+NAME="ch16-idx-1000292-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-1000292-1"
+></A
+>Benefits of internal modularization</A
+></H4
+><P
+CLASS="para"
+>Once I have created all of these specialized variations on <KBD
+CLASS="command"
+>put_line</KBD
+>, the body of the <KBD
+CLASS="command"
+>proc</KBD
+> procedure is very short and simple. Why do I go to all this trouble? Why not simply issue calls to <KBD
+CLASS="command"
+>put_line</KBD
+> with the appropriate combinations of strings? There are two very good reasons:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Each of these are called in other programs in the PLVgen package. If I did not encapsulate the logic inside a variation of <KBD
+CLASS="command"
+>put_line</KBD
+>, I would be repeating my logic. This would make debugging and enhancement of the package difficult, if not impossible.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The calls to the put procedures now reflect the structure of a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> procedure.</P
+></LI
+></OL
+><P
+CLASS="para"
+>Let's look at the second reason in detail. First, there is the program header:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>put_line 
+   (cor_start || proc_header (v_name, params_in), indent_in);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>While it is true that I don't have a separate <KBD
+CLASS="command"
+>put_header</KBD
+> program, this call to <KBD
+CLASS="command"
+>put_line</KBD
+> uses two functions to encapsulate much of the header logic. Most importantly, the <KBD
+CLASS="command"
+>proc_header</KBD
+> function returns the header string. This function is called in several different programs in PLVgen.</P
+><P
+CLASS="para"
+>After the header of the function, I need the IS and BEGIN clauses. These are provided by the <KBD
+CLASS="command"
+>put_is_begin</KBD
+> procedure:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>put_is_begin (v_name, indent_in);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Then it is time for executable statements:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>IF exec_in IS NOT NULL
+THEN
+   put_line 
+      (RTRIM (exec_in, ';') || ';', 
+       indent_in + v_incr_indent);
+END IF;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice that I make sure there is a single semicolon at the end of the supplied string. That way, the user can leave it off and it won't make any difference (one example of "self-correcting" software; the smarter I make my code, the more likely and widely it is going to be used). I also indent this executable statement by an additional amount to offset it from the BEGIN keyword (a section delimiter).</P
+><P
+CLASS="para"
+>I then terminate the procedure in three steps. First, I insert a call to <KBD
+CLASS="command"
+>PLVtrc.terminate</KBD
+> if the trace is in use (again, notice the incremental indentation):</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>put_terminate (v_name, indent_in + v_incr_indent);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Then I put a WHEN OTHERS exception section (unless told not to):</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>IF incl_exc_in
+THEN
+   put_when_others (v_name, indent_in + v_incr_indent);
+END IF;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Finally, it is time to issue the END statement to close the procedure:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>put_end (v_name, indent_in);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>By modularizing my code in this way, I am able to avoid superfluous and time-consuming inline documentation. The breakout of the modules explains much of what I am doing in the program. In addition, it is much easier to maintain and enhance this program. If I want to add code to the executable section, I make changes within that IF statement. If I need to enhance the way I terminate my generated program units, I will do so in <KBD
+CLASS="command"
+>put_terminate</KBD
+> and/or <KBD
+CLASS="command"
+>put_end</KBD
+>. The main body of the <KBD
+CLASS="command"
+>proc</KBD
+> procedure can remain as it is.</P
+><P
+CLASS="para"
+>Now that I have walked you through one of my high-level generators, let's dive down into the lowest level put program: <KBD
+CLASS="command"
+>put_line</KBD
+>.<A
+CLASS="indexterm"
+NAME="ch16-idx-1000293-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-1000293-1"
+></A
+></P
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch16-SECT-4.3"
+>16.4.3 put_line Procedure</A
+></H3
+><P
+CLASS="para"
+>At the very core of the PLVgen package is the <KBD
+CLASS="command"
+>put_line</KBD
+><A
+CLASS="indexterm"
+NAME="ch16-idx-1000294-0"
+></A
+> procedure (see <A
+CLASS="xref"
+HREF="ch16_04.htm#ch16-28472"
+>Example 16.2</A
+>). This program is called by other private put procedures to output various combinations of text. It is also called directly from the high-level, public programs such as <KBD
+CLASS="command"
+>proc</KBD
+> and <KBD
+CLASS="command"
+>toggle</KBD
+>. The <KBD
+CLASS="command"
+>put_line</KBD
+> procedure is the only way to generate code text from the PLVgen package.</P
+><DIV
+CLASS="example"
+><H4
+CLASS="example"
+><A
+CLASS="title"
+NAME="ch16-28472"
+>Example 16.2: The put_line Procedure </A
+></H4
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE put_line 
+   (stg_in IN VARCHAR2 := NULL, 
+    incr_indent_in IN INTEGER := 0,
+    blanks_in IN VARCHAR2 := c_none)
+IS
+BEGIN
+   IF blanks_in IN (c_both, c_before)
+   THEN
+      PLVio.put_line (stg_with_ln);
+   END IF;
+
+   PLVio.put_line 
+      (stg_with_ln (indent_stg (incr_indent_in) || stg_in));
+
+   IF blanks_in IN (c_both, c_after)
+   THEN
+      PLVio.put_line (stg_with_ln);
+   END IF;
+END;</PRE
+></BLOCKQUOTE
+></DIV
+><P
+CLASS="para"
+>Since <KBD
+CLASS="command"
+>put_line</KBD
+> is used in so many different ways, it must be flexible and, therefore, it must take several arguments. The header for <KBD
+CLASS="command"
+>put_line</KBD
+> is as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE put_line 
+   (stg_in IN VARCHAR2 := NULL, 
+    incr_indent_in IN INTEGER := 0,
+    blanks_in IN VARCHAR2 := c_none)</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The three arguments are described below:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+><KBD
+CLASS="command"
+>stg_in</KBD
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The string to be displayed. The default is NULL, which would produce a blank line.</P
+></DD
+><DT
+CLASS="term"
+><KBD
+CLASS="command"
+>incr_indent_in</KBD
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The incremental indentation to be applied to the string. The default is 0, which means that the current level of indentation (set with a call to <KBD
+CLASS="command"
+>set_indent</KBD
+>) is employed.</P
+></DD
+><DT
+CLASS="term"
+><KBD
+CLASS="command"
+>blanks_in</KBD
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>A string value which indicates the type of white space to generate around the line being displayed. The options are: <KBD
+CLASS="command"
+>c_none</KBD
+> (no blanks), <KBD
+CLASS="command"
+>c_before</KBD
+> (one line before), <KBD
+CLASS="command"
+>c_after</KBD
+> (one line after), or <KBD
+CLASS="command"
+>c_both</KBD
+> (one line before and after). </P
+></DD
+></DL
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch16-SECT-4.3.1"
+>16.4.3.1 <A
+CLASS="indexterm"
+NAME="ch16-idx-1000295-0"
+></A
+>Flexibility of put_line</A
+></H4
+><P
+CLASS="para"
+>The following examples of calls to <KBD
+CLASS="command"
+>put_line</KBD
+> give you an idea of its flexibility:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Display one blank line.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>put_line;</PRE
+></BLOCKQUOTE
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Display the word NULL; surrounded by blank lines.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>put_line ('NULL;', 0, c_both);</PRE
+></BLOCKQUOTE
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Indent a call to <KBD
+CLASS="command"
+>PLVtrc.startup</KBD
+> by the standard incremental indentation and display a blank line after that program call.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>put_line ('PLVtrc.startup', v_incr_indent, c_after);</PRE
+></BLOCKQUOTE
+></LI
+></OL
+><P
+CLASS="para"
+>Notice that in the second example I had to include a value of 0 for the incremental indentation. After a while, I found this practice annoying. The zero value is really just filler&nbsp;-- a placeholder so I could specify the blank-line behavior without using named notation. To get around this artificial coding, I have also overloaded <KBD
+CLASS="command"
+>put_line</KBD
+> as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE put_line 
+   (stg_in IN VARCHAR2, blanks_in IN VARCHAR2)
+IS
+BEGIN
+   put_line (stg_in, 0, blanks_in);
+END;</PRE
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch16-SECT-4.3.2"
+>16.4.3.2 <A
+CLASS="indexterm"
+NAME="ch16-idx-1000296-0"
+></A
+>Output mechanism of put_line</A
+></H4
+><P
+CLASS="para"
+>Did you notice that <KBD
+CLASS="command"
+>put_line</KBD
+> does not call DBMS_OUTPUT.PUT_LINE? It doesn't even call <KBD
+CLASS="command"
+>p.l</KBD
+>, that ubiquitous displayer of output from a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> program. In fact, PLVgen relies on the PLV<KBD
+CLASS="command"
+>io.put_line</KBD
+> to generate the code. Why did I bother with PLVio? What does the user have to gain from this extra layer of code? A tremendous amount of flexibility, namely with the ability to redirect the output of generated code.</P
+><P
+CLASS="para"
+>What if I want to plug-and-play my code generator from within a GUI interface (e.g., Oracle Forms or PowerBuilder)? If I rely on DBMS_OUTPUT.PUT_LINE, this GUI tool would have to be able to read information from the DBMS_OUTPUT buffer and then manipulate that data. I don't know about PowerBuilder, but I have not been successful in reading the DBMS_OUTPUT buffer from Oracle Forms (if you want to try, check out the GET_LINE procedure in the DBMS_OUTPUT package). </P
+><P
+CLASS="para"
+>With the PLVio package, I can redirect my output to a database table, <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table, or (with Release 2.3) an operating system file. To accomplish this I do not have to change PLVgen. I do not have to change any of the programs in which I have embedded calls to PLVgen elements. All I have to do is "flip a switch" by calling the <KBD
+CLASS="command"
+>settrg</KBD
+> procedure of PLVio. For example, if I want to send my output to a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table, I would issue this command before any calls to the PLVgen package:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PLVio.settrg (PLV.pstab);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Then all calls to <KBD
+CLASS="command"
+>PLVgen.put_line</KBD
+> would add another row to the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table defined in PLVio. The GUI environment can then extract the text from these rows and manipulate them within the GUI environment. You would not have to make a single change to the PLVgen package to accomplish this switch!</P
+><BLOCKQUOTE
+CLASS="note"
+><P
+CLASS="para"
+><STRONG
+>NOTE:</STRONG
+>  If a PLVio target repository has not been selected by the time PLVgen is first called, the initialization section of the PLVgen package body automatically sets the target to "standard out," as shown below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PACKAGE BODY PLVgen
+IS
+   /* All the package elements */
+BEGIN
+   /* If the target has not been set, use standard output. */
+   IF PLVio.notrg
+   THEN
+      PLVio.settrg (PLV.stdout);
+   END IF;
+END;</PRE
+></BLOCKQUOTE
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch16-SECT-4.3.3"
+>16.4.3.3 <A
+CLASS="indexterm"
+NAME="ch16-idx-1000297-0"
+></A
+>Modularization inside put_line </A
+></H4
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>put_line</KBD
+> procedure calls PLV<KBD
+CLASS="command"
+>io.put_line</KBD
+> to send the line of generated code to the designated repository. What text is sent to <KBD
+CLASS="command"
+>PLVio.put_line</KBD
+>? The <KBD
+CLASS="command"
+>PLVgen.put_line</KBD
+> procedure actually makes use of two other private functions, <KBD
+CLASS="command"
+>stg_with_ln</KBD
+> and <KBD
+CLASS="command"
+>indent_stg</KBD
+>, to construct the string for output.</P
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>stg_with_ln</KBD
+><A
+CLASS="indexterm"
+NAME="ch16-idx-1000298-0"
+></A
+> function incorporates logic required to display a line number before the line of code. It hides the logic and private variables shown below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION stg_with_ln (stg_in IN VARCHAR2 := NULL)
+RETURN VARCHAR2
+IS
+BEGIN
+   IF usingln
+   THEN
+      v_currln := v_currln + 1;
+      RETURN 
+         (LPAD (TO_CHAR (v_currln), 5) || ' ' || stg_in);
+   ELSE  
+      RETURN stg_in;
+   END IF;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>indent_stg</KBD
+><A
+CLASS="indexterm"
+NAME="ch16-idx-1000299-0"
+></A
+> function encapsulates the logic required to properly indent the line of code according to the current indent setting (initial and incremental). The body of <KBD
+CLASS="command"
+>indent_stg</KBD
+> is shown below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION indent_stg (incr_indent_in IN INTEGER := 0) 
+   RETURN VARCHAR2
+IS
+BEGIN
+   RETURN (RPAD (' ', v_indent + incr_indent_in));
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>put_line</KBD
+> program is the only module in PLVgen that calls either <KBD
+CLASS="command"
+>stg_with_ln</KBD
+> or <KBD
+CLASS="command"
+>indent_string</KBD
+>. One could, therefore, argue that these modules represent an unnecessary layer of code. That may be the case for <KBD
+CLASS="command"
+>indent_stg</KBD
+>. When I first wrote <KBD
+CLASS="command"
+>put_line</KBD
+>, however, I did not realize that I would be so successful at funneling all output through <KBD
+CLASS="command"
+>put_line</KBD
+>. I only knew that I did not want to embed the RPADding logic required for indentation right into <KBD
+CLASS="command"
+>put_line</KBD
+>. It felt safer to me to hide that implementational detail behind a function. I applied the same reasoning to handling line numbers&nbsp;-- and that paid off immediately.</P
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>put_line</KBD
+> procedure of PLVgen does, in fact, call <KBD
+CLASS="command"
+>stg_with_ln</KBD
+> three times in its short body. Since a blank line should have a line number as well, I needed to apply that logic in all three calls to PLV<KBD
+CLASS="command"
+>io.put_line</KBD
+>. If I did not consolidate line number handling inside a separate function, I would have repeated the formula and code in <KBD
+CLASS="command"
+>put_line</KBD
+>.</P
+><P
+CLASS="para"
+>This instinct to hide code behind a procedure or function is one you should develop and then cultivate actively. You may in some cases end up writing a program or two that is only used once. The vast majority of your modules will, however, be reused and reused often. If you are sufficiently fanatical about modularization you eventually reach a critical mass of code: a strong development foundation that enables you to implement complex programs quickly and with few bugs. </P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch16-SECT-4.3.4"
+>16.4.3.4 Building on put_line</A
+></H4
+><P
+CLASS="para"
+>Once the <KBD
+CLASS="command"
+>put_line</KBD
+> procedure was in place, I could create many other, more specialized put programs to handle different aspects of <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> code. You have already seen this specialization in the <KBD
+CLASS="command"
+>proc</KBD
+> procedure with such programs as <KBD
+CLASS="command"
+>put_terminate</KBD
+>. There are, in fact, ten different put programs:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>put_all_help
+put_begin
+put_comment
+put_cor_end
+put_end
+put_header_cmnt
+put_help
+put_is_begin
+put_terminate
+put_when_others</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Some of the programs, such as <KBD
+CLASS="command"
+>put_header_cmt</KBD
+> shown below, make direct calls to <KBD
+CLASS="command"
+>put_line</KBD
+>:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE put_header_cmnt 
+   (name_in IN VARCHAR2,
+    indent_in IN INTEGER := 0,
+    file_in IN VARCHAR2 := NULL,
+    author_in IN VARCHAR2 := v_author)
+IS
+BEGIN
+   IF using_hdr
+   THEN
+      put_line ('/*', indent_in);
+      put_line ('|| Program: ' || name_in, indent_in);
+      put_line ('||  Author: ' || author_in, indent_in);
+      put_line ('||    File: ' || file_in, indent_in);
+      put_line ('|| Created: ' || PLV.now, indent_in);
+      put_line ('*/');
+   END IF;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Other programs call both <KBD
+CLASS="command"
+>put_line</KBD
+> and other put procedures, such as <KBD
+CLASS="command"
+>put_end</KBD
+>:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE put_end 
+   (prog_in IN VARCHAR2,
+    indent_in IN INTEGER := 0,</PRE
+></BLOCKQUOTE
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>    incl_term_in IN BOOLEAN := FALSE)
+IS
+BEGIN
+   IF incl_term_in
+   THEN
+      put_terminate (prog_in, indent_in+v_incr_indent);
+   END IF;
+   put_line ('END ' || prog_in || ';', indent_in);
+   put_cor_end;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The conclusion to be drawn from all these layers of code is that you should always take fullest possible advantage of the opportunity to modularize. No user of PLVgen will ever know about all those different, private modules. But when it is time to add another code generator or enhance an existing program, those internal modules make it much easier to implement the changes.</P
+><P
+CLASS="para"
+>Another moment when all of this internal modularization will come in handy is when I enhance PLVgen so that it can be used by other developers to build their own customized code generators. To accomplish this, I need to publicize many of my private modules by putting their headers in the PLVgen specification. Then you can more easily construct code generators that reflect your own coding standards and specific program units&nbsp;-- without modifying the base PLVgen package itself.<A
+CLASS="indexterm"
+NAME="ch16-idx-1000300-0"
+></A
+></P
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch16-SECT-4.4"
+>16.4.4 <A
+CLASS="indexterm"
+NAME="ch16-idx-1000301-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-1000301-1"
+></A
+>Overloading in PLVgen</A
+></H3
+><P
+CLASS="para"
+>PLVgen takes advantage of the overloading feature of packages in a very interesting way to accomplish two important objectives:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Make it as easy as possible to generate code, particularly functions.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Minimize the volume of code required to implement a wide array of generators.</P
+></LI
+></OL
+><P
+CLASS="para"
+>Let's take a close look at the overloading in PLVgen. As we've mentioned before, when you overload you define more than one program with the same name. These programs differ in other ways (usually the number and types of parameters) so that at runtime the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> engine can figure out which of the programs to execute.</P
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>func</KBD
+><A
+CLASS="indexterm"
+NAME="ch16-idx-1000302-0"
+></A
+> procedure, which generates functions, is overloaded seven times in PLVgen. The <KBD
+CLASS="command"
+>gas</KBD
+> procedures, which generate get-and-set programs for a variable, is also overloaded seven times and in the same way. The techniques I employ in PLVgen to accomplish the overloading are quite interesting and informative. Let's examine the overloading in more detail for the <KBD
+CLASS="command"
+>func</KBD
+> procedure and draw out some lessons.</P
+><P
+CLASS="para"
+>First, let's take a look at the outcome of my overloaded <KBD
+CLASS="command"
+>func</KBD
+> procedure. The following execution of <KBD
+CLASS="command"
+>func</KBD
+> generates a numeric function called <KBD
+CLASS="command"
+>totals</KBD
+> whose return value defaults to NULL.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec PLVgen.func ('totals', 1);
+   FUNCTION totals RETURN NUMBER
+   IS
+      retval NUMBER := NULL;
+   BEGIN
+      RETURN retval;
+
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         RETURN NULL;
+   END totals;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>How do I know that a numeric function will be generated? More importantly, how does PLVgen know that it should create a function with a RETURN clause datatype of NUMBER&nbsp;-- and declare the <KBD
+CLASS="command"
+>retval</KBD
+> variable to be of type NUMBER as well? It's got to be the overloading! The second argument passed to <KBD
+CLASS="command"
+>func</KBD
+> was the value 1. Notice that this value does not appear anywhere in the generated function. It was simply used to direct the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> runtime engine to execute the appropriate <KBD
+CLASS="command"
+>func</KBD
+> generator. </P
+><P
+CLASS="para"
+>I could have entered any of the following calls to <KBD
+CLASS="command"
+>PLVgen.func</KBD
+> and generated the very same function:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec PLVgen.func ('totals', -16007.459);
+SQL&gt; exec PLVgen.func ('totals', INSTR ('abc', 'Q'));</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In both of these cases, the second argument evaluates to a number. As a result, the following version of the <KBD
+CLASS="command"
+>func</KBD
+> procedure would be executed:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE func
+   (name_in IN VARCHAR2,
+    datadesc_in NUMBER, 
+    defval_in IN NUMBER := NULL,
+    incl_exc_in IN BOOLEAN := TRUE);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice that the second argument has a datatype of NUMBER. </P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch16-SECT-4.4.1"
+>16.4.4.1 Implementing the func procedures</A
+></H4
+><P
+CLASS="para"
+>Examine the set of four overloaded definitions of <KBD
+CLASS="command"
+>func</KBD
+> in <A
+CLASS="xref"
+HREF="ch16_04.htm#ch16-14732"
+>Example 16.3</A
+>. The version shown above is the only one which has a string as the first argument and a number as the second argument. As a result, the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> engine executes the code for <EM
+CLASS="emphasis"
+>that</EM
+> procedure, which follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE func
+   (name_in IN VARCHAR2,
+    datadesc_in NUMBER, 
+    defval_in IN NUMBER,
+    incl_exc_in IN BOOLEAN := TRUE)
+IS
+BEGIN
+   ifunc 
+      (name_in,
+       c_number, 
+       NVL (TO_CHAR (defval_in), 'NULL'), 
+       NULL,
+       incl_exc_in);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Lo and behold, the entire body of the <KBD
+CLASS="command"
+>func</KBD
+> procedure is nothing more than a call to <KBD
+CLASS="command"
+>ifunc</KBD
+>, which is the internal version of the <KBD
+CLASS="command"
+>func</KBD
+> procedure. In fact, every single one of the other seven overloaded versions of <KBD
+CLASS="command"
+>func</KBD
+> also does nothing more than call <KBD
+CLASS="command"
+>ifunc</KBD
+>. Here, for example, is the body of the version of <KBD
+CLASS="command"
+>func</KBD
+> used to generate a date function:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE func
+   (name_in IN VARCHAR2,
+    datadesc_in DATE, 
+    defval_in IN DATE,
+    incl_exc_in IN BOOLEAN := TRUE)
+IS
+BEGIN
+   ifunc 
+      (name_in,
+       c_date, 
+       NVL (TO_CHAR (defval_in), 'NULL'), 
+       NULL,
+       incl_exc_in);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>There is, in fact, only one difference between the bodies of these procedures. </P
+><DIV
+CLASS="example"
+><H4
+CLASS="example"
+><A
+CLASS="title"
+NAME="ch16-14732"
+>Example 16.3: First Set of Overloaded Definitions for func </A
+></H4
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE func
+   (name_in IN VARCHAR2,
+    datadesc_in VARCHAR2, 
+    defval_in IN VARCHAR2 := NULL,
+    length_in IN INTEGER := c_def_length,
+    incl_exc_in IN BOOLEAN := TRUE);
+
+PROCEDURE func
+   (name_in IN VARCHAR2,
+    datadesc_in NUMBER, 
+    defval_in IN NUMBER := NULL,
+    incl_exc_in IN BOOLEAN := TRUE);
+
+PROCEDURE func
+   (name_in IN VARCHAR2,
+    datadesc_in BOOLEAN, 
+    defval_in IN BOOLEAN := NULL,
+    incl_exc_in IN BOOLEAN := TRUE);
+
+PROCEDURE func
+   (name_in IN VARCHAR2,
+    datadesc_in DATE, 
+    defval_in IN DATE := NULL,
+    incl_exc_in IN BOOLEAN := TRUE);<A
+CLASS="indexterm"
+NAME="ch16-idx-1000303-0"
+></A
+></PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch16-SECT-4.4.2"
+>16.4.4.2 Translating data to constant</A
+></H4
+><P
+CLASS="para"
+>In the number version, the second argument passed to <KBD
+CLASS="command"
+>ifunc</KBD
+> is a constant: <KBD
+CLASS="command"
+>c_number</KBD
+>. In the date version, I pass <KBD
+CLASS="command"
+>c_date</KBD
+> in the second position. What I have done is convert the datatype of the second argument in <KBD
+CLASS="command"
+>func</KBD
+> (the <KBD
+CLASS="command"
+>datadesc_in</KBD
+> parameter) into a string that indicates the type of function to generate. In this way I am able to implement all of the different function generators with a single procedure (<KBD
+CLASS="command"
+>ifunc</KBD
+><A
+CLASS="indexterm"
+NAME="ch16-idx-1000304-0"
+></A
+>), greatly reducing the size of PLVgen and making it easy for me to maintain and enhance all of the function generators at once. </P
+><P
+CLASS="para"
+>Here are the definitions of the datatype constants:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>c_varchar2 CONSTANT VARCHAR2(8) := 'VARCHAR2';
+c_date CONSTANT VARCHAR2(8) := 'DATE';
+c_boolean CONSTANT VARCHAR2(8) := 'BOOLEAN';
+c_number CONSTANT VARCHAR2(8) := 'NUMBER';</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice that another aspect of calling <KBD
+CLASS="command"
+>ifunc</KBD
+> is that I convert the default value into a string. Furthermore, if the default value is NULL, I pass a string NULL. Again, this conversion process allows me to implement all of the function generators with a single procedure that has the following header:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE ifunc
+   (name_in IN VARCHAR2,
+    datadesc_in VARCHAR2, 
+    defval_in IN VARCHAR2,
+    length_in IN INTEGER,
+    incl_exc_in IN BOOLEAN := TRUE)</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The arguments of <KBD
+CLASS="command"
+>ifunc</KBD
+> are the same as those for <KBD
+CLASS="command"
+>func</KBD
+>, with the following differences:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>datadesc_in</KBD
+> and <KBD
+CLASS="command"
+>defval_in</KBD
+> arguments are always and only VARCHAR2. All datatype differences have at this point been converted to constants and merged in the bodies of the <KBD
+CLASS="command"
+>func</KBD
+> procedures. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The fourth argument, <KBD
+CLASS="command"
+>length_in</KBD
+>, is required only for VARCHAR2 functions so it didn't appear in the headers for number and date versions of <KBD
+CLASS="command"
+>func</KBD
+> (it is present, on the other hand, in the string version&nbsp;-- see <A
+CLASS="xref"
+HREF="ch16_04.htm#ch16-14732"
+>Example 16.3</A
+>). The calls to <KBD
+CLASS="command"
+>ifunc</KBD
+> in those procedures simply pass NULL for the length argument.</P
+></LI
+></OL
+><P
+CLASS="para"
+>The body of <KBD
+CLASS="command"
+>ifunc</KBD
+> closely parallels that of the <KBD
+CLASS="command"
+>proc</KBD
+> procedure. Differences reflect the special structure of a function: the RETURN clause and RETURN statements, the declaration of a local "return value" variable (necessary to conform to my coding standards). I will not go over this implementation here, since the focus is on overloading. I direct your attention, however, to the way that the IS and BEGIN keyword are put separately in a function, since I declare a local variable in between, using the <KBD
+CLASS="command"
+>var_declare</KBD
+> private function.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch16-SECT-4.4.3"
+>16.4.4.3 Overloading for unevaluated default values</A
+></H4
+><P
+CLASS="para"
+>So far I have examined overloadings of <KBD
+CLASS="command"
+>func</KBD
+> for each of VARCHAR2, NUMBER, DATE, and BOOLEAN datatypes in which the default value passed in is of the same datatype as the function. These versions of <KBD
+CLASS="command"
+>func</KBD
+> allow me to specify a default value which is evaluated and then placed in the local variable declaration. </P
+><P
+CLASS="para"
+>Suppose I want to create a date function that contains as a default value the first day of 1996. I would call <KBD
+CLASS="command"
+>func</KBD
+> as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec PLVgen.func ('day_offset', SYSDATE, TRUNC (SYSDATE, 'YYYY'));
+   FUNCTION day_offset RETURN DATE
+   IS
+      retval DATE := '01-JAN-96';
+   BEGIN
+      RETURN retval;
+
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         RETURN NULL;
+   END day_offset;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In this situation, the expression TRUNC (SYSDATE, 'YYYY') was evaluated by <KBD
+CLASS="command"
+>ifunc</KBD
+>. The resulting value was then placed after the assignment operator in the declaration. That works just fine. What if, on the other hand, I don't want the default value to be the first day of 1996? What if, instead, I want the default to be the first day of the <EM
+CLASS="emphasis"
+>current</EM
+> year&nbsp;-- whatever that might be? I wouldn't want the default value evaluated. Rather, it should be treated as a literal&nbsp;-- a string, in fact&nbsp;-- and passed on to the assignment without parsing and evaluation. </P
+><P
+CLASS="para"
+>In this scenario, my call to <KBD
+CLASS="command"
+>func</KBD
+> would look like this:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec PLVgen.func
+             ('day_offset', SYSDATE, 'TRUNC (SYSDATE, ''YYYY'')');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>and the resulting declaration of the return value variable in the generated function would look like:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>IS
+   retval DATE := TRUNC (SYSDATE, 'YYYY');
+BEGIN</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This kind of default value is surely going to be a common occurrence when generating code in the real world. So if PLVgen is going to be truly useful, it needs to be able to handle this variation. </P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch16-SECT-4.4.4"
+>16.4.4.4 The final overloading frontier</A
+></H4
+><P
+CLASS="para"
+>Fortunately, the flexibility provided by overloading lets me get the job done in a straightforward manner. Did you notice that the last call to <KBD
+CLASS="command"
+>func</KBD
+> (passing the string version of TRUNC (SYSDATE, 'YYYY')) contains a sequence of arguments not supported by the overloadings of <KBD
+CLASS="command"
+>func</KBD
+> shown in <A
+CLASS="xref"
+HREF="ch16_04.htm#ch16-14732"
+>Example 16.3</A
+> (I pass string-date-string instead of string-date-date). To handle this combination, I need to create another overloading of <KBD
+CLASS="command"
+>func</KBD
+>, one that accepts a string default value. This version of <KBD
+CLASS="command"
+>func</KBD
+> is shown below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE func
+   (name_in IN VARCHAR2,
+    datadesc_in DATE, 
+    defval_in IN VARCHAR2,
+    incl_exc_in IN BOOLEAN := TRUE);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice that in this case I do not provide a default value of NULL for the <KBD
+CLASS="command"
+>defval_in</KBD
+> parameter. If I did so, then I would have an ambiguous overloading. A call to <KBD
+CLASS="command"
+>func</KBD
+> that only supplied the first two parameter values would be syntactically valid, but would generate the following runtime error:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PLS-00307: too many declarations of 'FUNC' match this call</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> engine would not know which of the two versions of <KBD
+CLASS="command"
+>func</KBD
+> to execute (in both cases only the first arguments are required and they are string-date in both versions). By leaving off a default for the <KBD
+CLASS="command"
+>defval_in</KBD
+> parameter, I force a user to provide three values, the third of which is a string, thereby ensuring that any valid execution of <KBD
+CLASS="command"
+>func</KBD
+> identifies uniquely one of the <KBD
+CLASS="command"
+>func</KBD
+> overloadings.</P
+><P
+CLASS="para"
+><A
+CLASS="xref"
+HREF="ch16_04.htm#ch16-21142"
+>Example 16.4</A
+> shows the additional overloadings for DATE, NUMBER, and BOOLEAN. Together with the versions shown in <A
+CLASS="xref"
+HREF="ch16_04.htm#ch16-14732"
+>Example 16.3</A
+>, I have now presented and explain the full set of overloadings (seven) for the <KBD
+CLASS="command"
+>func</KBD
+> procedure. The same number of and rationale for overloadings is, by the way, applicable to the <KBD
+CLASS="command"
+>PLVgen.gas</KBD
+> procedures.</P
+><DIV
+CLASS="example"
+><H4
+CLASS="example"
+><A
+CLASS="title"
+NAME="ch16-21142"
+>Example 16.4: Last Three Overloadings of Func </A
+></H4
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>&#13;PROCEDURE func
+   (name_in IN VARCHAR2,
+    datadesc_in NUMBER, 
+    defval_in IN VARCHAR2,
+    incl_exc_in IN BOOLEAN := TRUE);
+
+PROCEDURE func
+   (name_in IN VARCHAR2,
+    datadesc_in BOOLEAN, 
+    defval_in IN VARCHAR2,
+    incl_exc_in IN BOOLEAN := TRUE);
+
+PROCEDURE func
+   (name_in IN VARCHAR2,
+    datadesc_in DATE, 
+    defval_in IN VARCHAR2,
+    incl_exc_in IN BOOLEAN := TRUE);
+</PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch16-SECT-4.4.5"
+>16.4.4.5 Special casing unevaluated string values</A
+></H4
+><P
+CLASS="para"
+>I have presented all of the overloadings, but have not yet finished explaining the full range of functionality available with the <KBD
+CLASS="command"
+>func</KBD
+> procedures. Have you wondered why I have only (!) seven overloadings of <KBD
+CLASS="command"
+>func</KBD
+>? Why don't I offer another overloading to support nonevaluated default values for string functions, for a total of eight overloadings? That would provide a symmetry one might expect in the PLVgen code. </P
+><P
+CLASS="para"
+>Contrary to first impressions, however, I cannot overload two different versions of the VARCHAR2 function generator as I did for the other datatypes. Recall that the third argument of the original VARCHAR2 func is already a string. An overloading that followed the same approach would simply be a duplicate. You can see my dilemma in the two calls to <KBD
+CLASS="command"
+>func</KBD
+> shown below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec PLVgen.func ('full_name', 'A', 'SMITH, SALLY');
+SQL&gt; exec PLVgen.func ('full_name', 'A', 'LPAD (last_name_in)');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>These two uses of <KBD
+CLASS="command"
+>func</KBD
+> look very different to you and me; it is easy to see how and why they should be treated differently in the generated code. To the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> engine, however, there is no distinction. As a result, I needed to come up with a way to tell my package when it had an expression that should not be evaluated. </P
+><P
+CLASS="para"
+>The approach I took was to set the following rule: if you want the default value to be passed untouched to the generated function, prefix your default value with a <KBD
+CLASS="command"
+>=</KBD
+>. With this convention, I would change the last example of a call to <KBD
+CLASS="command"
+>PLVgen.func</KBD
+> to:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec PLVgen.func ('full_name', 'A', '=LPAD (last_name_in)');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This special case is recognized and handled in the <KBD
+CLASS="command"
+>var_declare</KBD
+> function. This function is called within <KBD
+CLASS="command"
+>ifunc</KBD
+> to define a local variable to RETURN from the function, as shown below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>put_line 
+   ('v_' || 
+    var_declare (v_name, datadesc_in, defval_in, length_in));</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Inside <KBD
+CLASS="command"
+>var_declare</KBD
+>, the following IF statement is then executed:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>IF SUBSTR (defval_in, 1, 1) = c_literal AND
+   LENGTH (defval_in) &gt; 1
+THEN
+   v_defval := SUBSTR (defval_in, 2);
+ELSIF datadesc_in IN (c_varchar2, c_date)
+THEN
+   v_defval := PLVchr.quoted1 (defval_in);
+END IF;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Translation: if the first character is an equal sign and there is more to the default than simply an equal sign, set the default value to the expression following the equal sign. Otherwise, if the datatype of the variable is a string or a date, embed the default value in single quotes. The default value is then concatenated <EM
+CLASS="emphasis"
+>into</EM
+> the variable declaration statement.</P
+><P
+CLASS="para"
+>The multiple versions of <KBD
+CLASS="command"
+>func</KBD
+> and <KBD
+CLASS="command"
+>gas</KBD
+> in PLVgen offer several interesting lessons in package-based overloading. First and most importantly, overloading provides a smooth and easy to use interface. The user of PLVgen only has to remember <KBD
+CLASS="command"
+>func</KBD
+> in order to generate a function, regardless of the datatype (within the range of supported datatypes, of course). This is much simpler than remembering different names, such as <KBD
+CLASS="command"
+>string_func</KBD
+> and <KBD
+CLASS="command"
+>date_func</KBD
+>. </P
+><P
+CLASS="para"
+>Second, from the implementational view, PLVgen shows how to merge all those different public <KBD
+CLASS="command"
+>func</KBD
+> procedures into a single, internal <KBD
+CLASS="command"
+>ifunc</KBD
+> procedure. By converting user-entered values to constants that are recognized by the package, I can keep the code required to implement all these variations down to an absolute minimum. </P
+><P
+CLASS="para"
+>Finally, the steps taken to allow for nonevaluated defaults for the VARCHAR2 function illustrate the kind of creative thinking (or is it just a workaround kludge?) in which you must sometimes engage in order to surmount obstacles in <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> development.<A
+CLASS="indexterm"
+NAME="ch16-idx-1000306-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-1000306-1"
+></A
+></P
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch16-SECT-4.5"
+>16.4.5 <A
+CLASS="indexterm"
+NAME="ch16-idx-1000305-0"
+></A
+>Applying the Toggles</A
+></H3
+><P
+CLASS="para"
+>With all of these toggles modifying the look-and-feel of the generated code, it is extremely important to find a way to apply the toggles without cluttering up the code. I accomplish this mostly through the use of those same specialized put programs discussed earlier. </P
+><P
+CLASS="para"
+>Consider the <KBD
+CLASS="command"
+>put_comment</KBD
+> program. This procedure accepts as input a string, any incremental indentation, and also a specifier for surrounding blank lines (the same three arguments as <KBD
+CLASS="command"
+>put_line</KBD
+> itself). <KBD
+CLASS="command"
+>put_comment</KBD
+> simply surrounds the string with the comment markers, <KBD
+CLASS="command"
+>/*</KBD
+> and <KBD
+CLASS="command"
+>*/</KBD
+>, and then passes this commented string to <KBD
+CLASS="command"
+>put_line</KBD
+>. </P
+><P
+CLASS="para"
+>The following statement shows an example of a call to <KBD
+CLASS="command"
+>put_comment</KBD
+> that outputs the string <KBD
+CLASS="command"
+>/* Public Modules */</KBD
+> indented three spaces past the default with a blank line both before and after the comment.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>put_comment ('Public Modules', 3, c_both);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Yet if the user has executed either of the following lines:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec PLVgen.usemin
+SQL&gt; exec PLVgen.nousecmnt</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>then I do not want <KBD
+CLASS="command"
+>put_comment</KBD
+> to display anything. There are two different solutions to this situation:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Nest every call to <KBD
+CLASS="command"
+>put_comment</KBD
+> inside an IF statement like this:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>IF using_cmnt
+THEN
+   put_comment ('Public Modules', 3, c_both);
+END IF;</PRE
+></BLOCKQUOTE
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Put the IF statement inside the <KBD
+CLASS="command"
+>put_comment</KBD
+> procedure. This approach is shown below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE put_comment 
+   (stg_in IN VARCHAR2 := NULL, 
+    incr_indent_in IN INTEGER := 0,      
+    blanks_in IN VARCHAR2 := c_none)
+IS
+BEGIN
+   IF using_cmnt
+   THEN
+      put_line (comment (stg_in), incr_indent_in, blanks_in);
+   ELSIF blanks_in != c_none
+   THEN
+      put_line (NULL, incr_indent_in, c_none);
+   END IF;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I recommend the second approach. By hiding the IF statement inside <KBD
+CLASS="command"
+>put_comment</KBD
+>, the code in each program that calls <KBD
+CLASS="command"
+>put_comment</KBD
+> is tighter and cleaner. In addition, I do not have to remember the name of the function that tells me whether or not to use comments each time I call <KBD
+CLASS="command"
+>put_comment</KBD
+>. Instead, I code it once inside <KBD
+CLASS="command"
+>put_comment</KBD
+> and make the toggle transparent in my code.</P
+><P
+CLASS="para"
+>You see this same approach used throughout PLVgen. Again and again you find that each toggle is checked and applied as close as possible to the <KBD
+CLASS="command"
+>put_line</KBD
+> the toggle is supposed to affect.</P
+></LI
+></OL
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch16-SECT-4.6"
+>16.4.6 <A
+CLASS="indexterm"
+NAME="ch16-idx-1000307-0"
+></A
+>Leveraging PL/Vision in PLVgen</A
+></H3
+><P
+CLASS="para"
+>You may have noticed several references in PLVgen programs to modules from other PL/Vision packages, such as PLVio. In fact, PLVgen takes advantage of the following programs in the PL/Vision library:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+><CODE
+CLASS="literal"
+> PLVio.put_line</CODE
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Called by <KBD
+CLASS="command"
+>PLVgen.put_line</KBD
+>, this program sends a line of output to the current default target for the PLVio package. If this target has not been set before using this package, the initialization section of the package sets the target to be standard output (display to terminal).</P
+></DD
+><DT
+CLASS="term"
+><CODE
+CLASS="literal"
+> PLV.now</CODE
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Returns the current date and time as a formatted string.</P
+></DD
+><DT
+CLASS="term"
+><CODE
+CLASS="literal"
+> PLVhlp.comment_start</CODE
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Returns a string that conforms to the guidelines used by PLVhlp to mark the beginning of a block of help text.</P
+></DD
+><DT
+CLASS="term"
+><CODE
+CLASS="literal"
+> PLVhlp.comment_end</CODE
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Returns a string that conforms to the guidelines used by PLVhlp to mark the ending of a block of help text.</P
+></DD
+><DT
+CLASS="term"
+><CODE
+CLASS="literal"
+> PLVcase.string</CODE
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Applies the UPPER-lower method to the parameter list of a program, and to the default value of a variable</P
+></DD
+><DT
+CLASS="term"
+><CODE
+CLASS="literal"
+> PLVchr.quoted1</CODE
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Embeds the specified string inside single quotes.</P
+></DD
+><DT
+CLASS="term"
+><CODE
+CLASS="literal"
+> PLV.boolstg</CODE
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Returns the string TRUE if a Boolean evaluates to TRUE. Otherwise returns the string FALSE.</P
+></DD
+><DT
+CLASS="term"
+><CODE
+CLASS="literal"
+> PLVhlp.show</CODE
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Shows any help text defined in the PLVgen package to help developers understand and use this package.</P
+></DD
+><DT
+CLASS="term"
+><CODE
+CLASS="literal"
+> PLVio.settrg</CODE
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Sets the target for calls to <KBD
+CLASS="command"
+>PLVio.put_line</KBD
+> to standard output if that target has not already been set in the current session.</P
+></DD
+></DL
+><P
+CLASS="para"
+>In most of the uses listed above, the PL/Vision modules play modest roles. They mostly serve to encapsulate logic which, while uncomplicated, should not have to be known outside of the package. Two of the programs, <KBD
+CLASS="command"
+>PLVio.put_line</KBD
+> and <KBD
+CLASS="command"
+>PLVcase.string</KBD
+>, offer major added-value to the PLVgen package. I have already examined how <KBD
+CLASS="command"
+>PLVio.put_line</KBD
+> is used in the <KBD
+CLASS="command"
+>Plvgen.put_line</KBD
+> procedure to enhance the flexibility of the code generator to write code out to different repositories. The usage of <KBD
+CLASS="command"
+>PLVcase.string</KBD
+> increases the elegance of the code generator and its ability to support best practices, in this case the automatic upper-casing of reserved words.<A
+CLASS="indexterm"
+NAME="ch16-idx-1000308-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-1000308-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-1000308-2"
+></A
+></P
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch16_03.htm"
+TITLE="16.3 Modifying PLVgen Behavior"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 16.3 Modifying PLVgen Behavior"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Advanced Oracle PL/SQL Programming with Packages"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Advanced Oracle PL/SQL Programming with Packages"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch17_01.htm"
+TITLE="17. PLVhlp: Online Help for PL/SQL Programs"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 17. PLVhlp: Online Help for PL/SQL Programs"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>16.3 Modifying PLVgen Behavior</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>17. PLVhlp: Online Help for PL/SQL Programs</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG
+SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly & Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

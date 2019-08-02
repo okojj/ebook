@@ -1,0 +1,162 @@
+<html><head>
+<title>[Chapter 8] 8.3 Restricting Logins</TITLE>
+<meta name="DC.title" content="Practical UNIX &amp; Internet Security"><meta name="DC.creator" content="Simson Garfinkel &amp; Gene Spafford"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-02-04T00:05:41Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-148-8" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch08_01.htm" title="8. Defending  Your Accounts"><link rel="prev" href="ch08_02.htm" title="8.2 Monitoring File Format"><link rel="next" href="ch08_04.htm" title="8.4 Managing Dormant Accounts"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Practical UNIX &amp; Internet Security" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Practical UNIX &amp; Internet Security"><area shape="RECT" coords="467,0,514,18" href="../search/psrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch08_02.htm" title="8.2 Monitoring File Format"><img src="../gifs/txtpreva.gif" alt="Previous: 8.2 Monitoring File Format" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 8<br>Defending  Your Accounts</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch08_04.htm" title="8.4 Managing Dormant Accounts"><img src="../gifs/txtnexta.gif" alt="Next: 8.4 Managing Dormant Accounts" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="PUIS-CHP-8-SECT-3">8.3 Restricting Logins</A
+></H2
+><p class="para"><a class="indexterm" name="AUTOID-10578"></A
+><a class="indexterm" name="AUTOID-10581"></A
+><a class="indexterm" name="AUTOID-10584"></A
+>Some systems have (or will soon have) the ability
+to restrict the circumstances under which each user may log in.
+In particular, you could specify times of day and days of the week
+for each account during which a user may not log in. You could also
+restrict the login account to a particular terminal line.</P
+><p class="para">These restrictions are very useful additional features to
+have, if they are available. They help prohibit access to accounts
+that are only used in a limited environment, thus narrowing the
+&quot;window of opportunity&quot; an attacker might have
+to exploit the system.</P
+><p class="para">For example, if your system is used in a business setting,
+perhaps the VP of finance will never log in from any network terminal,
+and he is never at work outside the hours of 7 a.m. to 7 p.m. on
+weekdays. Thus, you could configure his account to prohibit any
+logins outside those terminals and those hours. If an attacker knew
+the account existed and was involved in password cracking or other
+intelligence gathering over an off-site network connection, she
+would not be able to get in even if she stumbled across the correct
+password.</P
+><p class="para">If your system does not support this feature yet, you can
+ask your vendor when it will be provided. If you want to put in
+your own version, you can do so with a simple shell script:</P
+><ol class="orderedlist"><li class="listitem"><p class="para">First, write a script something like
+the following and put it in a secure location, such as <em class="emphasis">/etc/security/restrictions/fred</EM
+>:</P
+><blockquote class="screen"><pre class="screen">#!/bin/ksh
+
+allowed_ttys=&quot;/dev/tty@(01|02|03)&quot;
+allowed_days=&quot;@(Mon|Tue|Wed|Thu|Fri)&quot;
+allowed_hours=&quot;(( hour &gt;= 7 &amp;&amp; hour &lt;= 19))&quot;
+real_shell=/bin/ksh
+
+my_tty=&quot;$(bin/tty)&quot;
+dow=&quot;$(/bin/date +%a)&quot;
+hour=$(/bin/date +%H)
+
+eval [[ $my_tty != $allowed_ttys ]] &amp;&amp; exit 1
+eval [[ $dow != $allowed_days ]] &amp;&amp; exit 1
+eval $allowed_hours || exit 1
+
+exec -a -${real_shell##*/} $real_shell &quot;${1+&quot;$@&quot;}</PRE
+></BLOCKQUOTE
+></LI
+><li class="listitem"><p class="para">Replace the user's login shell with this
+script in the <em class="emphasis">/etc/passwd</EM
+> file. Do so with
+the <a class="indexterm" name="AUTOID-10598"></A
+>
+<kbd class="command">usermod -s</KBD
+> command, the <kbd class="command">vipw</KBD
+> command, or
+equivalent:</P
+><blockquote class="screen"><pre class="screen"># usermod -s /etc/security/restrictions/fred fred</PRE
+></BLOCKQUOTE
+></LI
+><li class="listitem"><p class="para">Remove the user's ability to change his
+or her own shell. If everyone on the system is going to have constraints
+on login place and time, then you can simply:</P
+><blockquote class="screen"><pre class="screen"># chmod 0 /bin/chsh</PRE
+></BLOCKQUOTE
+><p class="para">This method is preferable to deleting the command entirely
+because you might need it again later.[3]</P
+><blockquote class="footnote"><p class="para">[3] Be very careful
+when running this command as it will only work if <kbd class="command">/bin/chsh</KBD
+>
+is a single-purpose program that only changes the user's
+shell. If <em class="emphasis">passwd</EM
+> is a link to <em class="emphasis">chsh</EM
+>
+(or other password utilities), the <kbd class="command">chmod</KBD
+> can
+break a lot of things. Under SunOS, 4.1.x, <em class="emphasis">/bin/passwd</EM
+>
+is a hard link to <em class="emphasis">/bin/chfn</EM
+>, so if you do this
+<em class="emphasis">chmod</EM
+>, people won't be able to change
+passwords either! (This may be the case for other operating systems
+as well.) Note as well that removing <em class="emphasis">chsh</EM
+> won't
+work either in this case because users can <em class="emphasis">ln -s /bin/passwd
+chfn</EM
+> and run it that way. Finally, some <kbd class="command">passwd</KBD
+> programs have the <em class="emphasis">chfn</EM
+> functionality
+as a command line option! On these systems, you can only prevent
+a user from changing his shell by removing the unapproved shells
+from the <i class="filename">/etc/shells</I
+> file.</P
+></BLOCKQUOTE
+><p class="para">If only a few people are going to have restricted access,
+create a new group named restricta (or similar), and add all the
+users to that group. Then, do:</P
+><blockquote class="screen"><pre class="screen">#  <a class="indexterm" name="AUTOID-10624"></A
+> chmod 505 /bin/chsh # chgrp restricta /bin/chsh</PRE
+></BLOCKQUOTE
+><p class="para">This will allow other users to change their shells, but not
+anyone in the restricta group.</P
+></LI
+></OL
+><blockquote class="note"><p class="para"><strong>NOTE:</STRONG
+> If you take this approach, either with a vendor-supplied
+method or something like the example above, keep in mind that there
+are circumstances where some users may need access at different
+times. In particular, users traveling to different time zones, or
+working on big year-end projects, may need other forms of access.
+It is important that someone with the appropriate privileges is
+on call to alter these restrictions, if needed. Remember that the
+goal of security is to protect users, and not get in the way of
+their work!<a class="indexterm" name="AUTOID-10629"></A
+><a class="indexterm" name="AUTOID-10632"></A
+><a class="indexterm" name="AUTOID-10635"></A
+></P
+></BLOCKQUOTE
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch08_02.htm" title="8.2 Monitoring File Format"><img src="../gifs/txtpreva.gif" alt="Previous: 8.2 Monitoring File Format" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Practical UNIX &amp; Internet Security"><img src="../gifs/txthome.gif" alt="Practical UNIX &amp; Internet Security" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch08_04.htm" title="8.4 Managing Dormant Accounts"><img src="../gifs/txtnexta.gif" alt="Next: 8.4 Managing Dormant Accounts" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">8.2 Monitoring File Format</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">8.4 Managing Dormant Accounts</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.htm" title="The Networking CD Bookshelf">Library Home</A
+> | <a href="../dnsbind/index.htm" title="DNS &amp; BIND">DNS &amp; BIND</A
+> | <a href="../tcpip/index.htm" title="TCP/IP Network Administration">TCP/IP</A
+> | <a href="../sendmail/index.htm" title="sendmail">sendmail</A
+> | <a href="../smdref/index.htm" title="sendmail Desktop Reference">sendmail Reference</A
+> | <a href="../firewall/index.htm" title="Building Internet Firewalls">Firewalls</A
+> | <a href="index.htm" title="Practical UNIX &amp; Internet Security">Practical Security</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

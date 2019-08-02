@@ -1,0 +1,278 @@
+<html><head>
+<title>[Chapter 5] 5.6 Device Files</TITLE>
+<meta name="DC.title" content="Practical UNIX &amp; Internet Security"><meta name="DC.creator" content="Simson Garfinkel &amp; Gene Spafford"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-02-04T00:02:14Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-148-8" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch05_01.htm" title="5. The UNIX Filesystem"><link rel="prev" href="ch05_05.htm" title="5.5 SUID"><link rel="next" href="ch05_07.htm" title="5.7 chown: Changing a File's Owner"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Practical UNIX &amp; Internet Security" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Practical UNIX &amp; Internet Security"><area shape="RECT" coords="467,0,514,18" href="../search/psrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch05_05.htm" title="5.5 SUID"><img src="../gifs/txtpreva.gif" alt="Previous: 5.5 SUID" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 5<br>The UNIX Filesystem</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch05_07.htm" title="5.7 chown: Changing a File's Owner"><img src="../gifs/txtnexta.gif" alt="Next: 5.7 chown: Changing a File's Owner" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="PUIS-CHP-5-SECT-6">5.6 Device Files</A
+></H2
+><p class="para"><a class="indexterm" name="AUTOID-6076"></A
+><a class="indexterm" name="AUTOID-6078"></A
+>Computer
+systems usually have peripheral devices attached to them. These
+devices may be involved with <span class="acronym">I/O</SPAN
+> (terminals,
+printers, modems); they may involve mass storage (disks, tapes);
+and they may have other specialized functions. The <span class="acronym">UNIX</SPAN
+>
+paradigm for devices is to treat each one as a file, some with special
+characteristics.</P
+><p class="para"><span class="acronym">UNIX</SPAN
+> devices are represented as inodes,
+identical to files. The <a class="indexterm" name="AUTOID-6085"></A
+>
+inodes represent either a <i class="firstterm"><a class="indexterm" name="AUTOID-6089"></A
+>character device</I
+> or a <i class="firstterm"><a class="indexterm" name="AUTOID-6092"></A
+>
+block device (described in the
+sidebar)</I
+>. Each device is also designated by a major
+device number, indicating the type of device, and a minor device
+number, indicating which one of many similar devices the inode represents.
+For instance, the partitions of a physical disk will all have the
+same major device number, but different minor device numbers. For
+a serial card, the minor device number may represent which port
+number is in use. When a program reads from or writes to a device
+file, the kernel turns the request into an <span class="acronym">I/O</SPAN
+>
+operation with the appropriate device, using the major/minor
+device numbers as parameters to indicate which device to access.</P
+><div class="sidebar"><h4 class="sidebar"><a class="title" name="AUTOID-6095">Block Vs. Character Devices</A
+></H4
+><p class="para">Most devices in <span class="acronym">UNIX</SPAN
+> are referenced as
+<i class="firstterm"><a class="indexterm" name="AUTOID-6100"></A
+>character devices</I
+>.
+These are also known as <i class="firstterm"><a class="indexterm" name="AUTOID-6103"></A
+>raw
+devices</I
+>. The reason for the name &quot;raw device&quot;
+is because that is what you get&nbsp;- raw access to the device.
+You must make your read and write calls to the device file in the
+natural transfer units of the device. Thus, you probably read and
+write single characters at a time to a terminal device, but you
+need to read and write sectors to a disk device. Attempts to read
+fewer (or more) bytes than the natural block size results in an
+error, because the raw device doesn't work that way.</P
+><p class="para">When accessing the filesystem, we often want to read or write
+only the next few bytes of a file at a time. If we used the raw
+device, it would mean that to write a few bytes to a file, we would
+need to read in the whole sector off disk containing those bytes,
+modify the ones we want to write, and then write the whole sector
+back out. Now consider every user doing that as they update each
+file. That would be a lot of disk traffic!</P
+><p class="para">The solution is to make efficient use of <a class="indexterm" name="AUTOID-6107"></A
+><a class="indexterm" name="AUTOID-6109"></A
+>
+caching. <i class="firstterm"><a class="indexterm" name="AUTOID-6112"></A
+>Block
+devices </I
+>are cached versions of character devices. When
+we make reference to a few bytes of the block device, the kernel
+reads the corresponding sector into a buffer in memory, and then
+copies the characters out of the buffer that we wanted. The next
+time we reference the same sector, to read from or write to, the
+access goes to the cached version in memory. If we have enough memory,
+most of the files we will access can all be kept in buffers, resulting
+in much better performance.</P
+><p class="para">There is a drawback to block devices, however. If the system
+crashes before modified buffers get written back out to disk, the
+changes our programs made won't be there when the system
+reboots. Thus, we need to periodically flush the modified buffers
+out to disk. That is effectively what the <i class="firstterm"><a class="indexterm" name="AUTOID-6116"></A
+>sync </I
+>() system
+call does: schedule the buffers to be flushed to disk. Most systems
+have a <i class="filename">syn</I
+> or <i class="filename">fsflush</I
+>
+daemon that issues a <i class="filename">sync()</I
+> call every 30 or
+60 seconds to make sure the disk is mostly up to date. If the system
+goes down between <i class="filename">sync()</I
+> calls, we need to run
+a program such as <kbd class="command">fsck</KBD
+> or <kbd class="command">checkfsys</KBD
+>
+to make certain that no directories whose buffers were
+in memory were left in an inconsistent state.</P
+></DIV
+><p class="para"><span class="acronym">UNIX</SPAN
+> usually has some special device files
+that don't correspond to physical devices. The<a class="indexterm" name="AUTOID-6126"></A
+><a class="indexterm" name="AUTOID-6129"></A
+><a class="indexterm" name="AUTOID-6132"></A
+><a class="indexterm" name="AUTOID-6135"></A
+><a class="indexterm" name="AUTOID-6137"></A
+><a class="indexterm" name="AUTOID-6139"></A
+>
+<i class="filename">/dev/null</I
+> device simply discards
+anything written to it, and nothing can ever be read from it&nbsp;- a
+process that attempts to do so gets an immediate end-of-file condition.
+Writing to the <i class="filename">/dev/console</I
+> device results in
+output being printed on the system console terminal. And reading
+or writing to the <i class="filename">/dev/kmem</I
+> device accesses the
+kernel's memory. Devices such as these are often referred
+to as <i class="firstterm"><a class="indexterm" name="AUTOID-6145"></A
+>pseudo-devices</I
+>.</P
+><p class="para">Device files are one of the reasons <span class="acronym">UNIX</SPAN
+>
+is so flexible and popular&nbsp;- they allow programmers to write
+their programs in a general way without having to know the actual
+type of device being used. Unfortunately, they also can present
+a major security hazard when an attacker is able to access them
+in an unauthorized way.</P
+><p class="para">For instance, if attackers can read or write to the <i class="filename">/dev/kmem</I
+>
+device, they may be able to alter their priority, <span class="acronym">UID</SPAN
+>,
+or other attributes of their process. They could also scribble garbage
+data over important data structures and crash the system. Similarly,
+access to disk devices, tape devices, network devices, and terminals
+being used by others all can lead to problems. Access to your screen
+buffer might allow an attacker to read what is displayed on your
+screen. Access to your audio devices might allow an attacker to
+eavesdrop on your office without your knowing about it.</P
+><p class="para">In standard configurations of <span class="acronym">UNIX</SPAN
+>, all
+the standard device files are located in the directory <i class="filename">/dev.</I
+>
+There is usually a script (e.g., <span class="acronym">MAKEDEV</SPAN
+>) in
+that directory that can be run to create the appropriate device
+files and set the correct permissions. A few devices, such as <i class="filename">/dev/null</I
+>,
+<i class="filename">/dev/tty</I
+>, and <i class="filename">/dev/console</I
+>,
+should all be world-writable, but most of the rest should be unreadable
+and unwritable by regular users. Note that on some System V systems,
+many of the files in <i class="filename">/dev</I
+> are symbolic links
+to files in the <i class="filename">/devices</I
+> directory: those are
+the files whose permissions you need to check.</P
+><p class="para">Check the permissions on these files when you install the
+system, and periodically thereafter. If any permission is changed,
+or any device is accessible to all users, you should investigate.
+This research should be included as part of your checklists.</P
+><p class="para"><em class="emphasis">Unauthorized Device Files</EM
+></P
+><p class="para">Although device files are normally located in the <i class="filename">/dev</I
+>
+directory, they may, in fact, be anywhere on your system.
+A common method used by system crackers is to get on the system
+as the superuser and then create a writable device file in a hidden
+directory, such as the <i class="filename">/dev/kmem</I
+> device hidden
+in<i class="filename"> /usr/lib</I
+> and named to resemble one of the
+libraries. Later, if they wish to become superuser again, they know
+the correct locations in <i class="filename">/dev/kmem</I
+> to alter with
+a symbolic debugger or custom program to allow them that access.
+For instance, by changing the code for a certain routine to always
+return true, they can execute <kbd class="command">su</KBD
+> to become <i class="filename">root</I
+> without needing
+a password. Then, they set the routine back to normal.</P
+><p class="para">You should periodically scan your disks for unauthorized device
+files. The <a class="indexterm" name="AUTOID-6172"></A
+>
+ncheck
+command, mentioned earlier, will print the names of all device files
+when run with the <kbd class="command">-s</KBD
+> option. Alternatively, you can execute
+the following:</P
+><blockquote class="screen"><pre class="screen"># <b class="emphasis.bold">find / \( -type c -o -type b \) -exec ls -l {} \;</B
+></PRE
+></BLOCKQUOTE
+><p class="para">If you have <span class="acronym">NFS</SPAN
+>-mounted directories, use
+this version of the script:</P
+><blockquote class="screen"><pre class="screen"># <b class="emphasis.bold">find / \( -local -o -prune \) \( -type c -o -type b \) -exec ls -l {} \;</B
+></PRE
+></BLOCKQUOTE
+><p class="para">Note that some versions of <span class="acronym">NFS</SPAN
+> allow users
+on remote machines running as root to create device files on exported
+volumes.
+[27]
+This is a major problem.
+Be <em class="emphasis">very </EM
+>careful about exporting writable directories
+using <span class="acronym">NFSDEVICE FILESFILESDEVICE</SPAN
+>
+(see <a class="xref" href="ch20_01.htm" title="NFS">Chapter 20</A
+>, for more information).</P
+><blockquote class="footnote"><p class="para">[27] Of course, these modifications cannot be made if the
+filesystem is exported read only.</P
+></BLOCKQUOTE
+><div class="sidebar"><h4 class="sidebar"><a class="title" name="AUTOID-6194">Not Everything Is a File or a Device!</A
+></H4
+><p class="para">The two commands:</P
+><blockquote class="screen"><pre class="screen">find / \! -type f -a \! -type d -exec ls -l {} \;</PRE
+></BLOCKQUOTE
+><p class="para">and:</P
+><blockquote class="screen"><pre class="screen">find / \( -type c -o -type b \) -exec ls -l {} \;</PRE
+></BLOCKQUOTE
+><p class="para">are
+not equivalent!</P
+><p class="para">The first command prints all of the entries in the filesystem
+that are not files or directories. The second prints all of the
+entries in the filesystem that are either character or block devices.</P
+><p class="para">Why aren't these commands the same? Because there
+are other things that can be in a filesystem that are neither files
+nor directories. These include:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para">Symbolic Links</P
+></LI
+><li class="listitem"><p class="para">Sockets</P
+></LI
+><li class="listitem"><p class="para">Named pipes (<span class="acronym">FIFOS</SPAN
+>)</P
+></LI
+></UL
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch05_05.htm" title="5.5 SUID"><img src="../gifs/txtpreva.gif" alt="Previous: 5.5 SUID" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Practical UNIX &amp; Internet Security"><img src="../gifs/txthome.gif" alt="Practical UNIX &amp; Internet Security" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch05_07.htm" title="5.7 chown: Changing a File's Owner"><img src="../gifs/txtnexta.gif" alt="Next: 5.7 chown: Changing a File's Owner" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">5.5 SUID</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">5.7 chown: Changing a File's Owner</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.htm" title="The Networking CD Bookshelf">Library Home</A
+> | <a href="../dnsbind/index.htm" title="DNS &amp; BIND">DNS &amp; BIND</A
+> | <a href="../tcpip/index.htm" title="TCP/IP Network Administration">TCP/IP</A
+> | <a href="../sendmail/index.htm" title="sendmail">sendmail</A
+> | <a href="../smdref/index.htm" title="sendmail Desktop Reference">sendmail Reference</A
+> | <a href="../firewall/index.htm" title="Building Internet Firewalls">Firewalls</A
+> | <a href="index.htm" title="Practical UNIX &amp; Internet Security">Practical Security</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

@@ -1,0 +1,979 @@
+<html>
+<head>
+<title>Tracking File and Network Operations   (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Tracking File and Network Operations ">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch04_03.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch04_01.htm">Chapter 4: User Activity</a></td><td align="right" valign="top" width="172"><a href="ch04_05.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">4.4. Tracking File and Network Operations </h2>
+
+
+
+
+
+<p>For our last section of this chapter, we're going to lump two
+of the user action domains together. The processes we've just
+spent so much time controlling do more than just suck up CPU and
+memory. They also perform operations on filesystems and communicate
+on a network on behalf of a user. User administration requires that
+we deal with these second-order effects as well.</p>
+
+
+
+
+
+<p>Our focus is going to be fairly narrow. We're only interested
+in looking at file and network operations that
+<em class="emphasis">other</em> users are performing on a system.
+We're also only going to focus on those operations that we can
+track back to a specific user (or a specific process run by a
+specific user). With these blinders in mind, let's go forth.</p>
+
+
+
+
+
+<a name="ch04-10-fm2xml"></a>
+<h3 class="sect2">4.4.1. Tracking Operations on Windows NT/2000 </h3>
+
+
+
+
+
+<p>
+<a name="INDEX-353"></a><a name="INDEX-354"></a><a name="INDEX-355"></a><a name="INDEX-356"></a><a name="INDEX-357"></a><a name="INDEX-358"></a><a name="INDEX-359"></a><a name="INDEX-360"></a><a name="INDEX-361"></a>If we want to track other users'
+open files, the closest we can come involves using a third-party
+command-line program called <tt class="command">nthandle</tt> by Mark
+Russinovich, found at <a href="http://www.sysinternals.com">http://www.sysinternals.com</a>. It can show us
+all of the open handles on a particular system. Here's some
+sample output:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">System pid: 2
+     10: File          C:\WINNT\SYSTEM32\CONFIG\SECURITY
+     84: File          C:\WINNT\SYSTEM32\CONFIG\SAM.LOG
+     cc: File          C:\WINNT\SYSTEM32\CONFIG\SYSTEM
+     d0: File          C:\WINNT\SYSTEM32\CONFIG\SECURITY.LOG
+     d4: File          C:\WINNT\SYSTEM32\CONFIG\DEFAULT
+     e8: File          C:\WINNT\SYSTEM32\CONFIG\SYSTEM.ALT
+     fc: File          C:\WINNT\SYSTEM32\CONFIG\SOFTWARE.LOG
+    118: File          C:\WINNT\SYSTEM32\CONFIG\SAM
+    128: File          C:\pagefile.sys
+    134: File          C:\WINNT\SYSTEM32\CONFIG\DEFAULT.LOG
+    154: File          C:\WINNT\SYSTEM32\CONFIG\SOFTWARE
+    1b0: File          \Device\NamedPipe\
+    294: File          C:\WINNT\PROFILES\Administrator\ntuser.dat.LOG
+    2a4: File          C:\WINNT\PROFILES\Administrator\NTUSER.DAT
+------------------------------------------------------------------------------
+SMSS.EXE pid: 27 (NT AUTHORITY:SYSTEM)
+      4: Section       C:\WINNT\SYSTEM32\SMSS.EXE
+      c: File          C:\WINNT
+     28: File          C:\WINNT\SYSTEM32</pre>
+</blockquote>
+
+
+
+
+
+<p>Information on specific files or directories can also be requested:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">
+<tt class="userinput"><b>&gt; nthandle c:\temp</b></tt>
+Handle V1.11
+Copyright (C) 1997 Mark Russinovich
+http://www.sysinternals.com
+
+WINWORD.EXE        pid: 652    C:\TEMP\~DFF2B3.tmp
+WINWORD.EXE        pid: 652    C:\TEMP\~DFA773.tmp
+WINWORD.EXE        pid: 652    C:\TEMP\~DF913E.tmp</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="command">nthandle</tt> can provide this information for a
+specific process using the <tt class="command">-p</tt> switch.</p>
+
+
+
+
+
+<p>Using this executable from Perl is straightforward, so we won't
+provide any sample code. Instead, let's look at a related and
+more interesting operation: auditing.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-362"></a><a name="INDEX-363"></a>NT/2000
+allows us to efficiently watch a file, directory, or hierarchy of
+directories for changes. You could imagine repeatedly performing
+<tt class="literal">stat( )</tt>s on the desired object or objects, but
+that would be highly CPU intensive. Under NT/2000, we can ask the
+operating system to keep watch for us.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-364"></a>There
+are two specialized Perl modules that make this job relatively
+painless for us: <tt class="literal">Win32::ChangeNotify</tt> by
+Christopher J. Madsen and <tt class="literal">Win32::AdvNotify</tt> by
+Amine Moulay Ramdane. The latter is a bit more flexible, so
+we'll use it for our example in this section.
+<a name="INDEX-365"></a><a name="INDEX-366"></a>
+</p>
+
+
+
+
+
+<p>Using <tt class="literal">Win32::AdvNotify</tt> is a multiple-step process.
+First, you load the module and create a new
+<tt class="literal">AdvNotify</tt> object:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># also import two constants we'll use in a moment
+use Win32::AdvNotify qw(All %ActionName); 
+use Data::Dumper;
+
+$aobj = new Win32::AdvNotify(  ) or die "Can't make a new object\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>The next step is to create a monitoring thread for the directory in
+question. <tt class="literal">Win32::AdvNotify</tt> allows you to watch
+multiple directories at once simply by creating multiple threads.
+We'll stick to monitoring a single directory:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$thread = $aobj-&gt;StartThread(Directory =&gt; 'C:\temp',
+                             Filter =&gt; All,
+                             WatchSubtree =&gt; 0) 
+   or die "Unable to start thread\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>The first parameter of this method is self-explanatory; let's
+look at the others.</p>
+
+
+
+
+
+<p>We can look for many types of changes by setting
+<tt class="literal">Filter</tt> to one or a combination (<tt class="literal">SETTING1
+| SETTING2 | SETTING3...</tt>) of the constants listed in <a href="ch04_04.htm#ch04-94791">Table 4-1</a>.</p>
+
+
+
+
+
+<a name="ch04-94791"></a>
+<h4 class="objtitle">Table 4.1. Win32::AdvNotify Filter Parameters</h4>
+<table border="1">
+
+
+
+<tr>
+<th>
+<p>Parameter</p>
+</th>
+<th>
+<p>Notices</p>
+</th>
+</tr>
+
+
+
+
+
+
+
+
+
+
+<tr>
+<td>
+<p>FILE_NAME</p>
+</td>
+<td>
+<p>Creating, deleting, renaming of a file or files</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>DIR_NAME</p>
+</td>
+<td>
+<p>Creating or deleting a directory or directories</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>ATTRIBUTES</p>
+</td>
+<td>
+<p>Change in any directory attribute</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>SIZE</p>
+</td>
+<td>
+<p>Change in any file size</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>LAST_WRITE</p>
+</td>
+<td>
+<p>Change in the modification date of a file or files</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>CREATION</p>
+</td>
+<td>
+<p>Change in the creation date of a file or files</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>SECURITY</p>
+</td>
+<td>
+<p>Change in the security info (ACL, etc.) of a file or files</p>
+</td>
+</tr>
+
+
+
+
+
+</table>
+
+
+
+
+
+<p>The <tt class="literal">All</tt> setting you see in our code above is just
+a constant that includes a combination of the choices. Leaving the
+<tt class="literal">Filter</tt> parameter out of the method call will also
+select <tt class="literal">All</tt>. The <tt class="literal">WatchSubtree</tt>
+parameter determines if the thread will watch just the directory
+specified, or it and all of its subdirectories.</p>
+
+
+
+
+
+<p>
+<tt class="literal">StartThread( )</tt> creates a monitoring thread, but
+that thread doesn't actually begin monitoring until we ask it
+to:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$thread-&gt;EnableWatch(  ) or die "Can't start watching\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>There is also a <tt class="literal">DisableWatch( )</tt> call, should you
+choose to turn off monitoring at any point in your program.</p>
+
+
+
+
+
+<p>Now that we're monitoring our desired object, how do we know
+when something changes? We need some way for our thread to report
+back to us when the change we're looking for takes place. The
+process is similar to one we'll see in <a href="ch09_01.htm">Chapter 9, "Log Files"</a>, when we discuss network sockets. Basically,
+we call a function that blocks, or hangs, until a change occurs:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">while($thread-&gt;Wait(INFINITE)){
+    print "Something changed!\n";
+	last if ($changes++ == 5);
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>This <tt class="literal">while( )</tt> loop will call the <tt class="literal">Wait(
+)</tt> method for our thread. This call will block until the
+thread has something to report. <tt class="literal">Wait( )</tt> normally
+takes a parameter that dictates the number of milliseconds it should
+wait until giving up, though here we've given it a special
+value that says "wait forever." Once <tt class="literal">Wait(
+)</tt> returns, we print a message and go back to waiting
+unless we've already noticed five other changes. We now clean
+up:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$thread-&gt;Terminate(  );
+undef $aobj;</pre>
+</blockquote>
+
+
+
+
+
+<p>Our program isn't all that useful as written. All we know is
+<em class="emphasis">something</em> changed, but we don't know what
+changed or how it changed. To improve the situation, let's
+replace the contents of the <tt class="literal">while( )</tt> loop and
+add a Perl format specification:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">while($thread-&gt;Wait(INFINITE)){
+    while ($thread-&gt;Read(\@status)){
+        foreach $event (@status){
+            $filename = $event-&gt;{FileName};
+            $time     = $event-&gt;{DateTime};
+            $action   = $ActionName{$event-&gt;{Action}};
+            write;
+        }
+    }
+}
+
+format STDOUT = 
+@&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt; @&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt; @&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;
+$filename,$time,$action
+.
+
+format STDOUT_TOP =
+File Name            Date                 Action
+-------------------  -------------------- ---------------------
+.</pre>
+</blockquote>
+
+
+
+
+
+<p>The key change here is the addition of the <tt class="literal">Read(
+)</tt> method. <tt class="literal">Read( )</tt> gets information
+about the change event and populates the <tt class="literal">@status</tt>
+list above with a set of hash references. Each reference points to an
+anonymous hash that looks something like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">{'FileName' =&gt; '~GLF2425.TMP',
+ 'DateTime' =&gt; '11/08/1999 06:23:25p',
+ 'Directory' =&gt; 'C:\temp',
+ 'Action' =&gt; 3 }</pre>
+</blockquote>
+
+
+
+
+
+<p>Multiple sets of event changes can queue up for every change, hence
+our need to call <tt class="literal">Read( )</tt> in the <tt class="literal">while(
+)</tt> loop until it runs out of steam. When we de-reference
+the contents of those hash references appropriately and pass them
+through a Perl format, we get handy output that like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">File Name            Date                 Action
+-------------------  -------------------- ---------------------
+~DF40DE.tmp          11/08/1999 07:29:56p FILE_ACTION_REMOVED
+~DF6E5C.tmp          11/08/1999 07:29:56p FILE_ACTION_ADDED
+~DF6E66.tmp          11/08/1999 07:29:56p FILE_ACTION_ADDED
+~DF6E5C.tmp          11/08/1999 07:29:56p FILE_ACTION_REMOVED</pre>
+</blockquote>
+
+
+
+
+
+<p>Unfortunately, the tracking of network operations under NT/2000 is
+not nearly as impressive. Ideally, as an administrator you'd
+like to know which process (and therefore which user) has opened a
+network port. Unfortunately, I know of no Perl module or free
+third-party command-line tool that can provide this information.
+There does exist a single commercial command-line tool called
+<em class="emphasis">TCPVstat</em> that can show us the
+network-connection-to-process mapping. <em class="emphasis">TCPVstat</em>
+is found in the TCPView Professional Edition package available at
+<a href="http://www.winternals.com">http://www.winternals.com</a>.<a name="INDEX-367"></a>
+</p>
+
+
+
+
+
+<p>If we are only able to use free tools, then we'll have to make
+do with a simple listing of the currently open network ports on our
+system. For that, we'll use another module by Ramdane called
+<tt class="literal">Win32::IpHelp</tt>. Here's code to print this
+information:<a name="INDEX-368"></a><a name="INDEX-369"></a><a name="INDEX-370"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::IpHelp;
+
+# note: the case of "IpHelp" is signficant in this call
+my $iobj = new Win32::IpHelp; 
+
+# populates list of hash of hashes
+$iobj-&gt;GetTcpTable(\@table,1); 
+
+foreach $entry (@table){
+    print $entry-&gt;{LocalIP}-&gt;{Value} . ":" . 
+          $entry-&gt;{LocalPort}-&gt;{Value}. " -&gt; ";
+    print $entry-&gt;{RemoteIP}-&gt;{Value} . ":" . 
+          $entry-&gt;{RemotePort}-&gt;{Value}."\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Let's see how we'd perform the same tasks from within the
+Unix world.<a name="INDEX-371"></a><a name="INDEX-372"></a><a name="INDEX-373"></a><a name="INDEX-374"></a><a name="INDEX-375"></a><a name="INDEX-376"></a><a name="INDEX-377"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch04-11-fm2xml"></a>
+<h3 class="sect2">4.4.2. Tracking Operations in Unix</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-378"></a><a name="INDEX-379"></a><a name="INDEX-380"></a><a name="INDEX-381"></a><a name="INDEX-382"></a><a name="INDEX-383"></a><a name="INDEX-384"></a>To handle the tracking
+of both file and network operations in Unix, we can use a single
+approach. This is one of few times in this book where calling a
+separate executable is clearly the superior method. Vic Abell has
+given an amazing gift to the system administration world by writing
+and maintaining a program called <tt class="command">lsof</tt> (LiSt Open
+Files) that can be found at ftp://vic.cc.purdue.edu/pub/tools/unix/lsof.
+<tt class="command">lsof</tt> can show in detail all of the currently open
+files and network connections on a Unix machine. One of the things
+that make it truly amazing is its portability. The latest version as
+of this writing runs on at least 18 flavors of Unix and supports
+several OS versions for each flavor.<a name="INDEX-385"></a>
+</p>
+
+
+
+
+
+<p>Here's a snippet of <tt class="command">lsof </tt> 's output
+showing one of the processes I am running. <tt class="command">lsof</tt>
+tends to output very long lines, so I've inserted a blank line
+between each line of output to make the distinctions clear:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">COMMAND    PID USER   FD   TYPE     DEVICE  SIZE/OFF       NODE NAME
+netscape 21065  dnb  cwd   VDIR   172,2891      8192      12129 /home/dnb
+
+netscape 21065  dnb  txt   VREG   172,1246  14382364     656749 /net/arch-solaris (fileserver:/vol/systems/arch-solaris)
+
+netscape 21065  dnb  txt   VREG       32,6     54656      35172 /usr (/dev/dsk/c0t0d0s6)
+
+netscape 21065  dnb  txt   VREG       32,6    146740       6321 /usr/lib/libelf.so.1
+
+netscape 21065  dnb  txt   VREG       32,6     69292     102611 /usr (/dev/dsk/c0t0d0s6)
+
+netscape 21065  dnb  txt   VREG       32,6     21376      79751 /usr/lib/locale/en_US/en_US.so.1
+
+netscape 21065  dnb  txt   VREG       32,6     19304       5804 /usr/lib/libmp.so.2
+
+netscape 21065  dnb  txt   VREG       32,6     98284      22860 /usr/openwin/lib/libICE.so.6
+
+netscape 21065  dnb  txt   VREG       32,6     46576      22891 /usr/openwin/lib/libSM.so.6
+
+netscape 21065  dnb  txt   VREG       32,6   1014020       5810 /usr/lib/libc.so.1
+
+netscape 21065  dnb  txt   VREG       32,6    105788       5849 /usr/lib/libm.so.1
+
+netscape 21065  dnb  txt   VREG       32,6    721924       5806 /usr/lib/libnsl.so.1
+
+netscape 21065  dnb  txt   VREG       32,6    166196       5774 /usr/lib/ld.so.1
+
+netscape 21065  dnb    0u  VCHR       24,3      0t73       5863 /devices/pseudo/pts@0:3-&gt; ttcompat-&gt;ldterm-&gt;ptem-&gt;pts
+
+netscape 21065  dnb    3u  VCHR      13,12       0t0       5821 /devices/pseudo/mm@0:zero
+
+netscape 21065  dnb    7u  FIFO 0x6034d264       0t1      47151 PIPE-&gt;0x6034d1e0
+
+netscape 21065  dnb    8u  inet 0x6084cb68 0xfb210ec        TCP host.ccs.neu.edu:46575-&gt; host2.ccs.neu.edu:6000 (ESTABLISHED)
+
+netscape 21065  dnb   29u  inet 0x60642848  0t215868        TCP host.ccs.neu.edu:46758-&gt; www.mindbright.se:80 (CLOSE_WAIT)</pre>
+</blockquote>
+
+
+
+
+
+<p>In the previous output you can see some of the power this command
+provides. We can see the current working directory
+(<tt class="literal">VDIR</tt>), regular files (<tt class="literal">VREG</tt>),
+character devices (<tt class="literal">VCHR</tt>), pipes
+(<tt class="literal">FIFO</tt>), and network connections
+(<tt class="literal">inet</tt>) opened by this process.</p>
+
+
+
+
+
+<p>The easiest way to use <tt class="command">lsof</tt> from Perl is to invoke
+its special "field" mode (-<tt class="command">F </tt>). In
+this mode, its output is broken up into specially labeled and
+delimited fields, instead of the <tt class="command">ps </tt>-like columns
+show above. This makes parsing the output a cinch.</p>
+
+
+
+
+
+<p>There is one quirk to the output. It is organized into what the
+author calls "process sets" and "file sets."
+A process set is a set of field entries referring to a single
+process; a file set is a similar set for a file. This all makes more
+sense if we turn on field mode with the <tt class="literal">0</tt> option.
+Fields are then delimited with <tt class="literal">NUL</tt> (ASCII 0)
+characters and sets with <tt class="literal">NL</tt> (ASCII 12).
+Here's the same group of lines as those above, this time in
+field mode (<tt class="literal">NUL</tt> is represented as
+<tt class="literal">^@</tt>):</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">p21065^@cnetscape^@u6700^@Ldnb^@
+
+fcwd^@a ^@l ^@tVDIR^@D0x2b00b4b^@s8192^@i12129^@n/home/dnb^@
+
+ftxt^@a ^@l ^@tVREG^@D0x2b004de^@s14382364^@i656749^@n/net/arch-solaris (fileserver:/vol/systems/arch-solaris)^@
+
+ftxt^@a ^@l ^@tVREG^@D0x800006^@s54656^@i35172^@n/usr (/dev/dsk/c0t0d0s6)^@
+
+ftxt^@a ^@l ^@tVREG^@D0x800006^@s146740^@i6321^@n/usr/lib/libelf.so.1^@
+
+ftxt^@a ^@l ^@tVREG^@D0x800006^@s40184^@i6089^@n/usr (/dev/dsk/c0t0d0s6)^@
+
+ftxt^@a ^@l ^@tVREG^@D0x800006^@s69292^@i102611^@n/usr (/dev/dsk/c0t0d0s6)^@
+
+ftxt^@a ^@l ^@tVREG^@D0x800006^@s21376^@i79751^@n/usr/lib/locale/en_US/en_US.so.1^@
+
+ftxt^@a ^@l ^@tVREG^@D0x800006^@s19304^@i5804^@n/usr/lib/libmp.so.2^@
+
+ftxt^@a ^@l ^@tVREG^@D0x800006^@s98284^@i22860^@n/usr/openwin/lib/libICE.so.6^@
+
+ftxt^@a ^@l ^@tVREG^@D0x800006^@s46576^@i22891^@n/usr/openwin/lib/libSM.so.6^@
+
+ftxt^@a ^@l ^@tVREG^@D0x800006^@s1014020^@i5810^@n/usr/lib/libc.so.1^@
+
+ftxt^@a ^@l ^@tVREG^@D0x800006^@s105788^@i5849^@n/usr/lib/libm.so.1^@
+
+ftxt^@a ^@l ^@tVREG^@D0x800006^@s721924^@i5806^@n/usr/lib/libnsl.so.1^@
+
+ftxt^@a ^@l ^@tVREG^@D0x800006^@s166196^@i5774^@n/usr/lib/ld.so.1^@
+f0^@au^@l ^@tVCHR^@D0x600003^@o73^@i5863^@n/devices/pseudo/pts@0:3-&gt;ttcompat-&gt;ldterm-&gt;ptem-&gt;pts^@
+
+f3^@au^@l ^@tVCHR^@D0x34000c^@o0^@i5821^@n/devices/pseudo/mm@0:zero^@
+
+f7^@au^@l ^@tFIFO^@d0x6034d264^@o1^@i47151^@nPIPE-&gt;0x6034d1e0^@
+
+f8^@au^@l ^@tinet^@d0x6084cb68^@o270380692^@PTCP^@nhost.ccs.neu.edu:46575-&gt; host2.ccs.neu.edu:6000^@TST=ESTABLISHED^@
+
+f29^@au^@l ^@tinet^@d0x60642848^@o215868^@PTCP^@nhost.ccs.neu.edu:46758-&gt; www.mindbright.se:80^@TST=CLOSE_WAIT^@</pre>
+</blockquote>
+
+
+
+
+
+<p>Let's take this output apart. The first line is a process set
+(we can tell because it begins with the letter <tt class="literal">p</tt>):</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">p21065^@cnetscape^@u6700^@Ldnb^@</pre>
+</blockquote>
+
+
+
+
+
+<p>Each field begins with a letter identifying the field's
+contents ( <tt class="literal">p</tt> for <tt class="literal">pid</tt>,
+<tt class="literal">c</tt> for <tt class="literal">command</tt>,
+<tt class="literal">u</tt> for <tt class="literal">uid</tt>, and
+<tt class="literal">L</tt> for <tt class="literal">login</tt>) and ends with a
+delimiter character. Together the fields on this line make up a
+process set. All of the lines that follow, up until the next process
+set, describe the open files/network connections of the process
+described by this process set.</p>
+
+
+
+
+
+<p>Let's put this mode to use. If we wanted to show all of the
+open files on a system and the pids that are using them, we could use
+code like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Text::Wrap;
+
+$lsofexec = "/usr/local/bin/lsof"; # location of lsof executable
+
+# (F)ield mode, NUL (0) delim, show (L)ogin, file (t)ype and file (n)ame
+$lsofflag = "-FL0tn"; 
+open(LSOF,"$lsofexec $lsofflag|") or  die "Unable to start $lsof:$!\n";
+
+while(&lt;LSOF&gt;){
+    # deal with a process set
+    if (substr($_,0,1) eq "p"){
+        ($pid,$login) = split(/\0/);
+        $pid = substr($pid,1,length($pid));
+    }
+
+    # deal with a file set, note: we are only interested 
+    # in "regular" files
+    if (substr($_,0,5) eq "tVREG"){
+        ($type,$pathname) = split(/\0/);
+
+        # a process may have the same path name open twice, 
+        # these two lines make sure we only record it once
+        next if ($seen{$pathname} eq $pid);
+        $seen{$pathname} = $pid;
+
+        $pathname = substr($pathname,1,length($pathname));
+        push(@{$paths{$pathname}},$pid);
+    }
+}
+
+close(LSOF);
+
+for (sort keys %paths){
+    print "$_:\n";
+    print wrap("\t","\t",join(" ",@{$paths{$_}})),"\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>This code instructs <tt class="command">lsof</tt> to show only a few of its
+possible fields. We iterate through its output, collecting filenames
+and pids in a hash of lists. When we've received all of the
+output, we print the filenames in a nicely formatted pid list (thanks
+to David Muir Sharnoff's <tt class="literal">Text::Wrap</tt> module):</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">/usr (/dev/dsk/c0t0d0s6):
+        115 117 128 145 150 152 167 171 184 191 200 222 232 238 247 251 276
+        285 286 292 293 296 297 298 4244 4709 4991 4993 14697 20946 21065
+        24530 25080 27266 27603
+/usr/bin/tcsh:
+        4246 4249 5159 14699 20949
+/usr/bin/zsh:
+        24532 25082 27292 27564
+/usr/dt/lib/libXm.so.3:
+        21065 21080
+/usr/lib/ld.so.1:
+        115 117 128 145 150 152 167 171 184 191 200 222 232 238 247 251 267
+        276 285 286 292 293 296 297 298 4244 4246 4249 4709 4991 4993 5159
+        14697 14699 20946 20949 21065 21080 24530 24532 25080 25082 25947
+        27266 27273 27291 27292 27306 27307 27308 27563 27564 27603
+/usr/lib/libc.so.1:
+        267 4244 4246 4249 4991 4993 5159 14697 14699 20949 21065 21080
+        24530 24532 25080 25082 25947 27273 27291 27292 27306 27307 27308
+        27563 27564 27603
+...<a name="INDEX-386"></a>
+</pre>
+</blockquote>
+
+
+
+
+
+<p>For our last example of tracking Unix file and network operations,
+let's return to an earlier example, where we attempted to find
+IRC <em class="emphasis">bots</em> running on a system. There are more
+reliable ways to find network daemons like <em class="emphasis">bots</em>
+than looking at the process table. A user may be able to hide the
+name of a <em class="emphasis">bot</em> by renaming the executable, but
+she or he will have to work a lot harder to hide the open network
+connection. More often than not, this connection is to a server
+running on TCP ports <tt class="literal">6660-7000</tt>.
+<tt class="command">lsof</tt> makes looking for these processes
+easy:<a name="INDEX-387"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$lsofexec = "/usr/local/bin/lsof";
+$lsofflag = "-FL0c -iTCP:6660-7000";
+
+# this is a hash slice being used to preload a hash table, the 
+# existence of whose keys we'll check later. Usually this gets written 
+# like this:
+#     %approvedclients = ("ircII" =&gt; undef, "xirc" =&gt; undef, ...); 
+# (but this is a cool idiom popularized by Mark-Jason Dominus)
+@approvedclients{"ircII","xirc","pirc"} = (  ); 
+
+open(LSOF,"$lsofexec $lsofflag|") or
+  die "Unable to start $lsof:$!\n";
+
+while(&lt;LSOF&gt;){
+    ($pid,$command,$login) = /p(\d+)\000
+                              c(.+)\000
+                              L(\w+)\000/x;
+  warn "$login using an unapproved client called $command (pid $pid)!\n"
+      unless (exists $approvedclients{$command});
+}
+
+close(LSOF);</pre>
+</blockquote>
+
+
+
+
+
+<p>This is the simplest check we can make. It will catch users who
+rename <em class="filename">eggdrop</em> to <em class="filename">pine</em> or
+-<em class="filename">tcsh</em>, and it will catch those users who
+don't even attempt to hide their <em class="emphasis">bot</em>, but
+it suffers from a similar flaw to our other approach. If a user is
+smart enough, she or he may rename their <em class="emphasis">bot</em> to
+something on our "approved clients" list. To continue the
+cat-and-mouse game we could take at least two more steps:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>Use <tt class="command">lsof</tt> to check that the file opened for that
+executable really is the file we expect it to be, and not some random
+binary in a user filesystem.</p>
+</li>
+<li>
+<p>Use our process control methods to check that the user is running
+this program from an existing shell. If this is the only process
+running for a user (i.e., they've logged off but still left it
+running), it is probably a daemon and hence a
+<em class="emphasis">bot</em>.</p>
+</li>
+</ul>
+<p>This cat-and-mouse game brings us to a point that will help wrap up
+the chapter. In <a href="ch03_01.htm">Chapter 3, "User Accounts"</a>, we mentioned that users
+are fundamentally unpredictable. They do things systems
+administrators don't anticipate. There is an old saying:
+"Nothing is foolproof because fools are so ingenious." It
+is important to come to grips with this fact as you program Perl for
+user administration. You'll write more robust programs as a
+result. When one of your programs goes "blooey" because a
+user did something unexpected, you'll be able to sit back
+calmly and admire the ingenuity.<a name="INDEX-388"></a><a name="INDEX-389"></a><a name="INDEX-390"></a><a name="INDEX-391"></a><a name="INDEX-392"></a><a name="INDEX-393"></a><a name="INDEX-394"></a>
+</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch04_03.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch04_05.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">4.3. Unix Process Control</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">4.5. Module Information for This Chapter</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

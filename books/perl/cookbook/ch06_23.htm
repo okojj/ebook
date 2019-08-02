@@ -1,0 +1,394 @@
+<html><head>
+<title>Recipe 6.22. Program: tcgrep</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:35:09Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch06_01.htm" title="6. Pattern Matching"><link rel="prev" href="ch06_22.htm" title="6.21. Program: urlify"><link rel="next" href="ch06_24.htm" title="6.23. Regular Expression Grabbag"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch06_22.htm" title="6.21. Program: urlify"><img src="../gifs/txtpreva.gif" alt="Previous: 6.21. Program: urlify" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch06_01.htm" title="6. Pattern Matching">Chapter 6<br>Pattern Matching</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch06_24.htm" title="6.23. Regular Expression Grabbag"><img src="../gifs/txtnexta.gif" alt="Next: 6.23. Regular Expression Grabbag" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch06-65583">6.22. Program: tcgrep</A
+></H2
+><p class="para"><a class="indexterm" name="ch06-idx-1000007735-0"></A
+><a class="indexterm" name="ch06-idx-1000007735-1"></A
+><a class="indexterm" name="ch06-idx-1000007735-2"></A
+><a class="indexterm" name="ch06-idx-1000007735-3"></A
+><a class="indexterm" name="ch06-idx-1000007735-4"></A
+>This program is a Perl rewrite of the Unix <em class="emphasis">grep</EM
+> program. Although it runs slower than C versions (especially the GNU <em class="emphasis">grep</EM
+>s), it offers many more features.</P
+><p class="para">The first, and perhaps most important, feature is that it runs anywhere Perl does. Other enhancements are that it can ignore anything that's not a plain text file, automatically expand compressed or <em class="emphasis">gzip </EM
+>ped files, recurse down directories, search complete paragraphs or user-defined records, look in younger files before older ones, and add underlining or highlighting of matches. It also supports both the <b class="emphasis.bold">-c</B
+> option to indicate a count of matching records as well as <b class="emphasis.bold">-C</B
+> for a count of matching patterns when there could be more than one per record.</P
+><p class="para">This program uses <em class="emphasis">gzcat</EM
+> or <em class="emphasis">zcat</EM
+> to decompress compressed files, so this feature is unavailable on systems without these programs and systems without the ability to run external programs (such as the Macintosh).</P
+><p class="para">Run the program with no arguments for a usage message (see the <code class="literal">usage</CODE
+> subroutine in the following code). This command line recursively and case-insensitively greps every file in <em class="emphasis">~/mail</EM
+> for mail messages from someone called "kate", reporting the filenames that contained matches.</P
+><pre class="programlisting">% tcgrep -ril '^From: .*kate' ~/mail</PRE
+><p class="para">The program is shown in <a class="xref" href="#ch06-11977" title="tcgrep">Example 6.14</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch06-11977">Example 6.14: tcgrep</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# tcgrep: tom christiansen's rewrite of grep
+# v1.0: Thu Sep 30 16:24:43 MDT 1993
+# v1.1: Fri Oct  1 08:33:43 MDT 1993
+# v1.2: Fri Jul 26 13:37:02 CDT 1996
+# v1.3: Sat Aug 30 14:21:47 CDT 1997
+# v1.4: Mon May 18 16:17:48 EDT 1998
+
+use strict;
+                                  # globals
+use vars qw($Me $Errors $Grand_Total $Mult %Compress $Matches);
+
+my ($matcher, $opt);              # matcher - anon. sub to check for matches
+                                  # opt - ref to hash w/ command line options
+
+init();                           # initialize globals
+
+($opt, $matcher) = parse_args();  # get command line options and patterns
+
+matchfile($opt, $matcher, @ARGV); # process files
+
+exit(2) if $Errors;
+exit(0) if $Grand_Total;
+exit(1);
+
+###################################
+
+sub init {
+    ($Me = $0) =~ s!.*/!!;        # get basename of program, &quot;tcgrep&quot;
+    $Errors = $Grand_Total = 0;   # initialize global counters
+    $Mult = &quot;&quot;;                   # flag for multiple files in @ARGV
+    $| = 1;                       # autoflush output
+
+    %Compress = (                 # file extensions and program names
+        z  =&gt; 'gzcat',            # for uncompressing
+        gz =&gt; 'gzcat',
+        Z  =&gt; 'zcat',
+    );
+}
+
+###################################
+
+sub usage {
+        die &lt;&lt;EOF
+usage: $Me [flags] [files]
+
+Standard grep options:
+        i   case insensitive
+        n   number lines
+        c   give count of lines matching
+        C   ditto, but &gt;1 match per line possible
+        w   word boundaries only
+        s   silent mode
+        x   exact matches only
+        v   invert search sense (lines that DON'T match)
+        h   hide filenames
+        e   expression (for exprs beginning with -)
+        f   file with expressions
+        l   list filenames matching
+
+Specials:
+        1   1 match per file
+        H   highlight matches
+        u   underline matches
+        r   recursive on directories or dot if none
+        t   process directories in 'ls -t' order
+        p   paragraph mode (default: line mode)
+        P   ditto, but specify separator, e.g. -P '%%\\n'
+        a   all files, not just plain text files
+        q   quiet about failed file and dir opens
+        T   trace files as opened
+
+May use a TCGREP environment variable to set default options.
+EOF
+}
+
+###################################
+
+sub parse_args {
+    use Getopt::Std;
+
+    my ($optstring, $zeros, $nulls, %opt, $pattern, @patterns, $match_code);
+    my ($SO, $SE);
+
+    if ($_ = $ENV{TCGREP}) {      # get envariable TCGREP
+        s/^([^\-])/-$1/;          # add leading - if missing
+        unshift(@ARGV, $_);       # add TCGREP opt string to @ARGV
+    }
+
+    $optstring = &quot;incCwsxvhe:f:l1HurtpP:aqT&quot;;
+
+    $zeros = 'inCwxvhelut';       # options to init to 0 (prevent warnings)
+    $nulls = 'pP';                # options to init to &quot;&quot; (prevent warnings)
+
+    @opt{ split //, $zeros } = ( 0 )  x length($zeros);
+    @opt{ split //, $nulls } = ( '' ) x length($nulls);
+
+    getopts($optstring, \%opt)              or usage();
+
+    if ($opt{f}) {                # -f patfile
+        open(PATFILE, $opt{f})          or die qq($Me: Can't open '$opt{f}': $!);
+
+                                  # make sure each pattern in file is valid
+        while ( defined($pattern = &lt;PATFILE&gt;) ) {
+            chomp $pattern;
+            eval { 'foo' =~ /$pattern/, 1 } or
+                die &quot;$Me: $opt{f}:$.: bad pattern: $@&quot;;
+            push @patterns, $pattern;
+        }
+        close PATFILE;
+    }
+    else {                        # make sure pattern is valid
+        $pattern = $opt{e} || shift(@ARGV) || usage();
+        eval { 'foo' =~ /$pattern/, 1 } or
+            die &quot;$Me: bad pattern: $@&quot;;
+        @patterns = ($pattern);
+    }
+
+    if ($opt{H} || $opt{u}) {     # highlight or underline
+        my $term = $ENV{TERM} || 'vt100';
+        my $terminal;
+
+        eval {                    # try to look up escapes for stand-out
+            require POSIX;        # or underline via Term::Cap
+            use Term::Cap;
+
+            my $termios = POSIX::Termios-&gt;new();
+            $termios-&gt;getattr;
+            my $ospeed = $termios-&gt;getospeed;
+
+            $terminal = Tgetent Term::Cap { TERM=&gt;undef, OSPEED=&gt;$ospeed }
+        };
+
+        unless ($@) {             # if successful, get escapes for either
+            local $^W = 0;        # stand-out (-H) or underlined (-u)
+            ($SO, $SE) = $opt{H}
+                ? ($terminal-&gt;Tputs('so'), $terminal-&gt;Tputs('se'))
+                : ($terminal-&gt;Tputs('us'), $terminal-&gt;Tputs('ue'));
+        }
+        else {                    # if use of Term::Cap fails,
+            ($SO, $SE) = $opt{H}  # use tput command to get escapes
+                ? (`tput -T $term smso`, `tput -T $term rmso`)
+                : (`tput -T $term smul`, `tput -T $term rmul`)
+        }
+    }
+
+    if ($opt{i}) {
+        @patterns = map {&quot;(?i)$_&quot;} @patterns;
+    }
+
+    if ($opt{p} || $opt{P}) {
+        @patterns = map {&quot;(?m)$_&quot;} @patterns;
+    }
+
+    $opt{p}   &amp;&amp; ($/ = '');
+    $opt{P}   &amp;&amp; ($/ = eval(qq(&quot;$opt{P}&quot;)));     # for -P '%%\n'
+    $opt{w}   &amp;&amp; (@patterns = map {'\b' . $_ . '\b'} @patterns);
+    $opt{'x'} &amp;&amp; (@patterns = map {&quot;^$_\$&quot;} @patterns);
+    if (@ARGV) {
+        $Mult = 1 if ($opt{r} || (@ARGV &gt; 1) || -d $ARGV[0]) &amp;&amp; !$opt{h};
+    }
+    $opt{1}   += $opt{l};                   # that's a one and an ell
+    $opt{H}   += $opt{u};
+    $opt{c}   += $opt{C};
+    $opt{'s'} += $opt{c};
+    $opt{1}   += $opt{'s'} &amp;&amp; !$opt{c};     # that's a one
+
+    @ARGV = ($opt{r} ? '.' : '-') unless @ARGV;
+    $opt{r} = 1 if !$opt{r} &amp;&amp; grep(-d, @ARGV) == @ARGV;
+
+    $match_code  = '';
+    $match_code .= 'study;' if @patterns &gt; 5; # might speed things up a bit
+
+    foreach (@patterns) { s(/)(\\/)g }
+
+    if ($opt{H}) {
+        foreach $pattern (@patterns) {
+            $match_code .= &quot;\$Matches += s/($pattern)/${SO}\$1${SE}/g;&quot;;
+        }
+    }
+    elsif ($opt{v}) {
+        foreach $pattern (@patterns) {
+            $match_code .= &quot;\$Matches += !/$pattern/;&quot;;
+        }
+    }
+    elsif ($opt{C}) {
+        foreach $pattern (@patterns) {
+            $match_code .= &quot;\$Matches++ while /$pattern/g;&quot;;
+        }
+    }
+    else {
+        foreach $pattern (@patterns) {
+            $match_code .= &quot;\$Matches++ if /$pattern/;&quot;;
+        }
+    }
+
+    $matcher = eval &quot;sub { $match_code }&quot;;
+    die if $@;
+
+    return (\%opt, $matcher);
+}
+
+###################################
+
+sub matchfile {
+    $opt = shift;                 # reference to option hash
+    $matcher = shift;             # reference to matching sub
+
+    my ($file, @list, $total, $name);
+    local($_);
+    $total = 0;
+
+FILE: while (defined ($file = shift(@_))) {
+
+        if (-d $file) {
+            if (-l $file &amp;&amp; @ARGV != 1) {
+                warn &quot;$Me: \&quot;$file\&quot; is a symlink to a directory\n&quot;
+                    if $opt-&gt;{T};
+                next FILE;
+
+            }
+            if (!$opt-&gt;{r}) {
+                warn &quot;$Me: \&quot;$file\&quot; is a directory, but no -r given\n&quot;
+                    if $opt-&gt;{T};
+                next FILE;
+            }
+            unless (opendir(DIR, $file)) {
+                unless ($opt-&gt;{'q'}) {
+                    warn &quot;$Me: can't opendir $file: $!\n&quot;;
+                    $Errors++;
+                }
+                next FILE;
+            }
+            @list = ();
+            for (readdir(DIR)) {
+                push(@list, &quot;$file/$_&quot;) unless /^\.{1,2}$/;
+            }
+            closedir(DIR);
+            if ($opt-&gt;{t}) {
+                my (@dates);
+                for (@list) { push(@dates, -M) }
+                @list = @list[sort { $dates[$a] &lt;=&gt; $dates[$b] } 0..$#dates];
+            }
+            else {
+                @list = sort @list;
+            }
+            matchfile($opt, $matcher, @list);    # process files
+            next FILE;
+        }
+
+        if ($file eq '-') {
+            warn &quot;$Me: reading from stdin\n&quot; if -t STDIN &amp;&amp; !$opt-&gt;{'q'};
+            $name = '&lt;STDIN&gt;';
+        }
+        else {
+            $name = $file;
+            unless (-e $file) {
+                warn qq($Me: file &quot;$file&quot; does not exist\n) unless $opt-&gt;{'q'};
+                $Errors++;
+                next FILE;
+            }
+            unless (-f $file || $opt-&gt;{a}) {
+                warn qq($Me: skipping non-plain file &quot;$file&quot;\n) if $opt-&gt;{T};
+                next FILE;
+            }
+
+            my ($ext) = $file =~ /\.([^.]+)$/;
+            if (defined $ext &amp;&amp; exists $Compress{$ext}) {
+                $file = &quot;$Compress{$ext} &lt;$file |&quot;;
+            }
+            elsif (! (-T $file  || $opt-&gt;{a})) {
+                warn qq($Me: skipping binary file &quot;$file&quot;\n) if $opt-&gt;{T};
+                next FILE;
+            }
+        }
+
+        warn &quot;$Me: checking $file\n&quot; if $opt-&gt;{T};
+
+        unless (open(FILE, $file)) {
+            unless ($opt-&gt;{'q'}) {
+                warn &quot;$Me: $file: $!\n&quot;;
+                $Errors++;
+            }
+            next FILE;
+        }
+
+        $total = 0;
+
+        $Matches = 0;
+
+LINE:  while (&lt;FILE&gt;) {
+            $Matches = 0;
+    
+            ##############
+            &amp;{$matcher}();        # do it! (check for matches)
+            ##############
+
+            next LINE unless $Matches;
+
+            $total += $Matches;
+
+            if ($opt-&gt;{p} || $opt-&gt;{P}) {
+                s/\n{2,}$/\n/ if $opt-&gt;{p};
+                chomp         if $opt-&gt;{P};
+            }
+
+            print(&quot;$name\n&quot;), next FILE if $opt-&gt;{l};
+
+            $opt-&gt;{'s'} || print $Mult &amp;&amp; &quot;$name:&quot;,
+                $opt-&gt;{n} ? &quot;$.:&quot; : &quot;&quot;,
+                $_,
+                ($opt-&gt;{p} || $opt-&gt;{P}) &amp;&amp; ('-' x 20) . &quot;\n&quot;;
+
+            next FILE if $opt-&gt;{1};                 # that's a one
+        }
+    }
+    continue {
+        print $Mult &amp;&amp; &quot;$name:&quot;, $total, &quot;\n&quot; if $opt-&gt;{c};
+    }
+    $Grand_Total += $total;
+}<a class="indexterm" name="ch06-idx-1000007737-0"></A
+><a class="indexterm" name="ch06-idx-1000007737-1"></A
+><a class="indexterm" name="ch06-idx-1000007737-2"></A
+></PRE
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch06_22.htm" title="6.21. Program: urlify"><img src="../gifs/txtpreva.gif" alt="Previous: 6.21. Program: urlify" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch06_24.htm" title="6.23. Regular Expression Grabbag"><img src="../gifs/txtnexta.gif" alt="Next: 6.23. Regular Expression Grabbag" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">6.21. Program: urlify</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">6.23. Regular Expression Grabbag</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

@@ -1,0 +1,412 @@
+<html>
+<head>
+<title>Servlet Reuse (Java Servlet Programming)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jason Hunter and William Crawford">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-391-XE" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Servlet Reuse">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm" alt="Java Servlet Programming"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch11_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch11_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch11_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch11_01.htm">Chapter 11: Interservlet Communication</a></td><td align="right" valign="top" width="172"><a href="ch11_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch11_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">11.2. Servlet Reuse</h2>
+
+<p>Another use for interservlet communication is to allow one
+<a name="INDEX-1994"></a><a name="INDEX-1995"></a>servlet to reuse
+the abilities (the public methods) of another servlet. The major
+challenge with servlet reuse is for the "user" servlet to
+obtain the proper instance of "usee" servlet when the
+usee servlet has not yet been loaded into the server.
+</p>
+
+<p>The obvious solutions don't always work.
+<tt class="literal">getServlet()</tt> isn't guaranteed to load the
+named servlet on all servers; it may just return
+<tt class="literal">null</tt>. Directly creating a new instance of the usee
+servlet doesn't work either, as the newly created servlet
+doesn't have access to its own <tt class="literal">ServletConfig</tt>
+and <tt class="literal">ServletContext</tt> objects. Plus, the server would
+be using a different instance to handle client requests, leaving the
+new instance of the servlet without the right state information.
+</p>
+
+<p>The solution is for the user servlet to ask the server to load the
+usee servlet, then call <tt class="literal">getServlet()</tt> to get a
+reference to it. Unfortunately, the Servlet API distinctly lacks any
+methods whereby a servlet can control the servlet life cycle, for
+itself or for other servlets. This is considered a security risk and
+is officially "left for future consideration."
+</p>
+
+<p>Fortunately, there's a back door we can use today. A servlet
+can open an HTTP connection to the server in which it's
+running, ask for the unloaded servlet, and effectively force the
+server to load the servlet to handle the request. Then a call to
+<tt class="literal">getServlet()</tt> gets the proper instance.<a href="#FOOTNOTE-2">[2]</a>
+</p>
+<blockquote class="footnote">
+<a name="FOOTNOTE-2"></a>
+<p>[2] Unfortunately, this technique does not work directly for
+servlets running within a secure web server because a secure server
+accepts only encrypted HTTPS connections.</p> </blockquote>
+
+<a name="ch11-4-fm2xml"></a>
+<h3 class="sect2">11.2.1. An Improved getServlet()</h3>
+
+<p>The <tt class="literal">com.oreilly.servlet.ServletUtils</tt> class has an
+improved <tt class="literal">getServlet()</tt> method that does just this.
+It returns the named servlet, loading it first via an HTTP request if
+necessary. The code is shown in <a href="#ch11-41786">Example 11-3</a>.
+</p>
+
+<a name="ch11-41786"></a>
+<div class="example">
+<h4 class="objtitle">Example 11-3. The code for an improved getServlet() </h4>
+<blockquote>
+<pre class="programlisting">// Get the named servlet. Try loading it through an HTTP request if
+// necessary. Returns null if there's a problem. Only loads HTTP
+// servlets, of course.
+public static Servlet getServlet(String name,
+                                 ServletRequest req,
+                                 ServletContext context) {
+  try {
+    // Try getting the servlet the old-fashioned way
+    Servlet servlet = context.getServlet(name);
+    if (servlet != null) return servlet;
+
+    // If getServlet() returned null, we have to load it ourselves.
+    // Do this by making an HTTP GET request to the servlet.
+    // Use a raw socket connection so we can set a timeout.
+    Socket socket = new Socket(req.getServerName(), req.getServerPort());
+    socket.setSoTimeout(4000);  // wait up to 4 secs for a response
+    PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+    out.println("GET /servlet/" + name + " HTTP/1.0");  // the request
+    out.println();
+    try {
+      socket.getInputStream().read();  // Even one byte means its loaded
+    }
+    catch (InterruptedIOException e) { /* timeout: ignore, hope for the best */ }
+    out.close();
+
+    // Try getting the servlet again.
+    return context.getServlet(name);
+  }
+  catch (Exception e) {
+    // If there's any problem, return null.
+    return null;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>This <tt class="literal">getServlet()</tt> method uses a
+<a name="INDEX-1996"></a><a name="INDEX-1997"></a><a name="INDEX-1998"></a><a name="INDEX-1999"></a>raw socket connection to perform
+the HTTP GET request. This is so that it can set a time-out for how
+long it's willing to wait for a response. The
+<tt class="literal">URL</tt> and <tt class="literal">URLConnection</tt> classes
+don't provide this ability. In this case, the time-out is set
+to four seconds. If, after four seconds, the servlet hasn't
+written any response, the <tt class="literal">read()</tt> method throws an
+<tt class="literal">InterruptedIOException</tt> and the method continues.
+This time-out is necessary only for the special case where a servlet
+spends a long time preparing its response and we don't want to
+wait. It would appear this time-out could leave the loading servlet
+in an uninitialized state, if its <tt class="literal">init()</tt> method
+were to take five seconds, for example. A well-written server,
+however, should block in the <tt class="literal">getServlet()</tt> call
+until the servlet has been fully initialized. Note that because this
+<tt class="literal">ServletUtils.getServlet()</tt> method requires a
+<tt class="literal">ServletRequest</tt> parameter, it can be called only by
+methods with access to a <tt class="literal">ServletRequest</tt>, such as
+<tt class="literal">doGet()</tt> and <tt class="literal">doPost()</tt>.
+</p>
+
+
+<a name="ch11-5-fm2xml"></a>
+<h3 class="sect2">11.2.2. Reusing ChatServlet</h3>
+
+<p>An HTML-based chat
+<a name="INDEX-2000"></a><a name="INDEX-2001"></a><a name="INDEX-2002"></a>servlet built
+around the abilities of last chapter's
+<tt class="literal">ChatServlet</tt> is an excellent example of servlet
+reuse. This new servlet, called <tt class="literal">ChatPage</tt>, wraps an
+HTML interface around the <tt class="literal">getNextMessage()</tt> and
+<tt class="literal">broadcastMessage()</tt> methods of
+<tt class="literal">ChatServlet</tt>. The code is shown in <a href="#ch11-33975">Example 11-4</a>, while the output is shown in <a href="#ch11-31836">Figure 11-3</a>.
+</p>
+
+<a name="ch11-33975"></a>
+<div class="example">
+<h4 class="objtitle">Example 11-4. One servlet, ChatPage, reusing another servlet, ChatServlet </h4>
+<blockquote>
+<pre class="programlisting">import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+import com.oreilly.servlet.ServletUtils;
+
+public class ChatPage extends HttpServlet implements Runnable {
+
+  static final int MESSAGE_ARCHIVE_SIZE = 10;  // save the last 10 messages
+
+  ChatServlet chat = null;  // the servlet to reuse
+  String[] messages = new String[MESSAGE_ARCHIVE_SIZE];  // circular array
+  int messageIndex = 0;  // index into the messages array
+  Thread update = null;  // thread to update new messages
+
+  // Gets new messages from the chat servlet and inserts them in 
+  // the messages' circular array.
+  public void run() {
+    while (true) {
+      String message = chat.getNextMessage();
+      synchronized (this) {
+        messages[messageIndex] = message;
+        messageIndex = (messageIndex + 1) % MESSAGE_ARCHIVE_SIZE;
+      }
+    }
+  }
+
+  // Prints the message archive (the 10 latest messages) and a text 
+  // field where the reader can input a new message.
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+                               throws ServletException, IOException {
+    res.setContentType("text/html");
+    PrintWriter out = res.getWriter();
+
+    // Turn off caching, so the latest messages are always displayed.
+    // (Works around a Netscape problem.)
+    res.setHeader("Pragma", "no-cache");
+
+    // For our first request, "chat" is null and we need to use
+    // ServletUtils.getServlet() to get the ChatServlet instance.
+    // Then we need to start another thread to listen for chat's
+    // new messages.
+    if (chat == null) {
+      chat = (ChatServlet)ServletUtils.getServlet(
+                 "ChatServlet", req, getServletContext());
+      if (chat != null) {
+        update = new Thread(this);
+        update.start();
+      }
+    }
+
+    // Print a pretty header.
+    out.println("&lt;HTML&gt;&lt;HEAD&gt;");
+    out.println("&lt;TITLE&gt;ChatPage&lt;/TITLE&gt;");
+    out.println("&lt;/HEAD&gt;&lt;BODY&gt;");
+    out.println("&lt;CENTER&gt;&lt;H1&gt;Welcome to ChatPage!&lt;/H1&gt;&lt;/CENTER&gt;");
+
+    // Print the message archive, oldest first.
+    // Synchronized so it doesn't change while we're printing it.
+    synchronized (this) {
+      out.println("&lt;FONT SIZE=4&gt;Recent messages:&lt;/FONT&gt;&lt;P&gt;");
+      int i = messageIndex;
+      do {
+        String message = messages[i];
+        if (message != null) out.println(message + "&lt;P&gt;");
+        i = (i + 1) % MESSAGE_ARCHIVE_SIZE;
+      } while (i != messageIndex);
+    }
+
+    // Print a button that gets new messages.
+    out.println("&lt;FORM METHOD=GET&gt;");
+    out.println("&lt;INPUT TYPE=submit VALUE=\"Get New Messages\"&gt;");
+    out.println("&lt;/FORM&gt;");
+
+    // Print a form where the reader can submit a new message.
+    out.println("&lt;HR&gt;");
+    out.println("&lt;FORM METHOD=POST&gt;");
+    out.println("&lt;FONT SIZE=4&gt;Submit a message:&lt;/FONT&gt;");
+    out.println("&lt;INPUT TYPE=text NAME=message&gt;");
+    out.println("&lt;/FORM&gt;");
+
+    // Print a pretty footer.
+    out.println("&lt;HR&gt;");
+    out.println("&lt;CENTER&gt;&lt;FONT SIZE=2&gt;&lt;B&gt;");
+    out.println("Special thanks to ChatServlet for acting as our back-end");
+    out.println("&lt;/B&gt;&lt;/FONT&gt;&lt;/CENTER&gt;");
+    out.println("&lt;/BODY&gt;&lt;/HTML&gt;");
+  }
+
+  // Accepts messages for broadcast.
+  public void doPost(HttpServletRequest req, HttpServletResponse res)
+                                throws ServletException, IOException {
+    // If our first request happens to be a POST, we need to set "chat"
+    // and start our update thread just as we do for a GET request.
+    if (chat == null) {
+      chat = (ChatServlet)ServletUtils.getServlet(
+                 "ChatServlet", req, getServletContext());
+      if (chat != null) {
+        update = new Thread(this);
+        update.start();
+        Thread.currentThread().yield();  // let the run() method start
+      }
+    }
+
+    // Get the client's username. It's non-null only if ChatPage is
+    // protected by client authentication.
+    String user = req.getRemoteUser();
+    if (user == null) user = "anonymous";
+
+    // Get and broadcast the message.
+    String message = req.getParameter("message");
+    if (message != null &amp;&amp; chat != null) {
+      chat.broadcastMessage(user + ": " + message);
+      Thread.currentThread().yield();  // let the message be broadcast
+    }
+
+    // Have doGet() print the updated message archive and the form.
+    doGet(req, res);
+  }
+
+  // Stops the background thread. 
+  public void destroy() {
+    if (update != null)
+      update.stop();
+  }
+
+  public String getServletInfo() {
+    return "An HTML chat server front end, reusing ChatServlet";
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="ch11-31836"></a>
+<div class="figure">
+<img alt="figure" src="figs/jsp_1103.gif" webstripperlinkwas="figs/jsp_1103.gif"></div>
+<h4 class="objtitle">Figure 11-3. Another interface to ChatServlet</h4>
+
+<p>The core logic for running the chat service remains in
+<tt class="literal">ChatServlet</tt>. <tt class="literal">ChatPage</tt> just uses
+the public methods of <tt class="literal">ChatServlet</tt> to present an
+alternative front end to the user. <tt class="literal">ChatPage</tt> gains
+access to the server's <tt class="literal">ChatServlet</tt> instance
+with the following line of code:
+</p>
+
+<blockquote>
+<pre class="programlisting">chat = (ChatServlet)ServletUtils.getServlet(
+           "ChatServlet", req, getServletContext());</pre>
+</blockquote>
+
+<p>Remember that this cast can throw a
+<tt class="literal">ClassCastException</tt> if either
+<tt class="literal">ChatServlet</tt> or <tt class="literal">ChatPage</tt> was
+ever reloaded. To avoid this, put the class file for
+<tt class="literal">ChatServlet</tt> in the server's classpath. This
+ensures that <tt class="literal">ChatServlet</tt> isn't reloaded.
+(And what if <tt class="literal">ChatPage</tt> is reloaded? That
+won't be a problem as long as <tt class="literal">ChatServlet</tt>
+was loaded by the primordial class loader.) Not allowing
+<tt class="literal">ChatServlet</tt> to reload also guarantees that the
+background <tt class="literal">update</tt> thread of
+<tt class="literal">ChatPage</tt> won't find itself calling an old
+version of <tt class="literal">ChatServlet</tt>.
+</p>
+
+<p>
+<tt class="literal">ChatPage</tt> uses the returned
+<tt class="literal">ChatServlet</tt> instance for its back end. It calls
+<tt class="literal">chat.getNextMessage()</tt> to fill its array of recent
+messages and <tt class="literal">chat.broadcastMessage()</tt> to broadcast
+each new message as it's entered by the user.
+</p>
+
+<p>As often happens with servlet reuse, not everything fits together
+elegantly in this example. <tt class="literal">ChatServlet</tt>
+wasn't intended to be used by another servlet,<a href="#FOOTNOTE-3">[3]</a> so
+<tt class="literal">ChatPage</tt> requires some extra code to work around
+some issues that could have been solved with a better back-end
+design. Specifically, the <tt class="literal">doPost()</tt> method has two
+points where the current thread yields to allow the update thread to
+proceed with its work. First, <tt class="literal">doPost()</tt> calls
+<tt class="literal">yield()</tt> after starting the update thread. This
+gives the new thread a chance to start listening for chat messages.
+Second, <tt class="literal">doPost()</tt> calls <tt class="literal">yield()</tt>
+after broadcasting its message. This gives the
+<tt class="literal">update</tt> thread a chance to receive the broadcasted
+message. Without these yields, the thread calling
+<tt class="literal">doPost()</tt> may broadcast the message before the
+<tt class="literal">update</tt> thread is able to receive the message,
+resulting in a response that doesn't include the latest
+message. (And even with the yields, it's possible this could
+happen anyway due to unfortunate thread scheduling.)
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-3"></a>
+<p>[3]
+Honest! The examples from this chapter were dreamed up only after
+<a href="ch10_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch10_01.htm">Chapter 10, "Applet-Servlet Communication"</a> had been written.</p> </blockquote>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch11_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch11_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch11_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch11_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">11.1. Servlet Manipulation</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">11.3. Servlet Collaboration</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

@@ -1,0 +1,968 @@
+<html>
+<head>
+<title>Electronic Mail  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Electronic Mail">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch07_08.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm">Perl for System Administration</a></td><td align="right" valign="top" width="172"><a href="ch08_02.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+
+<h1 class="chapter">Chapter 8.  Electronic Mail</h1>
+<div class="htmltoc">
+<h4 class="tochead">Contents:</h4>
+<p>
+<a href="ch08_01.htm">Sending Mail</a>
+<br>
+<a href="ch08_02.htm">Common Mistakes in Sending Email</a>
+<br>
+<a href="ch08_03.htm">Receiving Mail</a>
+<br>
+<a href="ch08_04.htm">Module Information for This Chapter</a>
+<br>
+<a href="ch08_05.htm">References for More Information</a>
+<br>
+</p>
+</div>
+
+
+
+
+
+
+
+
+
+
+<p>
+<a name="INDEX-765"></a><a name="INDEX-766"></a><a name="INDEX-767"></a>Unlike the other chapters
+in this book, this chapter does not discuss how to administer a
+particular service, technology, or knowledge domain. Instead,
+we're going to look at how to use email from Perl as a tool for
+system administration.</p>
+
+
+
+
+
+<p>Perl can help us in an administrative context with both sending and
+receiving email. Email is a great notification mechanism: often we
+want a program to tell us when something goes wrong, provide the
+results of an automatic process (like a late night
+<tt class="command">cron</tt> or scheduler service job), or let us know
+when something we care about changes. We'll explore how to send
+mail from Perl for these purposes and then look at some of the
+pitfalls associated with the practice of sending ourselves mail.</p>
+
+
+
+
+
+<p>Similarly, we'll look at how Perl can be used to post-process
+mail we receive to make it more useful to us. Perl can be useful for
+dealing with spam and managing user questions.</p>
+
+
+
+
+
+<p>This chapter will assume that you already have a solid and reliable
+mail infrastructure. We're also going to assume that your mail
+system, or one that you have access to, uses protocols that follow
+the IETF specifications for sending and receiving mail. The examples
+in this chapter will use protocols like SMTP (Simple Mail Transfer
+Protocol, RFC821) and expect messages to be RFC822-compliant.
+We'll go over these terms in due course.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h2 class="sect1">8.1. Sending Mail</h2>
+
+
+
+
+
+<p>
+<a name="INDEX-768"></a><a name="INDEX-769"></a><a name="INDEX-770"></a>Let's
+talk about the mechanics of sending email first and then tackle the
+more sophisticated issues. The traditional (Unix) Perl mail sending
+code often looks something like this example from the Perl Frequently
+Asked Questions list:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># assumes we have sendmail installed
+open(SENDMAIL, "|/usr/lib/sendmail -oi -t -odq") or 
+  die "Can't fork for sendmail: $!\n";
+print SENDMAIL &lt;&lt;"EOF";
+From: User Originating Mail &lt;me\@host&gt;
+To: Final Destination &lt;you\@otherhost&gt;
+Subject: A relevant subject line
+
+Body of the message goes here after the blank line
+in as many lines as you like.
+EOF
+close(SENDMAIL) or warn "sendmail didn't close nicely";</pre>
+</blockquote>
+
+
+
+
+
+<a name="ch08-2-fm2xml"></a>
+<blockquote class="note">
+<h4 class="objtitle">TIP</h4>
+<p>When the array interpolation rules were changed between Perl Version
+4 and Perl Version 5, it broke many scripts that sent mail. Even now,
+be on the lookout for code like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$address = "fred@example.com";</pre>
+</blockquote>
+
+
+
+
+
+<p>This needs to be changed to one of these lines to work properly:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$address="fred<tt class="userinput"><b>\</b></tt>@example.com";
+$address=<tt class="userinput"><b>'</b></tt>fred@example.com<tt class="userinput"><b>'</b></tt>; 
+$address= join('@', 'fred', 'example.com');</pre>
+</blockquote>
+
+
+
+
+</blockquote>
+
+<p>Code that calls <tt class="command">sendmail</tt> like our example above
+works fine under many circumstances, but it doesn't work on any
+operating system that lacks a mail transport agent called
+"sendmail" installed (e.g., NT or MacOS). On those
+operating systems, this leaves you with a few
+choices.<a name="INDEX-771"></a>
+</p>
+
+
+
+
+
+<a name="ch08-3-fm2xml"></a>
+<h3 class="sect2">8.1.1. Getting sendmail (or Similar Mail Transport Agent)</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-772"></a>On Win32, you're in luck
+because I know of at least three Win32 ports of
+<tt class="command">sendmail</tt> itself:
+<a name="INDEX-773"></a>
+</p>
+
+
+
+
+
+<ul>
+<li>
+<p>Cygwin <tt class="command">sendmail</tt> port (<a href="http://dome/weeg.uiowa.edu/pub/domestic/sos/ports">http://dome/weeg.uiowa.edu/pub/domestic/sos/ports</a>)</p>
+</li>
+<li>
+<p>Mercury Systems' commercial <tt class="command">sendmail</tt> port
+(<a href="http://www.demobuilder.com/sendmail.htm">http://www.demobuilder.com/sendmail.htm</a>)</p>
+</li>
+<li>
+<p>Sendmail, Inc.'s commercial <tt class="command">Sendmail for NT</tt>
+(<a href="http://www.sendmail.com">http://www.sendmail.com</a>)<a name="INDEX-774"></a>
+</p>
+</li>
+</ul>
+<p>
+<a name="INDEX-775"></a><a name="INDEX-776"></a>If you'd like something more
+lightweight, and are willing to make small modifications to your Perl
+code to support different command-line arguments, other Win32
+programs like these will do the trick:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>
+<tt class="command">blat</tt> (<a href="http://www.interlog.com/~tcharron/blat.html">http://www.interlog.com/~tcharron/blat.html</a>)<a name="INDEX-777"></a><a name="INDEX-778"></a><a name="INDEX-779"></a>
+</p>
+</li>
+<li>
+<p>
+<tt class="command">netmail95</tt> (<a href="http://www.geocities.com/SiliconValley/Lakes/2382/netmail.html">http://www.geocities.com/SiliconValley/Lakes/2382/netmail.html</a>)</p>
+</li>
+<li>
+<p>
+<tt class="command">wmailto</tt> (<a href="http://www.impaqcomp.com/jgaa/wmailto.html">http://www.impaqcomp.com/jgaa/wmailto.html</a>)</p>
+</li>
+</ul>
+<p>The advantage of this approach is it offloads much of the
+mail-sending complexity from your script. A good Mail Transport Agent
+(MTA) handles the process of retrying a destination mail server if
+it's unreachable, selecting the right destination server
+(finding and choosing between Mail eXchanger DNS records), rewriting
+the headers if necessary, dealing with bounces, and so on. If you can
+avoid having to take care of all of that in Perl, that's often
+a good thing.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch08-4-fm2xml"></a>
+<h3 class="sect2">8.1.2. Using the OS-Specific IPC Framework. </h3>
+
+
+
+
+
+<p>
+<a name="INDEX-780"></a><a name="INDEX-781"></a>On MacOS or Windows NT, you can
+drive a mail client using the native interprocess communication (IPC)
+framework.</p>
+
+
+
+
+
+<p>I haven't seen any MacOS ports of <tt class="command">sendmail</tt>,
+but under MacOS, we can ask Perl to use AppleScript to drive an email
+client:<a name="INDEX-782"></a><a name="INDEX-783"></a><a name="INDEX-784"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$to="someone\@example.com";
+$from="me\@example.com";
+$subject="Hi there";
+$body="message body\n";
+
+MacPerl::DoAppleScript(&lt;&lt;EOC);
+tell application "Eudora"
+
+    make message at end of mailbox "out"
+       
+    -- 0 is the current message
+    set field \"from\" of message 0 to \"$from\"
+    set field \"to\" of message 0 to \"$to\"
+    set field \"subject\" of message 0 to \"$subject\"
+    set body of message 0 to \"$body\"
+    queue message 0
+    connect with sending without checking
+    quit
+end tell
+EOC</pre>
+</blockquote>
+
+
+
+
+
+<p>This code executes a very simple AppleScript that communicates with
+the email client <tt class="command">Eudora</tt> by Qualcomm. The script
+creates a new message, populates and queues the message for sending,
+and then instructs Eudora to send its queued messages before
+quitting.<a name="INDEX-785"></a>
+</p>
+
+
+
+
+
+<p>Another slightly more efficient way to write this same code would be
+to use the <tt class="literal">Mac::Glue</tt> module we saw in <a href="ch02_01.htm">Chapter 2, "Filesystems"</a>:<a name="INDEX-786"></a><a name="INDEX-787"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Mac::Glue ':glue';
+
+$e=new Mac::Glue 'Eudora';
+$to="someone\@example.com";
+$from="me\@example.com";
+$subject="Hi there";
+$body="message body";
+
+$e-&gt;make(
+	new =&gt; 'message',
+	at =&gt; location(end =&gt; $e-&gt;obj(mailbox =&gt; 'Out'))
+);
+
+$e-&gt;set($e-&gt;obj(field =&gt; from    =&gt; message =&gt; 0), to =&gt; $from);
+$e-&gt;set($e-&gt;obj(field =&gt; to      =&gt; message =&gt; 0), to =&gt; $to);
+$e-&gt;set($e-&gt;obj(field =&gt; subject =&gt; message =&gt; 0), to =&gt; $subject);
+$e-&gt;set($e-&gt;prop(body =&gt; message =&gt; 0), to =&gt; $body);
+
+$e-&gt;queue($e-&gt;obj(message =&gt; 0));
+$e-&gt;connect(sending =&gt; 1, checking =&gt; 0);
+$e-&gt;quit;</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<a name="INDEX-788"></a><a name="INDEX-789"></a><a name="INDEX-790"></a><a name="INDEX-791"></a><a name="INDEX-792"></a>Under NT, we can use
+Microsoft's Collaborative Data Objects Library (previously
+called Active Messaging), an ease-of-use layer built on top of their
+MAPI (Messaging Application Programming Interface) architecture. To
+call this library to drive a mail client like Outlook, we could use
+the <tt class="literal">Win32::OLE</tt> module like
+so:<a name="INDEX-793"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$to="me\@example.com";
+$subject="Hi there";
+$body="message body\n";
+
+use Win32::OLE;
+
+# init OLE, COINIT_OLEINITIALIZE required when using MAPI.Session objects
+Win32::OLE-&gt;Initialize(Win32::OLE::COINIT_OLEINITIALIZE);
+die Win32::OLE-&gt;LastError(),"\n" if Win32::OLE-&gt;LastError(  );
+
+# create a session object that will call Logoff when it is destroyed
+my $session = Win32::OLE-&gt;new('MAPI.Session','Logoff');
+die Win32::OLE-&gt;LastError(),"\n" if Win32::OLE-&gt;LastError(  );
+
+# log into that session using the default OL98 Internet Profile
+$session-&gt;Logon('Microsoft Outlook Internet Settings');
+die Win32::OLE-&gt;LastError(),"\n" if Win32::OLE-&gt;LastError(  );
+
+# create a message object
+my $message = $session-&gt;Outbox-&gt;Messages-&gt;Add;
+die Win32::OLE-&gt;LastError(),"\n" if Win32::OLE-&gt;LastError(  );
+
+# create a recipient object for that message object
+my $recipient = $message-&gt;Recipients-&gt;Add;
+die Win32::OLE-&gt;LastError(),"\n" if Win32::OLE-&gt;LastError(  );
+
+# populate the recipient object
+$recipient-&gt;{Name} = $to;
+$recipient-&gt;{Type} = 1; # 1 = "To:", 2 = "Cc:", 3 = "Bcc:"
+
+# all addresses have to be resolved against a directory 
+# (in this case probably your Address book). Full addresses 
+# usually resolve to themselves, so this line in most cases will 
+# not modify the recipient object.
+$recipient-&gt;Resolve(  );
+die Win32::OLE-&gt;LastError(),"\n" if Win32::OLE-&gt;LastError(  );
+
+# populate the Subject: line and message body
+$message-&gt;{Subject} = $subject;
+$message-&gt;{Text} = $body;
+
+# queue the message to be sent
+# 1st argument = save copy of message
+# 2nd argument = allows user to change message w/dialog box before sent
+# 3rd argument = parent window of dialog if 2nd argument is True
+$message-&gt;Send(0, 0, 0);
+die Win32::OLE-&gt;LastError(),"\n" if Win32::OLE-&gt;LastError(  );
+
+# explicitly destroy the $session object, calling $session-&gt;Logoff 
+# in the process
+undef $session;</pre>
+</blockquote>
+
+
+
+
+
+<p>Unlike the previous example, this code just queues the message to be
+sent. It is up to the mail client (like Outlook) or transport
+infrastructure (like Exchange) to periodically initiate message
+delivery. There is a CDO/AM 1.1 method for the
+<tt class="literal">Session</tt> object called <tt class="literal">DeliverNow(
+)</tt> that is supposed to instruct MAPI to flush all incoming
+and outgoing mail queues. Unfortunately, it is not available and does
+not work under some circumstances, so it is not included in the
+previous code example.</p>
+
+
+
+
+
+<p>The previous code drives MAPI "by hand" using OLE calls.
+If you'd like to use MAPI without getting your hands that
+dirty, Amine Moulay Ramdane has put together a
+<tt class="literal">Win32::MAPI</tt> module (found at <a href="http://www.generation.net/~aminer/Perl/">http://www.generation.net/~aminer/Perl/</a>)
+that can take some of the work out of the process.
+<a name="INDEX-794"></a>
+</p>
+
+
+
+
+
+<p>Programs that rely on AppleScript/Apple Events or MAPI are equally as
+non-portable as calling a <tt class="command">sendmail</tt> binary. They
+offload some of the work, but are relatively inefficient. They should
+probably be your methods of last
+resort.<a name="INDEX-795"></a><a name="INDEX-796"></a><a name="INDEX-797"></a><a name="INDEX-798"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch08-5-fm2xml"></a>
+<h3 class="sect2">8.1.3. Speaking to the Mail Protocols Directly</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-799"></a><a name="INDEX-800"></a>Our final
+choice is to write code that speaks to the mail server in its native
+language. Most of this language is documented in RFC821. Here's
+a basic SMTP (Simple Mail Transport Protocol) conversation. The data
+we send is in bold:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">% <tt class="userinput"><b>telnet example.com 25         </b></tt>-- connect to the SMTP port on example.com</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Trying 192.168.1.10 ...
+Connected to example.com.
+Escape character is '^]'.
+220 mailhub.example.com ESMTP Sendmail 8.9.1a/8.9.1; Sun, 11 Apr 1999 15:32:16 -0400 (EDT)
+<tt class="userinput"><b>HELO client.example.com        </b></tt>-- identify the machine we are connecting from</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">                                                                             (can also use EHLO)</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">250 mailhub.example.com Hello dnb@client.example.com [192.168.1.11], pleased to meet you
+<tt class="userinput"><b>MAIL FROM: &lt;dnb@example.com&gt;   </b></tt>-- specify the sender</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">250 &lt;dnb@example.com&gt;... Sender ok
+<tt class="userinput"><b>RCPT TO: &lt;dnb@example.com&gt;     </b></tt>-- specify the recipient</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">250 &lt;dnb@example.com&gt;... Recipient ok
+<tt class="userinput"><b>DATA                           </b></tt>-- begin to send message, note we send several key header lines</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">354 Enter mail, end with "." on a line by itself
+<tt class="userinput"><b>From: David N. Blank-Edelman (David N. Blank-Edelman)</b></tt>
+<tt class="userinput"><b>To: dnb@example.com</b></tt>
+<tt class="userinput"><b>Subject: SMTP is a fine protocol</b></tt>
+
+<tt class="userinput"><b>Just wanted to drop myself a note to remind myself how much I love SMTP.</b></tt>
+<tt class="userinput"><b>     Peace,</b></tt>
+<tt class="userinput"><b>       dNb</b></tt>
+<tt class="userinput"><b>.                              </b></tt>-- finish sending the message</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">250 PAA26624 Message accepted for delivery
+<tt class="userinput"><b>QUIT</b></tt>                           -- end the session</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">221 mailhub.example.com closing connection
+Connection closed by foreign host.</pre>
+</blockquote>
+
+
+
+
+
+<p>It is not difficult to script a network conversation like this. We
+could use the <tt class="literal">Socket</tt> module or even something like
+<tt class="literal">Net::Telnet</tt> as seen in <a href="ch06_01.htm">Chapter 6, "Directory Services"</a>. But there are good mail modules out there
+that make our job easier, like Jenda Krynicky's
+<tt class="literal">Mail::Sender</tt>, Milivoj Ivkovic's
+<tt class="literal">Mail::Sendmail</tt>, and
+<tt class="literal">Mail::Mailer</tt> in Graham Barr's
+<em class="emphasis">MailTools</em> package. All three of these packages
+are operating-system-independent and will work almost anywhere a
+modern Perl distribution is available. We'll look at
+<tt class="literal">Mail::Mailer</tt> because it offers a single interface
+to two of the mail-sending methods we've discussed so
+far.<a name="INDEX-801"></a><a name="INDEX-802"></a><a name="INDEX-803"></a><a name="INDEX-804"></a><a name="INDEX-805"></a> Like most Perl modules written
+in an object-oriented style, the first step is to construct an
+instance of new object:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Mail::Mailer;
+
+$from="me\@example.com";
+$to="you\@example.com";
+$subject="Hi there";
+$body="message body\n";
+
+$type="smtp";
+$server="mail.example.com";
+
+my $mailer = Mail::Mailer-&gt;new($type, Server =&gt; $server) or
+  die "Unable to create new mailer object:$!\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>The <tt class="literal">$type</tt> variable allows you to choose one of the
+following behaviors:</p>
+
+
+
+
+
+<dl>
+<dt>
+<b>smtp</b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-806"></a><a name="INDEX-807"></a><a name="INDEX-808"></a>Send the
+mail using the <tt class="literal">Net::SMTP</tt> module (part of
+Barr's <tt class="command">libnet</tt> package), available for most
+non-Unix ports of Perl as well. If you are using
+<em class="emphasis">MailTools</em> Version 1.13 and above, you can
+specify the SMTP server name using the <tt class="literal">=&gt;</tt>
+notation as demonstrated above. If not, you will have to configure
+the server name as part of the <em class="emphasis">libnet</em> install
+procedure.</p>
+</dd>
+
+
+
+
+
+<dt>
+<b>mail</b>
+</dt>
+<dd>
+<p>Send the mail using the Unix mail user agent <tt class="command">mail</tt>
+(or whatever binary you specify as an optional second argument). This
+is similar to our use of AppleScript and MAPI above.</p>
+</dd>
+
+
+
+
+
+<dt>
+<b>sendmail</b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-809"></a>Send the
+mail using the <tt class="command">sendmail</tt> binary, like our first
+method of this section.</p>
+</dd>
+
+</dl>
+
+
+
+
+
+<p>You can also set the environment variable
+<tt class="literal">PERL_MAILERS</tt> to change the default locations used
+to find the binaries like <tt class="command">sendmail</tt> on your system.</p>
+
+
+
+
+
+<p>Calling the <tt class="literal">open( )</tt> method of our
+<tt class="literal">Mail::Mailer</tt> object causes our object to behave
+like a filehandle to an outgoing message. In this call, we pass in
+the headers of the message as a reference to an anonymous hash:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$mailer-&gt;open({From =&gt; $from, 
+               To =&gt; $to, 
+               Subject =&gt; $subject}) or 
+  die "Unable to populate mailer object:$!\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>We <tt class="literal">print</tt> our message body to this
+pseudo-filehandle and then close it to send the message:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">print $mailer $body;
+$mailer-&gt;close;</pre>
+</blockquote>
+
+
+
+
+
+<p>That's all it takes to send mail portably via Perl.</p>
+
+
+
+
+
+<p>Depending on which <tt class="literal">$type</tt> behavior we choose when
+using this module, we may or may not be covered regarding the harder
+MTA issues mentioned earlier. The previous code uses the
+<tt class="literal">smtp</tt> behavior, which means our code needs to be
+smart enough to handle error conditions like unreachable servers. As
+written, it's not that smart. Be sure any production code you
+write is prepared to deal with these issues.<a name="INDEX-810"></a><a name="INDEX-811"></a><a name="INDEX-812"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch07_08.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch08_02.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">7.8. References for More Information</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">8.2. Common Mistakes in Sending Email</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

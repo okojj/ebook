@@ -1,0 +1,510 @@
+<html>
+<head>
+<title>Extending Perl (Using C from Perl) (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Extending Perl (Using C from Perl)">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch21_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch21_01.htm">Chapter 21: Internals and Externals</a></td><td align="right" valign="top" width="172"><a href="ch21_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">21.3. Extending Perl (Using C from Perl)</h2>
+
+<a name="INDEX-3694"></a><a name="INDEX-3695"></a><a name="INDEX-3696"></a><a name="INDEX-3697"></a>
+<p>
+<a name="INDEX-3698"></a><a name="INDEX-3699"></a><a name="INDEX-3700"></a><a name="INDEX-3701"></a>
+If you want to use C source code (or a C library) from Perl, you need
+to create a library that can be either dynamically loaded or statically
+linked into your <em class="emphasis">perl</em> executable.  (Dynamic loading is usually
+preferred, to minimize the number of different <em class="emphasis">perl</em> executables
+sitting around being different.) You create that library by creating an
+<em class="emphasis">XS</em> file (ending in <em class="emphasis">.xs</em>) containing a series of wrapper
+subroutines.  The wrapper subroutines are not Perl subroutines,
+however; they are in the XS language, and we call such a subroutine an
+<em class="emphasis">XSUB</em>, for "eXternal SUBroutine".  An XSUB can wrap a C function from an
+external library, a C function elsewhere in the XS file, or naked C
+code in the XSUB itself.  You then use the <em class="emphasis">xsubpp</em> utility bundled
+with Perl to take the XS file and translate it into C code that can be
+compiled into a library that Perl will understand.</p>
+
+<p>Assuming your operating system supports dynamic linking, the end
+result will be a Perl module that behaves like any other module
+written in 100% pure Perl, but runs compiled C code under the hood.
+It does this by pulling arguments from Perl's argument stack,
+converting the Perl values to the formats expected by a particular C
+function (specified through an XSUB declaration), calling the C
+function, and finally transferring the return values of the C function
+back to Perl.  These return values may be passed back to Perl either
+by putting them on the Perl stack or by modifying the arguments
+supplied from the Perl side.  (If your system doesn't support
+dynamic linking, you have another hoop to jump through, and we'll
+discuss that in the next section.)</p>
+
+<p>The previous description is a somewhat simplified view of what really
+happens.  Since Perl allows more flexible calling conventions than C,
+XSUBs can do much more in practice, such as checking input parameters
+for validity, throwing exceptions, returning <tt class="literal">undef</tt>
+or an empty list, calling different C functions based on numbers and
+types of the arguments, or providing an object-oriented interface.
+Again, see the <em class="emphasis">perlxs</em> and
+<em class="emphasis">perlxstut</em> manpages.</p>
+
+
+<h3 class="sect2">21.3.1. XS and XSUBs</h3>
+
+<a name="INDEX-3702"></a><a name="INDEX-3703"></a><a name="INDEX-3704"></a><a name="INDEX-3705"></a><a name="INDEX-3706"></a><a name="INDEX-3707"></a><a name="INDEX-3708"></a>
+<p>XS is a convenience: there's nothing stopping you from writing glue
+code directly in C and linking it into your Perl executable.  However,
+this would be tedious, especially if you need to write glue for
+multiple C functions, or if you're not familiar with the Perl stack
+discipline and other arcana.  XS lets you write a concise description
+of what should be done by the glue, and the XS compiler <em class="emphasis">xsubpp</em>
+handles the rest.</p>
+
+<p>
+<a name="INDEX-3709"></a>
+For people who don't find XS convenient enough, the SWIG system
+automatically generates simple XSUBs.  See <a href="http://www.swig.org">http://www.swig.org</a> for
+more information.</p>
+
+<p>
+<a name="INDEX-3710"></a><a name="INDEX-3711"></a><a name="INDEX-3712"></a>
+The XS language allows you to describe the mapping between a C
+function and a Perl function.  It also allows you to create a Perl
+function that is a wrapper around pure C code that you write yourself.
+When XS is used merely to map between C and Perl, the XSUB declaration
+is almost identical to a declaration of a C function.  In such
+circumstances, a tool called <em class="emphasis">h2xs</em> (bundled with Perl) is able to
+translate an entire C header file into a corresponding XS file that
+provides glue to the C functions and macros.</p>
+
+<p>The <em class="emphasis">xsubpp</em> tool creates the constructs necessary to let an XSUB
+manipulate Perl values and the glue necessary to let Perl
+call the XSUB.</p>
+
+<p>An XS file begins with any C code you want to include, which will often
+be nothing more than a set of <tt class="literal">#include</tt> directives.  After a <tt class="literal">MODULE</tt>
+keyword, the remainder of the file should be in the XS
+"language", a combination of XS directives and XSUB definitions.  We'll
+see an example of an entire XS file soon, but in the meantime here is a
+simple XSUB definition that allows a Perl program to access a C library
+function called <em class="emphasis">sin</em>(3).  The XSUB specifies the return type (a double
+length floating-point number), the function name and argument list
+(with one argument dubbed <tt class="literal">x</tt>), and the type of the argument (another double):
+<blockquote>
+<pre class="programlisting">double
+sin(x)
+    double x</pre>
+</blockquote>
+
+More complicated XSUBs will often contain other bits of XS code.
+Each section of an XSUB starts with a keyword followed by a colon,
+such as <tt class="literal">INIT:</tt> or <tt class="literal">CLEANUP:</tt>.  However, the first two lines of an
+XSUB always contain the same data: a description of the return type
+and the name of the function and its parameters.  Whatever immediately
+follows these is considered to be an <tt class="literal">INPUT:</tt> section unless
+explicitly marked with another keyword.  The various keywords are all
+explained in the <em class="emphasis">perlxs</em> manpage, which you should read to learn about
+everything you can do with XSUBs.</p>
+
+<p>
+<a name="INDEX-3713"></a><a name="INDEX-3714"></a>
+If your system does not have the capability to dynamically load
+shared libraries, you can still use XSUBs, but you must statically link the
+XSUBs with the rest of Perl, creating a new Perl executable (to sit
+around and be different).  The XSUB build mechanism will check the
+system and build a shared library if possible, or else a
+static library.  Optionally, it can build a new statically linked executable
+with that static library linked in.  (But you might want to delay that
+to bundle all your new extensions into a single executable sitting
+around being the same, as it were.)</p>
+
+<p>If your system can link libraries dynamically but you still want to
+build a statically linked executable, you can run <tt class="literal">make perl</tt> instead
+of <tt class="literal">make</tt> in the following examples.  You should then run <tt class="literal">make
+test_static</tt> instead of <tt class="literal">make test</tt> to test your extension.</p>
+
+<p>
+<a name="INDEX-3715"></a>
+The <em class="emphasis">xsubpp</em> program also needs to know how to
+convert from Perl's data types to C's data types.  Often it can guess,
+but with user-defined types you may need to help it out by specifying
+the conversion in a <em class="emphasis">typemap</em> file.  The default
+conversions are stored in
+<em class="replaceable">PATH-TO-PERLLIB</em><em class="emphasis">/ExtUtils/typemap</em>.</p>
+
+<p>The typemap is split into three sections.  The first section, labeled
+<tt class="literal">TYPEMAP</tt>, tells the compiler which of the code fragments in the
+following two sections should be used to map between C types and Perl
+values.  The second section, <tt class="literal">INPUT</tt>, contains C code specifying how
+Perl values should be converted to C types.  The third section,
+<tt class="literal">OUTPUT</tt>, contains C code specifying how to translate C types into
+Perl values.</p>
+
+
+
+
+
+
+<h3 class="sect2">21.3.2. Creating Extensions</h3>
+
+<a name="INDEX-3716"></a><a name="INDEX-3717"></a><a name="INDEX-3718"></a><a name="INDEX-3719"></a><a name="INDEX-3720"></a><a name="INDEX-3721"></a><a name="INDEX-3722"></a>
+<p>A proper extension consists of several files: one containing the XS code, plus 
+other supporting files that help Perl figure out what to do with the
+XS code.  You can create all of these files by hand, but it's easier
+to use the <em class="emphasis">h2xs</em> tool, which creates a skeletal extension that
+you can then flesh out:
+<blockquote>
+<pre class="programlisting">h2xs -A -n Mytest</pre>
+</blockquote>
+
+This creates a directory named <em class="emphasis">Mytest</em>, possibly under <em class="emphasis">ext/</em> if that
+directory exists in the current directory.  Six files will be created
+in the <em class="emphasis">Mytest</em> directory: <em class="emphasis">MANIFEST</em>, <em class="emphasis">Makefile.PL</em>, <em class="emphasis">Mytest.pm</em>,
+<em class="emphasis">Mytest.xs</em>, <em class="emphasis">test.pl</em>, and <em class="emphasis">Changes</em>.  We describe the first four below.</p>
+
+<dl>
+<dt>
+<b><em class="emphasis">MANIFEST</em></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a>
+The <em class="emphasis">MANIFEST</em> file contains the names of all the files just created in
+the <em class="emphasis">Mytest</em> directory.  If you add more files to your extension and
+intend to distribute it to the wide world, add the filenames here.  This
+is tested by some systems to ensure that your distribution is
+complete.</p>
+</dd>
+
+
+<dt>
+<b><em class="emphasis">Makefile.PL</em></b>
+</dt>
+<dd>
+<p>This is a Perl program that generates a <em class="emphasis">Makefile</em>
+(which is then passed to <em class="emphasis">make</em> or an equivalent).
+<em class="emphasis">Makefile.PL</em> is described further in "Creating
+CPAN Modules" in <a href="ch22_01.htm">Chapter 22, "CPAN"</a>.</p>
+</dd>
+
+
+<dt>
+<b><em class="emphasis">Mytest.pm</em></b>
+</dt>
+<dd>
+<p>Users will <tt class="literal">use</tt> this module when they
+want to load your extension.  You're expected to fill in the blanks in
+the skeletal module created for you by <em class="emphasis">h2xs</em>:
+<blockquote>
+<pre class="programlisting">package Mytest;
+
+use strict;
+use warnings;
+
+require Exporter;
+require DynaLoader;
+
+our @ISA = qw(Exporter DynaLoader);
+# Items to export into callers namespace by default. Note: do not export
+# names by default without a very good reason. Use EXPORT_OK instead.
+# Do not simply export all your public functions/methods/constants.
+our @EXPORT = qw(
+
+);
+our $VERSION = '0.01';
+
+bootstrap Mytest $VERSION;
+
+# Preloaded methods go here.
+
+# Autoload methods go after __END__, and are processed by the autosplit program.
+
+1;
+__END__
+# Below is the stub of documentation for your module. You better edit it!</pre>
+</blockquote>
+<a name="INDEX-"></a><a name="INDEX-"></a><a name="INDEX-"></a>
+</p>
+
+<p>Most extension modules will <tt class="literal">require</tt> the <tt class="literal">Exporter</tt> and <tt class="literal">DynaLoader</tt> extensions.  After setting <tt class="literal">@ISA</tt> (for inheritance)
+and <tt class="literal">@EXPORT</tt> (to make functions available to the package using the
+module), the initialization code tells Perl to <tt class="literal">bootstrap</tt> the XS code.  Perl then
+dynamically links the shared library into the <em class="emphasis">perl</em> process at run time.</p>
+</dd>
+
+
+<dt>
+<b><em class="emphasis">Mytest.xs</em></b>
+</dt>
+<dd>
+<p>The <em class="emphasis">Mytest.xs</em> file contains the XSUBs that tell Perl how to pass data
+to the compiled C routines.  Initially, <em class="emphasis">Mytest.xs</em> will look something
+like this:
+<blockquote>
+<pre class="programlisting">#include "EXTERN.h"
+#include "perl.h"
+#include "XSUB.h"
+
+MODULE = Mytest                PACKAGE = Mytest</pre>
+</blockquote>
+
+Let's edit the XS file by adding this to the end of the file:
+<blockquote>
+<pre class="programlisting">void
+hello()
+    CODE:
+        printf("Hello, world!\n");</pre>
+</blockquote>
+</p>
+</dd>
+
+</dl>
+
+<p>
+</p>
+
+<p>When you run <tt class="literal">perl Makefile.PL</tt>, the <em class="emphasis">Makefile</em> that <em class="emphasis">make</em> needs will
+be created:
+<blockquote>
+<pre class="programlisting">% <tt class="userinput"><b>perl Makefile.PL</b></tt>
+Checking if your kit is complete...
+Looks good
+Writing Makefile for Mytest</pre>
+</blockquote>
+
+Running <em class="emphasis">make</em> will now produce output that looks something like this
+(some long lines have been shortened for clarity and some extraneous
+lines have been deleted):
+<blockquote>
+<pre class="programlisting">% <tt class="userinput"><b>make</b></tt>
+umask 0 &amp;&amp; cp Mytest.pm ./blib/Mytest.pm
+perl xsubpp -typemap typemap Mytest.xs &gt;Mytest.tc &amp;&amp; mv Mytest.tc Mytest.c
+cc -c Mytest.c
+Running Mkbootstrap for Mytest ()
+chmod 644 Mytest.bs
+LD_RUN_PATH="" ld -o ./blib/PA-RISC1.1/auto/Mytest/Mytest.sl -b Mytest.o
+chmod 755 ./blib/PA-RISC1.1/auto/Mytest/Mytest.sl
+cp Mytest.bs ./blib/PA-RISC1.1/auto/Mytest/Mytest.bs
+chmod 644 ./blib/PA-RISC1.1/auto/Mytest/Mytest.bs
+Manifying ./blib/man3/Mytest.3</pre>
+</blockquote>
+
+We assume that the <em class="emphasis">make</em> program that Perl uses to build programs is
+called <em class="emphasis">make</em>.  Instead of running <em class="emphasis">make</em> in these examples, you may
+have to substitute whatever <em class="emphasis">make</em> program Perl has been configured
+to use.  You can find out what that program is with:
+<blockquote>
+<pre class="programlisting">% <tt class="userinput"><b>perl -V:make</b></tt>
+</pre>
+</blockquote>
+<a name="INDEX-3723"></a>
+</p>
+
+<p>Running <em class="emphasis">make</em> created a directory called <em class="emphasis">blib</em> (for "build
+library") in the current working directory.  This directory will
+contain the shared library that we will build.  Once we're sure we
+know what we're doing, we can install it from that directory into its
+final resting place.  Until then, we'll have to explicitly add the
+<em class="emphasis">blib</em> directory to Perl's <tt class="literal">@INC</tt> array by using the
+<tt class="literal">ExtUtils::testlib</tt> module.  If we now create a file called <em class="emphasis">hello</em>
+that looks like this:</p>
+
+<blockquote>
+<pre class="programlisting">use ExtUtils::testlib;   # adds blib/* directories to @INC
+use Mytest;
+Mytest::hello();</pre>
+</blockquote>
+
+<p>we can burrow down from Perl into C:</p>
+
+<blockquote>
+<pre class="programlisting">% <tt class="userinput"><b>perl hello</b></tt>
+Hello, world!</pre>
+</blockquote>
+
+<p>Once your extension is complete and passes all its tests, you can
+install it with <tt class="literal">make install</tt>.</p>
+
+<p>You will need write 
+permission for your Perl library.  (If you don't have permission, you can 
+specify another directory as shown in "Installing CPAN modules" in 
+<a href="ch22_01.htm">Chapter 22, "CPAN"</a>.)</p>
+
+<a name="INDEX-3724"></a><a name="INDEX-3725"></a><a name="INDEX-3726"></a>
+
+
+
+
+
+
+<h3 class="sect2">21.3.3. XSUB Input and Output</h3>
+
+<p>
+<a name="INDEX-3727"></a><a name="INDEX-3728"></a><a name="INDEX-3729"></a><a name="INDEX-3730"></a><a name="INDEX-3731"></a><a name="INDEX-3732"></a>
+Continuing with the previous example, we'll add a second XSUB, which
+takes a single numeric argument as input and returns 0 if the number
+is even, or 1 if the number is odd:
+<blockquote>
+<pre class="programlisting">int
+is_even(x)
+        int x
+    CODE:
+        RETVAL = (x % 2 == 0);
+    OUTPUT:
+        RETVAL</pre>
+</blockquote>
+
+The list of output parameters occurs at the very end of the function,
+just after the <tt class="literal">OUTPUT:</tt> directive.  The use of <tt class="literal">RETVAL</tt> tells Perl
+that you wish to send this value back as the return value of the XSUB.
+Had we wanted the function to modify its input parameter, we would
+have used <tt class="literal">x</tt> in place of <tt class="literal">RETVAL</tt>.</p>
+
+<p>We can rebuild our new shared library with the same steps as before,
+generating a <em class="emphasis">Makefile</em> from the <em class="emphasis">Makefile.PL</em> file and running
+<em class="emphasis">make</em>.</p>
+
+<p>
+<a name="INDEX-3733"></a><a name="INDEX-3734"></a>
+In order to verify that our extension works, we'll create a test suite in 
+<em class="emphasis">test.pl</em>.  This file is set up by <em class="emphasis">h2xs</em> to mimic the
+test script that Perl itself has.  Within the script, you may run tests to confirm that the extension behaves properly,
+printing <tt class="literal">ok</tt> when it does and <tt class="literal">not ok</tt> when it doesn't.  Change the
+print statement in the <tt class="literal">BEGIN</tt> block of <em class="emphasis">test.pl</em> to <tt class="literal">print "1..4\n";</tt>, 
+and add the following code to the end of the file:
+<blockquote>
+<pre class="programlisting">print Mytest::is_even(0) == 1 ? "ok 2" : "not ok 2", "\n";
+print Mytest::is_even(1) == 0 ? "ok 3" : "not ok 3", "\n";
+print Mytest::is_even(2) == 1 ? "ok 4" : "not ok 4", "\n";</pre>
+</blockquote>
+
+The test script will be executed when you type <tt class="literal">make test</tt>.</p>
+
+
+
+
+
+
+<h3 class="sect2">21.3.4. Using Functions from an External C Library</h3>
+
+<p>
+<a name="INDEX-3735"></a><a name="INDEX-3736"></a><a name="INDEX-3737"></a><a name="INDEX-3738"></a><a name="INDEX-3739"></a>
+So far, our two examples haven't relied on any C code outside of the
+XS file.  Now we'll use some functions from the C math library:
+<blockquote>
+<pre class="programlisting">void
+round(arg)
+        double  arg
+    CODE:
+        if (arg &gt; 0.0) {
+                arg = floor(arg + 0.5);
+        } else if (arg &lt; 0.0) {
+                arg = ceil(arg - 0.5);
+        } else {
+                arg = 0.0;
+        }
+    OUTPUT:
+        arg</pre>
+</blockquote>
+
+Note that the <tt class="literal">round</tt> we define above does not return a value, but
+instead changes the value of its argument in place.</p>
+
+<p>The <em class="emphasis">floor</em>(3) and <em class="emphasis">ceil</em>(3) functions are part of the C math library.  If
+you were compiling a C program and needed to link
+in the math library, you'd append <tt class="userinput"><b>-lm</b></tt> to the command line, so that's what you put into
+the <tt class="literal">LIBS</tt> line in <em class="emphasis">Makefile.PL</em>:
+<blockquote>
+<pre class="programlisting">'LIBS'  =&gt; ['-lm'],   # Link in the 'm' math library</pre>
+</blockquote>
+
+Generate the <em class="emphasis">Makefile</em> and run <em class="emphasis">make</em>.  Change the <tt class="literal">BEGIN</tt> block to
+run nine tests and add the following to <em class="emphasis">test.pl</em>:
+<blockquote>
+<pre class="programlisting">$i = -1.5; Mytest::round($i); print $i == -2.0 ? "ok 5" : "not ok 5", "\n";
+$i = -1.1; Mytest::round($i); print $i == -1.0 ? "ok 6" : "not ok 6", "\n";
+$i = 0.0; Mytest::round($i); print $i == 0.0 ? "ok 7" : "not ok 7", "\n";
+$i = 0.5; Mytest::round($i); print $i == 1.0 ? "ok 8" : "not ok 8", "\n";
+$i = 1.2; Mytest::round($i); print $i == 1.0 ? "ok 9" : "not ok 9", "\n";</pre>
+</blockquote>
+
+Running <tt class="literal">make test</tt> should now print out that all nine tests are okay.</p>
+
+<p>The <em class="emphasis">perlxstut</em> documentation bundled with Perl has several more
+examples of Perl extensions, including an example that uses <em class="emphasis">h2xs</em>
+to automatically make an entire C library available to Perl.</p>
+
+<a name="INDEX-3740"></a><a name="INDEX-3741"></a><a name="INDEX-3742"></a>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch21_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch21_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">21.2. Internal Data Types</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">21.4. Embedding Perl (Using Perl from C)</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

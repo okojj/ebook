@@ -1,0 +1,175 @@
+<html><head>
+<title>Recipe 20.3. Extracting URLs</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:45:56Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch20_01.htm" title="20. Web Automation"><link rel="prev" href="ch20_03.htm" title="20.2. Automating Form Submission"><link rel="next" href="ch20_05.htm" title="20.4. Converting ASCII to HTML"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch20_03.htm" title="20.2. Automating Form Submission"><img src="../gifs/txtpreva.gif" alt="Previous: 20.2. Automating Form Submission" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch20_01.htm" title="20. Web Automation">Chapter 20<br>Web Automation</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch20_05.htm" title="20.4. Converting ASCII to HTML"><img src="../gifs/txtnexta.gif" alt="Next: 20.4. Converting ASCII to HTML" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch20-25551">20.3. Extracting URLs<a class="indexterm" name="ch20-idx-1000002602-0"></A
+><a class="indexterm" name="ch20-idx-1000002602-1"></A
+><a class="indexterm" name="ch20-idx-1000002602-2"></A
+><a class="indexterm" name="ch20-idx-1000002602-3"></A
+><a class="indexterm" name="ch20-idx-1000002602-4"></A
+><a class="indexterm" name="ch20-idx-1000002602-5"></A
+></A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-289">Problem</A
+></H3
+><p class="para">You want to extract all URLs from an HTML file.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-295">Solution</A
+></H3
+><p class="para">Use the HTML::LinkExtor module from CPAN:</P
+><pre class="programlisting">use HTML::LinkExtor;
+
+$parser = HTML::LinkExtor-&gt;new(undef, $base_url);
+$parser-&gt;parse_file($filename);
+@links = $parser-&gt;links;
+foreach $linkarray (@links) {
+    my @element = @$linkarray;
+    my $elt_type = shift @element;                  # element type
+
+    # possibly test whether this is an element we're interested in
+    while (@element) {
+        # extract the next attribute and its value
+        my ($attr_name, $attr_value) = splice(@element, 0, 2);
+        # ... do something with them ...
+    }
+}</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-333">Discussion</A
+></H3
+><p class="para">You can use HTML::LinkExtor in two different ways: either to call <code class="literal">links</CODE
+> to get a list of all links in the document once it is completely parsed, or to pass a code reference in the first argument to <code class="literal">new</CODE
+>. The referenced function will be called on each link as the document is parsed.</P
+><p class="para">The <code class="literal">links</CODE
+> method clears the link list, so you can call it only once per parsed document. It returns a reference to an array of elements. Each element is itself an array reference with an HTML::Element object at the front followed by a list of attribute name and attribute value pairs. For instance, the HTML:</P
+><pre class="programlisting">&lt;A HREF=&quot;http://www.perl.com/&quot;&gt;Home page&lt;/A&gt;
+&lt;IMG SRC=&quot;images/big.gif&quot; LOWSRC=&quot;images/big-lowres.gif&quot;&gt;</PRE
+><p class="para">would return a data structure like this:</P
+><pre class="programlisting">[
+  [ a,   href   =&gt; &quot;http://www.perl.com/&quot; ],
+  [ img, src    =&gt;&quot;images/big.gif&quot;,
+         lowsrc =&gt; &quot;images/big-lowres.gif&quot; ]
+]</PRE
+><p class="para">Here's an example of how you would use the <code class="literal">$elt_type</CODE
+> and the <code class="literal">$attr_name</CODE
+> to print out and anchor an image:</P
+><pre class="programlisting">if ($elt_type eq 'a' &amp;&amp; $attr_name eq 'href') {
+    print &quot;ANCHOR: $attr_value\n&quot; 
+        if $attr_value-&gt;scheme =~ /http|ftp/;
+}
+if ($elt_type eq 'img' &amp;&amp; $attr_name eq 'src') {
+    print &quot;IMAGE:  $attr_value\n&quot;;
+}</PRE
+><p class="para"><a class="xref" href="#ch20-42565" title="xurl">Example 20.2</A
+> is a complete program that takes as its arguments a URL, like file:///tmp/testing.html or http://www.ora.com/, and produces on standard output an alphabetically sorted list of unique URLs.</P
+><div class="example"><h4 class="example"><a class="title" name="ch20-42565">Example 20.2: xurl</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# xurl - extract unique, sorted list of links from URL
+use HTML::LinkExtor;
+use LWP::Simple;
+
+$base_url = shift;
+$parser = HTML::LinkExtor-&gt;new(undef, $base_url);
+$parser-&gt;parse(get($base_url))-&gt;eof;
+@links = $parser-&gt;links;
+foreach $linkarray (@links) {
+    my @element  = @$linkarray;
+    my $elt_type = shift @element;
+    while (@element) {
+        my ($attr_name , $attr_value) = splice(@element, 0, 2);
+        $seen{$attr_value}++;
+    }
+}
+for (sort keys %seen) { print $_, &quot;\n&quot; }</PRE
+></DIV
+><p class="para">This program does have a limitation: if the <code class="literal">get</CODE
+> of <code class="literal">$base_url</CODE
+> involves a redirection, your links will all be resolved with the original URL instead of the URL at the end of the redirection. To fix this, fetch the document with LWP::UserAgent and examine the response code to find out if a redirection occurred. Once you know the post-redirection URL (if any), construct the HTML::LinkExtor object.</P
+><p class="para">Here's an example of the run:</P
+><pre class="programlisting">% xurl http://www.perl.com/CPAN
+<code class="userinput"><b><code class="replaceable"><i>ftp://ftp@ftp.perl.com/CPAN/CPAN.html</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>http://language.perl.com/misc/CPAN.cgi</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>http://language.perl.com/misc/cpan_module</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>http://language.perl.com/misc/getcpan</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>http://www.perl.com/index.html</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>http://www.perl.com/gifs/lcb.xbm</I
+></CODE
+></B
+></CODE
+></PRE
+><p class="para">Often in mail or Usenet messages, you'll see URLs written as:</P
+><pre class="programlisting">&lt;URL:http://www.perl.com&gt;</PRE
+><p class="para">This is supposed to make it easy to pick URLs from messages:</P
+><pre class="programlisting">@URLs = ($message =~ /&lt;URL:(.*?)&gt;/g);<a class="indexterm" name="ch20-idx-1000002604-0"></A
+><a class="indexterm" name="ch20-idx-1000002604-1"></A
+><a class="indexterm" name="ch20-idx-1000002604-2"></A
+><a class="indexterm" name="ch20-idx-1000002604-3"></A
+><a class="indexterm" name="ch20-idx-1000002604-4"></A
+><a class="indexterm" name="ch20-idx-1000002604-5"></A
+></PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-437">See Also</A
+></H3
+><p class="para">The documentation for the CPAN modules LWP::Simple, HTML::LinkExtor, and HTML::Entities; <a class="xref" href="ch20_02.htm" title="Fetching a URL from a Perl Script">Recipe 20.1</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch20_03.htm" title="20.2. Automating Form Submission"><img src="../gifs/txtpreva.gif" alt="Previous: 20.2. Automating Form Submission" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch20_05.htm" title="20.4. Converting ASCII to HTML"><img src="../gifs/txtnexta.gif" alt="Next: 20.4. Converting ASCII to HTML" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">20.2. Automating Form Submission</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">20.4. Converting ASCII to HTML</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

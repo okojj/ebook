@@ -1,0 +1,1152 @@
+<html>
+<head>
+<title>Common Mistakes in Sending Email  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Common Mistakes in Sending Email">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch08_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch08_01.htm">Chapter 8: Electronic Mail</a></td><td align="right" valign="top" width="172"><a href="ch08_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">8.2. Common Mistakes in Sending Email</h2>
+
+
+
+
+
+<p>
+<a name="INDEX-813"></a>Now
+we can begin using email as a notification method. However, when we
+start to write code that performs this function, we quickly find that
+the <em class="emphasis">how</em> to send mail is not nearly as
+interesting as the <em class="emphasis">when</em> and
+<em class="emphasis">what</em> to send.</p>
+
+
+
+
+
+<p>This section explores those questions by taking a contrary approach.
+If we look at what and how <em class="emphasis">not</em> to send mail
+we'll get a deeper insight into these issues. Let's talk
+about some of the most common mistakes made when writing system
+administration programs that send mail.</p>
+
+
+
+
+
+<a name="ch08-6-fm2xml"></a>
+<h3 class="sect2">8.2.1. Overzealous Message Sending</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-814"></a>By far, the most
+common mistake is sending too much mail. It is a great idea to have
+scripts send mail. If there's a service disruption, normal
+email or email sent to a pager are good ways to bring this problem to
+the attention of a human. But under most circumstances it is a very
+<em class="emphasis">bad</em> idea to have your program send mail about
+the problem every five minutes or so. Overzealous mail generators are
+quickly added to the mail filters of the very humans who should be
+reading the mail. The end result is that important mail is routinely
+ignored.</p>
+
+
+
+
+
+<a name="ch08-7-fm2xml"></a>
+<h3 class="sect3">8.2.1.1. Controlling the frequency of mail</h3>
+
+
+
+
+
+<p>The easiest way to avoid what I call "mail beaconing" is
+to build safeguards into the programs to gate the delay between
+messages. If your script runs constantly, it is easy to stash the
+time of the last mail message sent in a variable like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$last_sent = time;</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<a name="INDEX-815"></a><a name="INDEX-816"></a><a name="INDEX-817"></a>If your program is started up
+every N minutes or hours via Unix's <tt class="command">cron</tt> or
+NT scheduler service mechanisms, this information can be written to a
+one-line file and read again the next time the program is run. Be
+sure in this case to pay attention to some of the security
+precautions listed in <a href="ch01_01.htm">Chapter 1, "Introduction"</a>.</p>
+
+
+
+
+
+<p>Depending on the situation, you can get fancy about your delay times.
+This code shows an exponential backoff:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$max  = 24*60*60; # maximum amount of delay in seconds (1 day)
+$unit = 60;       # increase delay by measures of this unit (1 min)
+
+# provide a closure with the time we last sent a message and 
+# the last power of 2 we used to compute the delay interval. 
+# The subroutine we create will return a reference to an 
+# anonymous array with this information
+sub time_closure {
+    my($stored_sent,$stored_power)=(0,-1);
+    return sub {
+       (($stored_sent,$stored_power) = @_) if @_;
+       [$stored_sent,$stored_power];
+    }
+};
+
+$last_data=&amp;time_closure; # create our closure
+
+# return true first time called and then once after an 
+# exponential delay
+sub expbackoff {
+    my($last_sent,$last_power) = @{&amp;$last_data};
+
+    # reply true if this is the first time we've been asked, or if the
+    # current delay has elapsed since we last asked. If we return true, 
+    # we stash away the time of our last affirmative reply and increase 
+    # the power of 2 used to compute the delay.
+    if (!$last_sent or
+       ($last_sent + 
+         (($unit * 2**$last_power &gt;= $max) ? 
+             $max : $unit * 2**$last_power) &lt;= time(  ))){
+         	       &amp;$last_data(time(  ),++$last_power);
+              return 1;
+    }
+    else {
+	   return 0;
+    }
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>The subroutine <tt class="literal">expbackoff( )</tt> returns
+<tt class="literal">true</tt> (<tt class="literal">1</tt>) if email should be
+sent and <tt class="literal">false</tt> (<tt class="literal">0</tt>) if not. It
+begins by returning <tt class="literal">true</tt> the first time it is
+called, then rapidly increases the delay time until eventually
+<tt class="literal">true</tt> is only returned once a day.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-818"></a>To make this code more interesting,
+I've used a peculiar programming construct called a
+<em class="emphasis">closure</em> to stash away the last message-sent time
+and the last power of two used to compute the delay. We're
+using the closure as a way of hiding our important variables from the
+rest of the program. In this small program it is just a curiosity,
+but the usefulness of this technique becomes readily apparent in a
+larger program where it is more likely that other code might
+inadvertently stomp on our variables. In brief, here's how
+closures work.</p>
+
+
+
+
+
+<p>The subroutine <tt class="literal">&amp;time_closure( )</tt> returns a
+reference to an anonymous subroutine, essentially a little piece of
+code without a name. Later on we'll use that reference to run
+this code using the standard symbolic reference syntax:
+<tt class="literal">&amp;$last_data</tt>. The code in our anonymous
+subroutine returns a reference to an array, hence the punctuation
+parking lot in this line used to access the returned data:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">my($last_sent,$last_power) = @{&amp;$last_data<tt class="userinput"><b>}</b></tt>;</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's the magic that makes a closure: because the reference is
+created in the same enclosing block as the <tt class="literal">my(
+)</tt>ed variables <tt class="literal">$stored_sent</tt> and
+<tt class="literal">$stored_power</tt>, it traps those variables in a
+unique context. <tt class="literal">$stored_sent</tt> and
+<tt class="literal">$stored_power</tt> can be read and changed only while
+the code in this reference is executing. They also retain their
+values between invocations of the code reference. For instance:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># create our closure
+$last_data=&amp;time_closure;
+
+# call the subroutine that sets our variables
+&amp;$last_data(1,1);         
+
+# attempt to change them outside of the sub
+$stored_sent = $stored_power = 2; 
+
+# show their current value using the subroutine
+print "@{&amp;$last_data}\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>will print "<tt class="literal">1 1</tt>" even though it
+appears we changed the values of <tt class="literal">$stored_sent</tt> and
+<tt class="literal">$stored_power</tt> in the third line of code. We
+certainly changed the value of the global variables with those names,
+but we couldn't touch the copies protected by the closure.</p>
+
+
+
+
+
+<p>It may help you to think of a variable in a closure as a satellite in
+orbit around a wandering planet. The satellite is trapped by the
+gravity of the planet; where the planet goes, so too goes the
+satellite. The satellite's position can be described only in
+reference to the planet: to find the satellite, you first locate the
+planet. Each time you find this particular planet, the satellite
+should be there, just where you left it. Think of the variables in a
+closure as being in orbit around their anonymous subroutine code
+reference, separate from the rest of your program's galaxy.</p>
+
+
+
+
+
+<p>Setting astrophysics aside, let's return to our discussion of
+mail sending. Sometimes it is more appropriate to have your program
+act like a two-year-old, complaining more often as time goes by.
+Here's some code similar to the previous example. This time we
+increase the number of messages sent over time. It starts off giving
+the go-ahead to send mail once a day and then rapidly decreases the
+delay time until it hits a minimum delay of five minutes:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$max  = 60*60*24; # maximum amount of delay in seconds (1 day)
+$min  = 60*5;     # minimum amount of delay in seconds (5 minutes)
+$unit = 60;       # decrease delay by measures of this unit (1 min)
+
+$start_power = int log($max/$unit)/log(2); # find the closest power of 2 
+
+sub time_closure {
+    my($last_sent,$last_power)=(0,$start_power+1);
+    return sub {
+      (($last_sent,$last_power) = @_) if @_;
+      # keep exponent positive
+      $last_power = ($last_power &gt; 0) ? $last_power : 0; 
+      [$last_sent,$last_power];
+    }
+};
+
+$last_data=&amp;time_closure; # create our closure
+
+# return true first time called and then once after an 
+# exponential ramp up
+sub exprampup {
+    my($last_sent,$last_power) = @{&amp;$last_data};
+
+    # reply true if this is the first time we've been asked, or if the
+    # current delay has elapsed since we last asked. If we send, we
+    # stash away the time of our last affirmative reply and increased
+    # power of 2 used to compute the delay.
+    if (!$last_sent or
+	    ($last_sent + 
+         (($unit * 2**$last_power &lt;= $min) ? 
+              $min : $unit * 2**$last_power) &lt;= time(  ))){
+                 &amp;$last_data(time(  ),--$last_power);
+                 return 1;
+    }
+    else {
+       return 0;
+    }
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>In both examples we called an additional subroutine
+(<tt class="literal">&amp;$last_data</tt>) to find when the last message
+was sent and how the delay was computed. Later, if we decide to
+change how the program is run, this compartmentalization will allow
+us to change how we store that state. For example, if we change our
+program to run periodically rather than running all the time, we
+could easily replace the closure with a normal subroutine that saves
+and retrieves the data to and from a plain text file.</p>
+
+
+
+
+
+
+
+
+
+
+<a name="ch08-8-fm2xml"></a>
+<h3 class="sect3">8.2.1.2. Controlling the amount of mail</h3>
+
+
+
+
+
+<p>Another subclass of the "overzealous message sending"
+syndrome is the "everybody on the network for themselves"
+problem. If all of the machines on your network decide to send you a
+piece of mail, you may miss something important in the subsequent
+message blizzard. A better approach is to have them all report to a
+central repository of some sort. The information can then be collated
+and mailed out later in a single mail message.</p>
+
+
+
+
+
+<p>Let's consider a moderately contrived example. For this
+scenario, assume each machine in your network drops a one-line file
+into a shared directory.<a href="#FOOTNOTE-1">[1]</a> Named for each machine, that file will contain each
+machine's summary of the results of last night's
+scientific computation. It would have a single line of this form:</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-1"></a>
+<p>[1]Another good rendezvous spot
+for status information like this would be in a database.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">hostname success-or-failure number-of-computations-completed</pre>
+</blockquote>
+
+
+
+
+
+<p>A program that collates the information and mails the results might
+look like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Mail::Mailer;
+use Text::Wrap;
+
+# the list of machines reporting in
+$repolist = "/project/machinelist"; 
+# the directory where they write files
+$repodir  = "/project/reportddir";  
+# filesystem separator for portability, 
+# could use File::Spec module instead 
+$separator= "/";                    
+# send mail "from" this address
+$reportfromaddr  = "project\@example.com"; 
+# send mail to this address
+$reporttoaddr    = "project\@example.com"; 
+# read the list of machine reporting in into a hash. 
+# Later we de-populate this hash as each machine reports in, 
+# leaving behind only the machine which are missing in action
+open(LIST,$repolist) or die "Unable to open list $repolist:$!\n";
+while(&lt;LIST&gt;){
+    chomp;
+    $missing{$_}=1;
+    $machines++;
+}
+
+# read all of the files in the central report directory
+# note: this directory should be cleaned out automatically 
+# by another script
+opendir(REPO,$repodir) or die "Unable to open dir $repodir:$!\n";
+
+while(defined($statfile=readdir(REPO))){
+    next unless -f $repodir.$separator.$statfile;
+    
+    # open each status file and read in the one-line status report
+    open(STAT,$repodir.$separator.$statfile) 
+      or die "Unable to open $statfile:$!\n";
+
+    chomp($report = &lt;STAT&gt;);
+
+    ($hostname,$result,$details)=split(' ',$report,3);
+
+    warn "$statfile said it was generated by $hostname!\n"
+      if($hostname ne $statfile);
+
+    # hostname is no longer considered missing
+    delete $missing{$hostname}; 
+    # populate these hashes based on success or failure reported
+    if ($result eq "success"){
+        $success{$hostname}=$details;
+        $succeeded++;
+    }
+    else {
+        $fail{$hostname}=$details;
+        $failed++;
+    }	
+    close(STAT);
+}		
+closedir(REPO);
+
+# construct a useful subject for our mail message
+if ($successes == $machines){
+    $subject = "[report] Success: $machines";
+}
+elsif ($failed == $machines or scalar keys %missing &gt;= $machines) {
+    $subject = "[report] Fail: $machines";
+}
+else {
+    $subject = "[report] Partial: $succeeded ACK, $failed NACK".
+      ((%missing) ? ", ".scalar keys %missing." MIA" : "");
+}
+
+# create the mailer object and populate the headers
+$type="sendmail"; 
+my $mailer = Mail::Mailer-&gt;new($type) or
+  die "Unable to create new mailer object:$!\n";
+
+$mailer-&gt;open({From=&gt;$reportfromaddr, To=&gt;$reporttoaddr, Subject=&gt;$subject}) or 
+  die "Unable to populate mailer object:$!\n";
+
+# create the body of the message
+print $mailer "Run report from $0 on " . scalar localtime(time) . "\n";
+
+if (keys %success){
+    print $mailer "\n==Succeeded==\n";
+    foreach $hostname (sort keys %success){
+      print $mailer "$hostname: $success{$hostname}\n";
+    }
+}
+
+if (keys %fail){
+    print $mailer "\n==Failed==\n";
+    foreach $hostname (sort keys %fail){
+      print $mailer "$hostname: $fail{$hostname}\n";
+    }
+}
+
+if (keys %missing){
+    print $mailer "\n==Missing==\n";
+    print $mailer wrap("","",join(" ",sort keys %missing)),"\n";
+}
+
+# send the message
+$mailer-&gt;close;</pre>
+</blockquote>
+
+
+
+
+
+<p>The code first reads a list of the machine names that will be
+participating in this scheme. Later on it will use a hash based on
+this list to check if there are any machines that have not placed a
+file in the central reporting directory. We open each file in this
+directory and extract the status information. Once we've
+collated the results, we construct a mail message and send it out.</p>
+
+
+
+
+
+<p>Here's an example of the resulting mail:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Date: Wed, 14 Apr 1999 13:06:09 -0400 (EDT)
+Message-Id: &lt;199904141706.NAA08780@example.com&gt;
+Subject: [report] Partial: 3 ACK, 4 NACK, 1 MIA
+To: project@example.com
+From: project@example.com
+
+Run report from reportscript on Wed Apr 14 13:06:08 1999
+
+==Succeeded==
+barney: computed 23123 oogatrons
+betty: computed 6745634 oogatrons
+fred: computed 56344 oogatrons
+
+==Failed==
+bambam: computed 0 oogatrons
+dino: computed 0 oogatrons
+pebbles: computed 0 oogatrons
+wilma: computed 0 oogatrons
+
+==Missing==
+mrslate</pre>
+</blockquote>
+
+
+
+
+
+<p>Another way to collate results like this is to create a custom
+logging daemon and have each machine report in over a network socket.
+Let's look at code for the server first. This example reuses
+code from the previous example. We'll talk about the important
+new code right after you see the
+listing:<a name="INDEX-819"></a><a name="INDEX-820"></a><a name="INDEX-821"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use IO::Socket;
+use Text::Wrap; # used to make the output prettier
+
+# the list of machine reporting in
+$repolist = "/project/machinelist"; 
+# the port number clients should connect to 
+$serverport = "9967";               
+
+&amp;loadmachines; # load the machine list
+
+# set up our side of the socket
+$reserver = IO::Socket::INET-&gt;new(LocalPort =&gt; $serverport,
+                                  Proto     =&gt; "tcp",
+                                  Type      =&gt; SOCK_STREAM,
+                                  Listen    =&gt; 5,
+                                  Reuse     =&gt; 1)
+  or die "Unable to build our socket half: $!\n";
+
+# start listening on it for connects
+while(($connectsock,$connectaddr) = $reserver-&gt;accept(  )){
+
+    # the name of the client that has connected to us
+    $connectname = gethostbyaddr((sockaddr_in($connectaddr))[1],AF_INET);
+
+    chomp($report=$connectsock-&gt;getline);
+
+    ($hostname,$result,$details)=split(' ',$report,3);
+
+    # if we've been told to dump our info, print out a ready-to-go mail
+    # message and reinitialize all of our hashes/counters
+    if ($hostname eq "DUMPNOW"){
+      &amp;printmail($connectsock);
+      close($connectsock);
+      undef %success;
+      undef %fail;
+      $succeeded = $failed = 0;
+      &amp;loadmachines;
+      next;
+    }
+
+    warn "$connectname said it was generated by $hostname!\n"
+      if($hostname ne $connectname);
+    delete $missing{$hostname};
+    if ($result eq "success"){
+      $success{$hostname}=$details;
+      $succeeded++;
+    }
+    else {
+      $fail{$hostname}=$details;
+      $failed++;
+    }	
+    close($connectsock);
+}
+close($reserver);
+
+# loads the list of machines from the given file
+sub loadmachines {
+    undef %missing;
+    undef $machines; 
+    open(LIST,$repolist) or die "Unable to open list $repolist:$!\n";
+    while(&lt;LIST&gt;){
+      chomp;
+      $missing{$_}=1;
+      $machines++;
+    }
+}
+
+# prints a ready to go mail message. The first line is the subject, 
+# subsequent lines are all the body of the message
+sub printmail{
+    ($socket) = $_[0];
+
+    if ($successes == $machines){
+      $subject = "[report] Success: $machines";
+    }
+    elsif ($failed == $machines or scalar keys %missing &gt;= $machines) {
+      $subject = "[report] Fail: $machines";
+    }
+    else {
+      $subject = "[report] Partial: $succeeded ACK, $failed NACK".
+        ((%missing) ? ", ".scalar keys %missing." MIA" : "");
+    }
+
+    print $socket "$subject\n";
+    
+    print $socket "Run report from $0 on ".scalar localtime(time)."\n";
+
+    if (keys %success){
+      print $socket "\n==Succeeded==\n";
+      foreach $hostname (sort keys %success){
+	    print $socket "$hostname: $success{$hostname}\n";
+	   }
+    }
+
+    if (keys %fail){
+      print $socket "\n==Failed==\n";
+      foreach $hostname (sort keys %fail){
+	    print $socket "$hostname: $fail{$hostname}\n";
+	   }
+    }
+
+    if (keys %missing){
+      print $socket "\n==Missing==\n";
+      print $socket wrap("","",join(" ",sort keys %missing)),"\n";
+    }
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<a name="INDEX-822"></a><a name="INDEX-823"></a>Besides moving some of the code
+sections to their own subroutines, the key change is the addition of
+the networking code. The <tt class="literal">IO::Socket</tt> module makes
+the process of opening and using sockets pretty painless. Sockets are
+usually described using a telephone metaphor. We start by setting up
+our side of the socket (<tt class="literal">IO::Socket-&gt;new(
+)</tt><tt class="literal">)</tt>, essentially turning on our phone,
+and then wait for a call from a network client
+(<tt class="literal">IO::Socket-&gt;accept( )</tt>). Our program will
+pause (or "block") until a connection comes in. As soon
+as it arrives, we note the name of the connecting client. We then
+read a line of input from the socket.</p>
+
+
+
+
+
+<p>This line of input is expected to look just like those we read from
+individual files in our previous example. The one difference is the
+magic hostname <tt class="command">DUMPNOW</tt>. If we see this hostname,
+we print the subject and body of a ready-to-mail message to the
+connecting client and reset all of our counters and hash tables. The
+client is then responsible for actually sending the mail it receives
+from the server. Let's look at our sample client and what it
+can do with this message:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use IO::Socket;
+
+# the port number clients should connect to
+$serverport = "9967";
+# and the name of the server
+$servername = "reportserver";    
+# name to IP address
+$serveraddr = inet_ntoa(scalar gethostbyname($servername)); 
+$reporttoaddr  = "project\@example.com";
+$reportfromaddr  = "project\@example.com";
+
+$reserver = IO::Socket::INET-&gt;new(PeerAddr =&gt; $serveraddr,
+                                  PeerPort =&gt; $serverport,
+                                  Proto    =&gt; "tcp",
+                                  Type     =&gt; SOCK_STREAM)
+  or die "Unable to build our socket half: $!\n";
+
+
+if ($ARGV[0] ne "-m"){
+    print $reserver $ARGV[0];
+}
+else {
+    use Mail::Mailer;
+
+    print $reserver "DUMPNOW\n";
+    chomp($subject = &lt;$reserver&gt;);
+    $body = join("",&lt;$reserver&gt;);
+
+    $type="sendmail";
+    my $mailer = Mail::Mailer-&gt;new($type) or
+      die "Unable to create new mailer object:$!\n";
+
+    $mailer-&gt;open({
+		   From =&gt; $reportfromaddr,
+		   To =&gt; $reporttoaddr,
+		   Subject =&gt; $subject
+		  }) or
+		    die "Unable to populate mailer object:$!\n";
+
+    print $mailer $body;
+    $mailer-&gt;close;
+}
+
+close($reserver);</pre>
+</blockquote>
+
+
+
+
+
+<p>This code is simpler. First, we open up a socket to the server. In
+most cases, we pass it our status information (received on the
+command line as <tt class="literal">$ARGV[0]</tt>) and drop the connection.
+If we were really going to set up a logging client-server like this,
+we would probably encapsulate this client code in a subroutine and
+call it from within a much larger program after its processing had
+been completed.</p>
+
+
+
+
+
+<p>If this script is passed an <tt class="command">-m</tt> flag, it instead
+sends "DUMPNOW" to the server and reads the subject line
+and body returned by the server. Then this output is fed to
+<tt class="literal">Mail::Mailer</tt> and sent out via mail using the same
+code we've seen earlier.</p>
+
+
+
+
+
+<p>To limit the example code size and keep the discussion on track, the
+server and client code presented here is as bare bones as possible.
+There's no error or input checking, access control or
+authentication (anyone on the Net who can get to our server can feed
+and receive data from it), persistent storage (what if the machine
+goes down?), or any of a number of routine precautions in place. On
+top of this, we can only handle a single request at a time. If a
+client should stall in the middle of a transaction, we're sunk.
+For more sophisticated server examples, I recommend the client-server
+treatments in Sriram Srinivasan's <em class="citetitle">Advanced Perl
+Programming,</em> and Tom Christiansen and Nathan
+Torkington's <em class="citetitle">Perl Cookbook, </em>both
+published by O'Reilly. Jochen Wiedmann's
+<tt class="literal">Net::Daemon</tt> module will also help you write more
+sophisticated daemon programs.</p>
+
+
+
+
+
+<p>Let's move on to the other common mistakes made when writing
+system administration programs that send mail.<a name="INDEX-824"></a><a name="INDEX-825"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch08-9-fm2xml"></a>
+<h3 class="sect2">8.2.2. Subject Line Waste</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-826"></a>A <tt class="command">Subject:</tt>
+line is a terrible thing to waste. When sending mail automatically,
+it is possible to generate a useful <tt class="command">Subject:</tt> line
+on the fly for each message. This means there is very little excuse
+to leave someone with a mailbox that looks like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Super-User     File history database merge report
+Super-User     File history database merge report
+Super-User     File history database merge report
+Super-User     File history database merge report
+Super-User     File history database merge report
+Super-User     File history database merge report
+Super-User     File history database merge report</pre>
+</blockquote>
+
+
+
+
+
+<p>when it could look like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Super-User     Backup OK, 1 tape, 1.400 GB written.
+Super-User     Backup OK, 1 tape, 1.768 GB written.
+Super-User     Backup OK, 1 tape, 2.294 GB written.
+Super-User     Backup OK, 1 tape, 2.817 GB written.
+Super-User     Backup OK, 1 tape, 3.438 GB written. 
+Super-User     Backup OK, 3 tapes, 75.40 GB written.</pre>
+</blockquote>
+
+
+
+
+
+<p>Your <em class="emphasis">Subject</em>: line should be a concise and
+explicit summary of the situation. It should be very clear from the
+subject line whether the program generating the message is reporting
+success, failure, or something in between. A little more programming
+effort will pay off handsomely in reduced time reading mail.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch08-10-fm2xml"></a>
+<h3 class="sect2">8.2.3. Insufficient Information in the Message Body</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-827"></a>This falls into the same
+"a little verbosity goes a long way" category as the
+previous mistake. If your script is going to complain about problems
+or error conditions in email, there are certain pieces of information
+it should provide in that mail. They boil down to the canonical
+questions of journalism:</p>
+
+
+
+
+
+<dl>
+<dt>
+<b><em class="emphasis">Who?</em> </b>
+</dt>
+<dd>
+<p>Which script is complaining? Include the contents of
+<tt class="literal">$0</tt> (if you haven't set it explicitly) to
+show the full path to the current script. Mention the version of your
+script if it has one.</p>
+</dd>
+
+
+
+
+
+<dt>
+<b><em class="emphasis">Where?</em> </b>
+</dt>
+<dd>
+<p>Give some indication of the place in your script where trouble
+occurred. The Perl function <tt class="literal">caller( )</tt> returns
+all sorts of useful information for this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># note: what caller(  ) returns can be specific to a 
+# particular Perl version, be sure to see the perlfunc docs
+($package, $filename, $line, $subroutine, $hasargs, $wantarray, 
+ $evaltext, $is_require) = caller($frames);</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">$frames</tt> above is the number of stack frames (if
+you've called subroutines from within subroutines) desired.
+Most often you'll want <tt class="literal">$frames</tt> set to
+<tt class="literal">1</tt>. Here's a sample list returned by the
+<tt class="literal">caller( )</tt> function when called in the middle of
+the server code from our last full code example:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">('main','repserver',32,'main::printmail',1,undef)</pre>
+</blockquote>
+
+
+
+
+
+<p>This shows the script was in the <tt class="literal">main</tt> package
+while running from the filename <em class="filename">repserver</em> at
+line 32 in the script. At that point it was executing code in the
+<tt class="literal">main::printmail</tt> subroutine (which has arguments
+and has not been called in a list context).</p>
+
+
+
+
+
+<p>If you want to use <tt class="literal">caller( )</tt> without doing it by
+hand, the <tt class="literal">Carp</tt> module also provides an excellent
+problem report.</p>
+</dd>
+
+
+
+
+
+<dt>
+<b><em class="emphasis">When?</em> </b>
+</dt>
+<dd>
+<p>Describe the program state at the time of the error. For instance,
+what was the last line of input read?</p>
+</dd>
+
+
+
+
+
+<dt>
+<b><em class="emphasis">Why?</em> </b>
+</dt>
+<dd>
+<p>If you can, answer the reader's unspoken question: "Why
+are you bothering me with a mail message?" The answer may be as
+simple as "the accounting data has not been fully
+collated," "DNS service is not available now," or
+"the machine room is on fire." This provides context to
+the reader (and perhaps some motivation to investigate).</p>
+</dd>
+
+
+
+
+
+<dt>
+<b><em class="emphasis">What?</em> </b>
+</dt>
+<dd>
+<p>Finally, don't forget to mention what went wrong in the first
+place.</p>
+</dd>
+
+</dl>
+
+
+
+
+
+<p>Here's some simple Perl code that covers all of these bases:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Text::Wrap;
+
+sub problemreport {
+# $shortcontext should be a one-line description of the problem
+# $usercontext should be a detailed description of the problem
+# $nextstep should be the best suggestion for how to remedy the problem 
+    my($shortcontext,$usercontext,$nextstep) = @_;
+    my($filename, $line, $subroutine) = (caller(1))[1,2,3];
+    
+    push(@return,"Problem with $filename: $shortcontext\n");
+
+    push(@return,"*** Problem report for $filename ***\n\n");
+    push(@return,fill("","","- Problem: $usercontext")."\n\n");
+    push(@return,"- Location: line $line of file $filename in
+                 $subroutine\n\n");
+    push(@return,"- Occurred: ".scalar localtime(time)."\n\n");
+
+    push(@return,"- Next step: $nextstep\n");
+
+    \@return;
+}
+    
+sub fireperson {
+    $report = &amp;problemreport("the computer is on fire",&lt;&lt;EOR,&lt;&lt;EON);
+While running the accounting report, smoke started pouring out of the 
+back of the machine. This occurred right after we processed the ORA 
+pension plan.
+EOR
+Please put fire out before continuing.
+EON
+
+  print @{$report};
+
+}
+
+&amp;fireperson;</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">&amp;problemreport</tt> will output a problem report,
+subject line first, suitable for feeding to
+<tt class="literal">Mail::Mailer</tt> as per our previous examples.
+<tt class="literal">&amp;fireperson</tt> is an example test of this
+subroutine.</p>
+
+
+
+
+
+<p>Now that we've explored sending mail, let's see the other
+edge of the sword.<a name="INDEX-828"></a>
+</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch08_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch08_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">8.1. Sending Mail</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">8.3. Receiving Mail</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

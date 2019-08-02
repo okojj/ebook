@@ -1,0 +1,155 @@
+<html><head>
+<title>Recipe 16.9. Controlling the Input, Output, and Error of Another Program</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:43:52Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch16_01.htm" title="16. Process Management and Communication"><link rel="prev" href="ch16_09.htm" title="16.8. Controlling Input and Output of Another Program"><link rel="next" href="ch16_11.htm" title="16.10. Communicating Between Related Processes"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_09.htm" title="16.8. Controlling Input and Output of Another Program"><img src="../gifs/txtpreva.gif" alt="Previous: 16.8. Controlling Input and Output of Another Program" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch16_01.htm" title="16. Process Management and Communication">Chapter 16<br>Process Management and Communication</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch16_11.htm" title="16.10. Communicating Between Related Processes"><img src="../gifs/txtnexta.gif" alt="Next: 16.10. Communicating Between Related Processes" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch16-chap16_controlling_1">16.9. Controlling the Input, Output, and Error of Another Program</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1480">Problem<a class="indexterm" name="ch16-idx-1000006340-0"></A
+><a class="indexterm" name="ch16-idx-1000006340-1"></A
+></A
+></H3
+><p class="para">You want full control over a command's input, output, and error streams.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1486">Solution</A
+></H3
+><p class="para">Carefully use the standard <a class="indexterm" name="ch16-idx-1000006342-0"></A
+>IPC::Open3 module, possibly in conjunction with the IO::Select module. (IO::Select is new as of the 5.004 distribution.)</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1492">Discussion</A
+></H3
+><p class="para">If you're interested in only one of the program's STDIN, STDOUT, or STDERR, the task is simple. When you want to manage two or more of these, however, it abruptly stops being simple. Multiplexing multiple I/O streams is never a pretty picture. Here's an easy workaround:</P
+><pre class="programlisting">@all = `($cmd | sed -e 's/^/stdout: /' ) 2&gt;&amp;1`;
+for (@all) { push @{ s/stdout: // ? \@outlines : \@errlines }, $_ }
+print &quot;STDOUT:\n&quot;, @outlines, &quot;\n&quot;;
+print &quot;STDERR:\n&quot;, @errlines, &quot;\n&quot;;</PRE
+><p class="para">If you don't have <em class="emphasis">sed</EM
+> on your system, you'll find that for simple cases like this, <em class="emphasis">perl -pe</EM
+> works just as well as <em class="emphasis">sed -e</EM
+>.</P
+><p class="para">However, that's not really simultaneous processing. All we're doing is marking STDOUT lines with <code class="literal">&quot;stdout:&quot;</CODE
+> and then stripping them back out once we've read all the STDOUT and STDERR the program produced.</P
+><p class="para">You can use the standard IPC::Open3 module for this. Mysteriously, the argument order is different for IPC::Open3 than for IPC::Open2.</P
+><pre class="programlisting">open3(*WRITEHANDLE, *READHANDLE, *ERRHANDLE, &quot;program to run&quot;);</PRE
+><p class="para">Using this has even <em class="emphasis">more</EM
+> potential for chaos than using <code class="literal">open2</CODE
+>. If you're reading the program's STDERR as it is trying to write more than one buffer's worth to its STDOUT, the program will block on the write because its buffers are full, and you will block on the read because there's nothing available.</P
+><p class="para">You can avoid this deadlock by mimicking <code class="literal">open3</CODE
+> with <code class="literal">fork</CODE
+>, <code class="literal">open</CODE
+>, and <code class="literal">exec</CODE
+>; making all the filehandles unbuffered; and using <code class="literal">sysread</CODE
+>, <code class="literal">syswrite</CODE
+>, and <code class="literal">select</CODE
+> to decide which readable filehandle to read a byte from. This makes your program slower and bulkier, though, and it doesn't solve the classic <code class="literal">open2</CODE
+> deadlock where each program is expecting the other to say something.</P
+><pre class="programlisting">use IPC::Open3;
+$pid = open3(*HIS_IN, *HIS_OUT, *HIS_ERR, $cmd);
+close(HIS_IN);  # give end of file to kid, or feed him
+@outlines = &lt;HIS_OUT&gt;;              # read till EOF
+@errlines = &lt;HIS_ERR&gt;;              # XXX: block potential if massive
+print &quot;STDOUT:\n&quot;, @outlines, &quot;\n&quot;;
+print &quot;STDERR:\n&quot;, @errlines, &quot;\n&quot;;</PRE
+><p class="para">As if deadlock weren't bad enough, this approach is subtly error-prone. There are at least three worrisome situations: both the child and the parent trying to read at the same time, causing deadlock; full buffers causing the child to block as it tries to write to STDERR while the parent is blocked trying to read from the child's STDOUT; and full buffers causing the parent to block writing to the child's STDIN while the child is blocked writing to either its STDOUT or STDERR. The first problem is generally unsolvable, although you can work around it by setting timers with <code class="literal">alarm</CODE
+> and preventing blocking operations from restarting if a <code class="literal">SIGALRM</CODE
+> is received.</P
+><p class="para">We use the <a class="indexterm" name="ch16-idx-1000006343-0"></A
+>IO::Select module (you could also do this with the built-in function <code class="literal">select</CODE
+>) to learn which filehandles (if any) can be read from. This solves the second problem, but not the third. To solve the third, you also need <code class="literal">alarm</CODE
+> and non-restarting <code class="literal">SIGALRM</CODE
+>.</P
+><p class="para">If you want to send input to the program, read its output, and either read or ignore its error, you need to work much harder. (See <a class="xref" href="#ch16-19570" title="cmd3sel">Example 16.2</A
+>.)</P
+><div class="example"><h4 class="example"><a class="title" name="ch16-19570">Example 16.2: cmd3sel</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl
+# <a class="indexterm" name="ch16-idx-1000006344-0"></A
+>cmd3sel - control all three of kids in, out, and error.
+use IPC::Open3;
+use IO::Select;
+
+$cmd = &quot;grep vt33 /none/such - /etc/termcap&quot;;
+$pid = open3(*CMD_IN, *CMD_OUT, *CMD_ERR, $cmd);
+
+$SIG{CHLD} = sub {
+    print &quot;REAPER: status $? on $pid\n&quot; if waitpid($pid, 0) &gt; 0
+};
+
+print CMD_IN &quot;This line has a vt33 lurking in it\n&quot;;
+close(CMD_IN);
+
+$selector = IO::Select-&gt;new();
+$selector-&gt;add(*CMD_ERR, *CMD_OUT);
+
+while (@ready = $selector-&gt;can_read) {
+    foreach $fh (@ready) {
+        if (fileno($fh) == fileno(CMD_ERR)) {print &quot;STDERR: &quot;, scalar &lt;CMD_ERR&gt;}
+        else                                {print &quot;STDOUT: &quot;, scalar &lt;CMD_OUT&gt;}
+        $selector-&gt;remove($fh) if eof($fh);
+    }
+}
+close(CMD_OUT);
+close(CMD_ERR);</PRE
+></DIV
+><p class="para">We sent only a short line as input, then closed the handle. This avoids the deadlock situation of two processes each waiting for the other to write <a class="indexterm" name="ch16-idx-1000006336-0"></A
+><a class="indexterm" name="ch16-idx-1000006336-1"></A
+><a class="indexterm" name="ch16-idx-1000006336-2"></A
+><a class="indexterm" name="ch16-idx-1000006336-3"></A
+>something.<a class="indexterm" name="ch16-idx-1000006329-0"></A
+><a class="indexterm" name="ch16-idx-1000006329-1"></A
+><a class="indexterm" name="ch16-idx-1000006329-2"></A
+><a class="indexterm" name="ch16-idx-1000006329-3"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1594">See Also</A
+></H3
+><p class="para">The documentation for the standard IO::Select, IPC::Open2, and IPC::Open3 modules; the <a class="olink" href="../prog/ch03_005.htm"><code class="literal">alarm</CODE
+></A
+> function in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> or <i class="filename">perlfunc </I
+>(1); <a class="xref" href="ch16_09.htm" title="Controlling Input and Output of Another Program">Recipe 16.8</A
+>; <a class="xref" href="ch16_16.htm" title="Installing a Signal Handler">Recipe 16.15</A
+>; <a class="xref" href="ch16_17.htm" title="Temporarily Overriding a Signal Handler">Recipe 16.16</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_09.htm" title="16.8. Controlling Input and Output of Another Program"><img src="../gifs/txtpreva.gif" alt="Previous: 16.8. Controlling Input and Output of Another Program" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch16_11.htm" title="16.10. Communicating Between Related Processes"><img src="../gifs/txtnexta.gif" alt="Next: 16.10. Communicating Between Related Processes" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">16.8. Controlling Input and Output of Another Program</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">16.10. Communicating Between Related Processes</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

@@ -1,0 +1,148 @@
+<html><head>
+<title>[Chapter 1] 1.6 A View of the Internals</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:30:05Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch01_01.htm" title="1. Data References and Anonymous Storage"><link rel="prev" href="ch01_05.htm" title="1.5 Symbolic References"><link rel="next" href="ch01_07.htm" title="1.7 References in Other Languages"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch01_05.htm" title="1.5 Symbolic References"><img src="../gifs/txtpreva.gif" alt="Previous: 1.5 Symbolic References" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch01_01.htm" title="1. Data References and Anonymous Storage">Chapter 1<br>Data References and Anonymous Storage</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch01_07.htm" title="1.7 References in Other Languages"><img src="../gifs/txtnexta.gif" alt="Next: 1.7 References in Other Languages" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch01-42451">1.6 A View of the Internals</A
+></H2
+><p class="para"><a class="indexterm" name="ch01-idx-953738-0"></A
+><a class="indexterm" name="ch01-idx-953738-1"></A
+>Let us now take a look inside Perl to understand how it manages memory. You can safely skip this section without loss of continuity. </P
+><p class="para"><a class="indexterm" name="ch01-idx-953742-0"></A
+>A variable logically represents a binding between a <em class="emphasis">name</EM
+> and a <em class="emphasis">value</EM
+>, as <a class="xref" href="#ch01-16736" title="A variable is a name and value pair">Figure 1.3</A
+> illustrates.[<a class="footnote" href="#ch01-pgfId-953063">6</A
+>]</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch01-pgfId-953063">[6]</A
+> This is true whether the variable is global, dynamically scoped (using <code class="literal">local()</CODE
+>), or lexically scoped (using <code class="literal">my()</CODE
+>). More details are given in <a class="xref" href="ch03_01.htm" title="Typeglobs and Symbol Tables">Chapter 3</A
+>.</P
+></DIV
+></BLOCKQUOTE
+><h4 class="figure"><a class="title" name="ch01-16736">Figure 1.3: A variable is a name and value pair</A
+></H4
+><img class="graphic" src="figs/wpa_0103.gif" alt="Figure 1.3"><p class="para">An <a class="indexterm" name="ch01-idx-953743-0"></A
+><a class="indexterm" name="ch01-idx-953743-1"></A
+>array or a hash is not just a collection of numbers or strings. It is a collection of <em class="emphasis">scalar values</EM
+>, and this distinction is important, as <a class="xref" href="#ch01-40214" title="An array value is a collection of scalar values">Figure 1.4</A
+> illustrates. </P
+><h4 class="figure"><a class="title" name="ch01-40214">Figure 1.4: An array value is a collection of scalar values</A
+></H4
+><img class="graphic" src="figs/wpa_0104.gif" alt="Figure 1.4"><p class="para">Each box in <a class="xref" href="#ch01-40214" title="An array value is a collection of scalar values">Figure 1.4</A
+> represents a distinct value. An array has one value that represents <em class="emphasis">the collection</EM
+> of scalar values. Each element of the array is a distinct scalar value. This is analogous to a pride of lions being treated as a single entity (which is why we refer to it in the singular) that has properties distinct from those of the individual lion.</P
+><p class="para">Notice also that while a name always points to a value, a value doesn't always have to be pointed to by a name, as the array elements in <a class="xref" href="#ch01-40214" title="An array value is a collection of scalar values">Figure 1.4</A
+> or anonymous arrays and hashes exemplify.</P
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch01-pgfId-945311">1.6.1 Reference Counts</A
+></H3
+><p class="para"><a class="indexterm" name="ch01-idx-953744-0"></A
+>To support painless and transparent memory management, Perl maintains a reference count for every <em class="emphasis">value</EM
+>, whether it is directly pointed to by a name or not. Let's add this piece of information to our earlier view. Refer to <a class="xref" href="#ch01-40356" title="Adding reference counts to all values">Figure 1.5</A
+>.</P
+><h4 class="figure"><a class="title" name="ch01-40356">Figure 1.5: Adding reference counts to all values</A
+></H4
+><img class="graphic" src="figs/wpa_0105.gif" alt="Figure 1.5"><p class="para">As you can see, the reference count represents the number of arrows pointing to the value part of a variable. Because there is always an arrow from the name to its value, the variable's reference count is at least 1. When you obtain a reference to a variable, the corresponding value's reference count is incremented. </P
+><p class="para">It is important to stress the point that even though we would like to think of <kbd class="command">$ra</KBD
+> as pointing to <kbd class="command">$a</KBD
+>, it really points to <kbd class="command">$a</KBD
+>'s <em class="emphasis">value</EM
+>. In fact, <kbd class="command">$ra</KBD
+> does not even know whether the value it is pointing to has a corresponding entry in the symbol table. The value of the reference variable is the <em class="emphasis">address</EM
+> of another scalar value, which does not change even if <kbd class="command">$a</KBD
+>'s value changes.</P
+><p class="para"><a class="indexterm" name="ch01-idx-953749-0"></A
+>Perl automatically deletes a value when its reference count drops to zero. When variables (named values) go out of scope, the binding between the name and the value is removed, resulting in the value's reference count being decremented. In the typical case in which this count is 1, the value is deleted (or <em class="emphasis">garbage collected </EM
+>).[<a class="footnote" href="#ch01-pgfId-949479">7</A
+>]</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch01-pgfId-949479">[7]</A
+> For efficiency, Perl doesn't actually delete it; it just sends it to its own free pool and reuses it when you need a new value. It is <em class="emphasis">logically</EM
+> deleted, nevertheless.</P
+></DIV
+></BLOCKQUOTE
+><p class="para">The reference counting technique is sometimes referred to as "<a class="indexterm" name="ch01-idx-953750-0"></A
+>poor man's garbage collection," in contrast to much more sophisticated techniques used by environments such as LISP, Java, and Smalltalk (though the early versions of Smalltalk used reference counting). The problem is that reference counts take up space, which adds up if you consider that every piece of data in your application has an extra integer associated with it. </P
+><p class="para">Then there is also the problem of <a class="indexterm" name="ch01-idx-953748-0"></A
+><a class="indexterm" name="ch01-idx-953748-1"></A
+>circular references. The simplest case is this: </P
+><pre class="programlisting">$a = \$a;</PRE
+><p class="para">This is a classic case of narcissism. <kbd class="command">$a</KBD
+>'s reference count indicates that something is pointing to it, so it will never get freed. A more practical case of circular references is that of network graphs (each node keeps track of each of its neighbors) or ring buffers (where the last element points to the first one). Modern garbage collection algorithms implemented in Java and Smalltalk can detect circular references and deallocate the entire circular structure if none of the elements are reachable from other variables.</P
+><p class="para">On the other hand, reference counting is simple to understand and implement and makes it easy to integrate Perl with C or C++ code. Please refer to item 2 in the <a class="xref" href="ch01_08.htm" title="Resources">Section 1.8, "Resources</A
+>" section at the end of the chapter for a comprehensive treatment of garbage collection techniques.</P
+><p class="para">Note that while symbolic references allow you to access variables in an indirect way, no actual reference variables are created. In other words, the reference count of a symbolically accessed variable is not modified. Hence symbolic references are also called <i class="firstterm">soft</I
+><a class="indexterm" name="ch01-idx-953751-0"></A
+><a class="indexterm" name="ch01-idx-953751-1"></A
+><a class="indexterm" name="ch01-idx-953751-2"></A
+> references, in contrast to <i class="firstterm">hard</I
+> references, which actually allocate storage to keep track of the indirection. </P
+><p class="para">This is similar to the concept of soft versus hard links in the Unix filesystem. The i-node of a file has its reference count incremented every time someone creates a hard link to that file, so you can't really delete the file's <em class="emphasis">contents</EM
+> until its reference count goes down to zero. A symbolic link, on the other hand, stores only the name of the file and can point to a nonexistent file; you'll never know until you try to open the file using the symbolic link.<a class="indexterm" name="ch01-idx-953746-0"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch01-pgfId-945421">1.6.2 Array/Hash References Versus Element References</A
+></H3
+><p class="para"><a class="indexterm" name="ch01-idx-953752-0"></A
+><a class="indexterm" name="ch01-idx-953752-1"></A
+><a class="indexterm" name="ch01-idx-953752-2"></A
+>Recall that there is a distinction between the array as a whole and each of its constituent scalar values. The array's value maintains its own reference count, and each of its elements has its own. When you take a reference to an array, its own reference count is incremented without its elements getting affected, as shown in <a class="xref" href="#ch01-31941" title="Taking a reference to an array">Figure 1.6</A
+>.</P
+><h4 class="figure"><a class="title" name="ch01-31941">Figure 1.6: Taking a reference to an array</A
+></H4
+><img class="graphic" src="figs/wpa_0106.gif" alt="Figure 1.6"><p class="para">In contrast, <a class="xref" href="#ch01-22782" title="Referring to a list element">Figure 1.7</A
+> shows the picture when you create a reference to an <em class="emphasis">element</EM
+> of an array or a hash.</P
+><h4 class="figure"><a class="title" name="ch01-22782">Figure 1.7: Referring to a list element</A
+></H4
+><img class="graphic" src="figs/wpa_0107.gif" alt="Figure 1.7"><p class="para">When you take a reference to an element of an array (or a hash), Perl increments that scalar value's reference count. If, say, you now <kbd class="command">pop</KBD
+> it from the array, its reference count goes down by 1 because the array is no longer interested in the scalar value. But since there is an outstanding reference to the array element (and its reference count is still 1), it is not destroyed. <a class="xref" href="#ch01-21987" title="@array popped once; $r_array_elem holds on to the popped scalar">Figure 1.8</A
+> shows the picture after <kbd class="command">@array</KBD
+> has been popped<a class="indexterm" name="ch01-idx-953740-0"></A
+><a class="indexterm" name="ch01-idx-953740-1"></A
+><a class="indexterm" name="ch01-idx-953740-2"></A
+><a class="indexterm" name="ch01-idx-953740-3"></A
+><a class="indexterm" name="ch01-idx-953740-4"></A
+> once.</P
+><h4 class="figure"><a class="title" name="ch01-21987">Figure 1.8: @array popped once; $r_array_elem holds on to the popped scalar</A
+></H4
+><img class="graphic" src="figs/wpa_0108.gif" alt="Figure 1.8"></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch01_05.htm" title="1.5 Symbolic References"><img src="../gifs/txtpreva.gif" alt="Previous: 1.5 Symbolic References" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch01_07.htm" title="1.7 References in Other Languages"><img src="../gifs/txtnexta.gif" alt="Next: 1.7 References in Other Languages" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">1.5 Symbolic References</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">1.7 References in Other Languages</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

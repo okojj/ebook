@@ -1,0 +1,561 @@
+<html>
+<head>
+<title>Files (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Files">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch16_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch16_01.htm">Chapter 16: Interprocess Communication</a></td><td align="right" valign="top" width="172"><a href="ch16_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">16.2. Files</h2>
+
+<p>
+<a name="INDEX-2951"></a><a name="INDEX-2952"></a>
+Perhaps you've never thought about files as an IPC mechanism before,
+but they shoulder the lion's share of interprocess communication--far
+more than all other means combined.  When one process deposits its
+precious data in a file and another process later retrieves that data,
+those processes have communicated.  Files offer something unique among
+all forms of IPC covered here: like a papyrus scroll unearthed after
+millennia buried in the desert, a file can be unearthed and read
+long after its writer's personal end.<a href="#FOOTNOTE-6">[6]</a>  Factoring in persistence
+with comparative ease of use, it's no wonder that files remain
+popular.</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-6"></a>
+<p>[6] Presuming that a process can
+have a personal end.</p>
+
+</blockquote>
+
+<p>Using files to transmit information from the dead past to some unknown
+future poses few surprises.  You write the file to some permanent
+medium like a disk, and that's about it.  (You might tell a web server
+where to find it, if it contains HTML.)  The interesting challenge is
+when all parties are still alive and trying to communicate with one
+another.  Without some agreement about whose turn it is to have their
+say, reliable communication is impossible; agreement may be achieved through file locking, which is
+covered in the next section.  In the section after that, we discuss the
+special relationship that exists between a parent process and its
+children, which allows related parties to exchange information through
+inherited access to the same files.</p>
+
+<p>Files certainly have their limitations when it comes to things like
+remote access, synchronization, reliability, and session management.
+Other sections of the chapter cover various IPC mechanisms
+invented to address such limitations.</p>
+
+<a name="ch16-sect-fl"></a>
+<h3 class="sect2">16.2.1. File Locking</h3>
+
+<p>
+<a name="INDEX-2953"></a><a name="INDEX-2954"></a>
+In a multitasking environment, you need to be careful not to collide
+with other processes that are trying to use the same file you're using. 
+As long as all processes are just reading, there's no problem, but as soon as
+even one process needs to write to the file, complete chaos ensues
+unless some sort of locking mechanism acts as traffic cop.</p>
+
+<p>
+<a name="INDEX-2955"></a>
+Never use the mere existence of a filename (that is, <tt class="literal">-e $file</tt>) as a
+locking indication, because a race condition exists between the test
+for existence of that filename and whatever you plan to do with it
+(like create it, open it, or unlink it).  See the section <a href="ch23_02.htm#ch23-sect-hrc">Section 16.2.2, "Handling Race Conditions"</a> in <a href="ch23_01.htm">Chapter 23, "Security"</a>, for more about this.</p>
+
+<p>
+<a name="INDEX-2956"></a>
+Perl's portable locking interface is the <tt class="literal">flock</tt>(<em class="replaceable">HANDLE</em>,<em class="replaceable">FLAGS</em>)
+function, described in <a href="ch29_01.htm">Chapter 29, "Functions"</a>.  Perl maximizes
+portability by using only the simplest and most widespread locking
+features found on the broadest range of platforms.  These semantics
+are simple enough that they can be emulated on most systems, including
+those that don't support the traditional syscall of that name, such
+as System V or Windows NT.  (If you're running a Microsoft system earlier
+than NT, though, you're probably out of luck, as you would be if
+you're running a system from Apple before Mac OS X.)
+<a name="INDEX-2957"></a>
+</p>
+
+<p>
+<a name="INDEX-2958"></a><a name="INDEX-2959"></a><a name="INDEX-2960"></a>
+Locks come in two varieties: shared (the <tt class="literal">LOCK_SH</tt> flag) and exclusive
+(the <tt class="literal">LOCK_EX</tt> flag).  Despite the suggestive sound of "exclusive",
+processes aren't required to obey locks on files.  That is, <tt class="literal">flock</tt>
+only implements <em class="emphasis">advisory locking</em>, which means that locking a file
+does not stop another process from reading or even writing the file.
+Requesting an exclusive lock is just a way for a process to let the
+operating system suspend it until all current lockers, whether shared
+or exclusive, are finished with it.  Similarly, when a process asks for
+a shared lock, it is just suspending itself until there is no exclusive
+locker.  Only when all parties use the file-locking mechanism can a
+contended file be accessed safely.</p>
+
+<p>
+<a name="INDEX-2961"></a>
+Therefore, <tt class="literal">flock</tt> is a blocking operation by default.  That is, if you
+can't get the lock you want immediately, the operating system suspends
+your process till you can.  Here's how to get a blocking, shared lock,
+typically used for reading a file:
+<blockquote>
+<pre class="programlisting">use Fcntl qw(:DEFAULT :flock);
+open(FH, "&lt; filename")  or die "can't open filename: $!";
+flock(FH, LOCK_SH)      or die "can't lock filename: $!";
+# now read from FH</pre>
+</blockquote>
+
+You can try to acquire a lock in a nonblocking fashion by including
+the <tt class="literal">LOCK_NB</tt> flag in the <tt class="literal">flock</tt> request.  If you can't be given the
+lock right away, the function fails and immediately returns false.
+Here's an example:
+<blockquote>
+<pre class="programlisting">flock(FH, LOCK_SH | LOCK_NB)
+    or die "can't lock filename: $!";</pre>
+</blockquote>
+
+You may wish to do something besides raising an exception as we did
+here, but you certainly don't dare do any I/O on the file.  If you are
+refused a lock, you shouldn't access the file until you can get the lock.
+Who knows what scrambled state you might find the file in?  The main
+purpose of the nonblocking mode is to let you go off and do something
+else while you wait.  But it can also be useful for producing
+friendlier interactions by warning users that it might take
+a while to get the lock, so they don't feel abandoned:
+<blockquote>
+<pre class="programlisting">use Fcntl qw(:DEFAULT :flock);
+open(FH, "&lt; filename")  or die "can't open filename: $!";
+unless (flock(FH, LOCK_SH | LOCK_NB)) {
+    local $| = 1;
+    print "Waiting for lock on filename...";
+    flock(FH, LOCK_SH)  or die "can't lock filename: $!";
+    print "got it.\n"
+} 
+# now read from FH</pre>
+</blockquote>
+
+Some people will be tempted to put that nonblocking lock into a loop.
+The main problem with nonblocking mode is that, by the time you get
+back to checking again, someone else may have grabbed the lock because
+you abandoned your place in line.  Sometimes you just have to get in
+line and wait.  If you're lucky there will be some magazines to read.</p>
+
+<p>
+<a name="INDEX-2962"></a><a name="INDEX-2963"></a>
+Locks are on filehandles, not on filenames.<a href="#FOOTNOTE-7">[7]</a>  When you close the file, the lock
+dissolves automatically, whether you close the file explicitly by
+calling <tt class="literal">close</tt> or implicitly by reopening the handle or by exiting
+your process.</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-7"></a>
+<p>[7] Actually, locks
+aren't on filehandles--they're on the file descriptors associated with
+the filehandles since the operating system doesn't know about
+filehandles.  That means that all our <tt class="literal">die</tt> messages about failing to
+get a lock on filenames are technically inaccurate.  But error messages
+of the form "I can't get a lock on the file represented by the file
+descriptor associated with the filehandle originally opened to the path
+<em class="emphasis">filename</em>, although by now <em class="emphasis">filename</em> may represent a different file
+entirely than our handle does" would just confuse the user (not to
+mention the reader).</p>
+
+</blockquote>
+
+<p>
+<a name="INDEX-2964"></a>
+To get an exclusive lock, typically used for writing, you have to
+be more careful.  You cannot use a regular <tt class="literal">open</tt> for this; if you
+use an open mode of <tt class="literal">&lt;</tt>, it will fail on files that don't
+exist yet, and if you use <tt class="literal">&gt;</tt>, it will clobber any files
+that do.  Instead, use <tt class="literal">sysopen</tt> on the file so it can be locked
+before getting overwritten.  Once you've safely opened the file for
+writing but haven't yet touched it, successfully acquire the exclusive
+lock and only <em class="emphasis">then</em> truncate the file.  Now you may overwrite it
+with the new data.
+<blockquote>
+<pre class="programlisting">use Fcntl qw(:DEFAULT :flock);
+sysopen(FH, "filename", O_WRONLY | O_CREAT)
+    or die "can't open filename: $!";
+flock(FH, LOCK_EX)
+    or die "can't lock filename: $!";
+truncate(FH, 0)
+    or die "can't truncate filename: $!";
+# now write to FH</pre>
+</blockquote>
+<a name="INDEX-2965"></a>
+If you want to modify the contents of a file in place, use <tt class="literal">sysopen</tt>
+again.  This time you ask for both read and write access, creating
+the file if needed.  Once the file is opened, but before you've
+done any reading or writing, get the exclusive lock and keep it
+around your entire transaction.  It's often best to release the lock
+by closing the file because that guarantees all buffers are written
+before the lock is released.</p>
+
+<p>An update involves reading in old values and writing out new ones.  You
+must do both operations under a single exclusive lock, lest another
+process read the (imminently incorrect) value after (or even before)
+you do, but before you write.  (We'll revisit this situation when we
+cover shared memory later in this chapter.)
+<blockquote>
+<pre class="programlisting">use Fcntl qw(:DEFAULT :flock);
+
+sysopen(FH, "counterfile", O_RDWR | O_CREAT)
+    or die "can't open counterfile: $!";
+flock(FH, LOCK_EX)
+    or die "can't write-lock counterfile: $!";
+$counter = &lt;FH&gt; || 0;  # first time would be undef
+seek(FH, 0, 0)
+    or die "can't rewind counterfile : $!";
+print FH $counter+1, "\n"
+    or die "can't write counterfile: $!";
+
+# next line technically superfluous in this program, but
+# a good idea in the general case
+truncate(FH, tell(FH))
+    or die "can't truncate counterfile: $!";
+close(FH)
+    or die "can't close counterfile: $!";</pre>
+</blockquote>
+<a name="INDEX-2966"></a>
+You can't lock a file you haven't opened yet, and you can't have a
+single lock that applies to more than one file.  What you can do,
+though, is use a completely separate file to act as a sort of
+semaphore, like a traffic light, to provide controlled access to
+something else through regular shared and exclusive locks on the
+semaphore file.  This approach has several advantages.  You can have
+one lockfile that controls access to multiple files, avoiding the kind
+of deadlock that occurs when one process tries to lock those files in
+one order while another process is trying to lock them in a different
+order.  You can use a semaphore file to lock an entire directory of
+files.  You can even control access to something that's not even in the
+filesystem, like a shared memory object or the socket upon which
+several preforked servers would like to call <tt class="literal">accept</tt>.</p>
+
+<p>
+<a name="INDEX-2967"></a><a name="INDEX-2968"></a>
+If you have a DBM file that doesn't provide its own explicit locking
+mechanism, an auxiliary lockfile is the best way to control concurrent
+access by multiple agents.  Otherwise, your DBM library's internal
+caching can get out of sync with the file on disk.  Before calling
+<tt class="literal">dbmopen</tt> or <tt class="literal">tie</tt>, open and lock the semaphore file.  If you
+open the database with <tt class="literal">O_RDONLY</tt>, you'll want to use <tt class="literal">LOCK_SH</tt>
+for the lock.  Otherwise, use <tt class="literal">LOCK_EX</tt> for exclusive access
+to updating the database.  (Again, this only works if all participants 
+agree to pay attention to the semaphore.)
+<blockquote>
+<pre class="programlisting">use Fcntl qw(:DEFAULT :flock);
+use DB_File;  # demo purposes only; any db is fine
+
+$DBNAME  = "/path/to/database";
+$LCK     = $DBNAME . ".lockfile";
+
+# use O_RDWR if you expect to put data in the lockfile
+sysopen(DBLOCK, $LCK, O_RDONLY | O_CREAT)   
+    or die "can't open $LCK: $!";
+
+# must get lock before opening database
+flock(DBLOCK, LOCK_SH)
+    or die "can't LOCK_SH $LCK: $!";
+
+tie(%hash, "DB_File", $DBNAME, O_RDWR | O_CREAT)
+    or die "can't tie $DBNAME: $!";</pre>
+</blockquote>
+
+Now you can safely do whatever you'd like with the tied <tt class="literal">%hash</tt>.
+When you're done with your database, make sure you explicitly
+release those resources, and in the opposite order that you 
+acquired them:
+<blockquote>
+<pre class="programlisting">untie %hash;    # must close database before lockfile
+close DBLOCK;   # safe to let go of lock now</pre>
+</blockquote>
+<a name="INDEX-2969"></a>
+If you have the GNU DBM library installed, you can use the standard
+<tt class="literal">GDBM_File</tt> module's implicit locking.  Unless the initial <tt class="literal">tie</tt>
+contains the <tt class="literal">GDBM_NOLOCK</tt> flag, the library makes sure that only
+one writer may open a GDBM file at a time, and that readers and writers
+do not have the database open at the same time.</p>
+
+
+
+
+
+
+<h3 class="sect2">16.2.2. Passing Filehandles </h3>
+
+<p>
+<a name="INDEX-2970"></a><a name="INDEX-2971"></a><a name="INDEX-2972"></a>
+Whenever you create a child process using <tt class="literal">fork</tt>, that new process
+inherits all its parent's open filehandles.  Using filehandles for
+interprocess communication is easiest to illustrate by using plain
+files first.  Understanding how this works is essential for mastering
+the fancier mechanisms of pipes and sockets described later in this
+chapter.</p>
+
+<p>The simplest example opens a file and starts up a child process.
+The child then uses the filehandle already opened for it:
+<blockquote>
+<pre class="programlisting">open(INPUT, "&lt; /etc/motd")      or die "/etc/motd: $!";
+if ($pid = fork) { waitpid($pid,0) } 
+else {
+    defined($pid)         or die "fork: $!";
+    while (&lt;INPUT&gt;) { print "$.: $_" }
+    exit;  # don't let child fall back into main code
+} 
+# INPUT handle now at EOF in parent</pre>
+</blockquote>
+
+Once access to a file has been granted by <tt class="literal">open</tt>, it stays granted until
+the filehandle is closed; changes to the
+file's permissions or to the owner's access privileges have no effect
+on accessibility.  Even if the process later alters its user or group
+IDs, or the file has its ownership changed to a different
+user or group, that doesn't affect filehandles that are already open.
+Programs running under increased permissions (like set-id programs
+or systems daemons) often open a file under their increased rights
+and then hand off the filehandle to a child process that could not
+have opened the file on its own.</p>
+
+<p>
+<a name="INDEX-2973"></a><a name="INDEX-2974"></a><a name="INDEX-2975"></a>
+Although this feature is of great convenience when used intentionally,
+it can also create security issues if filehandles accidentally leak
+from one program to the next.  To avoid granting implicit
+access to all possible filehandles, Perl automatically closes any
+filehandles it has opened (including pipes and sockets) whenever you
+explicitly <tt class="literal">exec</tt> a new program or implicitly execute one through a
+call to a piped <tt class="literal">open</tt>, <tt class="literal">system</tt>, or <tt class="literal">qx//</tt> (backticks).  The system
+filehandles <tt class="literal">STDIN</tt>, <tt class="literal">STDOUT</tt>, and <tt class="literal">STDERR</tt> are exempt from this
+because their main purpose is to provide communications linkage between
+programs.  So one way of passing a filehandle to a new program is to
+copy the filehandle to one of the standard filehandles:
+<blockquote>
+<pre class="programlisting">open(INPUT, "&lt; /etc/motd")      or die "/etc/motd: $!";
+if ($pid = fork) { wait } 
+else {
+    defined($pid)               or die "fork: $!";
+    open(STDIN, "&lt;&amp;INPUT")      or die "dup: $!";
+    exec("cat", "-n")           or die "exec cat: $!";
+}</pre>
+</blockquote>
+<a name="INDEX-2976"></a>
+If you really want the new program to gain access to a filehandle
+other than these three, you can, but you have to do one of two things.
+When Perl opens a new file (or pipe or socket), it checks the current
+setting of the <tt class="literal">$^F</tt>
+(<tt class="literal">$SYSTEM_FD_MAX</tt>) variable.  If the numeric file
+descriptor used by that new filehandle is greater than
+<tt class="literal">$^F</tt>, the descriptor is marked as one to close.
+Otherwise, Perl leaves it alone, and new programs you
+<tt class="literal">exec</tt> will inherit access.</p>
+
+<p>
+<a name="INDEX-2977"></a>
+It's not always easy to predict what file descriptor your newly opened
+filehandle will have, but you can temporarily set your maximum system
+file descriptor to some outrageously high number for the duration of
+the <tt class="literal">open</tt>:
+<blockquote>
+<pre class="programlisting"># open file and mark INPUT to be left open across execs
+{ 
+    local $^F = 10_000;
+    open(INPUT, "&lt; /etc/motd")   or die "/etc/motd: $!";
+} # old value of $^F restored on scope exit</pre>
+</blockquote>
+
+Now all you have to do is get the new program to pay attention to
+the descriptor number of the filehandle you just opened.  The
+cleanest solution (on systems that support this) is to pass a
+special filename that equates to a file descriptor.  If your system
+has a directory called <em class="emphasis">/dev/fd</em> or <em class="emphasis">/proc/$$/fd</em> containing files
+numbered from 0 through the maximum number of supported descriptors,
+you can probably use this strategy.  (Many Linux operating systems
+have both, but only the <em class="emphasis">/proc</em> version tends to be correctly
+populated.  BSD and Solaris prefer <em class="emphasis">/dev/fd</em>.  You'll have to poke
+around at your system to see which looks better for you.)  First,
+open and mark your filehandle as one to be left open across <tt class="literal">exec</tt>s
+as shown in the previous code, then fork like this:
+<blockquote>
+<pre class="programlisting">if ($pid = fork) { wait } 
+else {
+    defined($pid)                or die "fork: $!";
+    $fdfile = "/dev/fd/" . fileno(INPUT);
+    exec("cat", "-n", $fdfile)   or die "exec cat: $!";
+}</pre>
+</blockquote>
+<a name="INDEX-2978"></a>
+If your system supports the <tt class="literal">fcntl</tt> syscall, you may
+diddle the filehandle's close-on-exec flag manually.  This is
+convenient for those times when you didn't realize back when you
+created the filehandle that you would want to share it with your
+children.
+<blockquote>
+<pre class="programlisting">use Fcntl qw/F_SETFD/;
+
+fcntl(INPUT, F_SETFD, 0)
+    or die "Can't clear close-on-exec flag on INPUT: $!\n";</pre>
+</blockquote>
+You can also force a filehandle to close:
+<blockquote>
+<pre class="programlisting">fcntl(INPUT, F_SETFD, 1)
+    or die "Can't set close-on-exec flag on INPUT: $!\n";</pre>
+</blockquote>
+
+You can also query the current status:
+<blockquote>
+<pre class="programlisting">use Fcntl qw/F_SETFD F_GETFD/;
+
+printf("INPUT will be %s across execs\n",
+    fcntl(INPUT, F_GETFD, 1) ? "closed" : "left open");</pre>
+</blockquote>
+
+If your system doesn't support file descriptors named in the
+filesystem, and you want to pass a filehandle other than
+<tt class="literal">STDIN</tt>, <tt class="literal">STDOUT</tt>, or
+<tt class="literal">STDERR</tt>, you can still do so, but you'll have to
+make special arrangements with that program.  Common strategies for
+this are to pass the descriptor number through an environment variable
+or a command-line option.
+<a name="INDEX-2979"></a>
+</p>
+
+<p>
+<a name="INDEX-2980"></a>
+If the executed program is in Perl,
+you can use <tt class="literal">open</tt> to convert a file descriptor into
+a filehandle.  Instead of specifying a filename, use "<tt class="literal">&amp;=</tt>" 
+followed by the descriptor number.  
+<blockquote>
+<pre class="programlisting">if (defined($ENV{input_fdno}) &amp;&amp; $ENV{input_fdno}) =~ /^\d$/) { 
+    open(INPUT, "&lt;&amp;=$ENV{input_fdno}")
+        or die "can't fdopen $ENV{input_fdno} for input: $!";
+}</pre>
+</blockquote>
+
+It gets even easier than that if you're going to be running
+a Perl subroutine or program that expects a filename argument.  You
+can use the descriptor-opening feature of Perl's regular <tt class="literal">open</tt>
+function (but not <tt class="literal">sysopen</tt> or three-argument <tt class="literal">open</tt>) to make
+this happen automatically.  Imagine you have a simple Perl program
+like this:
+<blockquote>
+<pre class="programlisting">#!/usr/bin/perl -p
+# nl - number input lines
+printf "%6d  ", $.;</pre>
+</blockquote>
+
+Presuming you've arranged for the <tt class="literal">INPUT</tt> handle to stay open across
+<tt class="literal">exec</tt>s, you can call that program this way:
+<blockquote>
+<pre class="programlisting">$fdspec = '&lt;&amp;=' . fileno(INPUT);
+system("nl", $fdspec);</pre>
+</blockquote>
+
+or to catch the output:
+<blockquote>
+<pre class="programlisting">@lines = `nl '$fdspec'`;  # single quotes protect spec from shell</pre>
+</blockquote>
+
+Whether or not you <tt class="literal">exec</tt> another program, if you use
+file descriptors inherited across <tt class="literal">fork</tt>, there's one
+small gotcha.  Unlike variables copied across a
+<tt class="literal">fork</tt>, which actually get duplicate but independent
+
+copies, file descriptors really <em class="emphasis">are</em> the same in
+both processes.  If one process reads data from the handle, the seek
+pointer (file position) advances in the other process, too, and that
+data is no longer available to either process.  If they take turns
+reading, they'll leapfrog over each other in the file.  This makes
+intuitive sense for handles attached to serial devices, pipes, or
+sockets, since those tend to be read-only devices with ephemeral data.
+But this behavior may surprise you with disk files.  If this is a
+problem, reopen any files that need separate tracking after the fork.</p>
+
+<p>
+<a name="INDEX-2981"></a>
+The <tt class="literal">fork</tt> operator is a concept derived from Unix, which means it might
+not be implemented correctly on all non-Unix/non-POSIX platforms.
+Notably, <tt class="literal">fork</tt> works on Microsoft systems only if you're running Perl
+5.6 (or better) on Windows 98 (or later).  Although <tt class="literal">fork</tt> is
+implemented via multiple concurrent execution streams within the same
+program on these systems, these aren't the sort of threads where all
+data is shared by default; here, only file descriptors are.  See also
+<a href="ch17_01.htm">Chapter 17, "Threads"</a>.
+<a name="INDEX-2982"></a><a name="INDEX-2983"></a>
+</p>
+
+<a name="INDEX-2984"></a><a name="INDEX-2985"></a>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch16_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch16_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">16.1. Signals</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">16.3. Pipes</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

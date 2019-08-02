@@ -1,0 +1,239 @@
+<html>
+<head>
+<title>use strict (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="use strict">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch31_18.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch31_01.htm">Chapter 31: Pragmatic Modules</a></td><td align="right" valign="top" width="172"><a href="ch31_20.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">31.19. use strict</h2>
+
+<blockquote>
+<pre class="programlisting">use strict;         # Install all three strictures.
+
+use strict "vars";  # Variables must be predeclared.
+use strict "refs";  # Can't use symbolic references.
+use strict "subs";  # Bareword strings must be quoted.
+
+use strict;         # Install all...
+no strict "vars";   # ...then renege on one.</pre>
+</blockquote>
+
+<p>This lexically scoped pragma changes some basic rules about what Perl
+considers to be legal code.  Sometimes these restrictions seem too
+strict for casual programming, such as when you're just trying to whip
+up a five-line filter program.  The larger your program, the more you
+need to be strict about it.</p>
+
+<p>Currently, there are three possible things to be strict about:
+<tt class="literal">subs</tt>, <tt class="literal">vars</tt>, and <tt class="literal">refs</tt>.  If no import list is supplied,
+all three restrictions are assumed.</p>
+
+
+<h3 class="sect2">31.19.1. strict 'refs'</h3>
+
+<p>This generates a run-time error if you use symbolic references,
+intentionally or otherwise.  See <a href="ch08_01.htm">Chapter 8, "References"</a>
+for more about these.
+<blockquote>
+<pre class="programlisting">use strict 'refs';
+
+$ref = \$foo;       # Store "real" (hard) reference.
+print $$ref;        # Dereferencing is ok.
+
+$ref = "foo";       # Store name of global (package) variable.
+print $$ref;        # WRONG, run-time error under strict refs.</pre>
+</blockquote>
+Symbolic references are suspect for various reasons.  It's
+surprisingly easy for even well-meaning programmers to invoke them
+accidentally; <tt class="literal">strict 'refs'</tt> guards against that.
+Unlike real references, symbolic references can only refer to global
+variables.  They aren't reference-counted.  And there's often a better way
+to do what you're doing: instead of referencing a symbol in a global
+symbol table, use a hash as its own little mini-symbol table.  It's
+more efficient, more readable, and less error prone.</p>
+
+<p>Nevertheless, some sorts of valid manipulation really do require
+direct access to the package's global symbol table of variables and
+function names.  For example, you might want to examine the <tt class="literal">@EXPORT</tt>
+list or the <tt class="literal">@ISA</tt> superclass of a given package whose name you don't know in advance.  Or you might want to install a whole
+slew of function calls that are all aliases to the same closure. This is just what symbolic references are best at, but to use them
+while <tt class="literal">use strict</tt> is in effect, you must first undo the "<tt class="literal">refs</tt>"
+stricture:
+<blockquote>
+<pre class="programlisting"># make a bunch of attribute accessors
+for my $methname (qw/name rank serno/) {
+    no strict 'refs';
+    *$methname = sub { $_[0]-&gt;{ __PACKAGE__ . $methname };
+}</pre>
+</blockquote>
+</p>
+
+
+
+
+
+
+<h3 class="sect2">31.19.2. strict 'vars'</h3>
+
+<p>Under this stricture, a compile-time error is triggered if you
+attempt to access a variable that hasn't met at least
+one of the following criteria:</p>
+
+<ul>
+<li>
+<p>Predefined by Perl itself, such as <tt class="literal">@ARGV</tt>, <tt class="literal">%ENV</tt>, and all the
+global punctuation variables such as <tt class="literal">$.</tt> or <tt class="literal">$_</tt>.</p>
+</li>
+<li>
+<p>Declared with <tt class="literal">our</tt> (for a global) or <tt class="literal">my</tt> (for a lexical).</p>
+</li>
+<li>
+<p>Imported from another package.  (The <tt class="literal">use vars</tt> pragma fakes up an
+import, but use <tt class="literal">our</tt> instead.)</p>
+</li>
+<li>
+<p>Fully qualified using its package name and the double-colon
+package
+
+separator.
+</p>
+</li>
+</ul>
+<p>Just using a <tt class="literal">local</tt> operator isn't good enough to
+keep <tt class="literal">use strict 'vars'</tt> happy because, despite its
+name, that operator doesn't change whether the named variable is
+global or not.  It just gives the variable a new, temporary value for
+the duration of block at run time.  You still need to use
+<tt class="literal">our</tt> to declare a global variable, or
+<tt class="literal">my</tt> to declare a lexical variable.  You can,
+however, localize an <tt class="literal">our</tt>:
+<blockquote>
+<pre class="programlisting">local our $law = "martial";</pre>
+</blockquote>
+
+Globals predefined by Perl are exempt from these requirements.  This
+applies to program-wide globals (those forced into package <tt class="literal">main</tt> like
+<tt class="literal">@ARGV</tt> or <tt class="literal">$_</tt>) and to per-package variables like <tt class="literal">$a</tt> and <tt class="literal">$b</tt>,
+which are normally used by the <tt class="literal">sort</tt> function.  Per-package variables
+used by modules like <tt class="literal">Exporter</tt> still need to be declared using
+<tt class="literal">our</tt>:
+<blockquote>
+<pre class="programlisting">our @EXPORT_OK = qw(name rank serno);</pre>
+</blockquote>
+</p>
+
+
+
+
+
+
+<h3 class="sect2">31.19.3. strict 'subs'</h3>
+
+<p>This stricture makes Perl treat all barewords as syntax errors.  A <em class="emphasis">bareword</em>
+("bearword" in some dialects) is any bare name or identifier that has
+no other interpretation forced by context.  (Context is often forced by
+a nearby keyword or token, or by predeclaration of the word in
+question.)  Historically, barewords were interpreted as unquoted
+strings.  This stricture outlaws that interpretation.  If you mean to 
+use it as a string, quote it.  If you mean to use it as 
+a function call, predeclare it or use parentheses.</p>
+
+<p>As a particular case of forced context,
+remember that a word that appears by itself in curly braces or on the
+lefthand side of the <tt class="literal">=&gt;</tt> operator counts as being quoted, and
+so is not subject to this restriction.
+<blockquote>
+<pre class="programlisting">use strict 'subs';
+
+$x = whatever;      # WRONG: bareword error!
+$x = whatever();    # This always works, though.
+
+sub whatever;       # Predeclare function.
+$x = whatever;      # Now it's ok.
+
+# These uses are permitted, because the =&gt; quotes:
+%hash = (red =&gt; 1, blue =&gt; 2, green =&gt; 3);
+
+$rednum =  $hash{red};              # Ok, braces quote here.
+
+# But not this one:
+@coolnums = @hash{blue, green};     # WRONG: bareword error.
+@coolnums = @hash{"blue", "green"}; # Ok, words now quoted.
+@coolnums = @hash{qw/blue green/};  # Likewise.</pre>
+</blockquote>
+</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch31_18.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch31_20.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">31.18. use sigtrap</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">31.20. use subs</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

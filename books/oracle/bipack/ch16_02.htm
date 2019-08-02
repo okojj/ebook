@@ -1,0 +1,2656 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 16] 16.2 Column Groups with DBMS_REPCAT</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein, Charles Dye &amp; John Beresniewicz"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T18:03:48Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates-1-56592-375-8E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-375-8E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle Packages"><META
+NAME="DC.Title"
+CONTENT="Oracle Built-in Packages"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch16_01.htm"
+TITLE="16. Conflict Resolution"><LINK
+REL="prev"
+HREF="ch16_01.htm"
+TITLE="16.1 Getting Started with DBMS_REPCAT"><LINK
+REL="next"
+HREF="ch16_03.htm"
+TITLE="16.3 Priority Groups with DBMS_REPCAT"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle Built-in Packages"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle Built-in Packages"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch16_01.htm"
+TITLE="16.1 Getting Started with DBMS_REPCAT"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 16.1 Getting Started with DBMS_REPCAT"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch16_01.htm"
+TITLE="16. Conflict Resolution"
+>Chapter 16<BR>Conflict Resolution</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch16_03.htm"
+TITLE="16.3 Priority Groups with DBMS_REPCAT"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 16.3 Priority Groups with DBMS_REPCAT"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch16-24404"
+>16.2 Column Groups with DBMS_REPCAT</A
+></H2
+><P
+CLASS="para"
+><EM
+CLASS="emphasis"
+>Column groups</EM
+><A
+CLASS="indexterm"
+NAME="ch16-idx-963112-0"
+></A
+> provide a mechanism for guaranteeing data consistency across one or more columns in a replicated table. Every replicated table has at least one column group, called the default column group, which Oracle creates automatically. You can also create your own column groups (and you probably should) in which you group logically related fields.</P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch16-SECT-2.1"
+>16.2.1 About Column Groups</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch16-idx-963114-0"
+></A
+>Suppose that you have a customer table that contains address information, such as street address, city, state, and postal code, plus personal information such as last name, marital status, birth date, and phone number.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>&#13;SQL&gt; desc customer
+ Name                   Null?           Type
+ ---------------	--------	------
+ CUSTOMER_ID                            NUMBER(6)
+ NAME                                   VARCHAR2(30)
+ MARITAL_STATUS                         VARCHAR2(1)
+ PHONE_NUMBER                           VARCHAR2(16)
+ STREET_ADDR                            VARCHAR2(30)
+ CITY                                   VARCHAR2(30)
+ STATE                                  VARCHAR2(30)
+ POSTAL_CODE                            VARCHAR2(12)
+ TIMESTAMP                              DATE
+ GLOBAL_NAME                            VARCHAR2(30)</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In this table, the fields pertaining to the customer's address (i.e., STREET_ADDR, CITY, STATE, and POSTAL_CODE) are logically related. You would not want to allow an update at one site to set the CITY to "San Francisco" and an update at another site to set the STATE to "Mississippi" since (as of this writing) there is no such municipality as San Francisco, Mississippi.</P
+><P
+CLASS="para"
+>Oracle's answer to this potential catastrophe is the column group. A column group is a logical grouping of columns whose collective values are treated as a unit. If we create a column group and add the address-related fields STREET_ADDR, CITY, STATE, and POSTAL_CODE, we can be sure that rows in this table will always contain consistent values for these columns. We can also make a second column group consisting of the fields NAME, MARITAL_STATUS, and PHONE_NUMBER. Note that a row in this table could contain address information that was entered at one site, and name information that was entered at another site.</P
+><P
+CLASS="para"
+>As we shall see in the later section "Built-in Resolution Techniques," every column group needs to have a "governing" column that determines which data is to be considered correct. For example, if you want to use the Latest Timestamp resolution method for a given column group, then your table should include a DATE field, and your application should update this field with the current time whenever it performs inserts or updates on the table.</P
+><BLOCKQUOTE
+CLASS="note"
+><P
+CLASS="para"
+><STRONG
+>NOTE:</STRONG
+> Oracle automatically creates a default column group, called the <EM
+CLASS="emphasis"
+>shadow column group</EM
+>, when you generate replication support for a table. This column group contains every field that you do not explicitly place in a column group of your <A
+CLASS="indexterm"
+NAME="ch16-idx-963115-0"
+></A
+>own.</P
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The procedures you'll use to create and maintain column groups follow:</P
+><TABLE
+CLASS="simplelist"
+BORDER="0"
+><TR
+><TD
+CLASS="member"
+>DBMS_REPCAT.ADD_GROUPED_COLUMN</TD
+></TR
+><TR
+><TD
+CLASS="member"
+>DBMS_REPCAT.COMMENT_ON_COLUMN_GROUP</TD
+></TR
+><TR
+><TD
+CLASS="member"
+>DBMS_REPCAT.DEFINE_COLUMN_GROUP</TD
+></TR
+><TR
+><TD
+CLASS="member"
+>DBMS_REPCAT.DROP_COLUMN_GROUP</TD
+></TR
+><TR
+><TD
+CLASS="member"
+>DBMS_REPCAT.DROP_GROUPED_COLUMN</TD
+></TR
+><TR
+><TD
+CLASS="member"
+>DBMS_REPCAT.MAKE_COLUMN_GROUP</TD
+></TR
+></TABLE
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch16-SECT-2.2"
+>16.2.2 Creating and Dropping Column Groups</A
+></H3
+><P
+CLASS="para"
+>The DEFINE_COLUMN_GROUP, DROP_COLUMN_GROUP, and MAKE_COLUMN_GROUP procedures are used to create and drop column groups. The difference between DEFINE_COLUMN_GROUP and MAKE_COLUMN_GROUP is that the former creates a column group with no member columns, and the latter both creates the group and adds columns to it.</P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch16-SECT-2.2.1"
+>16.2.2.1 The DBMS_REPCAT.DEFINE_COLUMN_GROUP procedure</A
+></H4
+><P
+CLASS="para"
+>The <A
+CLASS="indexterm"
+NAME="ch16-idx-963116-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-963116-1"
+></A
+>DEFINE_COLUMN_GROUP procedure creates a column group with no member columns. Here's the specification:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_REPCAT.DEFINE_COLUMN_GROUP
+   (sname IN VARCHAR2,
+    oname IN VARCHAR2,
+    column_group IN VARCHAR2,
+    comment IN VARCHAR@ := NULL);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Parameters are summarized in the following table.</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>sname</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the schema to which the replicated table belongs</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>oname</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the replicated table containing the column group</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>column_group</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the column group</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>comment</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Comment</P
+></TD
+></TR
+></TBODY
+></TABLE
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35247"
+>16.2.2.1.1 Exceptions</A
+></H4
+><P
+CLASS="para"
+>The DEFINE_COLUMN_GROUP procedure may raise the following exceptions:</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Number</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>duplicategroup</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23330</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Column_group already exists</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>missingobject</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23308</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Object oname does not exist</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>nonmasterdef</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23312</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Calling site is not master definition site</P
+></TD
+></TR
+></TBODY
+></TABLE
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35285"
+>16.2.2.1.2 Restrictions</A
+></H4
+><P
+CLASS="para"
+>Note the following restrictions on calling the DEFINE_COLUMN_GROUP:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>You must call this procedure from the quiesced master definition site.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>You must regenerate replication support for the table after defining the column group with the GENERATE_REPLICATION_SUPPORT procedure.</P
+></LI
+></UL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35293"
+>16.2.2.1.3 Example</A
+></H4
+><P
+CLASS="para"
+>The DEEFINE_COLUMN_GROUP creates an empty column group&nbsp;-- that is, one with no members. After creating the column group, you can add columns to it with the DBMS_REPCAT.ADD_GROUPED_COLUMN procedure described later in this chapter. The following example creates an empty column group for table SPROCKET.PRODUCTS:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>&#13;	BEGIN
+		DBMS_REPCAT.DEFINE_COLUMN_GROUP(sname=&gt; 'SPROCKET', 
+				oname =&gt; 'PRODUCTS	', 
+				column_group =&gt; 'CG_PRODUCTS_PRICE_COLS', 
+				comment =&gt; 'Comment added on '||sysdate|| ' by ' ||user);
+	<A
+CLASS="indexterm"
+NAME="ch16-idx-963118-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-963118-1"
+></A
+>END;</PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch16-SECT-2.2.2"
+>16.2.2.2 The DBMS_REPCAT.DROP_COLUMN_GROUP procedure</A
+></H4
+><P
+CLASS="para"
+>The <A
+CLASS="indexterm"
+NAME="ch16-idx-963120-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-963120-1"
+></A
+>DROP_COLUMN_GROUP procedure drops a column group that you've previously created. Here's the specification:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_REPCAT.DROP_COLUMN_GROUP
+   (sname IN VARCHAR2,
+    oname IN VARCHAR2,
+    column_group IN VARCHAR2);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Parameters are summarized in the following table.</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>sname</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the schema to which the replicated table belongs</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>oname</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the replicated table containing the column group</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>column_group</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the column group</P
+></TD
+></TR
+></TBODY
+></TABLE
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35335"
+>16.2.2.2.1 Exceptions</A
+></H4
+><P
+CLASS="para"
+>The DROP_COLUMN_GROUP procedure may raise the following exceptions:</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Number</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>missinggroup</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23331</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>The column_group does not exist</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>missingobject</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23308</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>The object oname does not exist</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>missingschema</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23306</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>The schema sname does not exist</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>nonmasterdef</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23312</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Calling site is not master definition site</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>referenced</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23332</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>The column_group is used by existing conflict resolution methods</P
+></TD
+></TR
+></TBODY
+></TABLE
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35387"
+>16.2.2.2.2 Restrictions</A
+></H4
+><P
+CLASS="para"
+>Note the following restrictions on calling DROP_COLUMN_GROUP:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>You must call this procedure from the quiesced master definition site.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>You must regenerate replication support for the table after defining the column group with the GENERATE_REPLICATION_SUPPORT procedure.</P
+></LI
+></UL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35395"
+>16.2.2.2.3 Example</A
+></H4
+><P
+CLASS="para"
+>This example drops the column group CG_PRODUCTS_PRICE_COLS that was created in the CREATE_COLUMN_GROUP <A
+CLASS="indexterm"
+NAME="ch16-idx-963122-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-963122-1"
+></A
+>example:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>BEGIN
+    DBMS_REPCAT.DROP_COLUMN_GROUP(sname &gt; 'SPROCKET', 
+                                  oname =&gt; 'PRODUCTS	', 
+                                  column_group =&gt; 'CG_PRODUCTS_PRICE_COLS');
+END;</PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch16-SECT-2.2.3"
+>16.2.2.3 The DBMS_REPCAT.MAKE_COLUMN_GROUP procedure</A
+></H4
+><P
+CLASS="para"
+>The <A
+CLASS="indexterm"
+NAME="ch16-idx-963124-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-963124-1"
+></A
+>MAKE_COLUMN_GROUP procedure creates a column group and adds member columns to it. Here's the specification:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_REPCAT.MAKE_COLUMN_GROUP
+   (sname IN VARCHAR2,
+    oname IN VARCHAR2,
+    column_group IN VARCHAR2,
+    {list_of_column_names IN VARCHAR2 |
+    list_of_column_names IN dbms_repcat.varchar2s} );</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Note that you must specify only one of the list_of_column_names parameters.</P
+><P
+CLASS="para"
+>Parameters are summarized in the following table.</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>sname</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the schema to which the replicated table belongs.</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>oname</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the replicated table containing the column group.</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>column_group</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the column group.</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>list_of_column_names</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>A comma-delimited list of column names, or a PL/SQL table of column names. Use `*' to add all columns in the table.</P
+></TD
+></TR
+></TBODY
+></TABLE
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35443"
+>16.2.2.3.1 Exceptions</A
+></H4
+><P
+CLASS="para"
+>The MAKE_COLUMN_GROUP procedure may raise the following exceptions:</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Number</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>duplicatecolumn</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23333</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Column(s) already a member of a different column group</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>duplicategroup</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23330</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>column_group already exists</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>missingcolumn</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23334</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Column(s) specified do not exist in table oname</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>missingobject</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23308</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Object oname does not exist</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>nonmasterdef</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23312</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Calling site is not master definition site</P
+></TD
+></TR
+></TBODY
+></TABLE
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35495"
+>16.2.2.3.2 Restrictions</A
+></H4
+><P
+CLASS="para"
+>Note the following restrictions on calling MAKE_COLUMN_GROUP:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>You must call this procedure from the quiesced master definition site.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>You must regenerate replication support for the table after defining the column group with the DBMS_REPCAT.GENERATE_REPLICATION_SUPPORT procedure.</P
+></LI
+></UL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35503"
+>16.2.2.3.3 Example</A
+></H4
+><P
+CLASS="para"
+>By passing "*" to the list_of_column_names parameter in MAKE_COLUMN_GROUP, you can create a column group consisting of all columns in the table.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>	BEGIN
+		DBMS_REPCAT.MAKE_COLUMN_GROUP(sname=&gt; 'SPROCKET', 
+					     oname =&gt; 'PRODUCTS	', 
+					     column_group =&gt; 'CG_PRODUCTS_ALL_COLS', 
+					     list_of_column_names =&gt; '*');
+	END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>You can also use MAKE_COLUMN_GROUP to create a column group containing whatever subset of columns you <A
+CLASS="indexterm"
+NAME="ch16-idx-963126-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-963126-1"
+></A
+>want.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>	BEGIN
+		DBMS_REPCAT.MAKE_COLUMN_GROUP(
+			sname		=&gt; 'SPROCKET', 
+			oname 		=&gt; 'PRODUCTS	', 
+			column_group	=&gt; 'CG_PRODUCTS_MFG_COLS', 
+			list_of_column_names=&gt; 'REV_LEVEL, PRODUCTION_DATE,
+                            PRODUCTION_STATUS');
+	END;</PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch16-SECT-2.3"
+>16.2.3 Modifying Existing Column Groups</A
+></H3
+><P
+CLASS="para"
+>Once you have created a column group, you can add and remove member columns (with the ADD_GROUPED_COLUMN and DROP_GROUPED_COLUMN procedures), and you can add or change the comment associated with the group (with the COMMENT_ON_COLUMN_GROUP procedure).</P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch16-SECT-2.3.1"
+>16.2.3.1 The DBMS_REPCAT.ADD_GROUPED_COLUMN procedure</A
+></H4
+><P
+CLASS="para"
+>The <A
+CLASS="indexterm"
+NAME="ch16-idx-963128-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-963128-1"
+></A
+>ADD_GROUPED_COLUMN procedure adds a member column to a column group. You can call this procedure after you have created a new, empty column group with DBMS_REPCAT.DEFINE_COLUMN_GROUP, or if your schema or conflict resolution requirements change. Here's the specification:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_REPCAT.ADD_GROUPED_COLUMN
+   (sname IN VARCHAR2,
+    oname IN VARCHAR2,
+    column_group IN VARCHAR2,
+    {list_of_column_names IN VARCHAR2 |
+    list_of_column_names IN dbms_repcat.varchar2s});</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Note that you must specify only one of the list_of_column_names parameters.</P
+><P
+CLASS="para"
+>Parameters are summarized in the following table.  </P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>sname</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the schema that owns the replicated table.</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>oname</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the table with the column_group.</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>column_group</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the column_group to which column(s) will be added.</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>list_of_column_names</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>A comma-delimited list of column names, or a PL/SQL table of column names. Use "*" to add all columns in the table to the column group.</P
+></TD
+></TR
+></TBODY
+></TABLE
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35556"
+>16.2.3.1.1 Exceptions</A
+></H4
+><P
+CLASS="para"
+>ADD_GROUPED_COLUMN may raise the following exceptions:</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Number</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>nonmasterdef</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23312</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Invoking site is not master definition site</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>missingobject</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23308</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Table oname does not exist</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>missinggroup</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23331</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Column group column_group does not exist</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>missingcolumn</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23334</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Column(s) specified do not exist in table oname</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>duplicatecolumn</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23333</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Column(s) specified already exist in column_group</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>missingschema</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23306</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Schema sname does not exist</P
+></TD
+></TR
+></TBODY
+></TABLE
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35615"
+>16.2.3.1.2 Restrictions</A
+></H4
+><P
+CLASS="para"
+>Note the following restrictions on calling ADD_GROUPED_COLUMN:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>You must call this procedure from the quiesced master definition site.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>You must regenerate replication support for the table after defining the column group with the GENERATE_REPLICATION_SUPPORT procedure.</P
+></LI
+></UL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35623"
+>16.2.3.1.3 Example</A
+></H4
+><P
+CLASS="para"
+>In this example, we add the columns CATALOG_ID and DESCRIPTION to the column group CG_PRODUCT_MFG_COLS that we created in the MAKE_COLUMN_GROUP <A
+CLASS="indexterm"
+NAME="ch16-idx-963130-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-963130-1"
+></A
+>example:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>	DECLARE cg_list DBMS_REPCAT.VARCHAR2(s);
+	BEGIN
+		cg_list(1) := 'CATALOG_ID';
+		cg_list(1) := 'DESCRIPTION';
+
+		DBMS_REPCAT.ADD_GROUPED_COLUMN(sname=&gt; 'SPROCKET', 
+					     oname =&gt; 'PRODUCTS	', 
+					     column_group =&gt; 'CG_PRODUCT_MFG_COLS', 
+					     list_of_column_names =&gt; cg_list);
+	END;</PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch16-SECT-2.3.2"
+>16.2.3.2 The DBMS_REPCAT.DROP_GROUPED_COLUMN procedure</A
+></H4
+><P
+CLASS="para"
+>The<A
+CLASS="indexterm"
+NAME="ch16-idx-963132-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-963132-1"
+></A
+> DROP_GROUPED_COLUMN procedure allows you to drop a column from a column group. Dropping a column from a column group is quite similar to adding one. Make sure, however, that none of your conflict resolution methods reference the column(s) that you are dropping. And as with the other procedures with a "list_of_column_names" parameter, you can pass "*" to the parameter to indicate all fields in table oname. Here's the specification:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_REPCAT.DROP_GROUPED_COLUMN
+   (sname IN VARCHAR2,
+    oname IN VARCHAR2,
+    column_group IN VARCHAR2,
+    {list_of_column_names IN VARCHAR2 |
+    list_of_column_names IN dbms_repcat.varchar2s});</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Note that you must specify only one of the list_of_column_names parameters.</P
+><P
+CLASS="para"
+>Parameters are summarized in the following table. </P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>sname</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the schema that owns the replicated table</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>oname</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the table with the column_group</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>column_group</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the column_group from which column(s) will be dropped</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>list_of_column_names</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>A comma-delimited list of column names, or a PL/SQL table of column names</P
+></TD
+></TR
+></TBODY
+></TABLE
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35671"
+>16.2.3.2.1 Exceptions</A
+></H4
+><P
+CLASS="para"
+>The DROP_GROUPED_COLUMN procedure may raise the following exceptions:</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Number</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>missinggroup</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23331</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Column group column_group does not exist</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>missingobject</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23308</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Table oname does not exist</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>missingschema</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23306</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Schema sname does not exist</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>nonmasterdef</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23312</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Invoking site is not the master definition site</P
+></TD
+></TR
+></TBODY
+></TABLE
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35716"
+>16.2.3.2.2 Restrictions</A
+></H4
+><P
+CLASS="para"
+>Note the following restrictions on calling DROP_GROUPED_COLUMN:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>You must not call this procedure from the quiesced master definition site.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>You must regenerate replication support for the table after defining the column group with the GENERATE_REPLICATION_SUPPORT procedure.</P
+></LI
+></UL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35724"
+>16.2.3.2.3 Example</A
+></H4
+><P
+CLASS="para"
+>The following example shows how to drop a column from an existing column <A
+CLASS="indexterm"
+NAME="ch16-idx-963139-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-963139-1"
+></A
+>group:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>	BEGIN
+		DBMS_REPCAT.DROP_GROUPED_COLUMN(
+				sname		=&gt; 'SPROCKET',
+				oname		=&gt; 'PRODUCTS',
+				column_group	=&gt; 'CG_PRODUCT_MFG_COLS',
+				list_of_column_names	=&gt; 'CATALOG_ID, DESCRIPTION');
+	END;</PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch16-SECT-2.3.3"
+>16.2.3.3 The DBMS_REPCAT.COMMENT_ON_COLUMN_GROUP procedure</A
+></H4
+><P
+CLASS="para"
+>The <A
+CLASS="indexterm"
+NAME="ch16-idx-963141-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-963141-1"
+></A
+>COMMENT_ON_COLUMN_GROUP procedure adds or changes the comment associated with a column group. Here's the specification:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_REPCAT.COMMENT_ON_COLUMN_GROUP
+   (sname IN VARCHAR2,
+    oname IN VARCHAR2,
+    column_group IN VARCHAR2,
+    comment IN VARCHAR2);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Parameters are summarized in the following table.</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>sname</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the schema to which the replicated table belongs</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>oname</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the replicated table containing the column group</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>column_group</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the column group</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>comment</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Comment</P
+></TD
+></TR
+></TBODY
+></TABLE
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35771"
+>16.2.3.3.1 Exceptions</A
+></H4
+><P
+CLASS="para"
+>The COMMENT_ON_COLUMN_GROUP procedure may raise the following exceptions:</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Number</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>missinggroup</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23331</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>The column_group does not exist</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>nonmasterdef</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>-23312</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Calling site is not the master definition site</P
+></TD
+></TR
+></TBODY
+></TABLE
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35802"
+>16.2.3.3.2 Restrictions</A
+></H4
+><P
+CLASS="para"
+>The COMMENT_ON_COLUMN_GROUP procedure must be called from the master definition site.</P
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-35805"
+>16.2.3.3.3 Example</A
+></H4
+><P
+CLASS="para"
+>You can create or change the comment field in DBA_REPCOLUMN_GROUP with the COMMENT_ON_COLUMN_GROUP procedure, as the following <A
+CLASS="indexterm"
+NAME="ch16-idx-963143-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch16-idx-963143-1"
+></A
+>example <A
+CLASS="indexterm"
+NAME="ch16-idx-963113-0"
+></A
+>illustrates:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>&#13;	BEGIN
+		DBMS_REPCAT.COMMENT_ON_COLUMN_GROUP(
+				sname 		=&gt; 'SPROCKET',
+				oname		=&gt; 'PRODUCTS',
+				column_group	=&gt; 'CG_PRODUCT_MFG_COLS',
+				comment		=&gt; 'Added catalog_id + desc on '||sysdate);</PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch16_01.htm"
+TITLE="16.1 Getting Started with DBMS_REPCAT"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 16.1 Getting Started with DBMS_REPCAT"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle Built-in Packages"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle Built-in Packages"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch16_03.htm"
+TITLE="16.3 Priority Groups with DBMS_REPCAT"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 16.3 Priority Groups with DBMS_REPCAT"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>16.1 Getting Started with DBMS_REPCAT</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>16.3 Priority Groups with DBMS_REPCAT</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

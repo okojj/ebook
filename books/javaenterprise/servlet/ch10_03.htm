@@ -1,0 +1,1098 @@
+<html>
+<head>
+<title>Chat Server (Java Servlet Programming)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jason Hunter and William Crawford">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-391-XE" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Chat Server">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm" alt="Java Servlet Programming"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch10_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch10_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch10_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch10_01.htm">Chapter 10: Applet-Servlet Communication</a></td><td align="right" valign="top" width="172"><a href="ch11_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch11_01.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">10.3. Chat Server</h2>
+
+<p>The daytime server example from the last section demonstrated the
+nuts and bolts of using each of the three communication techniques
+for <a name="INDEX-1915"></a><a name="INDEX-1916"></a><a name="INDEX-1917"></a>applet-servlet communication. It
+didn't take advantage, though, of the persistence gains when
+using socket communication. Nor did it show off the simplicity of RMI
+communication or the elegance of RMI <a name="INDEX-1918"></a><a name="INDEX-1919"></a><a name="INDEX-1920"></a>callbacks (where the servlet can
+invoke methods of the applet). It also didn't provide a
+compelling reason for why one servlet should support all the
+communication techniques--there was no state to maintain or
+complicated code base to collect in one location. So, before we end
+our discussion of applet-servlet communication, let's look at a
+more sophisticated <a name="INDEX-1921"></a><a name="INDEX-1922"></a><a name="INDEX-1923"></a>
+example: a chat server, implemented as a servlet, that supports
+clients connecting via HTTP, non-HTTP sockets, and RMI.
+</p>
+
+<p>We'll build this chat server using all three communication
+techniques so that it can take advantage of the best, most efficient
+solution for each client. For example, when the client supports RMI,
+the servlet can be treated as a remote object, and (where possible)
+it can treat the applet as a remote object, too. When the client
+doesn't support RMI but can support direct socket
+communication, the chat server can utilize socket persistence and
+communicate with the client using a non-HTTP socket protocol. And, of
+course, when all else fails, the chat server can fall back to using
+HTTP. It would rather not fall back because HTTP, being stateless,
+requires that the client poll for updates. But for many clients, HTTP
+is the only choice.
+</p>
+
+<p>The chat server is implemented as a single class with a single
+instantiation because it has a large amount of associated state and a
+fair amount of code that would otherwise have to be repeated. To
+separate it into three classes, one for each protocol, would demand
+excessive interserver communication and replicate the core chat
+server code three times. Implementing the chat server as a servlet
+provides a simple way for one object to make itself available via all
+three communication techniques. By being an HTTP servlet, it has
+built-in HTTP support. And by extending the
+<tt class="literal">RemoteDaemonHttpServlet</tt><a name="INDEX-1924"></a><a name="INDEX-1925"></a>
+class, it can also easily gain support for non-HTTP socket and RMI
+communication.
+</p>
+
+<p>Note that although you'll see the code in its entirety, we
+won't be fully explaining each and every line. To do so would
+extend this chapter beyond a reasonable length, assuming we
+aren't there already. Therefore, we'll explain the issues
+as they concern applet-servlet communication and rely on you to
+examine the code to understand all the details.
+</p>
+
+<a name="ch10-25-fm2xml"></a>
+<h3 class="sect2">10.3.1. The Design</h3>
+
+<p>
+<a href="#ch10-22836">Figure 10-3</a> shows the chat applet in action. Notice
+that it uses a large <tt class="literal">TextArea</tt> component to display
+the running conversation, with a small <tt class="literal">TextInput</tt>
+component underneath where the user can post a new single-line
+message. As each contributor composes a message, it's sent to
+the chat server and distributed to the other chat clients in various
+ways.
+</p>
+
+<a name="ch10-22836"></a>
+<div class="figure">
+<img alt="figure" src="figs/jsp_1003.gif" webstripperlinkwas="figs/jsp_1003.gif"></div>
+<h4 class="objtitle">Figure 10-3. The chat applet in action</h4>
+
+<p>HTTP chat clients post their messages to the server using the HTTP
+<a name="INDEX-1926"></a><a name="INDEX-1927"></a><a name="INDEX-1928"></a>POST method. The applet takes the new
+message from the <tt class="literal">TextInput</tt> component when the user
+hits <b class="emphasis-bold">Enter</b>, URL-encodes the message,
+and posts it to the servlet as a <tt class="literal">message</tt>
+parameter. It's all very straightforward. What is a bit more
+complicated is how an HTTP chat client manages to get the other
+clients' messages. It uses the HTTP <a name="INDEX-1929"></a><a name="INDEX-1930"></a><a name="INDEX-1931"></a>GET method to receive each message,
+but it has a problem: it doesn't know when exactly
+there's a new message to get. This is the problem with a
+unidirectional request/response communication paradigm. The client
+has to either periodically poll for updates or simulate bidirectional
+communication by making a series of blocking GET requests. By that we
+mean the chat client initiates a GET request that blocks until the
+server decides it's time to return something. For our example,
+we implement this simulated bidirectional communication.
+</p>
+
+<p>Socket chat clients, for the sake of convenience, post their messages
+to the server the same way HTTP chat clients do, with the HTTP POST
+method. They could post their messages using
+<a name="INDEX-1932"></a><a name="INDEX-1933"></a><a name="INDEX-1934"></a><a name="INDEX-1935"></a>raw socket connections, but only
+with a marginal gain in efficiency that, at least in this case,
+doesn't outweigh the increased complexity. These socket
+clients, however, do use raw sockets to get messages from the other
+clients, replacing the simulated bidirectional communication with
+actual bidirectional communication. As each new message comes in to
+the servlet, it's sent right away from the servlet to the
+socket chat clients across plain-text socket connections.
+</p>
+
+<p>RMI chat clients perform their <a name="INDEX-1936"></a><a name="INDEX-1937"></a><a name="INDEX-1938"></a> POSTs and their <a name="INDEX-1939"></a><a name="INDEX-1940"></a><a name="INDEX-1941"></a> GETs using method
+invocations. To post each new message, the applet simply calls the
+remote servlet's <tt class="literal">broadcastMessage(String)</tt>
+method. To get new messages, it has two options. It can call the
+servlet's blocking <tt class="literal">getNextMessage()</tt> method
+or, through the use of <a name="INDEX-1942"></a><a name="INDEX-1943"></a><a name="INDEX-1944"></a> callbacks, it can ask the servlet to
+call its own <tt class="literal">setNextMessage(String)</tt> method every
+time there's a new message broadcast. We've chosen to use
+the callback option in our example.
+</p>
+
+<p>In front of all these applets is a <a name="INDEX-1945"></a><a name="INDEX-1946"></a>dispatch servlet. It lets the user
+choose the applet-servlet communication technique (HTTP, socket, or
+RMI) he wants to use and, based on his choice, generates a page that
+contains the appropriate applet. It's true that a single applet
+could be written to support all three techniques and auto-select
+between them based on its runtime environment, but to do that here
+would unnecessarily complicate our example. The dispatch servlet also
+tells the applet the name of its user, but more on that later.
+</p>
+
+
+<a name="ch10-26-fm2xml"></a>
+<h3 class="sect2">10.3.2. The Servlet</h3>
+
+<p>The full listings for the <tt class="literal">ChatServer</tt> interface and
+the <tt class="literal">ChatServlet</tt> class that implements it are given
+in <a href="#ch10-34482">Example 10-15</a> and <a href="#ch10-14525">Example 10-16</a>.
+</p>
+
+<a name="ch10-34482"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-15. The ChatServer interface, implemented by ChatServlet </h4>
+<blockquote>
+<pre class="programlisting">import java.rmi.Remote;
+import java.rmi.RemoteException;
+
+public interface ChatServer extends Remote {
+  public String getNextMessage() throws RemoteException;
+  public void broadcastMessage(String message) throws RemoteException;
+
+  public void addClient(ChatClient client) throws RemoteException;
+  public void deleteClient(ChatClient client) throws RemoteException;
+}</pre>
+</blockquote>
+</div>
+
+<a name="ch10-14525"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-16. A full-service chat server/servlet </h4>
+<blockquote>
+<pre class="programlisting">import java.io.*;
+import java.net.*;
+import java.rmi.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+import com.oreilly.servlet.RemoteDaemonHttpServlet;
+
+public class ChatServlet extends RemoteDaemonHttpServlet
+                         implements ChatServer {
+
+  // source acts as the distributor of new messages
+  MessageSource source = new MessageSource();
+
+  // socketClients holds references to all the socket-connected clients
+  Vector socketClients = new Vector();
+
+  // rmiClients holds references to all the RMI clients
+  Vector rmiClients = new Vector();
+
+  // doGet() returns the next message. It blocks until there is one.
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+                               throws ServletException, IOException {
+    res.setContentType("text/plain");
+    PrintWriter out = res.getWriter();
+
+    // Return the next message (blocking)
+    out.println(getNextMessage());
+  }
+
+  // doPost() accepts a new message and broadcasts it to all
+  // the currently listening HTTP and socket clients.
+  public void doPost(HttpServletRequest req, HttpServletResponse res)
+                                throws ServletException, IOException {
+    // Accept the new message as the "message" parameter
+    String message = req.getParameter("message");
+
+    // Broadcast it to all listening clients
+    if (message != null) broadcastMessage(message);
+
+    // Set the status code to indicate there will be no response
+    res.setStatus(res.SC_NO_CONTENT);
+  }
+
+  // getNextMessage() returns the next new message.
+  // It blocks until there is one.
+  public String getNextMessage() {
+    // Create a message sink to wait for a new message from the
+    // message source.
+    return new MessageSink().getNextMessage(source);
+  }
+
+  // broadcastMessage() informs all currently listening clients that there
+  // is a new message. Causes all calls to getNextMessage() to unblock.
+  public void broadcastMessage(String message) {
+    // Send the message to all the HTTP-connected clients by giving the
+    // message to the message source
+    source.sendMessage(message);
+    
+    // Directly send the message to all the socket-connected clients
+    Enumeration enum = socketClients.elements();
+    while (enum.hasMoreElements()) {
+      Socket client = null;
+      try {
+        client = (Socket)enum.nextElement();
+        PrintStream out = new PrintStream(client.getOutputStream());
+        out.println(message);
+      }
+      catch (IOException e) {
+        // Problem with a client, close and remote it
+        try {
+          if (client != null) client.close();
+        }
+        catch (IOException ignored) { }
+        socketClients.removeElement(client);
+      }
+    }
+
+    // Directly send the message to all RMI clients
+    enum = rmiClients.elements();
+    while (enum.hasMoreElements()) {
+      ChatClient chatClient = null;
+      try {
+        chatClient = (ChatClient)enum.nextElement();
+        chatClient.setNextMessage(message);
+      }
+      catch (RemoteException e) {
+        // Problem communicating with a client, remove it
+        deleteClient(chatClient);
+      }
+    }
+  }
+
+  protected int getSocketPort() {
+    // We listen on port 2428 (look at a phone to see why)
+    return 2428;
+  }
+
+  public void handleClient(Socket client) {
+    // We have a new socket client. Add it to our list.
+    socketClients.addElement(client);
+  }
+
+  public void addClient(ChatClient client) {
+    // We have a new RMI client. Add it to our list.
+    rmiClients.addElement(client);
+  }
+
+  public void deleteClient(ChatClient client) {
+    // Remote the specified client from our list.
+    rmiClients.removeElement(client);
+  }
+}
+
+// MessageSource acts as the source for new messages.
+// Clients interested in receiving new messages can
+// observe this object.
+class MessageSource extends Observable {
+  public void sendMessage(String message) {
+    setChanged();
+    notifyObservers(message);
+  }
+}
+
+// MessageSink acts as the receiver of new messages.
+// It listens to the source.
+class MessageSink implements Observer {
+
+  String message = null;  // set by update() and read by getNextMessage()
+
+  // Called by the message source when it gets a new message
+  synchronized public void update(Observable o, Object arg) {
+    // Get the new message
+    message = (String)arg;
+
+    // Wake up our waiting thread
+    notify();
+  }
+
+  // Gets the next message sent out from the message source
+  synchronized public String getNextMessage(MessageSource source) {
+    // Tell source we want to be told about new messages
+    source.addObserver(this);
+
+    // Wait until our update() method receives a message
+    while (message == null) {
+      try { wait(); } catch (Exception ignored) { }
+    }
+
+    // Tell source to stop telling us about new messages
+    source.deleteObserver(this);
+
+    // Now return the message we received
+    // But first set the message instance variable to null
+    // so update() and getNextMessage() can be called again.
+    String messageCopy = message;
+    message = null;
+    return messageCopy;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>The <tt class="literal">getNextMessage()</tt> and
+<tt class="literal">broadcastMessage(String message)</tt> methods are most
+interesting portions of <tt class="literal">ChatServlet</tt>. The
+<tt class="literal">getNextMessage()</tt> method returns the next new
+message as it comes in, blocking until there is one. To enable this
+blocking, it uses the <tt class="literal">MessageSource</tt> and
+<tt class="literal">MessageSink</tt> classes. Without getting too deep into
+the details of these two classes, we'll just say this: the
+servlet constructs a new <tt class="literal">MessageSink</tt> and asks this
+sink to get the next message from the source. To accomplish this, the
+sink registers itself as an observer of source and calls
+<tt class="literal">wait()</tt> to block. When the source receives a new
+message, the sink (being an observer) is notified of the change with
+a call to its <tt class="literal">update()</tt> method. The sink's
+<tt class="literal">update()</tt> method saves the source's latest
+message in its <tt class="literal">message</tt> variable and then calls
+<tt class="literal">notify()</tt>. This causes its
+<tt class="literal">getNextMessage()</tt> method to unblock and return the
+message.
+</p>
+
+<p>The <tt class="literal">broadcastMessage()</tt> method tells all listening
+clients when there's a new message. It notifies HTTP clients by
+sending the message to the <tt class="literal">MessageSource</tt>; other
+clients it notifies directly by looping through its client list. For
+each of its socket-connected clients, it prints the message to the
+client's socket. For each of its RMI clients, it calls the
+client's <tt class="literal">setNextMessage(String)</tt> method. This
+is the callback we've been talking about. If, at any point,
+there's a problem with a socket or RMI client, it removes that
+client from its list.
+</p>
+
+<p>The two lists, <tt class="literal">socketClients</tt> and
+<tt class="literal">rmiClients</tt>, are populated as the servlet hears
+from clients. When a socket client connects, the servlet's
+<tt class="literal">handleClient(Socket)</tt> method is called and the new
+client is added to the <tt class="literal">socketClients</tt><tt class="literal">Vector</tt>. RMI clients have to add themselves to the
+list by invoking the servlet's
+<tt class="literal">addClient(ChatClient)</tt> method.
+</p>
+
+<p>The <tt class="literal">doGet()</tt><a name="INDEX-1947"></a><a name="INDEX-1948"></a>
+and <tt class="literal">doPost()</tt><a name="INDEX-1949"></a><a name="INDEX-1950"></a>
+methods of <tt class="literal">ChatServlet</tt> are essentially thin
+wrappers around the <tt class="literal">getNextMessage()</tt> and
+<tt class="literal">broadcastMessage()</tt> methods. The
+<tt class="literal">doGet()</tt> wrapper is so thin you can almost see
+through it: <tt class="literal">doGet()</tt> sends as its response whatever
+<tt class="literal">String</tt> is returned by
+<tt class="literal">getNextMessage()</tt>. The <tt class="literal">doPost()</tt>
+wrapper is a bit less transparent. It extracts the posted message
+from the <a name="INDEX-1951"></a><a name="INDEX-1952"></a><a name="INDEX-1953"></a>POST form data's
+<tt class="literal">"message"</tt> parameter, broadcasts the message by
+passing it to the <tt class="literal">broadcastMessage()</tt> method, and
+sets its response's status code to
+<tt class="literal">SC_NO_CONTENT</tt> to indicate there is no content in
+the response. In a sense, making a GET request is equivalent to
+calling <tt class="literal">getNextMessage()</tt>, and making a POST
+request is equivalent to calling
+<tt class="literal">broadcastMessage()</tt>.
+</p>
+
+<p>Did you notice which socket port <tt class="literal">ChatServlet</tt>
+listens on? It's 2428. Overriding the
+<tt class="literal">getSocketPort()</tt> method as
+<tt class="literal">ChatServlet</tt> does is an easy way to set the socket
+port when you don't want to use an init parameter.
+</p>
+
+
+<a name="ch10-27-fm2xml"></a>
+<h3 class="sect2">10.3.3. The HTTP Applet</h3>
+
+<p>The code for our first applet, the
+<a name="INDEX-1954"></a>HTTP chat applet, is shown in <a href="#ch10-20701">Example 10-17</a>.
+</p>
+
+<a name="ch10-20701"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-17. A chat client using HTTP communication </h4>
+<blockquote>
+<pre class="programlisting">import java.applet.*;
+import java.awt.*;
+import java.io.*;
+import java.net.*;
+import java.util.*;
+
+import com.oreilly.servlet.HttpMessage;
+
+public class HttpChatApplet extends Applet implements Runnable {
+
+  TextArea text;
+  Label label;
+  TextField input;
+  Thread thread;
+  String user;
+
+  public void init() {
+    // Check if this applet was loaded directly from the filesystem.
+    // If so, explain to the user that this applet needs to be loaded
+    // from a server in order to communicate with that server's servlets.
+    URL codebase = getCodeBase();
+    if (!"http".equals(codebase.getProtocol())) {
+      System.out.println();
+      System.out.println("*** Whoops! ***");
+      System.out.println("This applet must be loaded from a web server.");
+      System.out.println("Please try again, this time fetching the HTML");
+      System.out.println("file containing this servlet as");
+      System.out.println("\"http://server:port/file.html\".");
+      System.out.println();
+      System.exit(1);  // Works only from appletviewer
+                       // Browsers throw an exception and muddle on
+    }
+
+    // Get this user's name from an applet parameter set by the servlet
+    // We could just ask the user, but this demonstrates a
+    // form of servlet-&gt;applet communication.
+    user = getParameter("user");
+    if (user == null) user = "anonymous";
+
+    // Set up the user interface...
+    // On top, a large TextArea showing what everyone's saying.
+    // Underneath, a labeled TextField to accept this user's input.
+    text = new TextArea();
+    text.setEditable(false);
+    label = new Label("Say something: ");
+    input = new TextField();
+    input.setEditable(true);
+
+    setLayout(new BorderLayout());
+    Panel panel = new Panel();
+    panel.setLayout(new BorderLayout());
+
+    add("Center", text);
+    add("South", panel);
+
+    panel.add("West", label);
+    panel.add("Center", input);
+  }
+
+  public void start() {
+    thread = new Thread(this);
+    thread.start();
+  }
+
+  String getNextMessage() {
+    String nextMessage = null;
+    while (nextMessage == null) {
+      try {
+        URL url = new URL(getCodeBase(), "/servlet/ChatServlet");
+        HttpMessage msg = new HttpMessage(url);
+        InputStream in = msg.sendGetMessage();
+        DataInputStream data = new DataInputStream(
+                               new BufferedInputStream(in));
+        nextMessage = data.readLine();
+      }
+      catch (SocketException e) {
+        // Can't connect to host, report it and wait before trying again
+        System.out.println("Can't connect to host: " + e.getMessage());
+        try { Thread.sleep(5000); } catch (InterruptedException ignored) { }
+      }
+      catch (FileNotFoundException e) {
+        // Servlet doesn't exist, report it and wait before trying again
+        System.out.println("Resource not found: " + e.getMessage());
+        try { Thread.sleep(5000); } catch (InterruptedException ignored) { }
+      }
+      catch (Exception e) {
+        // Some other problem, report it and wait before trying again
+        System.out.println("General exception: " +
+          e.getClass().getName() + ": " + e.getMessage());
+        try { Thread.sleep(1000); } catch (InterruptedException ignored) { }
+      }
+    }
+    return nextMessage + "\n";
+  }
+
+  public void run() {
+    while (true) {
+      text.appendText(getNextMessage());
+    }
+  }
+
+  public void stop() {
+    thread.stop();
+    thread = null;
+  }
+
+  void broadcastMessage(String message) {
+    message = user + ": " + message;  // Pre-pend the speaker's name
+    try {
+      URL url = new URL(getCodeBase(), "/servlet/ChatServlet");
+      HttpMessage msg = new HttpMessage(url);
+      Properties props = new Properties();
+      props.put("message", message);
+      msg.sendPostMessage(props);
+    }
+    catch (SocketException e) {
+      // Can't connect to host, report it and abandon the broadcast
+      System.out.println("Can't connect to host: " + e.getMessage());
+    }
+    catch (FileNotFoundException e) {
+      // Servlet doesn't exist, report it and abandon the broadcast
+      System.out.println("Resource not found: " + e.getMessage());
+    }
+    catch (Exception e) {
+      // Some other problem, report it and abandon the broadcast
+      System.out.println("General exception: " +
+        e.getClass().getName() + ": " + e.getMessage());
+    }
+  }
+
+  public boolean handleEvent(Event event) {
+    switch (event.id) {
+      case Event.ACTION_EVENT:
+        if (event.target == input) {
+          broadcastMessage(input.getText());
+          input.setText("");
+          return true;
+        }
+    }
+    return false;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>This applet has the same two workhorse methods as
+<tt class="literal">ChatServlet</tt>: <tt class="literal">getNextMessage()</tt>
+and <tt class="literal">broadcastMessage()</tt>. Its
+<tt class="literal">getNextMessage()</tt> method gets the next message from
+the servlet. It's called repeatedly to update the
+<tt class="literal">TextArea</tt>. It operates using an
+<tt class="literal">HttpMessage</tt> to make a GET request to the servlet,
+then interprets the first line of the response as the next new
+message. Its <tt class="literal">broadcastMessage()</tt> method sends a
+message to the servlet for distribution to the other clients. This
+method is called in the applet's
+<tt class="literal">handleEvent()</tt> method every time the user hits
+<b class="emphasis-bold">Enter</b> in the
+<tt class="literal">TextInput</tt> component. It works similarly to
+<tt class="literal">getNextMessage()</tt>. It uses an
+<tt class="literal">HttpMessage</tt> to perform a POST request, passing the
+<tt class="literal">TextInput</tt>'s text as the
+<tt class="literal">"message"</tt> parameter, and it doesn't bother
+to read the response.
+</p>
+
+
+<a name="ch10-28-fm2xml"></a>
+<h3 class="sect2">10.3.4. The Socket-Connecting Applet</h3>
+
+<p>The only difference between the socket-based
+<tt class="literal">SocketChatApplet</tt> and the HTTP-based
+<tt class="literal">HttpChatApplet</tt> is a redesigned
+<tt class="literal">getNextMessage()</tt> method. This method is shown in
+<a href="#ch10-15510">Example 10-18</a>.
+</p>
+
+<a name="ch10-15510"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-18. A chat client using a raw socket connection </h4>
+<blockquote>
+<pre class="programlisting">static final int PORT = 2428;
+DataInputStream serverStream;
+
+String getNextMessage() {
+  String nextMessage = null;
+  while (nextMessage == null) {
+    try {
+      // Connect to the server if we haven't before
+      if (serverStream == null) {
+        Socket s = new Socket(getCodeBase().getHost(), PORT);
+        serverStream = new DataInputStream(
+                       new BufferedInputStream(
+                       s.getInputStream()));
+      }
+
+      // Read a line
+      nextMessage = serverStream.readLine();
+    }
+    catch (SocketException e) {
+      // Can't connect to host, report it and wait before trying again
+      System.out.println("Can't connect to host: " + e.getMessage());
+      serverStream = null;
+      try { Thread.sleep(5000); } catch (InterruptedException ignored) { }
+    }
+    catch (Exception e) {
+      // Some other problem, report it and wait before trying again
+      System.out.println("General exception: " +
+        e.getClass().getName() + ": " + e.getMessage());
+      try { Thread.sleep(1000); } catch (InterruptedException ignored) { }
+    }
+  }
+  return nextMessage + "\n";
+}</pre>
+</blockquote>
+</div>
+
+<p>This method reads broadcast messages from a socket that's
+connected to the chat servlet. It uses a simple socket protocol: all
+content is plain text, one message per line. The first time this
+method is called, it establishes the socket connection and then uses
+the connection to get a <tt class="literal">DataInputStream</tt>, where it
+can read from the socket one line at a time. It reads the first line
+from this stream and returns the text as the next message. For each
+subsequent invocation, it reuses the same stream and simply returns
+the next line it reads. If there's ever a
+<tt class="literal">SocketException</tt>, it reestablishes the connection.
+</p>
+
+
+<a name="ch10-29-fm2xml"></a>
+<h3 class="sect2">10.3.5. The RMI Applet</h3>
+
+<p>The code for the <tt class="literal">ChatClient</tt> interface is shown in
+<a href="#ch10-14378">Example 10-19</a>; the RMI-based chat applet that
+implements it is shown in <a href="#ch10-24777">Example 10-20</a>.
+</p>
+
+<a name="ch10-14378"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-19. The ChatClient interface, implemented by RMIChatApplet </h4>
+<blockquote>
+<pre class="programlisting">import java.rmi.Remote;
+import java.rmi.RemoteException;
+
+public interface ChatClient extends Remote {
+  public void setNextMessage(String message) throws RemoteException;
+}</pre>
+</blockquote>
+</div>
+
+<a name="ch10-24777"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-20. A chat client using RMI communication </h4>
+<blockquote>
+<pre class="programlisting">import java.applet.*;
+import java.awt.*;
+import java.io.*;
+import java.net.*;
+import java.rmi.*;
+import java.rmi.registry.*;
+import java.rmi.server.*;
+import java.util.*;
+
+public class RMIChatApplet extends Applet implements ChatClient {
+
+  TextArea text;
+  Label label;
+  TextField input;
+  Thread thread;
+  String user;
+
+  ChatServer chatServer;
+
+  private int getRegistryPort() {
+    try { return Integer.parseInt(getParameter("port")); }
+    catch (NumberFormatException ignored) { return Registry.REGISTRY_PORT; }
+  }
+
+  private String getRegistryName() {
+    String name = getParameter("name");
+    return (name == null ? "ChatServlet" : name);
+  }
+
+  // Returns a reference to the remote chat server/servlet
+  // Tries to exit if there's a problem.
+  private ChatServer getChatServer() {
+    try {
+      Registry registry =
+        LocateRegistry.getRegistry(getCodeBase().getHost(), getRegistryPort());
+      Object obj = registry.lookup(getRegistryName());
+      return (ChatServer)obj;
+    }
+    catch (java.rmi.UnknownHostException e) {
+      // Don't know the registry host, try to exit
+      System.out.println("Host unknown in url: " + e.getMessage());
+      System.exit(1);
+    }
+    catch (NotBoundException e) {
+      // Can't find our object, try to exit
+      System.out.println("Name not bound: " + e.getMessage());
+      System.exit(1);
+    }
+    catch (ClassCastException e) {
+      // The object wasn't a ChatServer, try to exit
+      System.out.println(getRegistryName() + " was not a ChatServer:" +
+                         e.getMessage());
+      System.exit(1);
+    }
+    catch (RemoteException e) {
+      // General RMI problem, try to exit
+      System.out.println("Remote exception: " + e.getMessage());
+      System.exit(1);
+    }
+    catch (Exception e) {
+      // Some other problem, try to exit
+      System.out.println("General exception: " +
+        e.getClass().getName() + ": " + e.getMessage());
+      System.exit(1);
+    }
+    return null;  // return null if the exit() doesn't work
+  }
+
+  // Add ourselves as a client of the chat server
+  // Notice there's no need for an RMI registry
+  private void registerWithChatServer(ChatServer server) {
+    try {
+      UnicastRemoteObject.exportObject(this);
+      server.addClient(this);
+    }
+    catch (RemoteException e) {
+      // General RMI problem, try to exit
+      System.out.println("Remote exception: " + e.getMessage());
+      System.exit(1);
+    }
+    catch (Exception e) {
+      // Some other problem, try to exit
+      System.out.println("General exception: " +
+        e.getClass().getName() + ": " + e.getMessage());
+      System.exit(1);
+    }
+  }
+
+  public void init() {
+    // Check if this applet was loaded directly from the filesystem.
+    // If so, explain to the user that this applet needs to be loaded
+    // from a server in order to communicate with that server's servlets.
+    URL codebase = getCodeBase();
+    if (!"http".equals(codebase.getProtocol())) {
+      System.out.println();
+      System.out.println("*** Whoops! ***");
+      System.out.println("This applet must be loaded from a web server.");
+      System.out.println("Please try again, this time fetching the HTML");
+      System.out.println("file containing this servlet as");
+      System.out.println("\"http://server:port/file.html\".");
+      System.out.println();
+      System.exit(1);  // Works only from appletviewer
+                       // Browsers throw an exception and muddle on
+    }
+
+    // Get the remote chat server
+    chatServer = getChatServer();
+
+    // Register ourselves as one of its clients
+    registerWithChatServer(chatServer);
+
+    // Get this user's name from an applet parameter set by the dispatch servlet
+    // We could just ask the user, but this demonstrates a
+    // form of servlet-&gt;applet communication.
+    user = getParameter("user");
+    if (user == null) user = "anonymous";
+
+    // Set up the user interface...
+    // On top, a large TextArea showing what everyone's saying.
+    // Underneath, a labeled TextField to accept this user's input.
+    text = new TextArea();
+    text.setEditable(false);
+    label = new Label("Say something: ");
+    input = new TextField();
+    input.setEditable(true);
+
+    setLayout(new BorderLayout());
+    Panel panel = new Panel();
+    panel.setLayout(new BorderLayout());
+
+    add("Center", text);
+    add("South", panel);
+
+    panel.add("West", label);
+    panel.add("Center", input);
+  }
+
+  String getNextMessage() {
+    String nextMessage = null;
+    while (nextMessage == null) {
+      try {
+        nextMessage = chatServer.getNextMessage();
+      }
+      catch (RemoteException e) {
+        // Remote exception, report and wait before trying again
+        System.out.println("Remote Exception:" + e.getMessage());
+        try { Thread.sleep(1000); } catch (InterruptedException ignored) { }
+      }
+    }
+    return nextMessage + "\n";
+  }
+
+  public void setNextMessage(String message) {
+    text.appendText(message + "\n");
+  }
+
+  void broadcastMessage(String message) {
+    message = user + ": " + message;  // Pre-pend the speaker's name
+    try {
+      chatServer.broadcastMessage(message);
+    }
+    catch (RemoteException e) {
+      // Remote exception, report it and abandon the broadcast
+      System.out.println("Remote exception: " + e.getMessage());
+    }
+    catch (Exception e) {
+      // Some other exception, report it and abandon the broadcast
+      System.out.println("General exception: " +
+        e.getClass().getName() + ": " + e.getMessage());
+    }
+  }
+
+  public boolean handleEvent(Event event) {
+    switch (event.id) {
+      case Event.ACTION_EVENT:
+        if (event.target == input) {
+          broadcastMessage(input.getText());
+          input.setText("");
+          return true;
+        }
+    }
+    return false;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>This applet's <tt class="literal">getNextMessage()</tt> and
+<tt class="literal">broadcastMessage()</tt> implementations are as simple
+as any we've seen. They need only call the remote
+servlet's methods of the same name. But their simplicity comes
+with a cost: more complicated set-up code. Specifically, the
+<tt class="literal">init()</tt> method now has to call the lengthy (but by
+now understandable) <tt class="literal">getChatServer()</tt> method to
+obtain a reference to the remote chat servlet.
+</p>
+
+<p>If you look closely at <tt class="literal">RMIChatApplet</tt>, you'll
+notice that it doesn't actually use its
+<tt class="literal">getNextMessage()</tt> method. Instead, it asks the
+servlet to call its <tt class="literal">setNextMessage()</tt> method each
+time there's a new message being broadcast. It makes this
+request in its <tt class="literal">init()</tt> method when it calls
+<tt class="literal">registerWithChatSer-ver(ChatServer)</tt>. This method
+exports the applet as a remote object, then invokes the
+servlet's <tt class="literal">addClient()</tt> method passing a
+reference to itself. After this, the servlet's
+<tt class="literal">broadcastMessage()</tt> method sends a callback to the
+applet each time there's a new message.
+</p>
+
+<p>If you try using <a name="INDEX-1955"></a><a name="INDEX-1956"></a><a name="INDEX-1957"></a>callbacks on your own, don't
+forget the basics we covered earlier. You need to run the
+<tt class="command"></tt><a name="INDEX-1958"></a><a name="INDEX-1959"></a><a name="INDEX-1960"></a><em class="emphasis">rmic</em> RMI compiler on
+your remote applet to generate its stub and skeleton classes. And you
+need to be sure your server has the
+<em class="filename">RMIChatApplet_Stub.class </em>and
+<em class="filename">ChatClient.class </em>files somewhere in its
+classpath.
+</p>
+
+
+<a name="ch10-30-fm2xml"></a>
+<h3 class="sect2">10.3.6. The Dispatcher</h3>
+
+<p>Now, for this chapter's last code example, the
+<tt class="literal">ChatDispatch</tt> servlet is shown in <a href="#ch10-36875">Example 10-21</a>. This servlet performs two duties. First, when
+this servlet is accessed without any request parameters, it prints a
+friendly welcome page asking the user which applet version he is
+interested in using, as shown in <a href="#ch10-10212">Figure 10-4</a>.
+Second, when it's accessed with a request parameter, it prints
+a page that contains the appropriate applet, as you saw in <a href="#ch10-22836">Figure 10-3</a>. Be aware that the URL used to access this
+dispatch servlet should contain the server's true name, not
+<em class="emphasis">localhost</em>, so as to avoid RMI security problems.
+</p>
+
+<a name="ch10-10212"></a>
+<div class="figure">
+<img alt="figure" src="figs/jsp_1004.gif" webstripperlinkwas="figs/jsp_1004.gif"></div>
+<h4 class="objtitle">Figure 10-4. The chat dispatch welcome page</h4>
+
+<a name="ch10-36875"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-21. The front door dispatch servlet </h4>
+<blockquote>
+<pre class="programlisting">import java.io.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class ChatDispatch extends HttpServlet { 
+
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+                               throws IOException, ServletException {
+    res.setContentType("text/html");
+
+    if (!req.getParameterNames().hasMoreElements()) {
+      // There were no request parameters. Print a welcome page.
+      printWelcomePage(req, res);
+    }
+    else {
+      // There was at least one request parameter.
+      // Print a page containing the applet.
+      printAppletPage(req, res);
+    }
+  }
+
+  // The welcome page greets the reader and has a form where the user
+  // can choose an applet-servlet communication method.
+  private void printWelcomePage(HttpServletRequest req,
+                                HttpServletResponse res)
+                    throws IOException {
+    PrintWriter out = res.getWriter();
+    String me = req.getServletPath();
+
+    out.println("&lt;HTML&gt;");
+    out.println("&lt;HEAD&gt;&lt;TITLE&gt;");
+    out.println("Welcome to an Absurdly Simple Chat");
+    out.println("&lt;/TITLE&gt;&lt;/HEAD&gt;");
+    out.println();
+    out.println("&lt;BODY&gt;");
+    out.println("&lt;H1&gt;Welcome to an Absurdly Simple Chat&lt;/H1&gt;");
+    out.println();
+    out.println("Would you like to communicate via:");
+    out.println("&lt;UL&gt;");
+    out.println("  &lt;LI&gt;&lt;A HREF=\"" + me + "?method=http\"&gt;http&lt;/A&gt;");
+    out.println("  &lt;LI&gt;&lt;A HREF=\"" + me + "?method=socket\"&gt;socket&lt;/A&gt;");
+    out.println("  &lt;LI&gt;&lt;A HREF=\"" + me + "?method=rmi\"&gt;rmi&lt;/A&gt;");
+    out.println("&lt;/UL&gt;");
+    out.println("&lt;/BODY&gt;&lt;/HTML&gt;");
+  }
+
+  // The applet page displays the chat applet.
+  private void printAppletPage(HttpServletRequest req,
+                               HttpServletResponse res)
+                    throws IOException {
+    PrintWriter out = res.getWriter();
+
+    out.println("&lt;HTML&gt;");
+    out.println("&lt;HEAD&gt;&lt;TITLE&gt;An Absurdly Simple Chat&lt;/TITLE&gt;&lt;/HEAD&gt;");
+    out.println("&lt;BODY&gt;");
+    out.println("&lt;H1&gt;An Absurdly Simple Chat&lt;/H1&gt;");
+
+    String method = req.getParameter("method");
+    String user = req.getRemoteUser();
+    String applet = null;
+
+    if ("http".equals(method)) {
+      applet = "HttpChatApplet";
+    }
+    else if ("socket".equals(method)) {
+      applet = "SocketChatApplet";
+    }
+    else if ("rmi".equals(method)) {
+      applet = "RMIChatApplet";
+    }
+    else {
+      // No method given, or an invalid method given.
+      // Explain to the user what we expect.
+      out.println("Sorry, this servlet requires a &lt;TT&gt;method&lt;/TT&gt; " + 
+                  "parameter with one of these values: " + 
+                  "http, socket, rmi"); 
+      return;
+    }
+
+    // Print the HTML code to generate the applet.
+    // Choose the applet code based on the method parameter.
+    // Provide a user parameter if we know the remote user.
+    out.println("&lt;APPLET CODE=" + applet + " CODEBASE=/ " +
+                "WIDTH=500 HEIGHT=170&gt;");
+    if (user != null)
+      out.println("&lt;PARAM NAME=user VALUE=\"" + user + "\"&gt;");
+    out.println("&lt;/APPLET&gt;");
+
+    out.println("&lt;/BODY&gt;&lt;/HTML&gt;");
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>
+<a name="INDEX-1961"></a><a name="INDEX-1962"></a><a name="INDEX-1963"></a>
+Nothing here should surprise you. In fact, we expect this code to
+appear refreshingly simple after the <tt class="literal">ChatServlet</tt>
+example. Still, this example does demonstrate one last form of
+<a name="INDEX-1964"></a><a name="INDEX-1965"></a><a name="INDEX-1966"></a>
+applet-servlet communication: <a name="INDEX-1967"></a><a name="INDEX-1968"></a><a name="INDEX-1969"></a>servlet-generated applet
+parameters. Using this technique, a servlet generates a page that
+contains an applet and passes information to the applet by
+manipulating the applet's <tt class="literal">&lt;PARAM&gt;</tt>
+tags. Any information the servlet wants to send to a new applet can be
+sent this way. In this example, the servlet sends the name returned by
+<tt class="literal">req.getRemoteUser()</tt>. In another example, a servlet
+could tell the applet its browser type by sending it the string
+returned by <tt class="literal">req.getHeader("User-Agent")</tt>. Or, to be
+more helpful, the servlet could use a database to determine the
+capabilities of the browser and tell the applet exactly what it needs
+to know. It could even tell the applet whether the browser supports
+RMI communication.
+<a name="INDEX-1970"></a><a name="INDEX-1971"></a><a name="INDEX-1972"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch10_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch10_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch11_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch11_01.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">10.2. Daytime Server</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">11. Interservlet Communication</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

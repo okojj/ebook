@@ -1,0 +1,666 @@
+<html><head>
+<title>[Chapter 13] Networking: Implementing RPC</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:37:13Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="index.htm" title="Advanced Perl Programming"><link rel="prev" href="ch12_07.htm" title="12.7 Resources"><link rel="next" href="ch13_02.htm" title="13.2 Remote Procedure Calls (RPC)"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch12_07.htm" title="12.7 Resources"><img src="../gifs/txtpreva.gif" alt="Previous: 12.7 Resources" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 13</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_02.htm" title="13.2 Remote Procedure Calls (RPC)"><img src="../gifs/txtnexta.gif" alt="Next: 13.2 Remote Procedure Calls (RPC)" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="chapter"><h1 class="chapter"><a class="title" name="ch13-14869">13. Networking: Implementing RPC</A
+></H1
+><div class="htmltoc"><p><b>Contents:</B
+><br><a class="sect1" href="#ch13-37076" title="13.1 Msg: Messaging Toolkit">Msg: Messaging Toolkit</A
+><br><a class="sect1" href="ch13_02.htm" title="13.2 Remote Procedure Calls (RPC)">Remote Procedure Calls (RPC)</A
+><br><a class="sect1" href="ch13_03.htm" title="13.3 Resources">Resources</A
+></P
+><p></P
+></DIV
+><div class="epigraph" align="right"><p class="para" align="right"><i>I waited and waited and waited, and when no message came, I knew it must have been from you.</I
+></P
+><p class="attribution" align="right">-&nbsp;Ashleigh Brilliant</P
+></DIV
+><p class="para">In this chapter, we build on the lessons learned in the preceding chapter and implement two layers on top of sockets. The first is an asynchronous message-passing system, Msg, which takes advantage of nonblocking I/O where available. We then build a remote procedure call module, RPC, on top of the Msg substrate. RPC offers the convenience of synchronous procedure calls and accounts for exceptions, <kbd class="command">wantarray</KBD
+>, parameter marshalling, and so on. </P
+><p class="para">Before we proceed, let us get one basic definition out of the way. In <a class="xref" href="ch12_01.htm" title="Networking with Sockets">Chapter 12, <cite class="chapter">Networking with Sockets</CITE
+></A
+>, we glossed over the definition of a "<a class="indexterm" name="ch13-idx-981068-0"></A
+>message." A socket connection is simply a stream of bytes and leaves it to the application to define message boundaries, so the receiver can tell when one message ends and another starts. Some protocols insert an end-of-message character, an arbitrarily chosen byte such as ASCII 4 (Ctrl-D), or a lone period on a line, and some prepend message lengths so that the receiver knows how much to expect. We use the latter option in this chapter. </P
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch13-37076">13.1 Msg: Messaging Toolkit</A
+></H2
+><p class="para"><a class="indexterm" name="ch13-idx-981069-0"></A
+>In this section, we implement a module called Msg, an event-driven, client-server, messaging framework,[<a class="footnote" href="#ch13-pgfId-975936">1</A
+>] using the IO::Select and IO::Socket modules. These are its key characteristics:<dl class="variablelist"><dt class="term">Queued messages</DT
+><dd class="listitem"><p class="para">You can instruct Msg to either send a message right away or queue it for later delivery.</P
+></DD
+><dt class="term">Nonblocking I/O </DT
+><dd class="listitem"><p class="para">Msg checks to see whether your system supports POSIX and, if so, uses its nonblocking I/O support (as shown in <a class="xref" href="ch12_01.htm" title="Networking with Sockets">Chapter 12</A
+>). On systems with nonblocking I/O support but no POSIX compliance, you can inherit from Msg and override two methods to set a filehandle's blocking properties. On systems with no support at all for this facility, a send or a receive will block, but because <kbd class="command">select</KBD
+> is used to determine a good time when messages can be sent out or received, it minimizes the chances that these calls might block (or block for long).</P
+></DD
+><dt class="term">Message boundaries</DT
+><dd class="listitem"><p class="para">Msg simply prepends every outgoing buffer with 4 bytes containing the message's length. The receiving side knows to expect at least 4 bytes and subsequently knows how long a message to expect.</P
+></DD
+><dt class="term">Message transparency</DT
+><dd class="listitem"><p class="para">Msg doesn't bother to look inside your message; this means that you have to be careful about sending binary messages to some other architecture. One simple solution is to encode all your messages in ASCII (using <kbd class="command">sprintf</KBD
+> or <kbd class="command">pack</KBD
+>). The RPC module, described later in this chapter, uses the FreezeThaw library to obtain a network-transparent encoding.</P
+></DD
+></DL
+></P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch13-pgfId-975936">[1]</A
+> Talk about being fully buzzword-compliant!</P
+></DIV
+></BLOCKQUOTE
+><p class="para">The following code shows a client that uses Msg:</P
+><pre class="programlisting">use Msg;
+$conn = Msg-&gt;connect('localhost', 8080);
+die &quot;Error: Could not connect\n&quot; unless $conn;
+$conn-&gt;send_now(&quot;Message $i&quot;);
+($msg, $err) = $conn-&gt;rcv_now();</PRE
+><p class="para"><kbd class="command">connect</KBD
+><a class="indexterm" name="ch13-idx-981083-0"></A
+> is a static method that creates a <em class="emphasis">connection</EM
+> object (one of its attributes is a socket connection). The <kbd class="command">send_now</KBD
+> method pumps out messages on that connection, and a corresponding method called <kbd class="command">rcv_now</KBD
+> blocks until it receives a message from the other side. We'll look at deferred (or queued) messaging shortly.</P
+><p class="para">The following code shows a server built using Msg:</P
+><pre class="programlisting">use Msg;
+use strict;
+my $host = 'localhost';
+my $port = 8080;
+Msg-&gt;new_server($host, $port, \&amp;login_proc);
+print &quot;Server created. Waiting for events&quot;;
+Msg-&gt;event_loop();
+#---------------------------------------------------------------
+sub login_proc {
+    # Unconditionally accept an incoming connection request
+    return \&amp;rcvd_msg_from_client;
+}
+
+
+sub rcvd_msg_from_client {
+    my ($conn, $msg, $err) = @_;
+    if (defined $msg) {
+        print &quot;$msg\n&quot;;
+    }
+}</PRE
+><p class="para">The script calls <kbd class="command">new_server</KBD
+> to create a listening socket (the program's network address) and then calls <kbd class="command">event_loop</KBD
+>, an event dispatcher, which is a thin wrapper over <kbd class="command">select</KBD
+>.</P
+><p class="para">When a client process attempts to connect, Msg creates a local connection object and calls the login procedure supplied by you (to <kbd class="command">new_server</KBD
+>), with the connection object as an argument. In the login procedure, you can query the remote host and port if you want and refuse a connection request by returning <kbd class="command">undef</KBD
+>. To accept the connection, you return the reference to a subroutine (<kbd class="command">rcvd_msg_from_client</KBD
+> in this example), which will be called on every subsequent message received on that connection. Different connections can have different receiving procedures if you so wish.</P
+><p class="para">This is how you send or receive messages in a deferred fashion:</P
+><pre class="programlisting">$conn = Msg-&gt;connect($remote_host, $remote_port, \&amp;msg_from_server);
+$conn-&gt;send_later($msg);
+Msg-&gt;event_loop();</PRE
+><p class="para">The <kbd class="command">connect</KBD
+> method takes a reference to a subroutine exactly like <kbd class="command">new_server</KBD
+>. <kbd class="command">event_loop</KBD
+> sends queued outgoing messages when the connection becomes writable, and is responsible for dispatching incoming messages to corresponding local subroutines (deferred receive). Note that if a client wants to use deferred messages, it has to call <kbd class="command">event_loop</KBD
+>.</P
+><p class="para">Do you see the lines between a "client" and "server" blurring? Both have event loops (although the client requires it only for deferred messages) and respond to incoming messages. In a traditional client/server setup such as a database connection, the client initiates the conversation (<kbd class="command">connect</KBD
+>) and asks the questions. The server never initiates a request. In a peer-peer setup, as in a telephone conversation, one process initiates the conversation, but once the connection is established, either process can send messages. Msg supports this peer-peer model.</P
+><p class="para">Other filehandles can be incorporated into the event loop, like this:</P
+><pre class="programlisting">Msg-&gt;set_event_handler (\*STDIN, &quot;read&quot; =&gt; \&amp;kbd_input);</PRE
+><p class="para">The process can now respond to keyboard events and still keep an ear out for incoming messages, or send outgoing queued messages in the "background." </P
+><p class="para">All event-driven frameworks support <a class="indexterm" name="ch13-idx-981094-0"></A
+>timer events to periodically trigger a background task. If you have a time-consuming task, you are expected to split it up into more manageable pieces and use a timer (with a 0 second time-out) to trigger the next subtask. This way, you can keep returning to the event loop after every subtask is over and get a chance to process other messages that might have trickled in since then. Since this chapter is about networking, I have not taken the trouble to add timer support to Msg. It is a rather trivial addition, because <kbd class="command">select</KBD
+> supports a millisecond resolution time-out facility. </P
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-36836">13.1.1 Msg Implementation</A
+></H3
+><p class="para"><a class="indexterm" name="ch13-idx-981074-0"></A
+>Msg exhibits the public interface shown in <a class="xref" href="#ch13-20036" title="Msg's Public Interface">Table 13.1</A
+>.</P
+><br><table class="table" border="1" cellpadding="3"><caption class="table"><a class="title" name="ch13-20036">Table 13.1: Msg's Public Interface</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Method</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Description</P
+></TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">connect(host, port,
+        [rcv_cb])</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Connects to a server at the remote host and port and returns a connection object. <kbd class="command">rcv_callback</KBD
+> is the reference to a user-defined subroutine, which is called as follows when the remote process sends a message (at any time):</P
+><pre class="programlisting">    <kbd class="command">rcv_callback($conn, $msg, $err)</KBD
+></PRE
+><p class="para"><kbd class="command">conn </KBD
+>is the connection object, used to send messages or issue a disconnect. <kbd class="command">msg</KBD
+> is the received message; it is <kbd class="command">undef</KBD
+> if the connection is closed on the other side. <kbd class="command">(</KBD
+>Msg automatically closes the connection on this side if this happens.) <kbd class="command">err</KBD
+>, if present, contains the last error value on a <kbd class="command">sysread</KBD
+>.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">$conn-&gt;send_now($msg)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Sends the message right away and blocks if it needs to. If there are queued messages, it sends them first before attempting to send <code class="literal">msg</CODE
+>.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">$conn-&gt;send_later($msg)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Puts the message in a queue associated with the connection object and leaves it to <kbd class="command">event_loop</KBD
+> (described later) to dispatch it when the socket becomes writable. That is, you have to call <kbd class="command">event_loop</KBD
+> at some point; otherwise, the message never goes out.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">$conn-&gt;disconnect()</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Closes the connection.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">($msg, $err) =
+    $conn-&gt;rcv_now()</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Blocks until it receives a full message. It does not call the callback function given to <kbd class="command">connect</KBD
+>. In a scalar context, it returns only the message; otherwise it returns the error code, if any.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">new_server($thishost,
+           $thisport,
+           [login_proc])</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">A static method that creates a listening socket at <kbd class="command">thishost</KBD
+>, <kbd class="command">thisport</KBD
+>. When a remote socket attempts to <code class="literal">connect</CODE
+>, <kbd class="command">login_proc</KBD
+> is called with the connection object and the connecting host and port as arguments. If <kbd class="command">login_proc</KBD
+> returns <kbd class="command">undef</KBD
+>, the connection is closed.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">set_event_handler(
+   $handle,
+   [&quot;read&quot; =&gt; rd_cb],
+   [&quot;write&quot; =&gt; wt_cb])</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para"><code class="literal">handle</CODE
+> can be a socket, file, or pipe handle, or a derivative of IO::Handle. The callbacks are called by <kbd class="command">event_loop</KBD
+> when the corresponding file descriptors become ready for reading or writing. A callback value of <kbd class="command">undef</KBD
+> removes existing registered callbacks. Only one callback of a type can be registered for a given handle.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">event_loop ([count])</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Executes the select loop <code class="literal">count</CODE
+> times (infinite, by default). This loop quits if no handles are registered with the event loop. Look at RPC for an example of how <code class="literal">count</CODE
+> is used.</P
+></TD
+></TR
+></TBODY
+></TABLE
+><p class="para">The Msg implementation is divided into four logical parts:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para"><a class="listitem" name="ch13-pgfId-978412"></A
+><em class="emphasis">Send routines</EM
+>. For connecting to a remote process and sending messages to it.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch13-pgfId-978413"></A
+><em class="emphasis">Receive routines</EM
+>. For receiving notification when a message or a connection request comes in.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch13-pgfId-978414"></A
+><em class="emphasis">Support for nonblocking I/O</EM
+>. Routines to make a socket blocking or non-blocking if the platform supports the POSIX module.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch13-pgfId-978415"></A
+> <em class="emphasis">Event loop support</EM
+>. For dispatching file-related events.</P
+></LI
+></UL
+><p class="para">Let's start with the send-side routines:</P
+><pre class="programlisting">package Msg;
+use strict;
+use IO::Select;
+use IO::Socket;
+use Carp;
+use vars qw(%rd_callbacks %wt_callbacks $rd_handles $wt_handles);
+%rd_callbacks = ();
+%wt_callbacks = ();
+$rd_handles   = IO::Select-&gt;new();
+$wt_handles   = IO::Select-&gt;new();
+my $blocking_supported = 0;</PRE
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch13-pgfId-976244">13.1.1.1 Msg: Send-side routines</A
+></H4
+><pre class="programlisting">sub <b class="emphasis.bold">connect</B
+> {
+    my ($pkg, $to_host, $to_port,$rcvd_notification_proc) = @_;  
+    # Create a new internet socket
+    my $sock = IO::Socket::INET-&gt;new (
+                                      PeerAddr =&gt; $to_host,
+                                      PeerPort =&gt; $to_port,
+                                      Proto    =&gt; 'tcp');
+
+    return undef unless $sock;
+    # Create a connection end-point object
+    my $conn = bless {
+        sock                   =&gt; $sock,
+        rcvd_notification_proc =&gt; $rcvd_notification_proc,
+    }, $pkg;
+    
+    if ($rcvd_notification_proc) {
+        # Bundle _rcv and $conn together in a closure 
+        my $callback = sub {_rcv($conn)}; 
+        set_event_handler ($sock, &quot;read&quot; =&gt; $callback);
+    }
+    $conn;
+}</PRE
+><p class="para"><kbd class="command">connect</KBD
+> sets up a client socket and creates the connection object mentioned earlier. The connection object is a communications endpoint and has the following attributes:</P
+><dl class="variablelist"><dt class="term"><code class="literal">sock</CODE
+></DT
+><dd class="listitem"><p class="para">The socket connection</P
+></DD
+><dt class="term"><code class="literal">rcvd_notification_proc</CODE
+></DT
+><dd class="listitem"><p class="para">A callback function to call on receipt of a message</P
+></DD
+><dt class="term"><code class="literal">queue</CODE
+></DT
+><dd class="listitem"><p class="para">A reference to a list of buffered messages</P
+></DD
+><dt class="term"><code class="literal">send_offset</CODE
+></DT
+><dd class="listitem"><p class="para">In nonblocking mode, Msg allows partial writes. If the socket blocks, we note down how much of the topmost message in the queue we have already sent. </P
+></DD
+><dt class="term"><code class="literal">msg</CODE
+></DT
+><dd class="listitem"><p class="para">In nonblocking mode, <code class="literal">msg</CODE
+> contains a partial incoming message...</P
+></DD
+><dt class="term"><code class="literal">bytes_to_read</CODE
+></DT
+><dd class="listitem"><p class="para">....and <code class="literal">bytes_to_read</CODE
+> contains the bytes still expected.</P
+></DD
+></DL
+><p class="para">Once the connection is established, each side can use its local connection object to talk to the other side. </P
+><p class="para">If the user specifies a <a class="indexterm" name="ch13-idx-981095-0"></A
+>callback (<kbd class="command">$rcvd_notification_proc</KBD
+>), we set up our event handler to call a private routine <kbd class="command">_rcv</KBD
+>, which in turn calls this callback when an entire message has been received: </P
+><pre class="programlisting">sub <b class="emphasis.bold">disconnect</B
+> {
+    my $conn = shift;
+    my $sock = delete $conn-&gt;{sock};
+    return unless defined($sock);
+    set_event_handler ($sock, &quot;read&quot; =&gt; undef, &quot;write&quot; =&gt; undef);
+    close($sock); undef $!; # Should ideally process errors from close
+}
+
+sub <b class="emphasis.bold">send_now</B
+> {
+    my ($conn, $msg) = @_;
+    _enqueue ($conn, $msg);
+    $conn-&gt;_send (1); # 1 ==&gt; flush
+}</PRE
+><p class="para"><kbd class="command">send_now</KBD
+> enqueues the message and tells <kbd class="command">_send</KBD
+> to flush this message and other previous messages hanging around in the queue, if any. </P
+><pre class="programlisting">sub <b class="emphasis.bold">send_later</B
+> {
+    my ($conn, $msg) = @_;
+    _enqueue($conn, $msg);
+    my $sock = $conn-&gt;{sock};
+    return unless defined($sock);
+    set_event_handler ($sock, &quot;write&quot; =&gt; sub {$conn-&gt;_send(0)});
+}</PRE
+><p class="para"><kbd class="command">send_later</KBD
+> enqueues the message and registers a "write" callback. This is invoked later on when <kbd class="command">event_loop</KBD
+> is called, and the file descriptor is writable.</P
+><pre class="programlisting">sub <b class="emphasis.bold">_enqueue</B
+> {
+    my ($conn, $msg) = @_;
+    # prepend length (encoded as network long)
+    my $len = length($msg);
+    $msg = pack ('N', $len) . $msg; 
+    push (@{$conn-&gt;{queue}}, $msg);
+}</PRE
+><p class="para"><kbd class="command">_enqueue</KBD
+> prepends each message with a length and pushes it into a queue associated with the connection. The length is encoded as a "network-independent long" (a 32-bit number) so that the receiving side knows to read exactly four bytes to obtain this length. As was mentioned earlier, the message itself is assumed to be independent of byte-ordering issues.</P
+><pre class="programlisting">sub <b class="emphasis.bold">_send</B
+> {
+    my ($conn, $flush) = @_;
+    my $sock = $conn-&gt;{sock};
+    return unless defined($sock);
+    my ($rq) = $conn-&gt;{queue};   # rq -&gt; ref. to queue.
+
+    # If $flush is set, set the socket to blocking, and send all
+    # messages in the queue - return only if there's an error
+    # If $flush is 0 (deferred mode) make the socket non-blocking, and
+    # return to the event loop only after every message, or if it
+    # is likely to block in the middle of a message.
+
+    $flush ? $conn-&gt;set_blocking() : $conn-&gt;set_non_blocking();
+    my $offset = (exists $conn-&gt;{send_offset}) ? $conn-&gt;{send_offset} : 0;
+    while (@$rq) {
+        my $msg            = $rq-&gt;[0];
+        my $bytes_to_write = length($msg) - $offset;
+        my $bytes_written  = 0;
+        while ($bytes_to_write) {
+            $bytes_written = syswrite ($sock, $msg,
+                                       $bytes_to_write, $offset);
+            if (!defined($bytes_written)) {
+                if (_err_will_block($!)) {
+                    # Should happen only in deferred mode. Record how
+                    # much we have already sent.
+                    $conn-&gt;{send_offset} = $offset;
+                    # Event handler should already be set, so we will
+                    # be called back eventually, and will resume sending
+                    return 1;
+                } else {    # Uh, oh
+                    $conn-&gt;handle_send_err($!);
+                    return 0; # fail. Message remains in queue ..
+                }
+            }
+            $offset         += $bytes_written;
+            $bytes_to_write -= $bytes_written;
+        }
+        delete $conn-&gt;{send_offset};
+        $offset = 0;
+        shift @$rq;
+        last unless $flush; # Go back to select and wait 
+                            # for it to fire again.
+    }
+    # Call me back if queue has not been drained.
+    if (@$rq) {
+        set_event_handler ($sock, &quot;write&quot; =&gt; sub {$conn-&gt;_send(0)});
+    } else {
+        set_event_handler ($sock, &quot;write&quot; =&gt; undef);
+    }
+    1;  # Success
+}</PRE
+><p class="para"><kbd class="command">_send</KBD
+> does the real work of sending the message and is called either directly from <kbd class="command">send_now</KBD
+> or as a callback from the event loop. If called from <kbd class="command">send_now</KBD
+>, it sets the socket to blocking mode and flushes all messages in the queue. If called from the event loop, it sets the socket to nonblocking mode and flushes at most one message at a time before returning to the event loop. This way, other connections get their share of time. If <kbd class="command">syswrite</KBD
+> says it will block, <kbd class="command">_send</KBD
+> notes down how much of the message has already been sent (in the <kbd class="command">send_offset</KBD
+> attribute) and returns to the event loop. In all cases, it accounts for the fact that <kbd class="command">syswrite</KBD
+> might write only a part of the buffer. </P
+><pre class="programlisting">sub <b class="emphasis.bold">handle_send_err</B
+> {
+   # For more meaningful handling of send errors, subclass Msg and
+   # rebless $conn.  
+   my ($conn, $err_msg) = @_;
+   warn &quot;Error while sending: $err_msg \n&quot;;
+   set_event_handler ($conn-&gt;{sock}, &quot;write&quot; =&gt; undef);
+}</PRE
+><p class="para">This is a wishy-washy error-handling procedure that doesn't do anything other than turn off the event loop notification. It does not touch the connection object in any way, so you can potentially resume from where you left off. To do this, you must override this method in an inherited class (look at the RPC module described later, for an example).</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch13-pgfId-976484">13.1.1.2 Msg: Receive-side routines</A
+></H4
+><p class="para">The procedures in this section implement the listening side: </P
+><pre class="programlisting">my ($g_login_proc, $g_pkg); # The prefix g_ stands for global
+my $main_socket = 0;
+sub <b class="emphasis.bold">new_server</B
+> {
+    @_ == 4 || die &quot;new_server (myhost, myport, login_proc)\n&quot;;
+    my ($pkg, $my_host, $my_port, $login_proc) = @_;
+    
+    $main_socket = IO::Socket::INET-&gt;new (
+                                          LocalAddr =&gt; $my_host,
+                                          LocalPort =&gt; $my_port,
+                                          Listen    =&gt; 5,
+                                          Proto     =&gt; 'tcp',
+                                          Reuse     =&gt; 1);
+    die &quot;Could not create socket: $! \n&quot; unless $main_socket;
+    set_event_handler ($main_socket, &quot;read&quot; =&gt; \&amp;_new_client);
+    $g_login_proc = $login_proc; $g_pkg = $pkg;
+}</PRE
+><p class="para"><kbd class="command">new_server</KBD
+> is somewhat similar to <kbd class="command">connect</KBD
+>. It creates a listening socket and registers the user-defined login procedure with the event handler. (Client programs that have no wish to send or receive deferred messages don't need to call <kbd class="command">new_server</KBD
+> or <kbd class="command">event_loop</KBD
+>.) This login procedure will not be called until the server calls <kbd class="command">event_loop</KBD
+> <em class="emphasis">and</EM
+> a connection request comes in. Unlike <kbd class="command">connect</KBD
+>, <kbd class="command">new_server</KBD
+> doesn't create a connection object yet; that is the job of     <kbd class="command">_new_client</KBD
+>:</P
+><pre class="programlisting">sub <b class="emphasis.bold">_new_client</B
+> {
+    my $sock = $main_socket-&gt;accept();
+    my $conn = bless {
+        'sock' =&gt;  $sock,
+        'state' =&gt; 'connected'
+    }, $g_pkg;
+    my $rcvd_notification_proc = &amp;$g_login_proc ($conn);
+    if ($rcvd_notification_proc) {
+        $conn-&gt;{rcvd_notification_proc} = $rcvd_notification_proc;
+        my $callback = sub {_rcv($conn)};
+        set_event_handler ($sock, &quot;read&quot; =&gt; $callback);
+    } else {  # Login failed
+        $conn-&gt;disconnect();
+    }
+}</PRE
+><p class="para"><kbd class="command">_new_client</KBD
+> is called when a connection request is received. After doing an <kbd class="command">accept</KBD
+>, it gives the user-defined login procedure a chance to accept or reject the connection. If the login procedure accepts the request, it returns a reference to a subroutine. This code reference is promptly associated with the newly created connection object and will be called when a message arrives on that connection.  <code class="literal">_</CODE
+><kbd class="command">rcv</KBD
+> is registered as the standard callback to process all incoming messages (for all connections) and accumulates an entire message before calling the code reference mentioned above.</P
+><pre class="programlisting">sub <b class="emphasis.bold">_rcv</B
+> {                     # Complement to _send
+    my ($conn, $rcv_now) = @_; # $rcv_now complement of $flush
+    # Find out how much has already been received, if at all
+    my ($msg, $offset, $bytes_to_read, $bytes_read);
+    my $sock = $conn-&gt;{sock};
+    return unless defined($sock);
+    if (exists $conn-&gt;{msg}) {
+        $msg           = $conn-&gt;{msg};
+        delete $conn-&gt;{'msg'};              # Have made a copy.
+        $offset        = length($msg) - 1;  # sysread appends to it.
+        $bytes_to_read = $conn-&gt;{bytes_to_read};
+    } else {
+        # The typical case ...
+        $msg           = &quot;&quot;;                # Otherwise -w complains 
+        $offset        = 0 ;  
+        $bytes_to_read = 0 ;                # Will get set soon
+    }
+    # We want to read the message length in blocking mode. Quite
+    # unlikely that we'll get blocked too long reading 4 bytes
+    if (!$bytes_to_read)  {                 # Get new length 
+        my $buf;
+        $conn-&gt;set_blocking();
+        $bytes_read = sysread($sock, $buf, 4);
+        if ($! || ($bytes_read != 4)) {
+            goto FINISH;
+        }
+        $bytes_to_read = unpack ('N', $buf);
+    }
+    $conn-&gt;set_non_blocking() unless $rcv_now;
+    while ($bytes_to_read) {
+        $bytes_read = sysread ($sock, $msg, $bytes_to_read, $offset);
+        if (defined ($bytes_read)) {
+            if ($bytes_read == 0) {
+                last;
+            }
+            $bytes_to_read -= $bytes_read;
+            $offset        += $bytes_read;
+        } else {
+            if (_err_will_block($!)) {
+                # Should come here only in non-blocking mode
+                $conn-&gt;{msg}           = $msg;
+                $conn-&gt;{bytes_to_read} = $bytes_to_read;
+                return ; # .. to event loop; _rcv will be called 
+                         # later when socket is readable again.
+            } else {
+                last;
+            }
+        }
+    }
+    # Message successfully read.
+  FINISH:
+    if (length($msg) == 0) {
+        $conn-&gt;disconnect();
+    }
+    if ($rcv_now) {
+        return ($msg, $!);
+    } else {
+        &amp;{$conn-&gt;{rcvd_notification_proc}}($conn, $msg, $!);
+    }
+}
+</PRE
+><p class="para"><kbd class="command">_read</KBD
+> is the complement to <kbd class="command">_send</KBD
+> and does the grunt work of reading from a socket. Unlike <kbd class="command">_send</KBD
+>, it does not know how much data it is going to deal with, but does know that the first four bytes of any message contain the encoded length (of the rest of the message). To simplify matters, it sets the mode to blocking before attempting to read these four bytes with the (reasonable) hope that if it blocks at all, it wouldn't be for too long. Once the length has been decoded, it sets the mode back to nonblocking, if required, and proceeds to read the socket. Like <kbd class="command">_send</KBD
+>, it accounts for the fact that <kbd class="command">sysread</KBD
+> may return less data than asked for, or it might return an error saying it may block. If the socket will block, <kbd class="command">_rcv</KBD
+> copies the partial message into the connection object, notes down the number of bytes still left to read, and returns, waiting for it to be triggered by the event loop again. If there's an error, it disconnects the connection automatically.</P
+><pre class="programlisting">sub <b class="emphasis.bold">rcv_now</B
+> {
+    my ($conn) = @_;
+    my ($msg, $err) = _rcv ($conn, 1); # 1 means receive immediately
+    return wantarray ? ($msg, $err) : $msg;
+}</PRE
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch13-pgfId-976637">13.1.1.3 Msg: Support for nonblocking I/O</A
+></H4
+><pre class="programlisting">BEGIN {
+    eval {
+        require POSIX; POSIX-&gt;import(qw(F_SETFL O_NONBLOCK EAGAIN));
+    };
+    $blocking_supported = 1 unless $@;
+}</PRE
+><p class="para"><kbd class="command">BEGIN</KBD
+> tests to see whether it can load the POSIX module and, if so, sets <kbd class="command">$blocking_supported</KBD
+>, which is used by the following routines:</P
+><pre class="programlisting">sub <b class="emphasis.bold">_err_will_block</B
+> {
+    if ($blocking_supported) {
+        return ($_[0] == EAGAIN());
+    }
+    return 0;
+}
+sub <b class="emphasis.bold">set_non_blocking</B
+> {
+    if ($blocking_supported) {
+        # preserve other fcntl flags
+        my $flags = fcntl ($_[0], F_GETFL(), 0);
+        fcntl ($_[0], F_SETFL(), $flags | O_NONBLOCK());
+    }
+}
+sub <b class="emphasis.bold">set_blocking</B
+> {
+    if ($blocking_supported) {
+        my $flags = fcntl ($_[0], F_GETFL(), 0);
+        $flags  &amp;= ~O_NONBLOCK(); # Clear blocking, but preserve others
+        fcntl ($_[0], F_SETFL(), $flags);
+    }
+}</PRE
+><p class="para"><kbd class="command">set_blocking</KBD
+> and <kbd class="command">set_non_blocking</KBD
+> both call <kbd class="command">fcntl</KBD
+> as explained in the last chapter. The <kbd class="command">F_SETFL</KBD
+> sets the file descriptor's flags to the bitmask you supplied, so we take care not to obliterate the flags that may already have been set.</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch13-pgfId-974804">13.1.1.4 Msg: Event loop routines</A
+></H4
+><p class="para">The <a class="indexterm" name="ch13-idx-981096-0"></A
+>event loop support routines use IO::Select to manage collections of filehandles and socket handles. The send and receive side routines described earlier call these routines, but because these procedures do not make any assumptions about who is calling them, they are at a logically lower level. This means that for this module to coexist with another event-driven toolkit, you will just have to rewrite the routines shown below (while preserving the interface). For example, to make Msg work with Tk, you can have <kbd class="command">set_event_handler</KBD
+> (described below) simply delegate its functionality to an equivalent Tk procedure called <kbd class="command">fileevent</KBD
+> (described in <a class="xref" href="ch14_01.htm#ch14-14115" title="Introduction to GUIs, Tk, and Perl/Tk">Section 14.1, "Introduction to GUIs, Tk, and Perl/Tk"</A
+>); similarly, <kbd class="command">event_loop</KBD
+> can simply call Tk's <i class="function">run</I
+> method, instead of calling IO::Select.</P
+><pre class="programlisting">sub <b class="emphasis.bold">set_event_handler</B
+> {
+    shift unless ref($_[0]); # shift if first arg is package name
+    my ($handle, %args) = @_;
+    my $callback;
+    if (exists $args{'write'}) {
+        $callback = $args{'write'};
+        if ($callback) {
+            $wt_callbacks{$handle} = $callback;
+            $wt_handles-&gt;add($handle);
+        } else {
+            delete $wt_callbacks{$handle};
+            $wt_handles-&gt;remove($handle);
+        }
+    }
+    if (exists $args{'read'}) {
+        $callback = $args{'read'};
+        if ($callback) {
+            $rd_callbacks{$handle} = $callback;
+            $rd_handles-&gt;add($handle);
+        } else {
+            delete $rd_callbacks{$handle};
+            $rd_handles-&gt;remove($handle);
+       }
+    }
+}</PRE
+><p class="para"><kbd class="command">set_event_handler</KBD
+> simply keeps track of read and write callbacks by using the handle as a hash index. To remove a callback, you call <kbd class="command">set_event_handler</KBD
+> with a callback value of <kbd class="command">undef</KBD
+>:</P
+><pre class="programlisting">sub <b class="emphasis.bold">event_loop</B
+> {
+    my ($pkg, $loop_count) = @_;
+    my ($conn, $r, $w, $rset, $wset);
+    while (1) {
+        # Quit the loop if no handles left to process
+        last unless ($rd_handles-&gt;count() || $wt_handles-&gt;count());
+        ($rset, $wset) =
+            IO::Select-&gt;select ($rd_handles, $wt_handles, 
+                                undef, undef);
+        foreach $r (@$rset) {
+            &amp;{$rd_callbacks{$r}} ($r) if exists $rd_callbacks{$r};
+        }
+        foreach $w (@$wset) {
+            &amp;{$wt_callbacks{$w}}($w) if exists $wt_callbacks{$w};
+        }
+        if (defined($loop_count)) {
+            last unless --$loop_count;
+        }
+    }
+}</PRE
+><p class="para"><kbd class="command">event_loop</KBD
+> is normally an infinite loop but can be instructed to cycle a limited number of times. The idea of giving this a loop count is to be able to dispatch other events without forfeiting control to an infinite loop. Take a look at the RPC implementation, described in the following section, which uses a count of 1 to dispatch messages in a controlled fashion. <a class="indexterm" name="ch13-idx-981078-0"></A
+><a class="indexterm" name="ch13-idx-981078-1"></A
+><a class="indexterm" name="ch13-idx-981078-2"></A
+></P
+></DIV
+></DIV
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch12_07.htm" title="12.7 Resources"><img src="../gifs/txtpreva.gif" alt="Previous: 12.7 Resources" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_02.htm" title="13.2 Remote Procedure Calls (RPC)"><img src="../gifs/txtnexta.gif" alt="Next: 13.2 Remote Procedure Calls (RPC)" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">12.7 Resources</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">13.2 Remote Procedure Calls (RPC)</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

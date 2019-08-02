@@ -1,0 +1,218 @@
+<html>
+<head>
+<title>Security Managers and the Class Loader (Java Security)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Scott Oaks">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-403-7E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Security Managers and the Class Loader">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm" alt="Java Security"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch06_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch06_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch06_01.htm">Chapter 6: Implementing Security Policies</a></td><td align="right" valign="top" width="172"><a href="ch06_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch06_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">6.2. Security Managers and the Class Loader</h2>
+
+<p>
+<a name="INDEX-781"></a><a name="INDEX-782"></a>In addition to the methods of the
+security manager class that we just examined, a second way by which
+the security manager can enforce policies is to ask that the class
+loader for a particular class provide more information on which the
+security manager may base its decision. This technique requires a
+coordination between the security manager and the class loader; there
+is no standard interface by which this information may be obtained
+(nor is there a limit to the type of information that may be
+exchanged). The details of the interface are completely at the
+discretion of the application developer. This technique is useful for
+both 1.1-based and (to a lesser extent) 1.2-based security managers.
+</p>
+
+<p>In the last section, we showed an example of the
+<tt class="literal">checkWrite()</tt> method that threw a security
+exception only if there was a class loader on the stack; this
+effectively prevented any class that was loaded from the network from
+opening a file in order to write to it. A more sophisticated policy
+would be to allow certain classes loaded over the network to write
+files, but not other classes. If you recall our example from <a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_01.htm">Chapter 3, "Java Class Loaders"</a>, XYZ Corporation is using a customized class
+loader that allows their applications to read classes both from the
+web server on which the application is hosted and from the
+centralized administration server. XYZ Corporation might want to
+establish a security policy whereby classes that are loaded from the
+administration server can write local files, but other classes
+cannot. This sort of policy requires some cooperation between the
+security manager and the class loader--the security manager must
+ask the class loader for the host the class was loaded from:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public void checkWrite(String s) {
+	ClassLoader cl = currentClassLoader();
+	if (cl != null) {
+		MultiLoader ml = null;
+		try {
+			ml = (MultiLoader) cl;
+		} catch (ClassCastException cce) {
+			// This can't happen unless our class loader and our
+			// security manager are out of sync
+			throw new SecurityException("checkWrite out of sync");
+		}
+		if (!ml.getTrust(currentLoadedClass()))
+			throw new SecurityException("checkWrite");
+	}
+}</pre>
+</blockquote>
+
+<p>This example only works with a class loader we have defined, since we
+need a method called
+<tt class="literal">getTrust()</tt><a name="INDEX-783"></a> in the class loader to let us know
+the origin of the class. That <tt class="literal">getTrust()</tt> method
+might look like this:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class MultiLoader extends SecureClassLoader {
+	...
+	boolean getTrust(Class c) {
+		String name = c.getName();
+		if (supportClassesCache.get(name))
+			return true;
+		return false;
+	}
+}</pre>
+</blockquote>
+
+<p>Hence, we cast the class loader returned from
+<tt class="literal">getClassLoader()</tt> to be an instance of
+<tt class="literal">MultiLoader</tt>. It's easy to keep the class
+loader and the security manager in sync because the application must
+install both of them, but it always pays to be sure. We use this
+class loader to check whether the particular class is to be trusted;
+the class loader thinks classes that have been loaded from
+XYZ's support machine are trusted and other classes are not.
+Note that if you are going to use this technique in 1.2 that it is
+quite possible the class loader will not be your multi
+loader--it might be one of the internal class loaders that is
+used to load extension or API classes. In that case, instead of
+throwing a security exception when the class cast fails, you should
+simply call the <tt class="literal">super.checkWrite()</tt> method, which
+will do the correct thing in 1.2.
+</p>
+
+<p>This sort of cooperation can be used between the class loader and the
+security manager to support a variety of requirements--providing
+different access to classes from different domains, or from different
+protocols, or anything else the class loader knows about. It just
+requires that the security manager know about any special interfaces
+the class loader might have to support these features.
+</p>
+
+<a name="SEC-CH-6-SECT-2.1"></a>
+<h3 class="sect2">6.2.1. The Class Loader and the Security Manager</h3>
+
+<p>The relationship between the security manager and class loader goes
+both ways--not only is the class loader able to provide
+additional information about particular classes to the security
+manager, the class loader is also responsible for calling the
+security manager to see if particular classes are able to be loaded
+or defined. We showed the code a class loader uses to do this in
+<a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_01.htm">Chapter 3, "Java Class Loaders"</a>.
+</p>
+
+<p>When a class loader is asked to load a class, it must call the
+<tt class="literal">checkPackageAccess()</tt><a name="INDEX-784"></a><a name="INDEX-785"></a><a name="INDEX-786"></a> method of
+the security manager so that the security manager can prevent certain
+classes from being loaded. This is chiefly used to prevent untrusted
+classes from directly accessing implementation-specific classes. If
+you ship an application with a set of classes in the
+<tt class="literal">com.XYZ</tt> package, you can ensure that untrusted
+classes do not directly call classes in that package by placing the
+appropriate logic into the <tt class="literal">checkPackageAccess()</tt>
+method. Java-enabled browsers typically do just that; for example, an
+applet cannot call any of the classes in the <tt class="literal">sun</tt>
+package within the HotJava browser.
+</p>
+
+<p>Additionally, when a class loader is asked to define a
+<a name="INDEX-787"></a><a name="INDEX-788"></a>class, it
+must call the
+<tt class="literal">checkPackageDefinition()</tt><a name="INDEX-789"></a>
+method of the security manager so that the security manager can
+prevent an untrusted class from defining classes in a particular
+package. This should be used, for example, to prevent an untrusted
+class from loading a new class into the
+<tt class="literal">java.lang</tt> package. Otherwise, an untrusted class
+could create a class named <tt class="literal">java.lang.Foo</tt> that
+has access to all the default-protected methods and instance
+variables of the other classes within the
+<tt class="literal">java.lang</tt> package.<a name="INDEX-790"></a><a name="INDEX-791"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch06_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch06_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch06_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">6.1. Protected Methods of the Security Manager</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">6.3. Implementation Techniques</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

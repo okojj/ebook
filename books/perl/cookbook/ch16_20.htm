@@ -1,0 +1,177 @@
+<html><head>
+<title>Recipe 16.19. Avoiding Zombie Processes</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:12Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch16_01.htm" title="16. Process Management and Communication"><link rel="prev" href="ch16_19.htm" title="16.18. Catching Ctrl-C"><link rel="next" href="ch16_21.htm" title="16.20. Blocking Signals"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_19.htm" title="16.18. Catching Ctrl-C"><img src="../gifs/txtpreva.gif" alt="Previous: 16.18. Catching Ctrl-C" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch16_01.htm" title="16. Process Management and Communication">Chapter 16<br>Process Management and Communication</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch16_21.htm" title="16.20. Blocking Signals"><img src="../gifs/txtnexta.gif" alt="Next: 16.20. Blocking Signals" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch16-15019">16.19. Avoiding Zombie Processes</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1000005696">Problem<a class="indexterm" name="ch16-idx-1000006421-0"></A
+><a class="indexterm" name="ch16-idx-1000006421-1"></A
+><a class="indexterm" name="ch16-idx-1000006421-2"></A
+></A
+></H3
+><p class="para">Your program forks children, but the dead children accumulate, fill up your process table, and aggravate your system administrator.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1000005699">Solution</A
+></H3
+><p class="para">If you don't need to record the children that have terminated, use:</P
+><pre class="programlisting">$SIG{CHLD} = 'IGNORE';</PRE
+><p class="para">To keep better track of deceased children, install a <a class="indexterm" name="ch16-idx-1000006430-0"></A
+>SIGCHLD handler to call <code class="literal">waitpid</CODE
+>:</P
+><pre class="programlisting">use POSIX &quot;:sys_wait_h&quot;;
+
+$SIG{CHLD} = \&amp;REAPER;
+sub REAPER {
+    my $stiff;
+    while (($stiff = waitpid(-1, &amp;WNOHANG)) &gt; 0) {
+        # do something with $stiff if you want
+    }
+    $SIG{CHLD} = \&amp;REAPER;                  # install *after* calling waitpid
+}</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1000005714">Discussion</A
+></H3
+><p class="para">When a process exits, the system keeps it in the process table so the parent can check its status&nbsp;- whether it terminated normally or abnormally. Fetching a child's status (thereby freeing it to drop from the system altogether) is rather grimly called <i class="firstterm">reaping</I
+> dead children. (This entire recipe is full of ways to harvest your dead children. If this makes you queasy, we understand.) It involves a call to <code class="literal">wait</CODE
+> or <code class="literal">waitpid </CODE
+>. Some Perl functions (piped <code class="literal">open</CODE
+>s, <code class="literal">system </CODE
+>, and backticks) will automatically reap the children they make, but you must explicitly wait when you use <code class="literal">fork</CODE
+> to manually start another process.</P
+><p class="para">To avoid accumulating dead children, simply tell the system that you're not interested in them by setting <code class="literal">$SIG{CHLD}</CODE
+> to <code class="literal">&quot;IGNORE&quot;</CODE
+>. If you want to know which children die and when, you'll need to use <code class="literal">waitpid</CODE
+>.</P
+><p class="para">The <code class="literal">waitpid</CODE
+><a class="indexterm" name="ch16-idx-1000006431-0"></A
+> function reaps a single process. Its first argument is the process to wait for&nbsp;- use <code class="literal">-1</CODE
+> to mean any process&nbsp;- and its second argument is a set of flags. We use the WNOHANG flag to make <code class="literal">waitpid</CODE
+> immediately return <code class="literal">0</CODE
+> if there are no dead children. A flag value of <code class="literal">0</CODE
+> is supported everywhere, indicating a blocking wait. Call <code class="literal">waitpid</CODE
+> from a SIGCHLD handler, as we do in the Solution, to reap the children as soon as they die.</P
+><p class="para"><a class="indexterm" name="ch16-idx-1000006432-0"></A
+>The <code class="literal">wait</CODE
+> function also reaps children, but it does not have a non-blocking option. If you inadvertently call it when there are running child processes but none have exited, your program will pause until there is a dead child.</P
+><p class="para">Because the kernel keeps track of undelivered signals using a bit vector, one bit per signal, if two children die before your process is scheduled, you will get only a single SIGCHLD. You must always loop when you reap in a SIGCHLD handler, and so you can't use <code class="literal">wait</CODE
+>.</P
+><p class="para">Both <code class="literal">wait</CODE
+> and <code class="literal">waitpid</CODE
+> return the process ID that they just reaped and set <code class="literal">$?</CODE
+> to the wait status of the defunct process. This status is actually two 8-bit values in one 16-bit number. The high byte is the exit value of the process. The low 7 bits represent the number of the signal that killed the process, with the 8th bit indicating whether a core dump occurred. Here's one way to isolate those values:</P
+><pre class="programlisting">$exit_value  = $? &gt;&gt; 8;
+$signal_num  = $? &amp; 127;
+$dumped_core = $? &amp; 128;</PRE
+><p class="para">The standard POSIX module has macros to interrogate status values: WIFEXITED, WEXITSTATUS, WIFSIGNALLED, and WTERMSIG. Oddly enough, POSIX doesn't have a macro to test whether the process core dumped.</P
+><p class="para">Beware of two things when using SIGCHLD. First, the system doesn't just send a SIGCHLD when a child exits; it also sends one when the child stops. A process can stop for many reasons&nbsp;- waiting to be foregrounded so it can do terminal I/O, being sent a SIGSTOP (it will wait for the SIGCONT before continuing), or being suspended from its terminal. You need to check the status with the <code class="literal">WIFEXITED</CODE
+>[<a class="footnote" href="#ch16-pgfId-1000005731">1</A
+>] function from the POSIX module to make sure you're dealing with a process that really died, and isn't just suspended.</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch16-pgfId-1000005731">[1]</A
+> Not <code class="literal">SPOUSEXITED</CODE
+>, even on a PC.</P
+></DIV
+></BLOCKQUOTE
+><pre class="programlisting">use POSIX qw(:signal_h :errno_h :sys_wait_h);
+
+$SIG{CHLD} = \&amp;REAPER;
+sub REAPER {
+    my $pid;
+
+    $pid = waitpid(-1, &amp;WNOHANG);
+
+    if ($pid == -1) {
+        # no child waiting.  Ignore it.
+    } elsif (WIFEXITED($?)) {
+        print &quot;Process $pid exited.\n&quot;;
+    } else {
+        print &quot;False alarm on $pid.\n&quot;;
+    }
+    $SIG{CHLD} = \&amp;REAPER;          # in case of unreliable signals
+}</PRE
+><p class="para">The second trap with SIGCHLD is related to Perl, not the operating system. Because <code class="literal">system </CODE
+>, <code class="literal">open</CODE
+>, and backticks all fork subprocesses and the operating system sends your process a SIGCHLD whenever any of its subprocesses exit, you could get called for something you weren't expecting. The built-in operations all wait for the child themselves, so sometimes the SIGCHLD will arrive before the <code class="literal">close</CODE
+> on the filehandle blocks to reap it. If the signal handler gets to it first, the zombie won't be there for the normal close. This makes <code class="literal">close</CODE
+> return false and set <code class="literal">$!</CODE
+> to <code class="literal">&quot;No</CODE
+> <code class="literal">child</CODE
+> <code class="literal">processes&quot;</CODE
+>. Then, if the <code class="literal">close</CODE
+> gets to the dead child first, <code class="literal">waitpid</CODE
+> will return <code class="literal">0</CODE
+>.</P
+><p class="para">Most systems support a non-blocking <code class="literal">waitpid </CODE
+>. Use Perl's standard Config.pm module to find out:</P
+><pre class="programlisting">use Config;
+$has_nonblocking = $Config{d_waitpid} eq &quot;define&quot; ||
+                   $Config{d_wait4}   eq &quot;define&quot;;</PRE
+><p class="para">System V defines SIGCLD, which has the same signal number as SIGCHLD but subtly different semantics. Use SIGCHLD to avoid confusion.<a class="indexterm" name="ch16-idx-1000006423-0"></A
+><a class="indexterm" name="ch16-idx-1000006423-1"></A
+><a class="indexterm" name="ch16-idx-1000006423-2"></A
+><a class="indexterm" name="ch16-idx-1000006423-3"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1000008386">See Also</A
+></H3
+><p class="para">The <a class="olink" href="../prog/ch06_02.htm#PERL2-CH-6-SECT-2.1">"Signals"</A
+> sections in <a class="olink" href="../prog/ch06_01.htm">Chapter 6</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlipc </I
+>(1); the <a class="olink" href="../prog/ch03_189.htm"><code class="literal">wait</CODE
+></A
+> and <a class="olink" href="../prog/ch03_190.htm"><code class="literal">waitpid</CODE
+></A
+> functions in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlfunc </I
+>(1); the documentation for the standard POSIX module, in <a class="olink" href="../prog/ch07_01.htm">Chapter 7</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; your system's <i class="filename">sigaction </I
+>(2), <i class="filename">signal</I
+> (3), and <i class="filename">kill</I
+> (2) manpages (if you have them); <a class="xref" href="ch16_18.htm" title="Writing a Signal Handler">Recipe 16.17</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_19.htm" title="16.18. Catching Ctrl-C"><img src="../gifs/txtpreva.gif" alt="Previous: 16.18. Catching Ctrl-C" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch16_21.htm" title="16.20. Blocking Signals"><img src="../gifs/txtnexta.gif" alt="Next: 16.20. Blocking Signals" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">16.18. Catching Ctrl-C</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">16.20. Blocking Signals</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

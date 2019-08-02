@@ -1,0 +1,569 @@
+<!doctype html public "-//ORA//DTD CD HTML 3.2//EN">
+<html>
+<head>
+<title>[Chapter 3] 3.2 Synchronizing Multiple Threads</TITLE>
+<meta name="author" content="Mark Grand and Jonathan Knudsen">
+<meta name="date" content="Fri Aug  8 16:09:21 1997">
+<meta name="form" content="html">
+<meta name="metadata" content="dublincore.0.1">
+<meta name="objecttype" content="book part">
+<meta name="otheragent" content="gmat dbtohtml">
+<meta name="publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="source" content="SGML">
+<meta name="subject" content="Java">
+<meta name="title" content="Java Fundamental Classes Reference">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+</HEAD>
+<body bgcolor="#FFFFFF">
+
+<div class=htmlnav>
+<h1><a href='index.htm'><img src="gifs/smbanner.gif" alt="Java Fundamental Classes Reference" border=0></a></H1>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch03_01.htm"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 3<br>Threads</FONT></B></TD>
+<td width=172 align=right valign=top><a href="ch04_01.htm"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+</table>
+
+&nbsp;
+<hr align=left width=515>
+</DIV>
+<div class=sect1>
+<h2 class=sect1><a class="TITLE" name="JFC-CH-3-SECT-2">3.2 Synchronizing Multiple Threads</A></h2>
+
+<p class=para>
+<a name="CH08.SYNCH1"></A><a name="CH08.SYNCH2"></A>The correct behavior of a multithreaded program generally
+depends on multiple threads cooperating with each other. This often
+involves threads not doing certain things at the same time or waiting
+for each other to perform certain tasks. This type of  cooperation
+is called <i class=emphasis>synchronization</I>. This section discusses
+some common strategies for synchronization and how they can be implemented
+in Java.
+
+<p class=para>
+The simplest strategy for ensuring that threads are correctly
+synchronized is to write code that works correctly when executed
+concurrently by any number of threads. However, this is more easily
+said than done. Most useful computations involve doing some activity,
+such as updating an instance variable or updating a display, that
+must be synchronized in order to happen correctly.
+
+<p class=para>
+If a method only updates its local variables and calls other
+methods that only modify their local variables, the method can be
+invoked by multiple threads without any need for synchronization.
+<tt class=literal>Math.sqrt()</tt> and the <tt class=literal>length()</tt>
+method of the <tt class=literal>String</tt> class are examples of such
+methods.
+
+<p class=para>
+A method that creates objects and meets the above criterion
+may not require synchronization. If the constructors invoked by
+the method do not modify anything but their own local variables
+and instance variables of the object they are constructing, and
+they only call methods that do not need to be synchronized, the
+method itself does not need to be synchronized. An example of such
+a method is the <tt class=literal>substring()</tt> in the
+<tt class=literal>String</tt> class.
+
+<p class=para>
+Beyond these two simple cases, it is impossible to give an
+exhaustive list of rules that can tell you whether or not a method
+needs to be synchronized. You need to consider what the method is
+doing and think about any ill effects of concurrent execution in
+order to decide if synchronization is necessary.
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="JFC-CH-3-SECT-2.1">Single-Threaded Execution</A></h3>
+
+<p class=para>
+<a name="CH08.SING"></A>When more than one thread is trying to update the same data
+at the same time, the result may be wrong or inconsistent. Consider
+the following example:
+
+<div class=screen>
+<p>
+<pre>
+class CountIt {
+    int i = 0;
+    void count() {
+        i = i + 1;
+    }
+}
+</PRE>
+</DIV>
+
+<p class=para>
+The method <tt class=literal>count()</tt> is supposed to increment
+the variable <tt class=literal>i</tt> by one. However, suppose that
+there are two threads, <tt class=literal>A</tt> and <tt class=literal>B</tt>,
+that call <tt class=literal>count()</tt> at the same time. In this case,
+it is possible that <tt class=literal>i</tt> could be incremented only
+once, instead of twice. Say the value of <tt class=literal>i</tt> is
+7. Thread <tt class=literal>A</tt> calls the <tt class=literal>count()</tt>
+method and computes <tt class=literal>i+1</tt> as 8. Then thread
+<tt class=literal>B</tt>
+calls the <tt class=literal>count()</tt> method and computes
+<tt class=literal>i+1</tt>
+as 8 because thread <tt class=literal>A</tt> has not yet assigned the
+new value to <tt class=literal>i</tt>. Next, thread <tt class=literal>A</tt>
+assigns the value 8 to the variable <tt class=literal>i</tt>. Finally,
+thread <tt class=literal>B</tt> assigns the value 8 to the variable
+<tt class=literal>i</tt>. Thus, even though the <tt class=literal>count()</tt>
+method is called twice, the variable has only been incremented once
+when the sequence is finished.
+
+<p class=para>
+Clearly, this code can fail to produce its intended result
+when it is executed concurrently by more than one thread. A piece
+of code that can fail to produce its intended result when executed
+concurrently is called a <i class=emphasis>critical section</I>.
+However, a critical section does behave correctly when it is executed
+by only one thread at a time. The strategy of single-threaded execution
+is to allow only one thread to execute a critical section of code
+at a time. If a thread wants to execute a critical section that
+another thread is already executing, the thread has to wait until
+the first thread is done and no other thread is executing that code
+before it can proceed.
+
+<p class=para>
+Java provides the <tt class=literal>synchronized</tt> statement and the
+<tt class=literal>synchronized</tt> method modifier for implementing
+single-threaded execution. Before executing the block in a
+<tt class=literal>synchronized</tt> statement, the current thread must
+obtain a lock for the object referenced by the expression. If a method
+is declared with the <tt class=literal>synchronized</tt> modifer, the
+current thread must obtain a lock before it can invoke the method.  If
+the method is not declared <tt class=literal>static</tt>, the thread must
+obtain a lock associated with the object used to access the method. If
+the method is declared <tt class=literal>static</tt>, the thread must
+obtain a lock associated with the class in which the method is
+declared. Because a thread must obtain a lock before executing a
+<tt class=literal>synchronized</tt> method, Java guarantees that
+<tt class=literal>synchronized</tt> methods are executed one thread at a
+time.
+
+<p class=para>
+Modifying the <tt class=literal>count()</tt> method to make it
+a <tt class=literal>synchronized</tt> method ensures that it works as
+intended.
+
+<div class=screen>
+<p>
+<pre>
+class CountIt {
+    int i = 0;
+    synchronized void count() {
+        i = i + 1;
+    }
+}
+</PRE>
+</DIV>
+
+<p class=para>
+The strategy of single-threaded execution can also be used
+when multiple methods update the same data. Consider the following
+example:
+
+<div class=screen>
+<p>
+<pre>
+class CountIt2 {
+    int i = 0;
+    void count() {
+        i = i + 1;
+    }
+    void count2() {
+        i = i + 2;
+    }
+}
+</PRE>
+</DIV>
+
+<p class=para>
+By the same logic used above, if the <tt class=literal>count()</tt>
+and <tt class=literal>count2()</tt> methods are executed concurrently,
+the result could be to increment <tt class=literal>i</tt> by 1, 2, or
+3. Both the <tt class=literal>count()</tt> and <tt class=literal>count2()</tt>
+methods can be declared as <tt class=literal>synchronized</tt> to ensure
+that they are not executed concurrently with themselves or each
+other:
+
+<div class=screen>
+<p>
+<pre>
+class CountIt2 {
+    int i = 0;
+    synchronized void count() {
+        i = i + 1;
+    }
+    synchronized void count2() {
+        i = i + 2;
+    }
+}
+</PRE>
+</DIV>
+
+<p class=para>
+Sometimes it's necessary for a thread to make multiple
+method calls to manipulate an object without another thread calling
+that object's methods at the same time.
+
+<p class=para>
+Consider the following example:
+
+<div class=screen>
+<p>
+<pre>
+System.out.print(new Date());
+System.out.print(" : ");
+System.out.println(foo());
+</PRE>
+</DIV>
+
+<p class=para>
+If the code in the example is executed concurrently by multiple
+threads, the output from the two threads will be interleaved. The
+<tt class=literal>synchronized</tt> keyword provides a way to ensure
+that only one thread at a time can execute a block of code. Before
+executing the block in a <tt class=literal>synchronized</tt> statement,
+the current thread must obtain a lock for the object referenced
+by the expression. The above code can be modified to give a thread
+exclusive access to the <tt class=literal>OutputStream</tt> object referenced
+by <tt class=literal>System.out</tt>:
+
+<div class=screen>
+<p>
+<pre>
+synchronized (System.out) {
+    System.out.print(new Date());
+    System.out.print(" : ");
+    System.out.println(foo());
+}
+</PRE>
+</DIV>
+
+<p class=para>
+Note that this approach only works if other code that wants 
+to call methods in the same object also uses similar <tt class=literal>synchronized</tt> 
+statements, or if the methods in question are all <tt class=literal>synchronized</tt> 
+methods. In this case, the <tt class=literal>print()</tt> and <tt class=literal>println()</tt> 
+methods are <tt class=literal>synchronized</tt>, so other pieces of code that need 
+to use these methods do not need to use a <tt class=literal>synchronized</tt> statement.
+
+<p class=para>
+Another situation in which simply making a method 
+<tt class=literal>synchronized</tt> does not provide the 
+needed single-threaded execution occurs when an inner class is
+updating fields in its enclosing instance. Consider the following code:
+
+<div class=screen>
+<p>
+<pre>
+public class Z extends Frame {
+    int pressCount = 0;
+    ...
+    private class CountButton extends Button
+                              implements ActionListener {
+        public void actionPerformed(ActionEvent evt) {
+            pressCount ++;
+        }
+    } 
+    ...
+} 
+</PRE>
+</DIV>
+
+<p class=para>
+If a <tt class=literal>Z</tt> object instantiates more than one instance 
+of <tt class=literal>CountButton</tt>, you need to use single-threaded 
+execution to ensure that updates to <tt class=literal>pressCount</tt> 
+are done correctly. Unfortunately, declaring the 
+<tt class=literal>actionPerformed()</tt> method of 
+<tt class=literal>CountButton</tt> to be <tt class=literal>synchronized</tt> 
+does not accomplish that goal because it only forces the method 
+to acquire a lock on the instance of <tt class=literal>CountButton</tt> 
+it is associated with before it executes. The object you need to acquire a lock for is the enclosing instance of 
+<tt class=literal>Z</tt>. 
+
+<p class=para>
+One way to have a <tt class=literal>CountButton</tt> object capture 
+a lock on its enclosing instance of <tt class=literal>Z</tt> is to 
+update <tt class=literal>pressCount</tt> inside of a 
+<tt class=literal>synchronized</tt> statement:
+
+<div class=screen>
+<p>
+<pre>
+synchronized (Z.this) {
+    pressCount ++;
+}
+</PRE>
+</DIV>
+
+<p class=para>
+The drawback to this approach is that every piece of code that
+accesses <tt class=literal>pressCount</tt> in any inner class of 
+<tt class=literal>Z</tt> must be in a similar <tt class=literal>synchronized</tt> 
+statement. Otherwise, it is possible for <tt class=literal>pressCount</tt> to 
+be updated incorrectly. The more pieces of code that need to be 
+inside of <tt class=literal>synchronized</tt> statements, the more places 
+there are to introduce bugs in your program.
+
+<p class=para>
+A more robust approach is to have the inner class update a field in its
+enclosing instance by calling a <tt class=literal>synchronized</tt> 
+method in the enclosing instance:
+
+<div class=screen>
+<p>
+<pre>
+public class Z extends Frame {
+    int pressCount = 0;
+    synchronized incrementPressCount() {
+        pressCount++;
+    } 
+    ...
+    private class CountButton extends Button
+                              implements ActionListener {
+        public void actionPerformed(ActionEvent evt) {
+            incrementPressCount();
+        } 
+    } 
+    ...
+} 
+</PRE>
+</DIV>
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="JFC-CH-3-SECT-2.2">Optimistic Single-Threaded Execution</A></h3>
+
+<p class=para>
+<a name="CH03.OPT6"></A>When multiple threads are updating a data structure, single-threaded
+execution is the obvious strategy to use to ensure correctness of
+the operations on the data structure. However, single-threaded execution
+can cause some problems of its own. Consider the following example:
+
+<div class=screen>
+<p>
+<pre>
+public class Queue extends java.util.Vector {
+    synchronized public void put(Object obj) {
+        addElement(obj);
+    }
+    synchronized public Object get() throws EmptyQueueException {
+        if (size() == 0)
+            throw new EmptyQueueException();
+        Object obj = elementAt(0);
+        removeElementAt(0);
+        return obj;
+    }
+}
+</PRE>
+</DIV>
+
+<p class=para>
+This example implements a first-in, first-out (FIFO) queue.
+If the <tt class=literal>get()</tt> method of a <tt class=literal>Queue</tt>
+object is called when the queue is empty, the method throws an exception.
+Now suppose that you want to write the <tt class=literal>get()</tt>
+method so that when the queue is empty, the method waits for an item
+to be put in the queue, rather than throwing an exception. In order
+for an item to be put in the queue, the <tt class=literal>put()</tt>
+method of the queue must be invoked. But using the single-threaded
+execution strategy, the <tt class=literal>put()</tt> method will never
+be able to run while the <tt class=literal>get()</tt> method is waiting
+for the queue to receive an item. A good way to solve this dilemma
+is to use a strategy called <i class=emphasis>optimistic single-threaded execution</I>.
+
+<p class=para>
+The optimistic single-threaded execution strategy is similar
+to the single-threaded execution strategy. They both begin by getting
+a lock on an object to ensure that the currently executing thread
+is the only thread that can execute a piece of code, and they both
+end by releasing that lock. The difference is what happens in between.
+Using the optimistic single-threaded execution strategy, if a piece
+of code discovers that conditions are not right to proceed, the
+code releases the lock it has on the object that enforces single-threaded
+execution and waits. When another piece of code changes things
+in such a way that might allow the first piece of code to proceed,
+it notifies the first piece of code that it should try to regain
+the lock and proceed.
+
+<p class=para>
+To implement this strategy, the <tt class=literal>Object</tt>
+class provides methods called <tt class=literal>wait()</tt>,
+<tt class=literal>notify()</tt>,
+and <tt class=literal>notifyAll()</tt>. These methods are inherited
+by every other class in Java. The following example shows how to
+implement a queue that uses the optimistic single-threaded execution
+strategy, so that when the queue is empty, its <tt class=literal>get()</tt>
+method waits for the queue to have an item put in it:
+
+<div class=screen>
+<p>
+<pre>
+public class Queue extends java.util.Vector {
+    synchronized public void put(Object obj) {
+        addElement(obj);
+        notify();
+    }
+    synchronized public Object get() throws EmptyQueueException {
+        while (size() == 0)
+            wait();
+        Object obj = elementAt(0);
+        removeElementAt(0);
+        return obj;
+    }
+}
+</PRE>
+</DIV>
+
+<p class=para>
+In the above implementation of the <tt class=literal>Queue</tt>
+class, the <tt class=literal>get()</tt> method calls <tt class=literal>wait()</tt>
+when the queue is empty. The <tt class=literal>wait()</tt> method releases
+the lock that excludes other threads from executing methods in the
+<tt class=literal>Queue</tt> object, and then waits until another thread
+calls the <tt class=literal>put()</tt> method. When <tt class=literal>put()</tt>
+is called, it adds an item to the queue and calls <tt class=literal>notify()</tt>.
+The <tt class=literal>notify()</tt> method tells a thread that is waiting
+to return from a <tt class=literal>wait()</tt> method that it should
+attempt to regain its lock and proceed. If there is more than one
+thread waiting to regain the lock on the object, <tt class=literal>notify()</tt>
+chooses one of the threads arbitrarily. The <tt class=literal>notifyAll()</tt>
+method is similar to <tt class=literal>notify()</tt>, but instead of
+choosing one thread to notify, it notifies all of the threads that
+are waiting to regain the lock on the object.
+
+<p class=para>
+Notice that the <tt class=literal>get()</tt> method calls
+<tt class=literal>wait()</tt>
+inside a <tt class=literal>while</tt> loop. Between the
+time that <tt class=literal>wait()</tt>
+is notified that it should try to regain its lock and the time
+it actually does regain the lock, another thread may have called
+the <tt class=literal>get()</tt> method and emptied the queue.
+The <tt class=literal>while</tt> loop guards against this situation.
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="JFC-CH-3-SECT-2.3">Rendezvous</A></h3>
+
+<p class=para>
+Sometimes it is necessary to have a thread wait to continue
+until another thread has completed its work and died. This type
+of synchronization uses the rendezvous strategy. The <tt class=literal>Thread</tt>
+class provides the <tt class=literal>join()</tt> method for implementing
+this strategy. When the <tt class=literal>join()</tt> method is called
+on a <tt class=literal>Thread</tt> object, the method returns immediately
+if the thread is dead. Otherwise, the method waits until the thread
+dies and then returns.
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="JFC-CH-3-SECT-2.4">Balking</A></h3>
+
+<p class=para>
+Some methods should not be executed concurrently and have
+a time-sensitive nature that makes postponing calls to them a bad
+idea. This is a common situation when software is controlling real-world
+devices. Suppose you have a Java program that is embedded in
+an electronic control for a toilet. There is a method called
+<tt class=literal>flush()</tt>
+that is responsible for flushing a toilet, and <tt class=literal>flush()</tt>
+can be called from more than one thread. If a thread calls
+<tt class=literal>flush()</tt>
+while another thread is already executing <tt class=literal>flush()</tt>,
+the second call should do nothing. A toilet is capable of only one
+flush at a time, and having a concurrent call to the <tt class=literal>flush()</tt>
+method result in a second flush would only waste water.
+
+<p class=para>
+This scenario suggests the use of the balking strategy. The balking
+strategy allows no more than
+one thread to execute a method at a time. If another thread attempts
+to execute the method, the method simply returns without doing
+anything. Here is an example that shows what such a <tt class=literal>flush()</tt>
+method might look like:
+
+<div class=screen>
+<p>
+<pre>
+boolean busy;
+void flush() {
+    synchronized (this) {
+        if (busy)
+            return;
+        busy = true;
+    }
+    // code to make flush happen goes here
+    busy = false;
+}
+</PRE>
+</DIV>
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="JFC-CH-3-SECT-2.5">Explicit Synchronization</A></h3>
+
+<p class=para>
+When the synchronization needs of a thread are not known in
+advance, you can use a strategy called explicit synchronization.
+The explicit synchronization strategy allows you to explicitly tell
+a thread when it can and cannot run. For example, you may want an
+animation to start and stop in response to external events that
+happen at unpredictable times, so you need to be able to tell the
+animation when it can run.
+
+<p class=para>
+To implement this strategy, the <tt class=literal>Thread</tt>
+class provides methods called <tt class=literal>suspend()</tt>
+and <tt class=literal>resume()</tt>. You can suspend the execution
+of a thread by calling the <tt class=literal>suspend()</tt>
+method of the <tt class=literal>Thread</tt> object that controls the
+thread. You can later resume execution of the thread by calling
+the <tt class=literal>resume()</tt> method on the
+<tt class=literal>Thread</tt> object.
+
+</DIV>
+
+</DIV>
+
+
+<div class=htmlnav>
+
+<p>
+<hr align=left width=515>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch03_01.htm"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><a href="index.htm"><img src='gifs/txthome.gif' border=0 alt='Home'></a></td>
+<td width=172 align=right valign=top><a href="ch04_01.htm"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+<tr>
+<td width=172 align=left valign=top>Using Thread Objects</td>
+<td width=171 align=center valign=top><a href="index/idx_0.htm"><img src='gifs/index.gif' alt='Book Index' border=0></a></td>
+<td width=172 align=right valign=top>Exception Handling</td>
+</tr>
+</table>
+<hr align=left width=515>
+
+<img src="gifs/smnavbar.gif" usemap="#map" border=0> 
+<map name="map"> 
+<area shape=RECT coords="0,0,108,15" href="../javanut/index.htm" alt="Java in a Nutshell"> 
+<area shape=RECT coords="109,0,200,15" href="../langref/index.htm" alt="Java Language Reference"> 
+<area shape=RECT coords="203,0,290,15" href="../awt/index.htm" alt="Java AWT"> 
+<area shape=RECT coords="291,0,419,15" href="index.htm" alt="Java Fundamental Classes"> 
+<area shape=RECT coords="421,0,514,15" href="../exp/index.htm" alt="Exploring Java"> 
+</MAP>
+</DIV>
+
+</BODY>
+</HTML>

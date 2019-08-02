@@ -1,0 +1,469 @@
+<html><head>
+<title>[Chapter 29] 29.10 The check_... Rule Sets</TITLE>
+<meta name="DC.title" content="sendmail"><meta name="DC.creator" content="Bryan Costales &amp; Eric Allman"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-01-06T19:52:18Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-222-0" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch29_01.htm" title="29. Rule Sets"><link rel="prev" href="ch29_09.htm" title="29.9 Rule Set 1"><link rel="next" href="ch29_11.htm" title="29.11 Pitfalls"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="sendmail" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="sendmail"><area shape="RECT" coords="467,0,514,18" href="../search/ssrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch29_09.htm" title="29.9 Rule Set 1"><img src="../gifs/txtpreva.gif" alt="Previous: 29.9 Rule Set 1" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 29<br>Rule Sets</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch29_11.htm" title="29.11 Pitfalls"><img src="../gifs/txtnexta.gif" alt="Next: 29.11 Pitfalls" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="SML2-CH-29-SECT-10">29.10 The check_... Rule Sets</A
+></H2
+><p class="para"><a class="indexterm" name="SML2-CH-29-IX-RULE-SETS-CHECK"></A
+>The rapid spread of the Internet has led to an increase of
+mail abuses. Prior to V8.8 <em class="emphasis">sendmail</EM
+>, detecting and rejecting
+abusive email required that you write C language code for
+use in the <em class="emphasis">checkcompat</EM
+>() routine (see <a class="xref" href="ch20_01.htm#SML2-CH-20-SECT-1" title="How checkcompat() Works">Section 20.1, "How checkcompat() Works"</A
+>). Beginning with
+V8.8 <em class="emphasis">sendmail</EM
+> important and useful checking and rejecting
+can be done from within four brand new rule sets:
+<code class="literal">check_mail</CODE
+> 
+Validate the sender-envelope address given to
+the SMTP MAIL command.
+<code class="literal">check_rcpt</CODE
+> 
+Validate the recipient-envelope address given to
+the SMTP RCPT command.
+<code class="literal">check_relay</CODE
+> 
+Validate the host initiating the SMTP connection.
+<code class="literal">check_compat</CODE
+> 
+Compare or contrast each envelope sender and envelope recipient
+pair of addresses just before delivery, and validate
+based on the result.</P
+><p class="para">These routines are handled in the same manner. If the rule set
+does not exist, the address is accepted. If the rule set returns
+anything other than a <code class="literal">#error</CODE
+> delivery agent,
+the message is accepted. Otherwise, the message is rejected by
+using the mechanism described under the <code class="literal">#error</CODE
+> delivery agent
+(see <a class="xref" href="ch30_05.htm#SML2-CH-30-SECT-5-2" title="The error Delivery Agent">Section 30.5.2, "The error Delivery Agent"</A
+>).&#13;</P
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-29-SECT-10-1">29.10.1 The check_mail Rule Set</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-28410"></A
+><a class="indexterm" name="AUTOID-28412"></A
+><a class="indexterm" name="AUTOID-28415"></A
+><a class="indexterm" name="AUTOID-28417"></A
+>The MAIL command in the SMTP dialog is used to
+specify the envelope-sender address:</P
+><p class="para"><blockquote class="screen"><pre class="screen">MAIL From: &lt;sender@host.domain&gt;</PRE
+></BLOCKQUOTE
+></P
+><p class="para">If the <code class="literal">check_mail</CODE
+> rule set exists, it is called immediately
+after the MAIL command is read. The workspace passed to
+<code class="literal">check_mail</CODE
+> is the address following the colon in the
+MAIL command. That envelope sender address may or may
+not be surrounded by angle braces.</P
+><p class="para">To illustrate one use for the <code class="literal">check_mail</CODE
+> rule set, consider
+the need to reject all incoming mail from the site named
+<em class="emphasis">spamming.org</EM
+>.
+[6]
+One method might look like this:</P
+><blockquote class="footnote"><p class="para">[6] Also see <a class="xref" href="ch22_04.htm#SML2-CH-22-SECT-4-1" title="Accept/Reject Connections via libwrap.a">Section 22.4.1, "Accept/Reject Connections via libwrap.a"</A
+> for a discussion of how to use
+the TCP wrapper library from within <em class="emphasis">sendmail</EM
+>.</P
+></BLOCKQUOTE
+><p class="para"><blockquote class="screen"><pre class="screen">Scheck_mail
+R$*                   $: $&gt;3 $1              focus on the host
+R$* &lt;@ $+. &gt; $*       $1 &lt;@ $2&gt; $3           strip trailing dots
+R$* &lt;@ $+ &gt; $*        $: $2                  isolate the host
+R$* . $+ . $+         $: $2 . $3             strip subdomains
+Rspamming.org         $#error $@ 5.7.1 $: &quot;cannot accept mail from spamming.org&quot;</PRE
+></BLOCKQUOTE
+></P
+><p class="para">Here, we force rule set 3 to preprocess the address so that
+any RFC822 comments will be thrown away and so that
+the host part of the address will be focused.
+We then strip any trailing dots from the hostname to prevent
+a trailing dot from wrongly effecting our validation.
+In the third line we throw away everything but the hostname.
+In the fourth line we throw away all but the rightmost two components
+of the hostname to eliminate the host part and any subdomain
+prefixes. What remains is just the domain name. We then compare
+that domain name to the hostname <em class="emphasis">spamming.org</EM
+>. If they match, we
+reject the sender.</P
+><p class="para">After this rule set is installed (and the <em class="emphasis">sendmail</EM
+> daemon 
+had been restarted), all mail from <em class="emphasis">spamming.org</EM
+> will be rejected
+during the SMTP dialogue like this:</P
+><p class="para"><blockquote class="screen"><pre class="screen">MAIL From: &lt;badguy@spamming.org&gt;
+553 &lt;badguy@spamming.org&gt;... cannot accept mail from spamming.org</PRE
+></BLOCKQUOTE
+></P
+><p class="para">This is just one possible use of the <code class="literal">check_mail</CODE
+>
+rule set. Other uses might be the following:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para">Rejecting mail from specific users at a given site.</P
+></LI
+><li class="listitem"><p class="para">Looking up <em class="emphasis">user@host</EM
+> in a database and rejecting the sender
+if that lookup succeeds.</P
+></LI
+><li class="listitem"><p class="para">Insisting that the host part of the address be canonifiable with
+the <code class="literal">$[</CODE
+> and <code class="literal">$]</CODE
+> operators.</P
+></LI
+></UL
+><p class="para">If you need to base a decision to reject mail on both the sender and the recipient,
+you may be able to use the <code class="literal">check_compat</CODE
+> rule set
+described below.&#13;</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-29-SECT-10-2">29.10.2 The check_rcpt Rule Set</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-28458"></A
+><a class="indexterm" name="AUTOID-28460"></A
+><a class="indexterm" name="AUTOID-28463"></A
+><a class="indexterm" name="AUTOID-28465"></A
+><a class="indexterm" name="AUTOID-28468"></A
+>The RCPT command in the SMTP dialogue
+specifies an envelope recipient's address:</P
+><p class="para"><blockquote class="screen"><pre class="screen">RCPT To: &lt;recipient@host.domain&gt;</PRE
+></BLOCKQUOTE
+></P
+><p class="para">If the <code class="literal">check_rcpt</CODE
+> rule set exists, it is called immediately
+after the RCPT command is read. The workspace that is passed to
+<code class="literal">check_rcpt</CODE
+> is the address following the colon.
+The envelope recipient address may or may
+not be surrounded by angle brackets and may or may not have
+other RFC822 comments associated with it.</P
+><p class="para">To illustrate one use for the <code class="literal">check_rcpt</CODE
+> rule set, consider
+the need to reject all incoming mail destined for the
+recipient named <em class="emphasis">fax</EM
+>.  One method might look like this:</P
+><p class="para"><blockquote class="screen"><pre class="screen">R$*                     $: $&gt;3 $1               focus on host
+R$* &lt;@ $~w &gt; $*         $@ ok                   not @ourhost is okay
+R$* &lt;@ $+ &gt; $*          $: $1                   discard host
+Rfax                    $#error $@ 5.1.3 $: &quot;cannot send mail to fax&quot;</PRE
+></BLOCKQUOTE
+></P
+><p class="para">Here, we first call rule set 3 to focus on the host part of the address
+and normalize it. The second rule accepts anything that is addressed to 
+any host but our own. That way, mail to <em class="emphasis">fax@another.host</EM
+> will
+work. The third rule discards the host (our local) part of the address. In the fourth line the remaining user part is compared to the name <em class="emphasis">fax</EM
+>.
+Any mail to <em class="emphasis">fax</EM
+> is thus rejected:</P
+><p class="para"><blockquote class="screen"><pre class="screen">RCPT To: &lt;fax@ourhost&gt;
+553 &lt;fax@ourhost&gt;... cannot send mail to fax</PRE
+></BLOCKQUOTE
+></P
+><p class="para">Other uses for this <code class="literal">check_rcpt</CODE
+> rule set might include the following:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para">Protecting a user who has become the target of a mail attack. You could create a
+new account for this user and block incoming mail to the old account.
+In the <code class="literal">#error</CODE
+> message you could print a phone number that others may
+call to obtain the new email address.</P
+></LI
+><li class="listitem"><p class="para">Claiming that certain secret users are unknown. These might be the pseudo-users
+associated with autonomous processes.</P
+></LI
+><li class="listitem"><p class="para">Refusing to accept mail that is not addressed to a user who has an active
+account as represented by the <em class="emphasis">passwd</EM
+>(5) file 
+(see <a class="xref" href="ch33_08.htm#SML2-CH-33-SECT-8-20" title="">Section 33.8.20, user</A
+>).</P
+></LI
+><li class="listitem"><p class="para">Looking up recipients in a database and accepting mail for them only if
+they are found in that database. This way, only selected users
+may be allowed, for example, through a firewall, though the firewall knows all about all users.</P
+></LI
+><li class="listitem"><p class="para">Looking up local-looking recipients in a database to see whether they have
+moved to a new location. If so, advise the other site of the new
+address with a rejection message. This is similar to the
+<code class="literal">redirect</CODE
+> FEATURE (see <a class="xref" href="ch19_06.htm#SML2-CH-19-SECT-6-21" title="">Section 19.6.21, FEATURE(redirect)</A
+>), but
+operates at the RCPT level instead of sending bounced mail.</P
+></LI
+><li class="listitem"><p class="para">Turning off unwanted &quot;relaying&quot; through your machine. Requires use of the
+<code class="literal">${client_name}</CODE
+> macro (see <a class="xref" href="ch31_10.htm#SML2-CH-31-SECT-10-8" title="">Section 31.10.8, ${client-name}</A
+>).</P
+></LI
+></UL
+><p class="para"></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-29-SECT-10-3">29.10.3 The check_relay Rule Set</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-28513"></A
+><a class="indexterm" name="AUTOID-28515"></A
+>V8.8 <em class="emphasis">sendmail</EM
+> supports two mechanisms for screening incoming SMTP
+connections. One is the <em class="emphasis">libwrap.a</EM
+> mechanism (see <a class="xref" href="ch22_04.htm#SML2-CH-22-SECT-4-1" title="Accept/Reject Connections via libwrap.a">Section 22.4.1</A
+>); 
+the other is this <code class="literal">check_relay</CODE
+> rule set. This rule set is
+used to screen incoming network connections and
+accept or reject them based on hostname, domain, or IP  
+number.  It is called just before the <em class="emphasis">libwrap.a</EM
+> code and can be used if
+that code was omitted from your release of <em class="emphasis">sendmail</EM
+>.</P
+><p class="para">The <code class="literal">check_relay</CODE
+> rule set is called with a workspace that looks like
+this:</P
+><p class="para"><blockquote class="screen"><pre class="screen">hostname $| IPnumber</PRE
+></BLOCKQUOTE
+></P
+><p class="para">The hostname and IP number are separated by the <code class="literal">$|</CODE
+>
+operator. The <code class="literal">hostname</CODE
+> is the fully qualified canonical 
+name of the connecting host. The <code class="literal">IPnumber</CODE
+> is the IP
+number of that host in dotted-quad form without surrounding square brackets.</P
+><p class="para">One way to use <code class="literal">check_relay</CODE
+> might be to list offensive
+sites in a database and to reject any connections from those sites.
+Consider a database that contains hostnames as its keys and descriptions
+of each host's offense as its values:</P
+><p class="para"><blockquote class="screen"><pre class="screen">hostA.edu      Spamming site
+hostB.com      Mail Bombing site
+123.45.6       Offensive domain</PRE
+></BLOCKQUOTE
+></P
+><p class="para">Notice that the keys can be hostnames or IP addresses.
+Such a database might be declared in the configuration file like this:</P
+><p class="para"><blockquote class="screen"><pre class="screen">Kbadhosts dbm -a &lt;&gt; /etc/badhosts</PRE
+></BLOCKQUOTE
+></P
+><p class="para">&#13;Now, each time a site connects to your running daemon, the following
+rule set will be called:</P
+><p class="para"><blockquote class="screen"><pre class="screen">Scheck_relay
+R$* $| $*            $: $(badhosts $1 $) $| $2             look up host name
+R$*&lt;&gt; $| $*          $#error $@ 5.1.3 $: Sorry, $1 denied
+R$* $|  $*           $: $2                                 select the IP number
+R$-.$-.$-.$-         $: $(badhosts $1.$2.$3 $)             look up domain part
+R$*&lt;&gt;                $#error $@ 5.1.3 $: Sorry, $1 denied
+R$*                  $@ ok                                 otherwise okay</PRE
+></BLOCKQUOTE
+></P
+><p class="para">The second rule looks up the host part in the database. If it is found,
+the value (reason for rejection) is returned and the two characters <code class="literal">&lt;&gt;</CODE
+>
+are appended. The third rule looks for anything to the left of the <code class="literal">$|</CODE
+>
+that ends in <code class="literal">&lt;&gt;</CODE
+> and, if anything is found, issues the error: 
+[7]</P
+><blockquote class="footnote"><p class="para">[7] Actually, the message is not printed; instead, the SMTP daemon goes into a &quot;reject everything&quot; mode. This prevents some SMTP implementations from retrying the connection.</P
+></BLOCKQUOTE
+><p class="para"><blockquote class="screen"><pre class="screen">Sorry, <i class="lineannotation">reason for reject</I
+> denied</PRE
+></BLOCKQUOTE
+></P
+><p class="para">Rejected connections are handled the same way as connections rejected by
+the <em class="emphasis">libwrap.a</EM
+> technique (see <a class="xref" href="ch22_04.htm#SML2-CH-22-SECT-4-1" title="Accept/Reject Connections via libwrap.a">Section 22.4.1</A
+>).</P
+><p class="para">The rest of the rules do the same thing, except that they check for the IP
+number. If the <code class="literal">check_relay</CODE
+> rule set returns anything other than
+a <code class="literal">#error</CODE
+> delivery agent, the address is accepted.</P
+><p class="para">Note that the rules presented here are not nearly as complex or sophisticated
+as your site will likely need. It does not, for example, reject on the basis of the domain
+part of hostnames, nor does it reject on the basis of the individual host IP addresses.</P
+><p class="para">Note that such rule sets cannot be tested in rule-testing mode, because
+that mode interprets the expression <code class="literal">$|</CODE
+> (when you enter it at the
+<code class="literal">&gt;</CODE
+> prompt) wrongly as two separate text characters instead of 
+correctly as a single operator. 
+To test an address that contains an embedded <code class="literal">$|</CODE
+> operator,
+we suggest that you create a translation rule set something like this:</P
+><p class="para"><blockquote class="screen"><pre class="screen">STranslate
+R$* $$| $*              $: $1 $| $2                            fake for -bt mode</PRE
+></BLOCKQUOTE
+></P
+><p class="para">This rule set changes a literal <code class="literal">$</CODE
+> and <code class="literal">|</CODE
+> into a <code class="literal">$|</CODE
+>
+operator so that you can test rule sets such as <code class="literal">check_relay</CODE
+>
+from rule-testing mode:</P
+><p class="para"><blockquote class="screen"><pre class="screen">ADDRESS TEST MODE (ruleset 3 NOT automatically invoked)
+Enter &lt;ruleset&gt; &lt;address&gt;
+&gt; <code class="userinput"><b>Translate,check_relay bogus.host.domain $| 123.45.67.89</B
+></CODE
+></PRE
+></BLOCKQUOTE
+></P
+><p class="para">&#13;Here, the comma-separated list of rule sets begins with <code class="literal">Translate</CODE
+>, which
+changes the two-character text expression &quot;<code class="literal">$|</CODE
+>&quot; into the
+single operator <code class="literal">$|</CODE
+>. The result, an address expression that is suitable
+for the <code class="literal">check_relay</CODE
+> rule set, can then be successfully tested.
+[8]&#13;</P
+><blockquote class="footnote"><p class="para">[8] Don't be tempted to put this rule directly into the <code class="literal">check_relay</CODE
+> rule
+set. You may someday encounter an address that has the two
+adjacent characters &quot;<code class="literal">$</CODE
+>&quot; and &quot;<code class="literal">|</CODE
+>&quot; as a legal part of it.
+Also beware of such addresses being intentionally sent just to circumvent your checks.</P
+></BLOCKQUOTE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-29-SECT-10-4">29.10.4 The check_compat Rule Set</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-28585"></A
+><a class="indexterm" name="AUTOID-28587"></A
+><a class="indexterm" name="AUTOID-28590"></A
+><a class="indexterm" name="AUTOID-28593"></A
+><a class="indexterm" name="AUTOID-28596"></A
+>Not all situations can be resolved by simply checking the recipient or sender address.
+Sometimes you will need to make judgments based on pairs of addresses. 
+To handle this situation,
+V8.8 introduced the <code class="literal">check_compat</CODE
+> rule set.
+Unlike <code class="literal">check_mail</CODE
+> and <code class="literal">check_rcpt</CODE
+>, <code class="literal">check_compat</CODE
+>
+is called for all deliveries, not just SMTP transactions.
+It is called just after the check for too large a size (as defined
+by <code class="literal">M=</CODE
+>; see <a class="xref" href="ch30_04.htm#SML2-CH-30-SECT-4-7" title="">Section 30.4.7, M=</A
+>) and just before
+the <em class="emphasis">checkcompat</EM
+>() routine is called (see <a class="xref" href="ch20_01.htm#SML2-CH-20-SECT-1" title="How checkcompat() Works">Section 20.1</A
+>).</P
+><p class="para">The <code class="literal">check_compat</CODE
+> rule set is called with a workspace that
+looks like this:</P
+><p class="para"><blockquote class="screen"><pre class="screen">sender $| recipient</PRE
+></BLOCKQUOTE
+></P
+><p class="para">The sender and recipient address are separated by the <code class="literal">$|</CODE
+>
+operator. 
+Each has undergone aliasing and <em class="emphasis">~/.forward</EM
+> file processing.</P
+><p class="para">As one example of a way to use the <code class="literal">check_compat</CODE
+> rule set, consider
+the need to prevent a certain user (here <em class="emphasis">operator</EM
+>) from sending
+mail offsite:</P
+><p class="para"><blockquote class="screen"><pre class="screen">SGet_domain
+R$*                     $: $&gt;3 $1               focus on host
+R$* &lt;@ $+. &gt; $*         $1 &lt;@ $2&gt; $3            strip trailing dots
+R$* &lt;@ $+ &gt; $*          $: $2                   isolate the host
+R$* . $+ . $+           $@ $2 . $3              strip host and subdomains
+
+SGet_user
+R$*                     $: $&gt;3 $1               focus on host
+R$* &lt;@ $+ &gt; $*          $@ $1                   discard host
+
+Scheck_compat
+R$* $| $*               $: $1 $|  $&gt;Get_domain $2       fetch recipient domain
+R$* $|  $=w             $@ ok                           local is okay
+R$* $|  $m              $@ ok                           local is okay
+R$* $|  $*              $: $&gt;Get_user $1                fetch sender user
+Roperator               $#error $@ 5.1.3 $: &quot;operator may not mail offsite&quot;</PRE
+></BLOCKQUOTE
+></P
+><p class="para">First we set up two subroutines patterned after the code in the previous two sections.
+The first reduces its workspace to just the domain part of an address.
+The second reduces an address to just the user part.
+These two subroutines are called by <code class="literal">check_compat</CODE
+>.</P
+><p class="para">The first rule in <code class="literal">check_compat</CODE
+> uses the <code class="literal">Get_domain</CODE
+> subroutine to convert
+the address on the right (the recipient) into just a domain name.
+That right side is compared to the local hosts names (<code class="literal">$=w</CODE
+> and
+<code class="literal">$m</CODE
+>). If the domain is a local one, delivery is allowed
+(we return anything but <code class="literal">#error</CODE
+>).</P
+><p class="para">If the domain is an offsite one, we then call <code class="literal">Get_user</CODE
+>
+to fetch the user part of the address to the left (the sender).
+If that user is <em class="emphasis">operator</EM
+>, delivery is denied and
+the message bounces.</P
+><p class="para">Other uses for the <code class="literal">check_compat</CODE
+> rule set might be the following:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para">Creating a class of user who, possibly for security reasons, may
+send only mail inside the organization, but not outside it.</P
+></LI
+><li class="listitem"><p class="para">Screening a particular recipient to prevent that user from receiving
+objectionable mail from a specific source.</P
+></LI
+><li class="listitem"><p class="para">Screening mail based on hostname to prevent outsiders from using
+your host as a mail relay.</P
+></LI
+></UL
+><p class="para">Note that such rule sets cannot be tested in rule-testing mode because
+that mode interprets the expression <code class="literal">$|</CODE
+> (when you enter it at the
+<code class="literal">&gt;</CODE
+> prompt) wrongly as two separate text characters instead of
+correctly as a single operator.
+See <a class="xref" href="#SML2-CH-29-SECT-10-3" title="The check_relay Rule Set">Section 29.10.3, "The check_relay Rule Set"</A
+> for one suggested solution to this problem.
+<a class="indexterm" name="AUTOID-28643"></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch29_09.htm" title="29.9 Rule Set 1"><img src="../gifs/txtpreva.gif" alt="Previous: 29.9 Rule Set 1" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="sendmail"><img src="../gifs/txthome.gif" alt="sendmail" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch29_11.htm" title="29.11 Pitfalls"><img src="../gifs/txtnexta.gif" alt="Next: 29.11 Pitfalls" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">29.9 Rule Set 1</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">29.11 Pitfalls</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.htm" title="The Networking CD Bookshelf">Library Home</A
+> | <a href="../dnsbind/index.htm" title="DNS &amp; BIND">DNS &amp; BIND</A
+> | <a href="../tcpip/index.htm" title="TCP/IP Network Administration">TCP/IP</A
+> | <a href="index.htm" title="sendmail">sendmail</A
+> | <a href="../smdref/index.htm" title="sendmail Desktop Reference">sendmail Reference</A
+> | <a href="../firewall/index.htm" title="Building Internet Firewalls">Firewalls</A
+> | <a href="../puis/index.htm" title="Practical UNIX &amp; Internet Security">Practical Security</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

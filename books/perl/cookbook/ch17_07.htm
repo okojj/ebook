@@ -1,0 +1,121 @@
+<html><head>
+<title>Recipe 17.6. Using UNIX Domain Sockets</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:32Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch17_01.htm" title="17. Sockets"><link rel="prev" href="ch17_06.htm" title="17.5. Setting Up a UDP Server"><link rel="next" href="ch17_08.htm" title="17.7. Identifying the Other End of a Socket"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_06.htm" title="17.5. Setting Up a UDP Server"><img src="../gifs/txtpreva.gif" alt="Previous: 17.5. Setting Up a UDP Server" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch17_01.htm" title="17. Sockets">Chapter 17<br>Sockets</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_08.htm" title="17.7. Identifying the Other End of a Socket"><img src="../gifs/txtnexta.gif" alt="Next: 17.7. Identifying the Other End of a Socket" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch17-12131">17.6. Using UNIX Domain Sockets</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-834">Problem<a class="indexterm" name="ch17-idx-1000004757-0"></A
+><a class="indexterm" name="ch17-idx-1000004757-1"></A
+></A
+></H3
+><p class="para">You want to communicate with other processes on only the local machine.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-840">Solution</A
+></H3
+><p class="para">Use domain sockets. You can use the code and techniques from the preceding Internet domain recipes, with the following changes:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para"><a class="listitem" name="ch17-pgfId-844"></A
+>Because the naming system is different, use <code class="literal">sockaddr_un</CODE
+> instead of <code class="literal">sockaddr_in</CODE
+>.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch17-pgfId-846"></A
+>Use IO::Socket::UNIX instead of IO::Socket::INET.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch17-pgfId-848"></A
+>Use PF_UNIX instead of PF_INET, and give PF_UNSPEC as the last argument to <code class="literal">socket</CODE
+>.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch17-pgfId-850"></A
+>SOCK_STREAM clients don't have to <code class="literal">bind</CODE
+> to a local address before they <code class="literal">connect</CODE
+>.</P
+></LI
+></UL
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-854">Discussion</A
+></H3
+><p class="para">Unix domain sockets have names like files on the filesystem. In fact, most systems implement them as special files; that's what Perl's <code class="literal">-S</CODE
+> filetest operator looks for&nbsp;- whether the file is a Unix domain socket.</P
+><p class="para">Supply the filename as the Peer argument to <code class="literal">IO::Socket::UNIX-&gt;new</CODE
+>, or encode it with <code class="literal">sockaddr_un</CODE
+> and pass it to <code class="literal">connect</CODE
+>. Here's how to make server and client Unix domain datagram sockets with IO::Socket::UNIX:</P
+><pre class="programlisting">use IO::Socket;
+
+unlink &quot;/tmp/mysock&quot;;
+$server = IO::Socket::UNIX-&gt;new(LocalAddr =&gt; &quot;/tmp/mysock&quot;,
+                                Type      =&gt; SOCK_DGRAM,
+                                Listen    =&gt; 5 )
+    or die $@;
+
+$client = IO::Socket::UNIX-&gt;new(PeerAddr  =&gt; &quot;/tmp/mysock&quot;,
+                                Type      =&gt; SOCK_DGRAM,
+                                Timeout   =&gt; 10 )
+    or die $@;</PRE
+><p class="para">Here's how to use the traditional functions to make stream sockets:</P
+><pre class="programlisting">use Socket;
+    
+socket(SERVER, PF_UNIX, SOCK_STREAM, 0);
+unlink &quot;/tmp/mysock&quot;;
+bind(SERVER, sockaddr_un(&quot;/tmp/mysock&quot;))
+    or die &quot;Can't create server: $!&quot;;
+
+socket(CLIENT, PF_UNIX, SOCK_STREAM, 0);
+connect(CLIENT, sockaddr_un(&quot;/tmp/mysock&quot;))
+    or die &quot;Can't connect to /tmp/mysock: $!&quot;;</PRE
+><p class="para">Unless you know what you're doing, set the protocol (the Proto argument to <code class="literal">IO::Socket::UNIX-&gt;new</CODE
+>, and the last argument to <code class="literal">socket</CODE
+>) to 0 for PF_UNIX sockets. You can use both SOCK_DGRAM and SOCK_STREAM types of communication in the Unix domain, with the same semantics as we saw for Internet sockets. Changing the domain doesn't change the characteristics of the type of socket.</P
+><p class="para">Because many systems actually create a special file in the filesystem, you should delete the file before you try to bind the socket. Even though there is a race condition (somebody could create a file with the name of your socket between your calls to <code class="literal">unlink</CODE
+> and <code class="literal">bind</CODE
+>), this isn't a security problem, because <code class="literal">bind</CODE
+> won't overwrite an existing file.<a class="indexterm" name="ch17-idx-1000004768-0"></A
+><a class="indexterm" name="ch17-idx-1000004768-1"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-912">See Also</A
+></H3
+><p class="para">Recipes <a class="xref" href="ch17_02.htm" title="Writing a TCP Client">Recipe 17.1</A
+> through <a class="xref" href="ch17_06.htm" title="Setting Up a UDP Server">Recipe 17.5</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_06.htm" title="17.5. Setting Up a UDP Server"><img src="../gifs/txtpreva.gif" alt="Previous: 17.5. Setting Up a UDP Server" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_08.htm" title="17.7. Identifying the Other End of a Socket"><img src="../gifs/txtnexta.gif" alt="Next: 17.7. Identifying the Other End of a Socket" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">17.5. Setting Up a UDP Server</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">17.7. Identifying the Other End of a Socket</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

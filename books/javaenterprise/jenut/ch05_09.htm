@@ -1,0 +1,176 @@
+<html>
+<head>
+<title>Databases and Non-HTML Content (Java Enterprise in a Nutshell)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David Flanagan, Jim Farley, William Crawford and Kristopher Magnusson">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-483-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Databases and Non-HTML Content">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm" alt="Java Enterprise in a Nutshell"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch05_08.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch05_08.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch05_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch05_01.htm">Chapter 5: Java Servlets</a></td><td align="right" valign="top" width="172"><a href="ch05_10.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch05_10.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY --><h2 class="sect1">5.9. Databases and Non-HTML Content</h2>
+<p>
+<a name="INDEX-1352"></a><a name="INDEX-1353"></a><a name="INDEX-1354"></a>Most web applications need to communicate with a database,
+either to generate dynamic content or collect and store data from
+users, or both.  With servlets, this communication is easily handled
+using the JDBC API described in <a href="ch02_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch02_01.htm">Chapter 2, "JDBC"</a>.
+Thanks to JDBC and the generally sensible design of the servlet life
+cycle, servlets are an excellent intermediary between a database and
+web clients.</p>
+<p>
+<a name="INDEX-1355"></a>Most of the general JDBC principles discussed in <a href="ch02_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch02_01.htm">Chapter 2, "JDBC"</a> apply
+to servlets.  However, servlet developers should keep a few things in
+mind for optimal performance.  First, JDBC
+<tt class="literal">Connection</tt> objects can be created in the
+servlet's <tt class="literal">init()</tt> method.  This allows the
+servlet to avoid reconnecting to the database (&agrave; la CGI) with each
+request, saving up to a second or more on every single page request.<a name="INDEX-1356"></a><a name="INDEX-1357"></a><a name="INDEX-1358"></a>
+If you anticipate high volume, you may want to create several
+connections and rotate between them.  An excellent freeware
+connection-pooling system is available at <a href="http://www.javaexchange.com">http://www.javaexchange.com</a>.  Or, if<a name="INDEX-1359"></a>
+you're using JDBC 2.0, <tt class="literal">the javax.sql</tt> package
+provides a connection-pooling mechanism.  Finally, if you plan on
+using JDBC's transaction support, you need to create individual
+connections for each request or obtain exclusive use of a pooled
+connection.</p>
+<p>
+<a name="INDEX-1360"></a><a name="INDEX-1361"></a>So far, all our servlets have produced standard HTML content.
+Of course, this is all most servlets ever do, but it's not all
+that they can do.  Say, for instance, that your company stores a large
+database of PDF documents within an Oracle database, where they can be
+easily accessed.  Now say you want to distribute these documents on
+the Web.  Luckily, servlets can dish out any form of content that can<a name="INDEX-1362"></a>
+be defined with a MIME header.  All you have to do is set the
+appropriate content type and use a
+<tt class="literal">ServletOuputStream</tt> if you need to transmit binary<a name="INDEX-1363"></a><a name="INDEX-1364"></a>
+data. <a href="#ch05-pgfid-548197">Example 5-8</a> shows how to pull an Adobe Acrobat document from an
+Oracle database.</p>
+<a name="ch05-pgfid-548197"></a>
+<div class="example">
+<h4 class="objtitle">Example 5-8. A Servlet That Serves PDF Files from a Database </h4>
+<blockquote>
+<pre class="programlisting">
+import java.io.*;
+import java.sql.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class DBPDFReader extends HttpServlet {
+
+  Connection con;
+
+  public void init(ServletConfig config) throws ServletException {
+    super.init(config);
+    try {
+      Class.forName("oracle.jdbc.driver.OracleDriver");
+      con = DriverManager.getConnection("jdbc:oracle:oci7:@DBHOST", 
+                                        "user", "passwd");
+    }
+    catch (ClassNotFoundException e) { 
+      throw new UnavailableException(this, "Couldn't load OracleDriver");
+    }    
+    catch (SQLException e) { 
+      throw new UnavailableException(this, "Couldn't get db connection");
+    }    
+  }
+
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+    throws ServletException, IOException {
+    
+    try {
+      res.setContentType("application/pdf");
+      ServletOutputStream out = res.getOutputStream();
+     
+      Statement stmt = con.createStatement();
+      ResultSet rs = stmt.executeQuery(
+        "SELECT PDF FROM PDF WHERE PDFID = " + req.getParameter("PDFID"));
+
+      if (rs.next()) {
+        BufferedInputStream pdfData =
+          new BufferedInputStream(rs.getBinaryStream("PDF"));
+        byte[] buf = new byte[4 * 1024];  // 4K buffer
+        int len;
+        while ((len = pdfData.read(buf, 0, buf.length)) != -1) {
+          out.write(buf, 0, len);
+        }
+      }
+      else {
+        res.sendError(res.SC_NOT_FOUND);
+      }
+    }
+    catch(SQLException e) {
+      // Report it
+    }
+  }
+}</pre>
+</blockquote>
+</div>
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch05_08.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch05_08.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch05_10.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch05_10.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">5.8. Session Tracking</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">5.10. The Servlet API 2.1</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

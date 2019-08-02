@@ -1,0 +1,814 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 25] 25.2 Tuning Access to Compiled Code</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein &amp; Bill Pribyl"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T19:13:07Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates CD-ROM-1-56592-335-9E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-335-9E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle PL/SQL"><META
+NAME="DC.Title"
+CONTENT="Oracle PL/SQL Programming, 2nd Edition"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch25_01.htm"
+TITLE="25. Tuning PL/SQL Applications"><LINK
+REL="prev"
+HREF="ch25_01.htm"
+TITLE="25.1 Analyzing Program Performance"><LINK
+REL="next"
+HREF="ch25_03.htm"
+TITLE="25.3 Tuning Access to Your Data"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd Edition"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch25_01.htm"
+TITLE="25.1 Analyzing Program Performance"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 25.1 Analyzing Program Performance"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch25_01.htm"
+TITLE="25. Tuning PL/SQL Applications"
+>Chapter 25<BR>Tuning PL/SQL Applications</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch25_03.htm"
+TITLE="25.3 Tuning Access to Your Data"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 25.3 Tuning Access to Your Data"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-2"
+>25.2 Tuning Access to Compiled Code</A
+></H2
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999815-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999815-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999815-3"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999815-4"
+></A
+>Before <A
+CLASS="indexterm"
+NAME="ch25-idx-999832-1"
+></A
+>your code can be executed (and perhaps run too slowly), it must be loaded into the System Global Area (SGA) of the Oracle instance (described in more detail in <A
+CLASS="xref"
+HREF="ch23_01.htm"
+>Chapter 23, <CITE
+CLASS="chapter"
+>Managing Code in the Database</CITE
+></A
+>). There are two elements to PL/SQL code in shared memory: the code segment and the data segment. This loading process can benefit from its own special tuning effort. </P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-2.1"
+>25.2.1 Tune the Size of the Shared Pool of the SGA</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-22500"
+></A
+><A
+CLASS="indexterm"
+NAME="AUTOID-22503"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22505"
+></A
+><A
+CLASS="indexterm"
+NAME="AUTOID-22509"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22512"
+></A
+>Before you can execute a stored package module or reference a stored package object, the compiled code for that package must be loaded into the SGA. Clearly, if the package is already present in shared memory, your code executes more quickly. An important element of tuning an application which is heavily dependent on stored packages (especially large ones) is to optimize package access so that the most often-used packages are always present when needed. </P
+><P
+CLASS="para"
+>The default method for maintaining packages in the SGA (or "shared pool") is to let the RDBMS manage the code using its least-recently-used algorithm. The first time you reference a package, the compiled code is loaded into the shared pool. It is then available to anyone with EXECUTE authority on that package. It remains in the shared pool until the memory is needed by other memory-based resources and that package has not been used most recently. At that point, the package is flushed from the shared pool. The next time an object in the package is needed, the whole package has to be loaded once again into memory. </P
+><P
+CLASS="para"
+>The larger your shared pool, the more likely it is that your programs will be resident in memory the next time they are needed. Yet if you make your shared pool too large, you will be wasting memory. You should monitor your shared buffer pool to make sure it is retaining all the parsed SQL cursors and PL/SQL code segments which are commonly referenced in your application. If you find that too much swapping is occurring, increase the size of the shared buffer pool (as physical memory permits) by adjusting the SHARED_POOL_SIZE parameter in your <I
+CLASS="filename"
+>INIT.ORA</I
+> file. </P
+><P
+CLASS="para"
+>You can display all the objects currently in the shared pool that are larger than a specified size (in the example, 25KB) with the following statement (make sure you have SET SERVEROUTPUT ON in SQL*Plus before you make this call): </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec dbms_shared_pool.sizes (25);</PRE
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-2.2"
+>25.2.2 Pin Critical Code into the SGA</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999899-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999899-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999899-3"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999899-4"
+></A
+>To increase your ability to tune application performance, Oracle supplies the <A
+CLASS="indexterm"
+NAME="ch25-idx-999891-1"
+></A
+>DBMS_SHARED_POOL package to pin a package in the shared pool. When a package is pinned, the RDBMS does not apply its least-recently-used algorithm to that package. The package remains in memory for as long as the database instance is available (or until you explicitly "unpin" the package, as described below). </P
+><P
+CLASS="para"
+>At this time, only <A
+CLASS="indexterm"
+NAME="ch25-idx-999903-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999903-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999903-3"
+></A
+>packages can be pinned in the shared pool; this fact provides added incentive to define your procedures and functions inside packages, rather than as standalone modules. </P
+><P
+CLASS="para"
+>You will only want to pin code when absolutely necessary, since you can end up setting aside too much memory for code, resulting in a degradation in performance of other aspects of the application. In fact, Oracle Corporation warns that the KEEP and UNKEEP procedures may not be supported in future releases, since it might provide an "automatic mechanism" which replaces these procedures. </P
+><P
+CLASS="para"
+>The usual candidates for pinning are particularly large programs. Prior to Oracle 7.3, Oracle requires contiguous memory in the SGA to store the code, so if sufficient space is not available at a given point of execution, Oracle will either raise an error or start swapping out other programs to make room. Neither scenario is optimal. </P
+><P
+CLASS="para"
+>Usually you will pin programs right after the database is started up, so that all the critical elements of your application are in place for all users. Here is an example of the pinning of the order entry package (owned by the appowner schema): </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DBMS_SHARED_POOL.KEEP ('appowner.ordentry');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Here is the code you would execute to unpin the same package from shared memory: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DBMS_SHARED_POOL.UNKEEP ('appowner.ordentry');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Keep the following factors in mind when working with the DBMS_SHARED_POOL package: </P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>When you call the <A
+CLASS="indexterm"
+NAME="AUTOID-22557"
+></A
+>KEEP procedure, the package is "queued" for pinning in the SGA. However, the KEEP procedure does not immediately load the package into the shared pool&nbsp;-- that happens when the package is first referenced, either to execute a module or to use one of the declared objects, such as a global variable or a cursor. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Oracle recommends that you pin all your packages in the shared pool soon after instance startup, when the SGA is still relatively unfragmented. That way it can set aside contiguous blocks of memory for large packages. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>If you pin a package which is not owned by SYS (DBMS_OUTPUT, for example, is owned by SYS), you must grant EXECUTE on the package to PUBLIC before you execute the KEEP procedure. Once you have pinned the package, you can revoke the PUBLIC access. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The SQL DDL command, ALTER SYSTEM FLUSH SHARED_POOL, does not affect pinned packages. You must either explicitly UNKEEP a package or restart the database to release the package from the shared pool. </P
+></LI
+></UL
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-2.2.1"
+>25.2.2.1 Candidates for pinning in the shared pool</A
+></H4
+><P
+CLASS="para"
+>You might consider pinning the following packages in the shared pool to improve performance: </P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+><A
+CLASS="indexterm"
+NAME="AUTOID-22571"
+></A
+> STANDARD   </DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Package which implements the core elements of the PL/SQL language.</P
+></DD
+><DT
+CLASS="term"
+><A
+CLASS="indexterm"
+NAME="AUTOID-22578"
+></A
+> DBMS_STANDARD   </DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Package of standard database-level modules, such as RAISE_APPLICATION_ERROR. </P
+></DD
+><DT
+CLASS="term"
+><A
+CLASS="indexterm"
+NAME="AUTOID-22585"
+></A
+> DBMS_UTILITY   </DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Package of low-level database utilities which are used to analyze schemas and objects. </P
+></DD
+><DT
+CLASS="term"
+><A
+CLASS="indexterm"
+NAME="AUTOID-22592"
+></A
+> DBMS_DESCRIBE</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Package containing a utility to describe the structure of a stored module. </P
+></DD
+><DT
+CLASS="term"
+><A
+CLASS="indexterm"
+NAME="AUTOID-22599"
+></A
+> DBMS_OUTPUT   </DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Package which allows programmers to display output to the screen.</P
+></DD
+></DL
+><P
+CLASS="para"
+>In addition, if you make frequent use of any other Oracle-provided "SYS" packages such as DBMS_LOCK or DBMS_PIPE, pinning those objects could improve performance as well. </P
+><P
+CLASS="para"
+>You are probably getting the idea that the more you pin into the shared pool, the better off you are. Certainly that is true, at least as true as the statement: "If all your data is stashed in memory, your applications will run much faster." Memory is always quicker than disk access. The problem is making sure you have enough memory. </P
+><P
+CLASS="para"
+>The more you pin into the shared pool, the less space is left in the SGA for other memory-based resources, such as data dictionary latches, application data, and shared SQL. Since a pinned object is never aged out of the SGA using a least-recently-used algorithm, other elements in the SGA are instead pushed out of the way. </P
+><P
+CLASS="para"
+>You can use SQL to generate a script to KEEP packages in the SGA. You can use the following SQL statement to access the v$db_object_cache to generate a KEEP for each package currently in the shared pool: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT 'EXECUTE DBMS_SHARED_POOL.KEEP('''||name||''');'
+  FROM v$db_object_cache
+ WHERE type='PACKAGE';</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>You can also generate a KEEP statement for every package currently stored in the database with these other SQL statements: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT DISTINCT 'EXECUTE DBMS_SHARED_POOL.KEEP('''||name||''');'
+  FROM user_source
+ WHERE type='PACKAGE';
+
+SELECT DISTINCT 'EXECUTE DBMS_SHARED_POOL.KEEP('''||object_name||''');' 
+ <A
+CLASS="indexterm"
+NAME="AUTOID-22611"
+></A
+>
+<A
+CLASS="indexterm"
+NAME="AUTOID-22612"
+></A
+>
+<A
+CLASS="indexterm"
+NAME="AUTOID-22613"
+></A
+>
+ FROM user_objects<A
+CLASS="indexterm"
+NAME="AUTOID-22614"
+></A
+>
+<A
+CLASS="indexterm"
+NAME="AUTOID-22615"
+></A
+>
+<A
+CLASS="indexterm"
+NAME="AUTOID-22616"
+></A
+>
+<A
+CLASS="indexterm"
+NAME="AUTOID-22617"
+></A
+>
+
+ WHERE object_type='PACKAGE';<A
+CLASS="indexterm"
+NAME="AUTOID-22618"
+></A
+></PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-2.3"
+>25.2.3 Tune ACCESS$ Table to Reduce First Execution Time of Code</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-22622"
+></A
+>When a database object is first referenced in a PL/SQL program, the PL/SQL engine checks the ACCESS$ table (owned by SYS) to see if the executor of the program has authority on that database object. The structure of this table is shown here: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; desc access$
+ Name                            Null?    Type
+ ------------------------------- -------- ----
+ D_OBJ#                          NOT NULL NUMBER
+ ORDER#                          NOT NULL NUMBER
+ COLUMNS                                  RAW(32)
+ TYPES                           NOT NULL NUMBER </PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The PL/SQL engine searches through this table on the D_OBJ# column, so if you create a nonunique index on the D_OBJ# column, you may in some cases reduce significantly the amount of time needed to perform this security check. </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-2.4"
+>25.2.4 Creating Packages with Minimal Interdependencies</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999914-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999914-2"
+></A
+>Design your code (preferably, most of it inside packages) so that you only load into memory the code you need at any given moment in time. To accomplish this objective, you should create more smaller packages, each of which is tightly focused on implementing functionality in a given area. The alternative, which too many of us employ without giving it much thought, is to create a few large packages that group together lots of different elements of functionality. </P
+><P
+CLASS="para"
+>The problem with this approach is that if I need to execute one function in that 32K package, the entire package still must be loaded up into memory. Suppose that my application then touches another element of the package, such as a constant or perhaps a different function in a different functional area. The least-recently-used algorithm will then ensure that all the memory for that package continues to be set aside, perhaps crowding out other smaller programs. The result can be excessive swapping of code. </P
+><P
+CLASS="para"
+>As you build your programs and design your package interfaces, be on the lookout for an opportunity to break up a single package into two or even more distinct packages with minimal interdependencies. <A
+CLASS="indexterm"
+NAME="AUTOID-22636"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22637"
+></A
+> </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-2.5"
+>25.2.5 Reducing Memory Usage of Package Variables</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999918-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999918-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999918-3"
+></A
+>Prior to PL/SQL8, any data declared in a package simply stayed around until the end of the session, whether or not it was needed any more by the application. This is an important feature of PL/SQL packages (persistent, global data), but it limits scalability since such memory grows linearly with the number of users. </P
+><P
+CLASS="para"
+>To help applications better manage memory usage, PL/SQL8 provides the pragma SERIALLY_REUSABLE, which lets you mark some packages as "serially reusable." You can so mark a package if its state is needed only for the duration of a call to the server (for example, an OCI call to the server, a PL/SQL client-to-server, or server-to-server RPC). </P
+><P
+CLASS="para"
+>The global memory for such packages is not kept in the memory area per user, but instead in a small SGA pool. At the end of the call to the server, this memory is returned to the pool for reuse. Before reuse, the package global variables are initialized to NULL or to the default values provided. </P
+><P
+CLASS="para"
+>The pool is kept in SGA memory so that the work area of a package can be reused across users who have requests for the same package. In this scheme, the maximum number of work areas needed for a package is only as many as there are concurrent users of the package, which is typically much fewer than the total number of logged on users. The use of "serially reusable" packages does increase the shared-pool requirements slightly, but this is more than offset by the decrease in the per-user memory requirements. Further, Oracle ages out work areas not in use when it needs to reclaim shared pool memory. </P
+><P
+CLASS="para"
+>The following example shows how global variables in a "serially reusable" package behave across call boundaries: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE PACKAGE sr_pkg
+IS
+  PRAGMA SERIALLY_REUSABLE;
+  num NUMBER := 0;
+  PROCEDURE print_pkg;
+  PROCEDURE init_pkg (n NUMBER);
+END sr_pkg;
+/
+CREATE OR REPLACE PACKAGE BODY sr_pkg
+IS
+  -- the body is required to have the pragma since the
+  -- specification of this package has the pragma
+  PRAGMA SERIALLY_REUSABLE;
+  -- Print package state
+  PROCEDURE print_pkg is
+  BEGIN
+    DBMS_OUTPUT.PUT_LINE ('num: ' || sr_pkg.num);
+  END;
+  -- Initialize package state
+  PROCEDURE init_pkg(n NUMBER) IS
+  BEGIN
+    sr_pkg.num := n;
+  END;
+END sr_pkg;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Now I will exercise this package. First, I enable output from SQL*Plus: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQLPLUS&gt; set serveroutput on;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Next, I initialize the package with a value of 4 and then display package contents&nbsp;-- all within a single PL/SQL block: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQLPLUS&gt; begin
+           -- initialize and print the package
+           SR_PKG.init_pkg(4);
+
+           -- Print it in the same call to the server.
+           -- We should see the new values.
+           SR_PKG.print_pkg;
+         end;
+         /
+Statement processed.
+num: 4</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>And we see that initial value of 4. If I had not placed the call to sr_pkg.print_pkg <EM
+CLASS="emphasis"
+>inside</EM
+> the same PL/SQL block, however, that package variable would lose its setting, as you can see in the following steps: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQLPLUS&gt; begin
+           -- We should see that the package state is reset to the
+           -- initial (default) values.
+           SR_PKG.print_pkg;
+         end;
+         /
+Statement processed.
+num: 0</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Use this feature with care! Many of the packages I have constructed over the years absolutely rely on the <A
+CLASS="indexterm"
+NAME="AUTOID-22665"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22666"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22667"
+></A
+> persistent data<A
+CLASS="indexterm"
+NAME="AUTOID-22668"
+></A
+> feature.<A
+CLASS="indexterm"
+NAME="AUTOID-22669"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22670"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22671"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22672"
+></A
+> </P
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch25_01.htm"
+TITLE="25.1 Analyzing Program Performance"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 25.1 Analyzing Program Performance"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming, 2nd Edition"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch25_03.htm"
+TITLE="25.3 Tuning Access to Your Data"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 25.3 Tuning Access to Your Data"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>25.1 Analyzing Program Performance</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>25.3 Tuning Access to Your Data</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

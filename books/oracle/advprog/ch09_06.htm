@@ -1,0 +1,482 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 9] 9.6 Implementing load_  from_dbms</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T18:27:02Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates-1-56592-238-7E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-238-7E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="PL/SQL SQL Oracle Packages"><META
+NAME="DC.Title"
+CONTENT="Advanced Oracle PL/SQL Programming with Packages"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch09_01.htm"
+TITLE="9. PLVmsg: Single-Sourcing PL/SQL Message Text"><LINK
+REL="prev"
+HREF="ch09_05.htm"
+TITLE="9.5 Integrating PLVmsg with Error Handling"><LINK
+REL="next"
+HREF="ch10_01.htm"
+TITLE="10. PLVprs, PLVtkn, and PLVprsps: Parsing Strings"></HEAD>
+<BODY><DIV CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Advanced Oracle PL/SQL Programming with Packages"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Advanced Oracle PL/SQL Programming with Packages"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch09_05.htm"
+TITLE="9.5 Integrating PLVmsg with Error Handling"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 9.5 Integrating PLVmsg with Error Handling"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch09_01.htm"
+TITLE="9. PLVmsg: Single-Sourcing PL/SQL Message Text"
+>Chapter 9<BR>PLVmsg: Single-Sourcing PL/SQL Message Text</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch10_01.htm"
+TITLE="10. PLVprs, PLVtkn, and PLVprsps: Parsing Strings"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 10. PLVprs, PLVtkn, and PLVprsps: Parsing Strings"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch09-17830"
+>9.6 Implementing load_  from_dbms</A
+></H2
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>load_from_dbms</KBD
+> procedure<A
+CLASS="indexterm"
+NAME="ch09-idx-998233-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch09-idx-998233-1"
+></A
+> serves as a good example of a program for loading number-text combinations from any database table into a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table using dynamic <SPAN
+CLASS="acronym"
+>SQL</SPAN
+>. Since you can specify the table name, WHERE clause, and column names, you can load message text from multiple sources and for multiple purposes. You can even copy this program, modify it, and use it in other programs.</P
+><P
+CLASS="para"
+>The implementation of this procedure is shown in <A
+CLASS="xref"
+HREF="ch09_06.htm#ch09-17387"
+>Example 9.2</A
+>. It is explained in the next section. (continued)</P
+><DIV
+CLASS="example"
+><H4
+CLASS="example"
+><A
+CLASS="title"
+NAME="ch09-17387"
+>Example 9.2: The Implementation of load_ from_dbms </A
+></H4
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE load_from_dbms
+   (table_in IN VARCHAR2, 
+    where_clause_in IN VARCHAR2 := NULL,
+    code_col_in IN VARCHAR2 := 'error_code',
+    text_col_in IN VARCHAR2 := 'error_text')
+IS
+   select_string PLV.max_varchar2%TYPE :=
+    'SELECT ' || code_col_in || ', ' || text_col_in ||
+    '  FROM ' || table_in;
+
+   cur INTEGER;
+   error_code INTEGER;
+   error_text VARCHAR2(2000);
+
+   PROCEDURE set_minmax (code_in IN INTEGER) IS
+   BEGIN
+      IF min_row IS NULL OR min_row &gt; code_in
+      THEN
+         v_min_row := code_in;
+      END IF;
+
+      IF max_row IS NULL OR max_row &lt; code_in
+      THEN
+         v_max_row := code_in;
+      END IF;
+   END;      
+BEGIN
+   IF where_clause_in IS NOT NULL
+   THEN
+      select_string := select_string || ' WHERE ' || where_clause_in;
+   END IF;
+
+   cur := PLVdyn.open_and_parse (select_string);
+   DBMS_SQL.DEFINE_COLUMN (cur, 1, error_code);
+   DBMS_SQL.DEFINE_COLUMN (cur, 2, error_text, 2000);
+
+   PLVdyn.execute (cur);
+   LOOP
+      EXIT WHEN DBMS_SQL.FETCH_ROWS (cur) = 0;
+      DBMS_SQL.COLUMN_VALUE (cur, 1, error_code);
+      DBMS_SQL.COLUMN_VALUE (cur, 2, error_text);
+      set_minmax (error_code);
+      add_text (error_code, error_text);
+   END LOOP;
+   DBMS_SQL.CLOSE_CURSOR (cur);
+END;</PRE
+></BLOCKQUOTE
+></DIV
+><P
+CLASS="para"
+>When performing dynamic <SPAN
+CLASS="acronym"
+>SQL</SPAN
+>, you construct the <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statement at runtime. In <KBD
+CLASS="command"
+>load_from_dbms</KBD
+>, I declare and initialize my SELECT string as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+> select_string PLV.max_varchar2%TYPE :=
+    'SELECT ' || code_col_in || ', ' || text_col_in ||
+    '  FROM ' || table_in;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice that I use all of the name arguments to the program to build the SELECT statement. There is nothing hard coded here except for the mandatory syntax elements like SELECT and FROM. That assignment (which takes place in the declaration section) covers the basic query. </P
+><P
+CLASS="para"
+>What if the user provided a WHERE clause? The first line in the procedure's body adds the WHERE clause if it is not NULL:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>   IF where_clause_in IS NOT NULL
+   THEN
+      select_string := select_string || ' WHERE ' || where_clause_in;
+   END IF;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice that you do not have to provide a WHERE keyword. That is inserted automatically by the program.</P
+><P
+CLASS="para"
+>My string is ready to be parsed, so I call the <KBD
+CLASS="command"
+>PLVdyn</KBD
+> <KBD
+CLASS="command"
+>open_and_parse</KBD
+> procedure to take those two steps. Then I define the two columns (number and string) that are specified in the SELECT statement:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>   cur := PLVdyn.open_and_parse (select_string);
+   DBMS_SQL.DEFINE_COLUMN (cur, 1, error_code);
+   DBMS_SQL.DEFINE_COLUMN (cur, 2, error_text, 2000);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Now the cursor is fully defined and ready to be executed. The final step in <KBD
+CLASS="command"
+>load_from_dbms</KBD
+> is to run the equivalent of a cursor FOR loop: for every record dynamically fetched, add the text to the table and update the high and low indicators:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>   PLVdyn.execute (cur);
+   LOOP
+      EXIT WHEN DBMS_SQL.FETCH_ROWS (cur) = 0;
+      DBMS_SQL.COLUMN_VALUE (cur, 1, error_code);
+      DBMS_SQL.COLUMN_VALUE (cur, 2, error_text);</PRE
+></BLOCKQUOTE
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>      set_minmax (error_code);</PRE
+></BLOCKQUOTE
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>      add_text (error_code, error_text);
+   END LOOP;
+   DBMS_SQL.CLOSE_CURSOR (cur);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I fetch a row (exiting immediately if nothing is returned). I then extract the values into local variables with COLUMN_VALUE. Following that, I update the minimum and maximum row numbers and, finally, add the text to the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table using that same <KBD
+CLASS="command"
+>add_text</KBD
+> program that users of <KBD
+CLASS="command"
+>PLVmsg</KBD
+> would use to add text to the table. When I am done with the loop, I close the cursor.</P
+><P
+CLASS="para"
+>To make the main body of the procedure as readable as possible, I create a local procedure (<KBD
+CLASS="command"
+>set_minmax</KBD
+>) to keep track of the lowest and highest row numbers used in the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table. This is necessary in releases of <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> earlier than 2.3 since there is no way to query the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> runtime engine for this information. The local procedure, <KBD
+CLASS="command"
+>set_minmax</KBD
+>, also serves to hide this annoying level of detail and weakness in <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table design. When you upgrade to <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> Release 2.3 or above, you can just strip out this code.<A
+CLASS="indexterm"
+NAME="ch09-idx-998234-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch09-idx-998234-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch09-idx-998234-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch09-idx-998234-3"
+></A
+></P
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch09_05.htm"
+TITLE="9.5 Integrating PLVmsg with Error Handling"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 9.5 Integrating PLVmsg with Error Handling"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Advanced Oracle PL/SQL Programming with Packages"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Advanced Oracle PL/SQL Programming with Packages"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch10_01.htm"
+TITLE="10. PLVprs, PLVtkn, and PLVprsps: Parsing Strings"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 10. PLVprs, PLVtkn, and PLVprsps: Parsing Strings"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>9.5 Integrating PLVmsg with Error Handling</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>10. PLVprs, PLVtkn, and PLVprsps: Parsing Strings</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG
+SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly & Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

@@ -1,0 +1,2094 @@
+<html>
+<head>
+<title>Bean-Managed Persistence (Enterprise JavaBeans)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Richard Monson-Haefel">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-869-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Bean-Managed Persistence">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm" alt="Enterprise JavaBeans"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch06_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch06_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch06_01.htm">Chapter 6: Entity Beans</a></td><td align="right" valign="top" width="172"><a href="ch06_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch06_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">6.2. Bean-Managed Persistence</h2>
+
+<p>
+<a name="INDEX-1084"></a><a name="INDEX-1085"></a>
+Bean-managed persistence is more complicated than container-managed
+persistence because you must explicitly write the persistence logic
+into the <a name="INDEX-1086"></a>bean class. In order to write the
+persistence handling code into the bean class, you must know what
+type of <a name="INDEX-1087"></a>database is being used and the how the
+bean class's fields map to that database.
+</p>
+
+<p>Bean-managed persistence gives you more flexibility in how
+<a name="INDEX-1088"></a>state is
+managed between the bean instance and the database. Entity beans that
+are defined by complex joins, a combination of different databases,
+or other resources such as legacy systems will benefit from
+bean-managed persistence. Essentially, bean-managed persistence is
+the alternative to container-managed persistence when the deployment
+tools are inadequate for mapping the bean instance's state to
+the database. It is likely that enterprise developers will use
+bean-managed persistence for creating custom beans for their business
+system.
+</p>
+
+<p>The disadvantage of bean-managed persistence is that more work is
+required to define the bean. You have to understand the structure of
+the database and develop the logic to create, update, and remove data
+associated with an entity. This requires diligence in using the EJB
+callback methods such as <tt class="literal">ejbLoad()</tt> and
+<tt class="literal">ejbStore()</tt> appropriately. In addition, you must
+explicitly develop the find methods defined in the bean's home
+interface.
+</p>
+
+<p>Another disadvantage of bean-managed persistence is that it ties the
+bean to a specific database type and structure. Any changes in the
+database or in the structure of data require changes to the bean
+instance's definition; these changes may not be trivial. A
+bean-managed entity is not as database-independent as a
+container-managed entity, but it can better accommodate a complex or
+unusual set of data.<a href="#FOOTNOTE-4">[4]</a>
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-4"></a>
+<p>[4] Containers that use
+object-to-relational mapping tools in bean-managed persistence can
+mitigate this disadvantage.</p> </blockquote>
+
+<p>To understand how bean-managed persistence works, we will modify the
+Ship bean to use bean-managed persistence. The nice thing about this
+change is that we do not need to modify any of the client's
+API. All the changes take place in the <tt class="literal">ShipBean</tt>
+class and the deployment descriptor.
+</p>
+
+<a name="JBEANS-CH-6-SECT-2.1"></a>
+<h3 class="sect2">6.2.1. Making the ShipBean a Bean-Managed Entity</h3>
+
+<p>The bulk of the source code for a bean-managed Ship bean is
+applicable to both EJB 1.1 and EJB 1.0. Changes to accommodate EJB
+1.0 containers are indicated by comments in the source code. There
+are two types of changes required:
+</p>
+
+<ul>
+<li>
+<p>EJB 1.0 requires that a
+<tt class="literal">RemoteException</tt><a name="INDEX-1089"></a> be thrown if a
+system exception occurs. You will notice that a special comment,
+<tt class="literal">EJB</tt><tt class="literal">1.0:</tt><tt class="literal">throw</tt><tt class="literal">new</tt><tt class="literal">RemoteException(),</tt> is placed in the appropriate
+locations to note this difference. EJB 1.1 requires that the
+<tt class="literal">javax.ejb.EJBException</tt><a name="INDEX-1090"></a> be thrown if a system error, like
+an <tt class="literal">SQLException</tt>, is encountered while executing a
+method. The <tt class="literal">EJBException</tt> is a subclass of
+<tt class="literal">RuntimeException</tt> in EJB 1.1, so you don't
+have to declare it in the method signature.
+</p>
+</li>
+<li>
+<p>
+<a name="INDEX-1091"></a>Multi-entity find methods in EJB
+1.0 are required to return <tt class="literal">null</tt>, if no matching
+entities are found. This difference is noted in the code of the
+<tt class="literal">findByCapacity()</tt> method. Multi-entity find methods
+in EJB 1.1 return an empty
+<tt class="literal">Collection</tt><a name="INDEX-1092"></a><a name="INDEX-1093"></a><a name="INDEX-1094"></a> or <tt class="literal">Enumeration</tt>
+if no matching entities are found.
+</p>
+</li>
+</ul>
+<p>Here is the complete definition of the <a name="INDEX-1095"></a><a name="INDEX-1096"></a>bean-managed
+<tt class="literal">ShipBean</tt>:
+<a name="INDEX-1097"></a><a name="INDEX-1098"></a>
+</p>
+
+<blockquote>
+<pre class="programlisting">package com.titan.ship;
+
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+import javax.ejb.EntityContext;
+import java.rmi.RemoteException;
+import java.sql.SQLException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import javax.sql.DataSource;
+import javax.ejb.CreateException;
+import javax.ejb.EJBException;
+import javax.ejb.FinderException;
+import javax.ejb.ObjectNotFoundException;
+import java.util.Enumeration;
+import java.util.Properties;
+import java.util.Vector;
+
+public class ShipBean implements javax.ejb.EntityBean {
+    public int id;
+    public String name;
+    public int capacity;
+    public double tonnage;
+
+    public EntityContext context;
+       
+    public ShipPK ejbCreate(int id, String name,
+        int capacity, double tonnage) 
+        throws CreateException {
+        // EJB 1.0: Also throws RemoteException
+        if ((id &lt; 1) || (name == null))
+           throw new CreateException("Invalid Parameters");
+        this.id = id;
+        this.name = name;
+        this.capacity = capacity;
+        this.tonnage = tonnage;
+        
+        Connection con = null;
+        PreparedStatement ps = null;
+        try {
+          con = this.getConnection();
+          ps = con.prepareStatement(
+           <tt class="userinput"><b>"insert into Ship (id, name, capacity, tonnage) " +</b></tt>
+<tt class="userinput"><b>           "values (?,?,?,?)"</b></tt>);
+          ps.setInt(1, id);
+          ps.setString(2, name);
+          ps.setInt(3, capacity);
+          ps.setDouble(4, tonnage);
+          if (ps.executeUpdate() != 1) {
+            throw new CreateException ("Failed to add Ship to database");
+          }
+          ShipPK primaryKey = new ShipPK();
+          primaryKey.id = id;
+          return primaryKey;
+        }
+        catch (SQLException se) {
+          // EJB 1.0: throw new RemoteException("", se);
+          throw new EJBException (se);
+        }
+        finally {
+          try {         
+            if (ps != null) ps.close(); 
+            if (con!= null) con.close(); 
+          } catch(SQLException se) {
+            se.printStackTrace();
+          }
+        }
+    }
+    public void ejbPostCreate(int id, String name,
+        int capacity, double tonnage) {
+        // Do something useful with the primary key.
+    }
+    public ShipPK ejbCreate(int id, String name )
+        throws CreateException {
+        // EJB 1.0: Also throws RemoteException
+        return ejbCreate(id,name,0,0);
+    }
+    public void ejbPostCreate(int id, String name) {
+        // Do something useful with the EJBObject reference.
+    }
+    public ShipPK ejbFindByPrimaryKey(ShipPK primaryKey) 
+        throws FinderException, {
+        // EJB 1.0: Also throws RemoteException    
+        Connection con = null;
+        PreparedStatement ps = null;
+        ResultSet result = null;
+        try {
+          con = this.getConnection();
+          ps = con.prepareStatement(
+<b class="emphasis-bold">              "select id from Ship where id = ?");</b>
+          ps.setInt(1, primaryKey.id);
+          result = ps.executeQuery();
+          // Does ship id exist in database?
+          if (!result.next()) {
+            throw new ObjectNotFoundException(
+                "Cannot find Ship with id = "+id);
+          }
+        } catch (SQLException se) {
+          // EJB 1.0: throw new RemoteException("", se);
+          throw new EJBException(se);
+        }
+        finally {
+          try {
+            if (result != null) result.close();
+            if (ps != null) ps.close(); 
+            if (con!= null) con.close(); 
+          } catch(SQLException se){
+            se.printStackTrace();
+          }
+        }
+        return primaryKey;
+    }
+    public Enumeration ejbFindByCapacity(int capacity) 
+        throws FinderException {
+        // EJB 1.0: Also throws RemoteException
+        Connection con = null;
+        PreparedStatement ps = null;
+        ResultSet result = null;        
+        try {
+          con = this.getConnection();
+          ps = con.prepareStatement(
+              <tt class="userinput"><b>"select id from Ship where capacity = ?"</b></tt>);
+          ps.setInt(1,capacity);
+          result = ps.executeQuery();
+          Vector keys = new Vector();
+          while(result.next()) {
+            ShipPK shipPk = new ShipPK();
+            shipPk.id = result.getInt("id");
+            keys.addElement(shipPk);
+          }
+          // EJB 1.1: always return collection, even if empty.
+          return keys.elements();
+          // EJB 1.0: return null if collection is empty.
+          // return (keys.size() &gt; 0) ? keys.elements() : null;
+          
+        }
+        catch (SQLException se) {
+          // EJB 1.0: throw new RemoteException("",se);
+          throw new EJBException (se);
+        }
+        finally {
+          try {
+            if (result != null) result.close();
+            if (ps != null) ps.close(); 
+            if (con!= null) con.close(); 
+          } catch(SQLException se) {
+            se.printStackTrace();
+          }
+        }      
+    }
+    public void setEntityContext(EntityContext ctx) {
+        context = ctx;
+    }
+    public void unsetEntityContext() {
+        context = null;
+    }
+    public void ejbActivate() {}
+    public void ejbPassivate() {}
+    public void ejbLoad() {
+        // EJB 1.0: throws RemoteException
+
+        ShipPK pk = (ShipPK) context.getPrimaryKey();
+        Connection con = null;
+        PreparedStatement ps = null;
+        ResultSet result = null;
+        try {
+          con = this.getConnection();
+          ps = con.prepareStatement(
+<b class="emphasis-bold">"              select name, capacity, tonnage from Ship where id = ?");</b>
+          ps.setInt(1,pk.id);
+          result = ps.executeQuery();
+          if (result.next()){
+            id = id;
+            name = result.getString("name");
+            capacity = result.getInt("capacity");
+            tonnage = result.getDouble("tonnage");
+          } else {
+            /* EJB 1.0: throw new RemoteException();
+            */
+            throw new EJBException();
+          }
+        } catch (SQLException se) {
+           // EJB 1.0: throw new RemoteException("",se);
+           throw new EJBException(se);
+        }
+        finally {
+          try {
+            if (result != null) result.close();
+            if (ps != null) ps.close(); 
+            if (con!= null) con.close(); 
+          } catch(SQLException se) {
+            se.printStackTrace();
+          }
+        }      
+    }
+    public void ejbStore() {
+    // EJB 1.0: throws RemoteException 
+        Connection con = null;
+        PreparedStatement ps = null;
+        try {
+          con = this.getConnection();
+          ps = con.prepareStatement(
+              <tt class="userinput"><b>"update Ship set name = ?, capacity = ?, " +</b></tt>
+<tt class="userinput"><b>              "tonnage = ? where id = ?"</b></tt>);
+          ps.setString(1,name);
+          ps.setInt(2,capacity);
+          ps.setDouble(3,tonnage);
+          ps.setInt(4,id);
+          if (ps.executeUpdate() != 1) {
+            // EJB 1.0: throw new RemoteException ("ejbStore failed");
+            throw new EJBException("ejbStore");
+          }
+        }
+        catch (SQLException se) {
+          // EJB 1.0: throw new RemoteException("",se);
+          throw new EJBException (se);
+        }
+        finally {
+          try {
+            if (ps != null) ps.close(); 
+            if (con!= null) con.close(); 
+          } catch(SQLException se) {
+            se.printStackTrace();
+          }
+        }
+    }
+    public void ejbRemove() {
+        // EJB 1.0: throws RemoteException
+        Connection con = null;
+        PreparedStatement ps = null;
+        try {
+          con = this.getConnection();
+          ps = con.prepareStatement(<tt class="userinput"><b>"delete from Ship where id = ?"</b></tt>);
+          ps.setInt(1, id);
+          if (ps.executeUpdate() != 1) {
+            // EJB 1.0 throw new RemoteException("ejbRemove");
+            throw new EJBException("ejbRemove");
+          }
+        }
+        catch (SQLException se) {
+          // EJB 1.0: throw new RemoteException("",se);
+          throw new EJBException (se);
+        }
+        finally {
+          try {
+            if (ps != null) ps.close(); 
+            if (con!= null) con.close(); 
+          } catch(SQLException se) {
+            se.printStackTrace();
+          }
+        }
+    }
+    public String getName() {
+        return name;
+    }
+    public void setName(String n) {
+        name = n;
+    }
+    public void setCapacity(int cap) {
+        capacity = cap;
+    }
+    public int getCapacity() {
+        return capacity;
+    }
+    public double getTonnage() {
+        return tonnage;
+    }
+    public void setTonnage(double tons) {
+        tonnage = tons;
+    }
+    private Connection getConnection() throws SQLException {
+         // Implementations for EJB 1.0 and EJB 1.1 shown below
+   }
+}</pre>
+</blockquote>
+
+
+<a name="JBEANS-CH-6-SECT-2.2"></a>
+<h3 class="sect2">6.2.2. Exception Handling</h3>
+
+<p>There are three types of
+<a name="INDEX-1099"></a><a name="INDEX-1100"></a><a name="INDEX-1101"></a>exceptions thrown from a bean:
+<a name="INDEX-1102"></a>
+application exceptions, which indicate business logic errors,
+<a name="INDEX-1103"></a>runtime
+exceptions, and <a name="INDEX-1104"></a><a name="INDEX-1105"></a>checked subsystem exceptions, which
+are throw from subsystems like JDBC or JNDI.
+</p>
+
+<dl>
+<dt>
+<b>Application exceptions</b>
+</dt>
+<dd>
+<p>Application exceptions include standard EJB application exceptions
+and custom application exceptions. The standard EJB application
+exceptions are <tt class="literal">CreateException</tt>,
+<tt class="literal">FinderException</tt>,
+<tt class="literal">ObjectNotFoundException</tt>,
+<tt class="literal">DuplicateKeyException</tt>, and
+<tt class="literal">RemoveException</tt>. These exceptions are thrown from
+the appropriate methods to indicate that a business logic error has
+occurred. Custom exceptions are exceptions you develop for specific
+business problems. You will develop custom exceptions in <a href="ch07_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch07_01.htm">Chapter 7, "Session Beans"</a>.
+</p>
+</dd>
+
+<dt>
+<b>Runtime exceptions</b>
+</dt>
+<dd>
+<p>
+<tt class="literal">RuntimeException</tt> types are thrown from the virtual
+machine itself and indicate that a fairly serious programming error
+has occurred. Examples include
+<tt class="literal">NullPointerException</tt> and
+<tt class="literal">IndexOutOfBoundsException</tt>. These exceptions are
+handled by the
+<a name="INDEX-1106"></a>container
+automatically and should not be handled inside a bean method.
+</p>
+</dd>
+
+<dt>
+<b>EJB 1.1 subsystem exceptions</b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1107"></a>Checked exceptions thrown by
+other subsystems must be wrapped in an
+<tt class="literal">EJBException</tt><a name="INDEX-1108"></a> and rethrown
+from the method. Several examples of this can be found in the
+previous example, in which an <tt class="literal">SQLException</tt> that
+was thrown from JDBC was caught and rethrown as an
+<tt class="literal">EJBException</tt>. Checked exceptions from other
+subsystems, such as those thrown from JNDI, JavaMail, JMS, etc.,
+should be handled in the same fashion. The
+<tt class="literal">EJBException</tt> is a subtype of the
+<tt class="literal">RuntimeException</tt>, so it doesn't need to be
+declared in the method's <tt class="literal">throws</tt> clause.
+</p>
+</dd>
+
+<dt>
+<b>EJB 1.0 subsystem exceptions</b>
+</dt>
+<dd>
+<p>Checked exceptions thrown by other subsystems must be wrapped in a
+<tt class="literal">RemoteException</tt><a name="INDEX-1109"></a> and rethrown
+from the method. In the previous example, we caught an
+<tt class="literal">SQLException</tt> that was thrown by JDBC, and threw
+our own <tt class="literal">RemoteException</tt>. Checked exceptions, such
+as those thrown from JNDI, JavaMail, JMS, etc., should be handled in
+the same fashion.
+</p>
+</dd>
+
+</dl>
+
+<p>Exceptions have an impact on transactions and are fundamental to
+transaction processing. Exceptions are examined in greater detail in
+<a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_01.htm">Chapter 8, "Transactions"</a>.
+</p>
+
+
+<a name="JBEANS-CH-6-SECT-2.3"></a>
+<h3 class="sect2">6.2.3. EntityContext</h3>
+
+<p>An <a name="INDEX-1110"></a><a name="INDEX-1111"></a><tt class="literal">EntityContext</tt> is given
+to the bean instance at the beginning of its life cycle, before
+it's made available to service any clients. The
+<tt class="literal">EntityContext</tt> should be placed in an instance
+field of the bean and maintained for the life of the instance.
+</p>
+
+<p>The <tt class="literal">setEntityContext()</tt> method saves the
+<tt class="literal">EntityContext</tt> assigned to the bean in the instance
+field <tt class="literal">context</tt>. As the bean instance is swapped
+from one EJB object to the next, the information obtainable from the
+<tt class="literal">EntityContext</tt> reference changes to reflect the EJB
+object that the instance is assigned to. This is possible because the
+<tt class="literal">EntityContext</tt> is an interface, not a static class
+definition. This means that the container can implement the
+<tt class="literal">EntityContext</tt> with a concrete class that it
+controls. As the bean instance is swapped from one EJB object to
+another, some of the information made available through the
+<tt class="literal">EntityContext</tt> will also change.
+</p>
+
+<p>Both <tt class="literal">SessionContext</tt>, used by session beans, and
+<tt class="literal">EntityContext</tt> extend
+<tt class="literal">EJBContext</tt>. Here is the definition of
+<tt class="literal">EntityContext</tt>:
+</p>
+
+<blockquote>
+<pre class="programlisting">public interface EntityContext extends EJBContext {
+    public EJBObject getEJBObject() 
+        throws java.lang.IllegalStateException;
+    public Object getPrimaryKey() 
+        throws java.lang.IllegalStateException;
+}</pre>
+</blockquote>
+
+<p>The superinterface, the <tt class="literal">EJBContext</tt>, defines
+several methods that provide a lot of information about the bean
+instance's properties, security, and transactional environment.
+The next section discusses the <tt class="literal">EJBContext</tt> in more
+detail. Here we focus on the methods defined in the
+<tt class="literal">EntityContext</tt>.
+</p>
+
+<p>The <tt class="literal">getEJBObject()</tt> method returns a remote
+reference to the bean instance's EJB object. This is the same
+kind of reference that might be used by an application client or
+another bean. The purpose of this method is to provide the bean
+instance with a reference to itself when it needs to perform a
+loopback operation. A loopback occurs when a bean invokes a method on
+another bean, passing itself as one of the parameters. Here is a
+hypothetical example:
+</p>
+
+<blockquote>
+<pre class="programlisting">public class A_Bean extends EntityBean {
+   public EntityContext context;
+   public void someMethod() {
+       B_Bean  b = ... // Get a remote reference to a bean of type B_Bean.
+       // EJB 1.0: Use native casting instead of narrow()
+       EJBObject obj = context.getEJBObject();             
+       A_Bean mySelf =  (A_Bean)
+           PortableRemoteObject.narrow(obj,A_Bean.class);
+    b.aMethod( mySelf );
+   }
+   ...
+}</pre>
+</blockquote>
+
+<p>It is illegal for a bean instance to pass a <tt class="literal">this</tt>
+reference to another bean; instead, it passes its remote reference,
+which the bean instance gets from its context. As discussed in <a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch03_01.htm">Chapter 3, "Resource Management and the Primary Services"</a>, loopbacks or reentrant behavior are
+problematic in EJB and should be avoided by new EJB developers.
+Session beans also define the <tt class="literal">getEJBObject()</tt>
+method in the <tt class="literal">SessionContext</tt> interface; its
+behavior is exactly the same.
+</p>
+
+<p>The
+<tt class="literal">getEJBHome()</tt><a name="INDEX-1112"></a> method is available to both entity
+and session beans and is defined in the <tt class="literal">EJBContext</tt>
+class. The <tt class="literal">getEJBHome()</tt> method returns a remote
+reference to the EJB home for that bean type. The bean instance can
+use this method to create new beans of its own type or, in the case
+of entity beans, to find other bean entities of its own type. Most
+beans won't need access to their EJB home, but if you need one,
+<tt class="literal">getEJBHome()</tt> provides a way to get it.
+</p>
+
+<p>The
+<a name="INDEX-1113"></a><a name="INDEX-1114"></a><tt class="literal">getPrimaryKey()</tt> method allows a bean instance to
+get a copy of the primary key to which it is currently assigned.
+Outside of the <tt class="literal">ejbLoad()</tt> and
+<tt class="literal">ejbStore()</tt> methods, the use of this method, like
+the <tt class="literal">getEJBHome()</tt> method in the
+<tt class="literal">EJBContext</tt>, is probably rare, but the
+<tt class="literal">EntityContext</tt> makes the primary key available for
+those unusual circumstances when it is needed.
+</p>
+
+<p>As the context in which the bean instance operates changes, some of
+the information made available through the
+<tt class="literal">EntityContext</tt> reference will be changed by the
+container. This is why the methods in the
+<tt class="literal">EntityContext</tt> throw the
+<tt class="literal">java.lang.IllegalStateException</tt>. The
+<tt class="literal">EntityContext</tt> is always available to the bean
+instance, but the instance is not always assigned to an EJB object.
+<a name="INDEX-1115"></a><a name="INDEX-1116"></a><a name="INDEX-1117"></a>
+When the bean is between EJB objects, it has no EJB object or primary
+key to return. If the <tt class="literal">getEJBObject()</tt> or
+<tt class="literal">getPrimaryKey()</tt> methods are invoked when the bean
+is not assigned to an EJB object (when it is swapped out), they throw
+an <tt class="literal">IllegalStateException</tt>. <a href="appb_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/appb_01.htm">Appendix B, "State and Sequence Diagrams"</a> provides tables for each bean type describing
+which <tt class="literal">EJBContext</tt> methods can be invoked at
+<a name="INDEX-1118"></a><a name="INDEX-1119"></a> what
+times.
+</p>
+
+
+<a name="JBEANS-CH-6-SECT-2.4"></a>
+<h3 class="sect2">6.2.4. EJB 1.1: EJBContext</h3>
+
+<p>The <tt class="literal">EntityContext</tt> extends the
+<tt class="literal">javax.ejb.EJBContext</tt> class, which is also the base
+class for the <tt class="literal">SessionContext</tt> used by session
+beans. The <tt class="literal">EJBContext</tt> defines several methods that
+provide useful information to a bean at runtime. Here is the
+definition of the <tt class="literal">EJBContext</tt><a name="INDEX-1120"></a> interface:
+</p>
+
+<blockquote>
+<pre class="programlisting">package javax.ejb;
+public interface EJBContext {
+   
+   public EJBHome getEJBHome();
+   
+   // security methods
+   public java.security.Principal getCallerPrincipal();
+   public boolean isCallerInRole(java.lang.String roleName);
+   
+   // deprecated methods
+   public java.security.Identity getCallerIdentity();
+   public boolean isCallerInRole(java.security.Identity role); 
+   public java.util.Properties getEnvironment();
+
+   // transaction methods
+   public javax.transaction.UserTransaction getUserTransaction() 
+   throws java.lang.IllegalStateException;
+   public boolean getRollbackOnly() 
+       throws java.lang.IllegalStateException;
+   public void setRollbackOnly() 
+       throws java.lang.IllegalStateException;
+}</pre>
+</blockquote>
+
+<p>The
+<tt class="literal">getEJBHome()</tt><a name="INDEX-1121"></a> method returns a reference to the
+bean's <a name="INDEX-1122"></a>home interface. This is useful if
+the bean needs to create or find beans of its own type. As an
+example, if all employees in Titan's system (including
+managers) are represented by the Employee bean, then a manager
+employee that needs access to subordinate employees can use the
+<tt class="literal">getEJBHome()</tt> method to get beans representing the
+appropriate employees:
+</p>
+
+<blockquote>
+<pre class="programlisting">public class EmployeeBean implements EntityBean {
+     int id;
+     String firstName;
+     ...
+     public Enumeration getSubordinates() {            
+         // EJB 1.0: Use native Java casting instead of narrow()
+         Object ref = <tt class="userinput"><b>ejbContext.getEJBHome()</b></tt>;
+         EmployeeHome home = (EmployeeHome)
+             PortableRemoteObject.narrow(ref, EmployeeHome.class);
+
+         Enumeration subordinates = home.findByManagerID(this.id);
+         return subordinates;
+     }
+     ...
+}</pre>
+</blockquote>
+
+<p>The
+<tt class="literal">getCallerPrincipal()</tt><a name="INDEX-1123"></a> method is used to obtain the
+<tt class="literal">Principal</tt> object representing the client that is
+currently accessing the bean. The
+<tt class="literal">Principal</tt><a name="INDEX-1124"></a> object can, for
+example, be used by the Ship bean to track the identity of clients
+making updates:
+</p>
+
+<blockquote>
+<pre class="programlisting"> public class ShipBean implements EntityBean {
+    String modifiedBy;
+    EntityContext context;
+    ...
+    public void setTonnage(double tons){
+        tonnage = tons;
+        Principal principal = <tt class="userinput"><b>context.getCallerPrincipal();</b></tt>
+        String modifiedBy = principal.getName();
+    }
+    ...
+}</pre>
+</blockquote>
+
+<p>The
+<tt class="literal">isCallerInRole()</tt><a name="INDEX-1125"></a><a name="INDEX-1126"></a> method tells you whether the client
+accessing the bean is a member of a specific role, identified by a
+role name. This method is useful when more access control is needed
+than the simple method-based access control can provide. In a banking
+system, for example, the Teller role might be allowed to make
+withdrawals, but only a Manager can make withdrawals over $10,000.00.
+This kind of fine-grained <a name="INDEX-1127"></a>access control cannot be addressed
+through EJB's security attributes because it involves a
+business logic problem. Therefore, we can use the
+<tt class="literal">isCallerInRole()</tt> method to augment the automatic
+access control provided by EJB. First, let's assume that all
+Managers also are Tellers. Let's also assume that the
+deployment descriptor for the Account bean specifies that clients
+that are members of the Teller role can invoke the
+<tt class="literal">withdraw()</tt> method. The business logic in the
+<tt class="literal">withdraw()</tt> method uses
+<tt class="literal">isCallerInRole()</tt> to further refine access control
+so that only the Manager role can withdraw over $10,000.00.
+</p>
+
+<blockquote>
+<pre class="programlisting">public class AccountBean implements EntityBean {
+    int id;
+    double balance;
+    EntityContext context;
+
+    public void withdraw(Double withdraw)
+    throws AccessDeniedException {
+        
+        if (withdraw.doubleValue() &gt; 10000) {
+           boolean isManager = <tt class="userinput"><b>context.isCallerInRole("Manager");</b></tt>
+           if (!isManager) {
+              // Only Managers can withdraw more than 10k.
+              throw new AccessDeniedException();
+           }
+        }
+        balance = balance - withdraw.doubleValue();
+
+    }
+    ...
+}</pre>
+</blockquote>
+
+<p>The <tt class="literal">EJBContext</tt> contains some deprecated methods
+that were used in EJB 1.0 but will be abandoned in a future version
+of the specification. Support for these deprecated methods is
+optional so that EJB 1.1 servers can host EJB 1.0 beans. EJB servers
+that do not support the deprecated security methods will throw a
+<tt class="literal">RuntimeException</tt>. The deprecated security methods
+are based on EJB 1.0's use of the <tt class="literal">Identity</tt>
+object instead of the <tt class="literal">Principal</tt> object. The
+semantics of the deprecated methods are basically the same, but
+because <tt class="literal">Identity</tt> is an abstract class, it has
+proven to be too difficult to use. <a href="ch06_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch06_01.htm">Chapter 6, "Entity Beans"</a> goes into detail on how to use
+the <tt class="literal">Identity</tt> driven security methods. EJB 1.1
+beans should use the <tt class="literal">Principal</tt>-based security
+methods.
+</p>
+
+<p>The
+<tt class="literal">getEnvironment()</tt><a name="INDEX-1128"></a> method has been replaced by the
+<a name="INDEX-1129"></a>JNDI Environment Naming Context,
+which is discussed later in the book. Support in EJB 1.1 for the
+deprecated <tt class="literal">getEnvironment()</tt> method is discussed in
+detail in <a href="ch07_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch07_01.htm">Chapter 7, "Session Beans"</a>.
+</p>
+
+<p>The transactional methods (<tt class="literal">getUserTransaction()</tt>,
+<tt class="literal">setRollbackOnly()</tt>,
+<tt class="literal">getRollbackOnly()</tt>) are described in
+<tt class="literal"></tt><a name="INDEX-1130"></a> detail in <a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_01.htm">Chapter 8, "Transactions"</a><tt class="literal">.</tt>
+</p>
+
+
+<a name="JBEANS-CH-6-SECT-2.5"></a>
+<h3 class="sect2">6.2.5. EJB 1.0: EJBContext</h3>
+
+<p>In EJB 1.0, the <tt class="literal">EntityContext</tt> serves essentially
+the same purpose as in EJB 1.1. It extends the
+<tt class="literal">javax.ejb.EJBContext</tt> class, which is also the base
+class for the <tt class="literal">SessionContext</tt> used by session
+beans, and it defines several methods that provide useful information
+to a bean at runtime. Here is the definition of the
+<tt class="literal">EJBContext</tt><a name="INDEX-1131"></a> for Version 1.0:
+</p>
+
+<blockquote>
+<pre class="programlisting">package javax.ejb;
+public interface EJBContext {
+   
+   public EJBHome getEJBHome();
+   public java.util.Properties getEnvironment();
+  
+   // security methods
+   public java.security.Identity getCallerIdentity();
+   public boolean isCallerInRole(java.security.Identity role); 
+
+   // transaction methods
+   public javax.transaction.UserTransaction getUserTransaction() 
+   throws java.lang.IllegalStateException;
+   public boolean getRollbackOnly()
+       throws java.lang.IllegalStateException;
+   public void setRollbackOnly()
+       throws java.lang.IllegalStateException;
+}</pre>
+</blockquote>
+
+<p>The
+<tt class="literal">getEJBHome()</tt><a name="INDEX-1132"></a> method is used to obtain a
+reference to the bean's home interface. Repeating the same
+example: if all employees in Titan's system (including
+managers) are represented by the Employee bean, then a manager can
+access subordinate employees using the
+<tt class="literal">getEJBHome()</tt> method:
+</p>
+
+<blockquote>
+<pre class="programlisting">public class EmployeeBean implements EntityBean {
+     int id;
+     String firstName;
+     ...
+     public Enumeration getSubordinates() {            
+         EmployeeHome home = (EmployeeHome) ejbContext.getEJBHome();
+         Enumeration subordinates = home.findByManagerID(this.id);
+         return subordinates;
+     }
+     ...
+}</pre>
+</blockquote>
+
+<p>The
+<tt class="literal">EJBContext.getEnvironment()</tt><a name="INDEX-1133"></a> method is used by both
+<a name="INDEX-1134"></a>session and entity
+beans. This method provides the bean instance with a set of
+properties defined at deployment; it returns an instance of
+<tt class="literal">java.util.Properties</tt>, which is a type of hash
+table. The bean's deployment descriptor provides the
+properties, which can include anything you consider necessary for the
+bean to function. The <a name="INDEX-1135"></a>environment properties are always
+available to the bean instance from any method.
+</p>
+
+<p>Properties are usually used to modify the business behavior at
+runtime. As an example, an Account bean used in a banking system
+might use properties to set a limit for withdrawals. Here's how
+the code might look:
+</p>
+
+<blockquote>
+<pre class="programlisting">public class AccountBean implements EntityBean {
+    int id; 
+    double balance; 
+    EntityContext ejbContext; 
+
+    public void withdraw(Double withdraw) 
+        throws WithdrawLimitException {
+<b class="emphasis-bold">    Properties props = ejbContext.getEnvironment();</b>
+<b class="emphasis-bold">    String value = props.getProperty("withdraw_limit");</b>
+        Double limit = new Double(value)
+        if (withdraw.doubleValue() &gt; limit.doubleValue())
+            throw new WithdrawLimitException(limit); 
+        else
+            balance = balance - withdraw.doubleValue();
+        }
+    }
+    ...
+}</pre>
+</blockquote>
+
+<p>When we create the deployment descriptor for the
+<tt class="literal">AccountBean</tt>, we set the
+<tt class="literal">withdraw_limit</tt> property in a
+<tt class="literal">Properties</tt> object, which in turn defines the
+environment properties for the entire bean. The following code shows
+how environment properties are set when creating a deployment
+descriptor:
+</p>
+
+<blockquote>
+<pre class="programlisting">Properties props = new Properties();
+props.put("withdraw_limit","100,000.00");
+deploymentDesc.setEnvironmentProperties(props);</pre>
+</blockquote>
+
+<p>In this case, we set the <tt class="literal">withdraw_limit</tt> to be
+$100,000.00. Environment properties can be used for a variety of
+purposes; setting limits is just one application. In <a href="#JBEANS-CH-6-SECT-2.6">Section 6.2.6, "Obtaining a Connection to the Database"</a>, you will learn how to use
+Environment properties to obtain database connections.
+</p>
+
+<p>The
+<tt class="literal">getCallerIdentity()</tt><a name="INDEX-1136"></a><a name="INDEX-1137"></a><a name="INDEX-1138"></a> method is used to obtain the
+<tt class="literal">java.security.Identity</tt> object that represents the
+client accessing the bean. The <tt class="literal">Identity</tt> object
+might, for example, be used by the Ship bean to track the identity of
+the client making updates:
+</p>
+
+<blockquote>
+<pre class="programlisting"> public class ShipBean implements EntityBean {
+    String modifiedBy;
+    EntityContext context;
+    ...
+    public void setTonnage(double tons) {
+        tonnage = tons;
+        Identity identity = <tt class="userinput"><b>context.getCallerIdentity();</b></tt>
+        String modifiedBy = identity.getName();
+    }
+    ...
+}</pre>
+</blockquote>
+
+<p>
+<tt class="literal">isCallerInRole()</tt><a name="INDEX-1139"></a><a name="INDEX-1140"></a> determines whether the client invoking the
+method is a member of a specific role, identified by a
+<tt class="literal">Identity</tt> object. We can use the same example that
+we discussed for EJB 1.1: a bank in which a Teller can make
+withdrawals, but only a Manager can make withdrawals over $10,000.00.
+This kind of fine-grained access control cannot be addressed by
+EJB's security attributes because it's a business logic
+problem. Therefore, we can use <tt class="literal">isCallerInRole()</tt> to
+augment the automatic <a name="INDEX-1141"></a>access control provided by EJB. In the
+Account bean, the access control attributes specify that only clients
+that are members of the Teller role can invoke the
+<tt class="literal">withdraw()</tt> method. The business logic in the
+<tt class="literal">withdraw()</tt> method uses the
+<tt class="literal">isCallerInRole()</tt> method to further refine access
+control so that only Manager role types, which are also a Teller role
+type, can withdraw over $10,000.00.
+</p>
+
+<blockquote>
+<pre class="programlisting">public class AccountBean implements EntityBean {
+    int id;
+    double balance;
+    EntityContext ejbContext;
+
+    public void withdraw(Double withdraw)
+    throws WithdrawLimitException, AccessDeniedException {
+        if (withdraw.doubleValue() &gt; 10000) {
+            Identity managerRole = new RoleIdentity("Manager");
+            boolean isManager = <tt class="userinput"><b>ejbContext.isCallerInRole(managerRole);</b></tt>
+            if (!isManager) {
+                // Only tellers can withdraw more than 10k.
+                throw new AccessDeniedException();
+            }
+        }
+        balance = balance - withdraw.doubleValue();
+    }
+    ...
+}</pre>
+</blockquote>
+
+<p>Unfortunately, while the EJB 1.0 specification requires the use of
+the <tt class="literal">Identity</tt> type as a role identifier, it
+doesn't specify how a bean should acquire the
+<tt class="literal">Identity</tt><a name="INDEX-1142"></a> object.<a href="#FOOTNOTE-5">[5]</a> The <tt class="literal">Identity</tt>
+class is an abstract class, so simply instantiating it is not
+possible. In our example, a mysterious
+<tt class="literal">RoleIdentity</tt> object was instantiated with the name
+of the role being tested. This provided us with an
+<tt class="literal">Identity</tt> object that could be used in the
+<tt class="literal">isCallerInRole(Identity role)</tt> method. But where
+did the <tt class="literal">RoleIdentity</tt> object come from?
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-5"></a>
+<p>[5]The
+remainder of this section appeared first in jGuru's Server-Side
+Java column "Create forward-compatible beans in EJB, Part
+2" in <em class="citetitle">JavaWorld</em> (<a href="http://www.javaworld.com/javaworld/jw-01-2000/jw-01-ssj-ejb2.html" ">http://www.javaworld.com/javaworld/jw-01-2000/jw-01-ssj-ejb2.html" </a>).</p> </blockquote>
+
+<p>The <tt class="literal">RoleIdentity</tt><a name="INDEX-1143"></a> class is a simple extension of the
+<tt class="literal">java.security.Identity</tt> class, and provides us with
+a simple, concrete implementation of <tt class="literal">Identity</tt> that
+we can instantiate with a string name.<a href="#FOOTNOTE-6">[6]</a> Here is the definition of this class:
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-6"></a>
+<p>[6]A similar
+<tt class="literal">RoleIdentity</tt> class was originally defined by Jian
+Lin in a post to the ejb-interest mailing list on September 24,
+1999.</p> </blockquote>
+
+<blockquote>
+<pre class="programlisting">import java.security.Identity;
+public class RoleIdentity extends Identity {
+    public RoleIdentity(String name) {
+        super(name);
+    }
+}</pre>
+</blockquote>
+
+<p>Use of the <tt class="literal">RoleIdentity</tt> class works in those EJB
+servers that limit comparison operations of
+<tt class="literal">Identity</tt><a name="INDEX-1144"></a> to the name attribute. In other words,
+these servers simply compare the string values returned by the
+<tt class="literal">getName()</tt><a name="INDEX-1145"></a> methods of the
+<tt class="literal">Identity</tt> objects.
+</p>
+
+<p>Some EJB vendors may use more complicated mechanisms for comparing
+the <tt class="literal">Identity</tt> objects. In these cases, you may have
+to enhance the <tt class="literal">RoleIdentity</tt> defined here, or use a
+vendor-specific mechanism for verifying membership in a role.
+BEA's WebLogic Server, for example, works well with the
+<tt class="literal">RoleIdentity</tt>, but it also provides a proprietary
+mechanism for obtaining group <tt class="literal">Identity</tt> objects
+(i.e., roles to which identities belong). The following code fragment
+shows how the Account bean would be coded to use the WebLogic
+security API instead of <tt class="literal">RoleIdentity</tt> :
+</p>
+
+<blockquote>
+<pre class="programlisting">public class AccountBean implements EntityBean {
+    int id;
+    double balance;
+    EntityContext ejbContext;
+
+    public void withdraw(Double withdraw)
+    throws WithdrawLimitException, AccessDeniedException {
+        if (withdraw.doubleValue() &gt; 10000) {
+<b class="emphasis-bold">            Identity managerRole = (Identity)</b>
+<b class="emphasis-bold">                weblogic.security.acl.Security.getRealm().getGroup("Manager");</b>
+            boolean isManager = ejbContext.isCallerInRole(managerRole)
+            if (!isManager) {
+                // Only tellers can withdraw more than 10k.
+                throw new AccessDeniedException();
+            }
+        }
+        balance = balance - withdraw.doubleValue();
+    }
+    ...
+}</pre>
+</blockquote>
+
+<p>In general, proprietary APIs like the previous one should be avoided
+so that the bean remains portable across EJB servers.
+</p>
+
+<p>The transactional methods (<tt class="literal">getUserTransaction()</tt>,
+<tt class="literal">setRollbackOnly()</tt>,
+<tt class="literal">getRollbackOnly()</tt>) are described in
+<tt class="literal"></tt><a name="INDEX-1146"></a> detail in <a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_01.htm">Chapter 8, "Transactions"</a>.
+</p>
+
+
+<a name="JBEANS-CH-6-SECT-2.6"></a>
+<h3 class="sect2">6.2.6. Obtaining a Connection to the Database</h3>
+
+<p>Titan's business <a name="INDEX-1147"></a><a name="INDEX-1148"></a><a name="INDEX-1149"></a>system is based on a
+<a name="INDEX-1150"></a>relational database, so we need to
+start with access to the database. The <a name="INDEX-1151"></a>JDBC API provides a standard and
+convenient way for programs written in Java to access relational
+databases. We use JDBC throughout this book and assume that
+you're already familiar with it.
+</p>
+
+<a name="JBEANS-CH-6-SECT-2.6.1"></a>
+<h3 class="sect3">6.2.6.1. EJB 1.1: Using JDBC in EJB</h3>
+
+<p>To get access to the database we simply request a connection from a
+<tt class="literal">DataSource</tt>, which we obtain from the JNDI
+environment naming context:
+</p>
+
+<blockquote>
+<pre class="programlisting">private Connection getConnection() throws SQLException {
+    try {
+      Context jndiCntx = new InitialContext();
+      DataSource ds = 
+         (DataSource)jndiCntx.lookup("java:comp/env/jdbc/titanDB");
+      return ds.getConnection();
+    }
+    catch (NamingException ne) {
+      throw new EJBException(ne);
+    }
+}</pre>
+</blockquote>
+
+<p>In EJB 1.1, every bean has access to its <a name="INDEX-1152"></a>JNDI environment naming context (ENC),
+which is part of the bean-container contract. In the bean's
+deployment descriptor, resources such as the JDBC DataSource,
+JavaMail, and Java Messaging Service can be mapped to a context
+(name) in the ENC. This provides a portable model for accessing these
+types of resources. In EJB 1.0, standard mechanisms for accessing
+JDBC connections and other resources were not defined. Here's
+the relevant portion of the EJB 1.1 <a name="INDEX-1153"></a><a name="INDEX-1154"></a><a name="INDEX-1155"></a>
+deployment descriptor:
+</p>
+
+<blockquote>
+<pre class="programlisting">&lt;enterprise-beans&gt;
+   &lt;entity&gt;
+     &lt;resource-ref&gt;
+           &lt;description&gt;DataSource for the Titan database&lt;/description&gt;
+           &lt;res-ref-name&gt;<tt class="userinput"><b>jdbc/titanDB</b></tt>&lt;/res-ref-name&gt;
+           &lt;res-type&gt;javax.sql.DataSource&lt;/res-type&gt;
+           &lt;res-auth&gt;Container&lt;/res-auth&gt;
+     &lt;resource-ref&gt;
+      ...
+   &lt;entity&gt;
+...
+&lt;enterprise-beans&gt;</pre>
+</blockquote>
+
+<p>The <tt class="literal">&lt;resource-ref&gt;</tt> tag is used for any
+resource ( JDBC, JMS, JavaMail) that is accessed from the ENC. It
+describes the JNDI name of the resource
+(<tt class="literal">&lt;res-ref-name&gt;</tt><a name="INDEX-1156"></a><a name="INDEX-1157"></a>), the factory type
+(<tt class="literal">&lt;res-type&gt;</tt><a name="INDEX-1158"></a>), and whether
+<a name="INDEX-1159"></a><a name="INDEX-1160"></a><a name="INDEX-1161"></a>authentication is performed
+explicitly by the bean or automatically by the container
+(<tt class="literal">&lt;res-auth&gt;</tt>). In this example, we are
+declaring that the JNDI name <tt class="literal">"jdbc/titanDB</tt>" refers
+to a <tt class="literal">javax.sql.DataSource</tt> resource manager, and
+that authentication to the database is handle automatically by the
+container. The JNDI name specified in the
+<tt class="literal">&lt;res-ref-name&gt;</tt><a name="INDEX-1162"></a> tag is always relative to the
+standard JNDI ENC context name, <tt class="literal">"java:comp/env"</tt>.
+</p>
+
+<p>When the bean is deployed, the deployer maps the information in the
+<tt class="literal">&lt;resource-ref&gt;</tt> tag to a live database. This
+is done in a vendor-specific manner, but the end result is the same.
+When a database connection is requested using the JNDI name
+<tt class="literal">"java:comp/jdbc/titanDB"</tt>, a
+<tt class="literal">DataSource</tt> for the Titan database is returned.
+Consult your vendor's documentation for details on how to map
+the <tt class="literal">DataSource</tt> to the database at deployment time.
+</p>
+
+<p>The
+<tt class="literal">getConnection()</tt><a name="INDEX-1163"></a>
+ method provides us with a simple and consistent mechanism for
+obtaining a database connection for our <tt class="literal">ShipBean</tt>
+class. Now that we have a mechanism for obtaining a database
+connection, we can use it to insert, update, delete, and find
+<tt class="literal">Ship</tt> entities in the database.
+</p>
+
+
+
+<a name="JBEANS-CH-6-SECT-2.6.2"></a>
+<h3 class="sect3">6.2.6.2. EJB 1.0: Using JDBC in EJB</h3>
+
+<p>To get access to the <a name="INDEX-1164"></a>database, we simply request a connection
+from the <tt class="literal">DriverManager</tt>. To do this, we add a
+private method to the <tt class="literal">ShipBean</tt> class called
+<tt class="literal">getConnection()</tt>:
+</p>
+
+<blockquote>
+<pre class="programlisting">private Connection getConnection() throws SQLException {
+   Properties environmentProps = context.getEnvironment();
+   String url = environmentProps.getProperty("jdbcURL");
+   return DriverManager.getConnection(url);
+}</pre>
+</blockquote>
+
+<p>The <tt class="literal">getConnection()</tt> method provides an excellent
+opportunity to use the <tt class="literal">EntityContext</tt> that was
+passed to the bean instance at the beginning of its life cycle. We
+use the
+<tt class="literal">EJBContext.getEnvironment()</tt><a name="INDEX-1165"></a> method to obtain
+<a name="INDEX-1166"></a>properties that help us
+acquire JDBC connections.
+</p>
+
+<p>When we create the deployment descriptor for the
+<tt class="literal">ShipBean</tt>, we use a <tt class="literal">Properties</tt>
+object to tell the bean what URL to use to obtain a database
+connection. The following code, taken from the
+<tt class="literal">MakeDD</tt> class, shows how it's done:
+</p>
+
+<blockquote>
+<pre class="programlisting">Properties props = new Properties();
+props.put("jdbcURL","jdbc:&lt;subprotocol&gt;:&lt;subname&gt;");
+shipDD.setEnvironmentProperties(props);</pre>
+</blockquote>
+
+<p>We create a new instance of <tt class="literal">Properties</tt>, add the
+<tt class="literal">"jdbcURL"</tt> property, and then call the
+<tt class="literal">setEnvironmentProperties()</tt><a name="INDEX-1167"></a> method of the
+<tt class="literal">DeploymentDescriptor</tt> class to pass the properties
+to the actual bean when it is deployed.
+<a name="INDEX-1168"></a><a name="INDEX-1169"></a>The information in the property table
+is used in the <tt class="literal">getConnection()</tt> method.
+<a name="INDEX-1170"></a><a name="INDEX-1171"></a><a name="INDEX-1172"></a>This technique solves a nasty
+problem in an elegant, vendor-independent way: how does the bean make
+use of vendor-specific resources? The JDBC URL used is
+vendor-specific and therefore shouldn't be made part of the
+bean itself. However, when you are deploying a bean, you certainly
+know what vendor-specific environment you are deploying it in; thus
+the URL logically belongs to the deployment descriptor. In short, the
+<a name="INDEX-1173"></a>
+environment properties lets vendor-specific and environment-specific
+information be defined in the deployment process, where it belongs,
+and not during the bean development process.
+</p>
+
+<p>The <tt class="literal">getConnection()</tt> method provides us with a
+simple and consistent mechanism for obtaining a database connection
+for our <tt class="literal">ShipBean</tt> class. Now that we have a
+mechanism for obtaining a database connection we can use it to
+insert, update, delete, and find <tt class="literal">Ship</tt> entities in
+the <a name="INDEX-1174"></a><a name="INDEX-1175"></a><a name="INDEX-1176"></a>
+database.
+</p>
+
+
+
+<a name="JBEANS-CH-6-SECT-2.7"></a>
+<h3 class="sect2">6.2.7. The ejbCreate( ) Method</h3>
+
+<p>The <a name="INDEX-1177"></a><a name="INDEX-1178"></a><tt class="literal">ejbCreate()</tt> methods are called by the <a name="INDEX-1179"></a>container when a <a name="INDEX-1180"></a>client
+invokes the corresponding <tt class="literal">create()</tt> method on the
+bean's home. With bean-managed persistence, the
+<tt class="literal">ejbCreate()</tt> methods are responsible for adding the
+new entity to the database. This means that the new version of
+<tt class="literal">ejbCreate()</tt> will be much more complicated than our
+container-managed version from earlier examples; with
+container-managed beans, <tt class="literal">ejbCreate()</tt> doesn't
+have to do much more than initialize a few fields. The EJB
+specification also states that <tt class="literal">ejbCreate()</tt> methods
+in bean-managed persistence must return the primary key of the newly
+created entity. This is another difference between bean-managed and
+container-managed persistence; in our container-managed beans,
+<tt class="literal">ejbCreate()</tt> was required to return
+<tt class="literal">void</tt>.
+</p>
+
+<p>The following code contains the <tt class="literal">ejbCreate()</tt> method
+of the <tt class="literal">ShipBean</tt>, modified for bean-managed
+persistence. Its return type has been changed from
+<tt class="literal">void</tt> to the Ship bean's primary key,
+<tt class="literal">ShipPK</tt>. Furthermore, the method uses the JDBC API
+to insert a new record into the database based on the information
+passed as parameters. The changes to the original
+<tt class="literal">ejbCreate()</tt> method are emphasized in bold.
+</p>
+
+<blockquote>
+<pre class="programlisting">  public ShipPK ejbCreate(int id, String name,
+    int capacity, double tonnage) 
+        throws CreateException {
+        // EJB 1.0: Also throws RemoteException
+    if ((id &lt; 1) || (name == null))
+        throw new CreateException("Invalid Parameters");
+    this.id = id;
+    this.name = name;
+    this.capacity = capacity;
+    this.tonnage = tonnage;
+        
+    Connection con = null;
+    PreparedStatement ps = null;
+    try {
+        con = this.getConnection();
+        ps = con.prepareStatement(
+            "insert into Ship (id, name, capacity, tonnage) " +
+            "values (?,?,?,?)");
+        ps.setInt(1, id);
+        ps.setString(2, name);
+        ps.setInt(3, capacity);
+        ps.setDouble(4, tonnage);
+        if (ps.executeUpdate() != 1) {
+            throw new CreateException ("Failed to add Ship to database");
+        }
+        ShipPK primaryKey = new ShipPK();
+        primaryKey.id = id;
+        return primaryKey;
+    }
+    catch (SQLException se) {
+        // EJB 1.0: throw new RemoteException(""se);
+        throw new EJBException (se);
+    }
+    finally {
+        try {         
+            if (ps != null) ps.close(); 
+            if (con!= null) con.close(); 
+        } catch(SQLException se) {
+            se.printStackTrace();
+        }
+    }
+}</pre>
+</blockquote>
+
+<p>At the beginning of the method, we verify that the parameters are
+correct, and throw a
+<tt class="literal">CreateException</tt><a name="INDEX-1181"></a>
+ if the <tt class="literal">id</tt> is less than 1, or the
+<tt class="literal">name</tt> is <tt class="literal">null</tt>. This shows how
+you would typically use a <tt class="literal">CreateException</tt> to
+report an application logic error.
+</p>
+
+<p>The ShipBean instance fields are still initialized using the
+parameters passed to <tt class="literal">ejbCreate()</tt> as before, but
+now we manually insert the data into the <tt class="literal">SHIP</tt>
+table in our database. To do so, we use a <a name="INDEX-1182"></a><a name="INDEX-1183"></a>
+JDBC <tt class="literal">PreparedStatement</tt> for SQL requests because it
+makes it easier to see the parameters being used. Alternatively, we
+could have used a stored procedure through a JDBC
+<tt class="literal">CallableStatement</tt> or a simple JDBC
+<tt class="literal">Statement</tt> object. We insert the new bean into the
+database using an SQL <tt class="literal">INSERT</tt> statement and the
+values passed into <tt class="literal">ejbCreate()</tt> parameters. If the
+insert is successful (no exceptions thrown), we create a primary key
+and return it to the container. If the insert operation is
+unsuccessful, we throw a new <tt class="literal">CreateException</tt>,
+which illustrates its use in more ambiguous situation. Failure to
+insert the record could be construed as an application error or a
+system failure. In this situation, the JDBC subsystem hasn't
+thrown an exception, so we shouldn't interpret the inability to
+insert a record as a failure of the subsystem. Therefore, we throw a
+<tt class="literal">CreateException</tt> instead of an
+<tt class="literal">EJBException</tt> (EJB 1.1) or
+<tt class="literal">RemoteException</tt> (EJB 1.0). Throwing a
+<tt class="literal">CreateException</tt> provides the application the
+opportunity to recover from the error, a transactional concept that
+is covered in more detail in <a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_01.htm">Chapter 8, "Transactions"</a>.
+</p>
+
+<p>Behind the scenes, the container uses the primary key and the
+<tt class="literal">ShipBean</tt> instance that returned it to provide the
+client with a remote reference to the new Ship entity. Conceptually,
+this means that the <tt class="literal">ShipBean</tt> instance and primary
+key are assigned to a newly constructed EJB object, and the EJB
+object stub is returned to the client.
+</p>
+
+<p>Our home interface requires us to provide a second
+<tt class="literal">ejbCreate()</tt> method with different parameters. We
+can save work and write more bulletproof code by making <a name="INDEX-1184"></a> the <a name="INDEX-1185"></a> second method
+call the <a name="INDEX-1186"></a><a name="INDEX-1187"></a> first:
+</p>
+
+<blockquote>
+<pre class="programlisting">public ShipPK ejbCreate(int id, String name)
+    throws CreateException {
+    return ejbCreate(id,name,0,0);
+}</pre>
+</blockquote>
+
+<a name="JBEANS-CH-6-ADMON-5"></a>
+<blockquote class="note">
+<h4 class="objtitle">NOTE</h4>
+<p>In EJB 1.0, the return type of the
+<tt class="literal">ejbCreate()</tt> method is void for container-managed
+persistence, while the return type for bean managed persistence is
+the primary key type. However, regardless of the persistence strategy
+used, the <tt class="literal">ejbPostCreate()</tt> methods always return
+<tt class="literal">void</tt>.
+</p>
+</blockquote>
+
+
+<a name="JBEANS-CH-6-SECT-2.8"></a>
+<h3 class="sect2">6.2.8. The ejbLoad( ) and ejbStore( ) Methods</h3>
+
+<p>Throughout the life of an <a name="INDEX-1188"></a><a name="INDEX-1189"></a>entity, its <a name="INDEX-1190"></a><a name="INDEX-1191"></a>data will be changed by client
+applications. In the <tt class="literal">ShipBean</tt>, we provide accessor
+methods to change the <tt class="literal">name</tt>,
+<tt class="literal">capacity</tt>, and <tt class="literal">tonnage</tt> of the
+Ship bean after it has been created. Invoking any of these accessor
+methods changes the state of the <tt class="literal">ShipBean</tt>
+instance, which must be reflected in the database. It is also
+necessary to ensure that the state of the bean instance is always
+up-to-date with the database.
+</p>
+
+<p>In container-managed persistence, synchronization between the bean
+and the database takes place automatically; the container handles it
+for you. With bean-managed persistence, you are responsible for
+synchronization: the bean must read and write to the database
+directly. The container works closely with the bean-managed entities
+by advising them when to synchronize their state through the use of
+two <a name="INDEX-1192"></a>callback methods:
+<tt class="literal">ejbStore()</tt> and <tt class="literal">ejbLoad()</tt>.
+</p>
+
+<p>The <tt class="literal">ejbStore()</tt> method is called when the container
+decides that it is a good time to write the entity bean's data
+to the database. The container makes these decisions based on all the
+activities it is managing, including transactions, concurrency, and
+resource management. Vendor implementations may differ slightly in
+when the <tt class="literal">ejbStore()</tt> method is called, but this is
+not the bean developer's concern. In most cases, the
+<tt class="literal">ejbStore()</tt> method will be called after a business
+method has been invoked on the bean. Here is the
+<tt class="literal">ejbStore()</tt><a name="INDEX-1193"></a>
+ method for the <tt class="literal">ShipBean</tt>:
+</p>
+
+<blockquote>
+<pre class="programlisting">public void ejbStore() {
+// EJB 1.0: throws RemoteException 
+    Connection con = null;
+    PreparedStatement ps = null;
+    try {
+        con = this.getConnection();
+        ps = con.prepareStatement(
+            "update Ship set name = ?, capacity = ?, " +
+            "tonnage = ? where id = ?");
+        ps.setString(1,name);
+        ps.setInt(2,capacity);
+        ps.setDouble(3,tonnage);
+        ps.setInt(4,id);
+        if (ps.executeUpdate() != 1) {
+        // EJB 1.0: throw new RemoteException ("ejbStore failed");
+        throw new EJBException("ejbStore");
+        }
+    }
+    catch (SQLException se) {
+        // EJB 1.0: throw new RemoteException("",se);
+        throw new EJBException (se);
+    }
+    finally {
+        try {
+            if (ps != null) ps.close(); 
+            if (con!= null) con.close(); 
+        } catch(SQLException se) {
+            se.printStackTrace();
+        }
+    }
+}
+</pre>
+</blockquote>
+
+<p>Except for the fact that we are doing an update instead of an insert,
+this method is similar to the <tt class="literal">ejbCreate()</tt> method
+we coded earlier. A JDBC <tt class="literal">PreparedStatement</tt> is
+employed to execute the SQL <tt class="literal">UPDATE</tt> command, and
+the bean's persistent fields are used as parameters to the
+request. This method synchronizes the database with the state of the
+bean.
+</p>
+
+<dl>
+<dt>
+<b>EJB 1.1 callback methods and exceptions </b>
+</dt>
+<dd>
+<p>Notice that we throw an
+<tt class="literal">EJBException</tt><a name="INDEX-1194"></a> when a problem occurs.
+All EJB callback methods declare the <tt class="literal">EJBException</tt>
+and <tt class="literal">RemoteException</tt> in their throws clause. If you
+need to throw an exception from one of these callback methods, it
+must be an <tt class="literal">EJBException</tt> or a subclass. The
+<tt class="literal">RemoteException</tt><a name="INDEX-1195"></a> type is included in
+the method signature to support backward compatibility with EJB 1.0
+beans. Throwing the <tt class="literal">RemoteException</tt> from callback
+methods is deprecated in EJB 1.1, which means that it will not be
+supported in subsequent versions.
+</p>
+</dd>
+
+<dt>
+<b>EJB 1.0 callback methods and exceptions</b>
+</dt>
+<dd>
+<p>In EJB 1.0, we throw a <tt class="literal">RemoteException</tt> when a
+problem occurs. All EJB callback methods declare the
+<tt class="literal">RemoteException</tt> in their throws clause. If you
+need to throw an exception from one of these callback methods, it
+must be a <tt class="literal">RemoteException</tt>.
+</p>
+</dd>
+
+</dl>
+
+<p>EJB also provides an
+<tt class="literal">ejbLoad()</tt><a name="INDEX-1196"></a>
+ method that synchronizes the state of the entity with the database.
+This method is usually called prior to a new transaction or business
+method invocation. The idea is to make sure that the bean always
+represents the most current data in the database, which could be
+changed by other beans or other non-EJB applications. Here is the
+<tt class="literal">ejbLoad()</tt> method for a bean-managed
+<tt class="literal">ShipBean</tt> class:
+</p>
+
+<blockquote>
+<pre class="programlisting">public void ejbLoad() {
+// EJB 1.0: throws RemoteException
+
+    ShipPK pk = (ShipPK) context.getPrimaryKey();
+    Connection con = null;
+    PreparedStatement ps = null;
+    ResultSet result = null;
+    try {
+        con = this.getConnection();
+        ps = con.prepareStatement(
+            "select name, capacity, tonnage from Ship where id = ?");
+        ps.setInt(1,pk.id);
+        result = ps.executeQuery();
+        if (result.next()) {
+            id = id;
+            name = result.getString("name");
+            capacity = result.getInt("capacity");
+            tonnage = result.getDouble("tonnage");
+        } else {
+            // EJB 1.0: throw new RemoteException();
+            throw new EJBException();
+        }
+    } catch (SQLException se) {
+        // EJB 1.0: throw new RemoteException("",se);
+        throw new EJBException(se);
+    }
+    finally {
+        try {
+            if (result != null) result.close();
+            if (ps != null) ps.close(); 
+            if (con!= null) con.close(); 
+        } catch(SQLException se) {
+            se.printStackTrace();
+        }
+    }      
+}</pre>
+</blockquote>
+
+<p>To execute the <tt class="literal">ejbLoad()</tt> method we need a primary
+key. To get a primary key, we query the bean's
+<tt class="literal">EntityContext</tt><a name="INDEX-1197"></a><a name="INDEX-1198"></a>. Note that we don't get the
+primary key directly from the <tt class="literal">ShipBean</tt>'s
+<tt class="literal">id</tt> field because we cannot guarantee that this
+field is always valid--the <tt class="literal">ejbLoad()</tt> method
+might be populating the bean instance's state for the first
+time, in which case the fields would all be set to the default
+values. This situation would occur following bean activation. We can
+guarantee that the <tt class="literal">EntityContext</tt> for the
+<tt class="literal">ShipBean</tt> is valid because the EJB specification
+requires that the bean instance <tt class="literal">EntityContext</tt>
+reference is valid before the <tt class="literal">ejbLoad()</tt> method can
+be invoked. More about this in the life cycle section later in
+<a name="INDEX-1199"></a><a name="INDEX-1200"></a> this
+<a name="INDEX-1201"></a><a name="INDEX-1202"></a>
+chapter.
+</p>
+
+
+<a name="JBEANS-CH-6-SECT-2.9"></a>
+<h3 class="sect2">6.2.9. The ejbRemove( ) Method</h3>
+
+<p>In addition to
+<a name="INDEX-1203"></a><a name="INDEX-1204"></a>handling their
+<a name="INDEX-1205"></a><a name="INDEX-1206"></a>own inserts and updates,
+bean-managed entities must also handle their own deletions. When a
+client application invokes the remove method on the EJB home or EJB
+object, that method invocation is delegated to the bean-managed
+entity by calling <tt class="literal">ejbRemove()</tt>. It is the bean
+developer's responsibility to implement an
+<tt class="literal">ejbRemove()</tt> method that deletes the entity's
+data from the database. Here's the
+<tt class="literal">ejbRemove()</tt> method for our bean-managed
+<tt class="literal">ShipBean</tt>:
+</p>
+
+<blockquote>
+<pre class="programlisting">public void ejbRemove() {
+// EJB 1.0: throws RemoteException
+    Connection con = null;
+    PreparedStatement ps = null;
+    try {
+        con = this.getConnection();
+        ps = con.prepareStatement("delete from Ship where id = ?");
+        ps.setInt(1, id);
+        if (ps.executeUpdate() != 1) {
+            // EJB 1.0 throw new RemoteException("ejbRemove");
+            throw new EJBException("ejbRemove");
+        }
+    }
+    catch (SQLException se) {
+        // EJB 1.0: throw new RemoteException("",se);
+        throw new EJBException (se);
+    }
+    finally {
+        try {
+            if (ps != null) ps.close(); 
+            if (con!= null) con.close(); 
+        } catch(SQLException se){
+            se.printStackTrace();
+        }
+    }
+}</pre>
+</blockquote>
+
+
+<a name="JBEANS-CH-6-SECT-2.10"></a>
+<h3 class="sect2">6.2.10. ejbFind( ) Methods</h3>
+
+<p>In <a name="INDEX-1207"></a><a name="INDEX-1208"></a>bean-managed
+<tt class="literal">EntityBean</tt>s, the <a name="INDEX-1209"></a><a name="INDEX-1210"></a>find methods
+in the home interface must match the ejbFind methods in the actual
+bean class. In other words, for each method named
+<tt class="literal">find</tt><em class="replaceable">lookup-type</em><tt class="literal">()</tt>
+in the home interface, there must be a corresponding
+<tt class="literal">ejbFind</tt><em class="replaceable">lookup-type</em><tt class="literal">()</tt>
+method in the bean implementation with the same arguments and
+exceptions. When a find method is invoked on an EJB home, the
+container delegates the
+<tt class="literal">find</tt><em class="replaceable">lookup-type</em><tt class="literal">()</tt>
+to a corresponding
+<tt class="literal">ejbFind</tt><em class="replaceable">lookup-type</em><tt class="literal">()</tt>
+method on the bean instance. The bean-managed entity is responsible
+for finding records that match the find requests. In
+<tt class="literal">ShipHome</tt>, there are two find methods:
+</p>
+
+<blockquote>
+<pre class="programlisting">public interface ShipHome extends javax.ejb.EJBHome {
+
+    public Ship <tt class="userinput"><b>findByPrimaryKey</b></tt>(ShipPK primaryKey) 
+      throws FinderException, RemoteException;
+    public Enumeration <tt class="userinput"><b>findByCapacity</b></tt>(int capacity) 
+      throws FinderException, RemoteException;
+}</pre>
+</blockquote>
+
+<p>And here are the signatures of the corresponding ejbFind methods in
+the <tt class="literal">ShipBean</tt>:
+</p>
+
+<blockquote>
+<pre class="programlisting">public class ShipBean extends javax.ejb.EntityBean {
+
+    public ShipPK <tt class="userinput"><b>ejbFindByPrimaryKey</b></tt>(ShipPK primaryKey) 
+      throws FinderException, RemoteException {}
+    public Enumeration <tt class="userinput"><b>ejbFindByCapacity</b></tt>(int capacity) 
+      throws FinderException, RemoteException {}
+}</pre>
+</blockquote>
+
+<dl>
+<dt>
+<b>EJB 1.1 return types for find methods</b>
+</dt>
+<dd>
+<p>Aside from the <a name="INDEX-1211"></a>names, there's one difference
+between these two groups of methods. <a name="INDEX-1212"></a>The
+find methods in the home interface return either an object
+implementing the bean's remote interface--in this case,
+<tt class="literal">Ship</tt> --or a collection of such objects in the
+form of a <tt class="literal">java.util.Enumeration</tt> or
+<tt class="literal">java.util.Collection</tt>. The ejbFind methods in the
+<a name="INDEX-1213"></a>bean class return either a
+primary key for the appropriate bean--in this case,
+<tt class="literal">ShipPK</tt>--or a collection of primary keys. The
+methods that return a single object (whether a remote interface or a
+primary key) are used whenever you need to look up a single reference
+to a bean. If you are looking up a group of references (for example,
+all ships with a certain capacity), you have to use the method that
+returns either the <tt class="literal">Collection</tt> or
+<tt class="literal">Enumeration</tt> type. In either case, the container
+intercepts the primary keys and converts them into remote references
+for the client.
+</p>
+</dd>
+
+<dt>
+<b>EJB 1.0 return types for find methods</b>
+</dt>
+<dd>
+<p>In EJB 1.0, you are not allowed to write find and ejbFind methods
+that return arrays, vectors, or other <tt class="literal">Collection</tt>
+types. The find methods in the home interface return either an object
+implementing the bean's remote interface--in this case,
+<tt class="literal">Ship</tt>--or an <tt class="literal">Enumeration</tt> of
+such objects. The ejbFind methods in the bean class return either a
+primary key for the appropriate bean or an
+<tt class="literal">Enumeration</tt> of primary keys. The methods that
+return a single object (whether a remote interface or a primary key)
+are used whenever you need to look up a single reference to a bean.
+If you are looking up a group of references (for example, all ships
+with a certain capacity), you have to use the method that returns a
+serializable implementation of <tt class="literal">Enumeration</tt>. In
+either case, the container intercepts the primary keys and converts
+them into remote references for the client.
+</p>
+</dd>
+
+</dl>
+
+<p>It shouldn't come as a surprise that the object you
+return--whether it's a primary key or a remote
+interface--must be appropriate for the type of bean you're
+defining. For example, you shouldn't put find methods in a Ship
+bean to look up and return <tt class="literal">Cabin</tt> objects. If you
+need to return collections of a different bean type, use a business
+method in the remote interface, not a find method from the home
+interface.
+</p>
+
+<p>Both find methods in the <tt class="literal">ShipBean</tt> class methods
+throw a <tt class="literal">FinderException</tt> if a failure in the
+request occurs when an SQL exception condition is encountered. The
+<tt class="literal">findByPrimaryKey()</tt> throws the
+<tt class="literal">ObjectNotFoundException</tt><a name="INDEX-1214"></a>
+ if there are no records in the database that match the
+<tt class="literal">id</tt> argument.
+</p>
+
+<dl>
+<dt>
+<b>EJB 1.1 empty sets and exceptions</b>
+</dt>
+<dd>
+<p>The <tt class="literal">findByCapacity()</tt> method returns an empty
+collection, and not a null reference, if no <tt class="literal">SHIP</tt>
+records were found with a matching capacity. Find methods also throw
+<tt class="literal">FinderException</tt><a name="INDEX-1215"></a>
+ and <tt class="literal">EJBException</tt><a name="INDEX-1216"></a>
+, in addition to any application-specific exceptions that you
+consider appropriate.
+</p>
+</dd>
+
+<dt>
+<b>EJB 1.0 empty sets and exceptions</b>
+</dt>
+<dd>
+<p>The <tt class="literal">findByCapacity()</tt> method returns a
+<tt class="literal">null</tt> if no <tt class="literal">SHIP</tt> records were
+found with a matching capacity. Find methods also throw
+<tt class="literal">FinderException</tt> and
+<tt class="literal">RemoteException</tt><a name="INDEX-1217"></a>. The find methods can also throw any
+application-specific exceptions that you consider appropriate.
+</p>
+</dd>
+
+</dl>
+
+<p>It is mandatory that all entity home interfaces include the method
+<tt class="literal">findByPrimaryKey()</tt>. This method returns a single
+remote reference and takes one parameter, the primary key for that
+bean type. You cannot deploy an entity bean that doesn't
+include a <a name="INDEX-1218"></a><tt class="literal">findByPrimaryKey()</tt>
+method in its home interface.
+</p>
+
+<p>Following the rules outlined earlier, we can define two ejbFind
+methods in <tt class="literal">ShipBean</tt> that match the two find
+methods defined in the <tt class="literal">ShipHome</tt>:
+</p>
+
+<blockquote>
+<pre class="programlisting">public ShipPK ejbFindByPrimaryKey(ShipPK primaryKey) 
+    throws FinderException, {
+    // EJB 1.0: Also throws RemoteException    
+    Connection con = null;
+    PreparedStatement ps = null;
+    ResultSet result = null;
+    try {
+        con = this.getConnection();
+        ps = con.prepareStatement(
+            "select id from Ship where id = ?");
+        ps.setInt(1, primaryKey.id);
+        result = ps.executeQuery();
+        // does ship id exist in database?
+        if (!result.next()){
+            throw new ObjectNotFoundException(
+                "Cannot find Ship with id = "+id);
+        }
+    } catch (SQLException se) {
+        // EJB 1.0: throw new RemoteException("", se);
+        throw new EJBException(se);
+    }
+    finally {
+        try {
+            if (result != null) result.close();
+            if (ps != null) ps.close(); 
+            if (con!= null) con.close(); 
+        } catch(SQLException se) {se.printStackTrace();}
+    }
+    return primaryKey;
+}
+public Enumeration ejbFindByCapacity(int capacity) 
+    throws FinderException {
+    // EJB 1.0: Also throws RemoteException
+    Connection con = null;
+    PreparedStatement ps = null;    ResultSet result = null;        
+    try {
+        con = this.getConnection();
+        ps = con.prepareStatement(
+            "select id from Ship where capacity = ?");
+        ps.setInt(1,capacity);
+        result = ps.executeQuery();
+        Vector keys = new Vector();
+        while(result.next()) {
+        ShipPK shipPk = new ShipPK();
+        shipPk.id = result.getInt("id");
+        keys.addElement(shipPk);
+        }
+        // EJB 1.1: always return collection, even if empty.
+        return keys.elements();
+        // EJB 1.0: return null if collection is empty.
+        // return (keys.size() &gt; 0) ? keys.elements() : null;
+          
+    }
+    catch (SQLException se) {
+        // EJB 1.0: throw new RemoteException("",se);
+        throw new EJBException (se);
+    }
+    finally {
+        try {
+            if (result != null) result.close();
+            if (ps != null) ps.close(); 
+            if (con!= null) con.close(); 
+        } catch(SQLException se){
+            se.printStackTrace();
+        }
+    }      
+}</pre>
+</blockquote>
+
+<p>The mandatory <tt class="literal">findByPrimaryKey()</tt> method uses the
+<a name="INDEX-1219"></a>primary key to locate the
+corresponding database record. Once it has verified that the record
+exists, it simply returns the primary key to the container, which
+then uses the key to activate a new instance and associate it with
+that primary key at the appropriate time. If the there is no record
+associated with the primary key, the method throws a
+<tt class="literal">ObjectNotFoundException</tt>.
+</p>
+
+<p>The <tt class="literal">ejbFindByCapacity()</tt> method returns an
+enumeration of primary keys that match the criteria passed into the
+method. Again, we construct a prepared statement that we use to
+execute our SQL query. This time, however, we expect multiple results
+so we use the <tt class="literal">java.sql.ResultSet</tt> to iterate
+through the results, creating a vector of primary keys for each
+<tt class="literal">SHIP_ID</tt> returned.
+</p>
+
+<p>
+<a name="INDEX-1220"></a><a name="INDEX-1221"></a>Find
+methods are not executed on bean instances that are currently
+supporting a client application. Only bean instances that are not
+assigned to an EJB object (instances in the instance pool) are
+supposed to service find requests, which means that the
+<tt class="literal">ejbFind()</tt> method in the bean instance has somewhat
+limited use of its <tt class="literal">EntityContext</tt>. The
+<tt class="literal">getPrimaryKey()</tt> and
+<tt class="literal">getEJBObject()</tt> methods will throw exceptions
+because the bean instance is a pooled instance and is not associated
+with a primary key or <tt class="literal">EJBObject</tt> . Where do the
+objects returned by a find method come from? This seems like a simple
+enough question, but the answer is surprisingly complex. Remember
+that a find method isn't executed by a bean instance that is
+actually supporting the client; the container finds an idle bean
+instance from the instance pool. The container is responsible for
+creating the EJB objects and remote references for the primary keys
+returned by the ejbFind method in the bean class. As the client
+accesses these remote references, bean instances are swapped into the
+appropriate EJB objects, loaded with data, and made <a name="INDEX-1222"></a> ready to
+<a name="INDEX-1223"></a><a name="INDEX-1224"></a>
+service the clients requests.
+</p>
+
+
+<a name="JBEANS-CH-6-SECT-2.11"></a>
+<h3 class="sect2">6.2.11. EJB 1.1: Deploying the Bean-Managed Ship Bean</h3>
+
+<p>With a <a name="INDEX-1225"></a><a name="INDEX-1226"></a>complete definition of the Ship bean,
+including the remote interface, home interface, and primary key, we
+are ready to create a deployment descriptor. Here is the
+<a name="INDEX-1227"></a><a name="INDEX-1228"></a>XML deployment descriptor for EJB
+1.1. This deployment descriptor is not significantly different from
+the descriptor we created for the container-managed Ship bean
+earlier. In this deployment descriptor the
+<tt class="literal">persistence-type</tt> is <tt class="literal">Bean</tt> and
+there are no container-managed field declarations. We also must
+declare the
+<tt class="literal">DataSource</tt><a name="INDEX-1229"></a> resource factory that we use
+to query and update the database.
+</p>
+
+<blockquote>
+<pre class="programlisting">&lt;?xml version="1.0"?&gt;
+
+&lt;!DOCTYPE ejb-jar PUBLIC "-//Sun Microsystems, Inc.//DTD Enterprise
+JavaBeans 1.1//EN" "http://java.sun.com/j2ee/dtds/ejb-jar_1_1.dtd"&gt;
+
+&lt;ejb-jar&gt;
+ &lt;enterprise-beans&gt;
+   &lt;entity&gt;
+      &lt;description&gt;
+            This bean represents a cruise ship.
+      &lt;/description&gt;
+      &lt;ejb-name&gt;ShipBean&lt;/ejb-name&gt;
+      &lt;home&gt;com.titan.ship.ShipHome&lt;/home&gt;
+      &lt;remote&gt;com.titan.ship.Ship&lt;/remote&gt;
+      &lt;ejb-class&gt;com.titan.ship.ShipBean&lt;/ejb-class&gt;
+      &lt;persistence-type&gt;Bean&lt;/persistence-type&gt;
+      &lt;prim-key-class&gt;com.titan.ship.ShipPK&lt;/prim-key-class&gt;
+      &lt;reentrant&gt;False&lt;/reentrant&gt;
+
+      &lt;resource-ref&gt;
+           &lt;description&gt;DataSource for the Titan database&lt;/description&gt;
+           &lt;res-ref-name&gt;jdbc/titanDB&lt;/res-ref-name&gt;
+           &lt;res-type&gt;javax.sql.DataSource&lt;/res-type&gt;
+           &lt;res-auth&gt;Container&lt;/res-auth&gt;
+      &lt;/resource-ref&gt;
+
+  &lt;/entity&gt;
+ &lt;/enterprise-beans&gt;
+ 
+ &lt;assembly-descriptor&gt;
+   &lt;security-role&gt;
+      &lt;description&gt;
+         This role represents everyone who is allowed full access 
+         to the Ship bean.
+      &lt;/description&gt;
+     &lt;role-name&gt;everyone&lt;/role-name&gt;
+   &lt;/security-role&gt;
+
+   &lt;method-permission&gt;
+     &lt;role-name&gt;everyone&lt;/role-name&gt;
+     &lt;method&gt;
+         &lt;ejb-name&gt;ShipBean&lt;/ejb-name&gt;
+         &lt;method-name&gt;*&lt;/method-name&gt;
+     &lt;/method&gt;
+   &lt;/method-permission&gt;
+
+   &lt;container-transaction&gt;
+     &lt;method&gt;
+        &lt;ejb-name&gt;ShipBean&lt;/ejb-name&gt;
+        &lt;method-name&gt;*&lt;/method-name&gt;
+     &lt;/method&gt;
+     &lt;trans-attribute&gt;Required&lt;/trans-attribute&gt;
+   &lt;/container-transaction&gt;
+ &lt;/assembly-descriptor&gt;
+&lt;/ejb-jar&gt;</pre>
+</blockquote>
+
+<p>Save the Ship bean's XML deployment descriptor into the
+<em class="filename">com/titan/ship</em> directory as
+<em class="filename">ejb-jar.xml</em> and package it a JAR file:
+</p>
+
+<blockquote>
+<pre class="programlisting">\dev % jar cf ship.jar com/titan/ship/*.class META-INF/ejb-jar.xml
+
+F:\..\dev&gt;jar cf ship.jar com\titan\ship\*.class META-INF\ejb-jar.xml</pre>
+</blockquote>
+
+<p>To test this new bean, use the client application that we used to
+test the container-managed Ship bean. You will probably need to
+change the names and IDs of the ships you create; otherwise, your
+inserts will cause a database error. In the SQL statement that we
+defined to create the <tt class="literal">SHIP</tt> table, we placed a
+primary key restriction on the ID column of the
+<tt class="literal">SHIP</tt> table so that only unique ID values can be
+inserted. Attempts to insert a record with a duplicate ID will cause
+an <tt class="literal">SQL-Exception</tt> to be thrown.
+</p>
+
+
+<a name="JBEANS-CH-6-SECT-2.12"></a>
+<h3 class="sect2">6.2.12. EJB 1.0: Deploying the Bean-Managed Ship Bean</h3>
+
+<p>To deploy the <a name="INDEX-1230"></a>bean-managed
+<tt class="literal">ShipBean</tt>, you can reuse the
+<tt class="literal">MakeDD</tt> application we developed earlier to create
+a serialized <tt class="literal">DeploymentDescriptor</tt>. You will need
+to comment out the section that sets the container-managed fields in
+the <tt class="literal">EntityDescriptor</tt>, as follows:
+</p>
+
+<blockquote>
+<pre class="programlisting">/* COMMENTED OUT FOR BEAN-MANAGED SHIP BEAN
+*****************************************
+Class beanClass = ShipBean.class;
+Field [] persistentFields = new Field[4];
+persistentFields[0] = beanClass.getDeclaredField("id");
+persistentFields[1] = beanClass.getDeclaredField("name");
+persistentFields[2] = beanClass.getDeclaredField("capacity");
+persistentFields[3] = beanClass.getDeclaredField("tonnage");
+shipDD.setContainerManagedFields(persistentFields);
+************************
+*/</pre>
+</blockquote>
+
+<p>Not specifying any container-managed fields tells the EJB deployment
+tools that this bean uses bean-managed persistence.
+</p>
+
+<p>
+<a name="INDEX-1231"></a>
+We also need to add some code to set the
+<a name="INDEX-1232"></a>environment properties for the
+<tt class="literal">ShipBean</tt>:
+</p>
+
+<blockquote>
+<pre class="programlisting">Properties props = new Properties();
+props.put("jdbcURL",<tt class="userinput"><b>"jdbc:</b></tt><tt class="userinput"><b>subprotocol:subname");</b></tt>
+shipDD.setEnvironmentProperties(props);</pre>
+</blockquote>
+
+<p>This code defines the property <tt class="literal">"jdbcURL"</tt>, which
+holds the part of the URL that we need to get a database connection.
+Replace the URL in this example with whatever is appropriate for the
+EJB server and JDBC driver that you are using. Our bean will be able
+to access the properties defined here through the
+<tt class="literal">Entity-Context</tt> and use this URL to get a database
+connection.
+</p>
+
+<p>You will need to consult your EJB vendor's documentation to
+determine what <a name="INDEX-1233"></a>JDBC URL is needed for your specific
+EJB server and database combination. BEA's WebLogic Server, for
+example, uses a pooled driver that is accessed using the JDBC URL,
+<em class="emphasis">jdbc:weblogic:jts:ejbPool</em>. Other
+EJB servers and database combinations will use different JDBC
+<a name="INDEX-1234"></a>URLs.
+</p>
+
+<p>After running <tt class="literal">MakeDD</tt> to generate the deployment
+descriptor, use the JAR utility to archive the Ship bean for
+deployment. Archiving this version of the Ship bean is no different
+than archiving the earlier version.
+</p>
+
+<p>To test this new bean, use the client application that we used to
+test the container-managed Ship bean. You will probably need to
+change the names and IDs of the ships you create; otherwise, your
+inserts will cause a database error. In the SQL statement that we
+defined to create the <tt class="literal">SHIP</tt> table, we placed a
+primary key restriction on the ID column of the
+<tt class="literal">SHIP</tt> table so that only unique ID values can be
+inserted. Attempts to insert a record with a duplicate ID will cause
+an
+<tt class="literal">SQL-Exception</tt><a name="INDEX-1235"></a><a name="INDEX-1236"></a><a name="INDEX-1237"></a> to
+be <a name="INDEX-1238"></a><a name="INDEX-1239"></a> thrown.
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch06_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch06_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch06_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">6.1. Container-Managed Persistence</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">6.3. The Life Cycle of an Entity Bean</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

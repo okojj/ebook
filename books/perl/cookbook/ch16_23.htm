@@ -1,0 +1,293 @@
+<html><head>
+<title>Recipe 16.22. Program: sigrand</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:16Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch16_01.htm" title="16. Process Management and Communication"><link rel="prev" href="ch16_22.htm" title="16.21. Timing Out an Operation"><link rel="next" href="ch17_01.htm" title="17. Sockets"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_22.htm" title="16.21. Timing Out an Operation"><img src="../gifs/txtpreva.gif" alt="Previous: 16.21. Timing Out an Operation" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch16_01.htm" title="16. Process Management and Communication">Chapter 16<br>Process Management and Communication</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="chapter" href="ch17_01.htm" title="17. Sockets"><img src="../gifs/txtnexta.gif" alt="Next: 17. Sockets" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch16-chap16_program_0">16.22. Program: sigrand</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-2256">Description</A
+></H3
+><p class="para">The following <a class="indexterm" name="ch16-idx-1000006436-0"></A
+><a class="indexterm" name="ch16-idx-1000006436-1"></A
+><a class="indexterm" name="ch16-idx-1000006436-2"></A
+><a class="indexterm" name="ch16-idx-1000006436-3"></A
+><a class="indexterm" name="ch16-idx-1000006436-4"></A
+>program gives you random signatures by using named pipes. It expects the signatures file to have records in the format of the <em class="emphasis">fortune</EM
+> program&nbsp;- that is, each possible multiline record is terminated with <code class="literal">&quot;%%\n&quot;</CODE
+>. Here's an example:</P
+><pre class="programlisting">Make is like Pascal: everybody likes it, so they go in and change it.
+                                            --Dennis Ritchie
+%%
+I eschew embedded capital letters in names; to my prose-oriented eyes,
+they are too awkward to read comfortably. They jangle like bad typography.
+                                            --Rob Pike
+%%
+God made the integers; all else is the work of Man.  
+                                            --Kronecker
+%%
+I'd rather have :rofix than const.          --Dennis Ritchie
+%%
+If you want to program in C, program in C.  It's a nice language.
+I use it occasionally...   :-)              --Larry Wall
+%%
+Twisted cleverness is my only skill as a programmer.       
+                                            --Elizabeth Zwicky
+%%
+Basically, avoid comments. If your code needs a comment to be understood,
+it would be better to rewrite it so it's easier to understand.  
+                                            --Rob Pike
+%%
+Comments on data are usually much more helpful than on algorithms.  
+                                            --Rob Pike
+%% 
+Programs that write programs are the happiest programs in the world.
+                                            --Andrew Hume 
+%%</PRE
+><p class="para">We check whether we're already running by using a file with our PID in it. If sending a signal number 0 indicates that PID still exists (or, rarely, that something else has reused it), we just exit. We also look at the current Usenet posting to decide whether to look for a per-newsgroup signature file. That way, you can have different signatures for each newsgroup you post to. For variety, a global signature file is still on occasion used even if a per-newsgroup file exists.</P
+><p class="para">You can even use <em class="emphasis">sigrand</EM
+> on systems without named pipes if you remove the code to create a named pipe and extend the sleep interval before file updates. Then <em class="emphasis">.signature</EM
+> would just be a regular file. Another portability concern is that the program forks itself in the background, which is almost like becoming a <a class="indexterm" name="ch16-idx-1000008951-0"></A
+>daemon. If you have no <code class="literal">fork</CODE
+> call, just comment it out.</P
+><p class="para">The full program is shown in <a class="xref" href="#ch16-36804" title="sigrand">Example 16.12</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch16-36804">Example 16.12: sigrand</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# sigrand - supply random fortunes for .signature file
+
+use strict;
+
+# config section variables
+use vars qw( $NG_IS_DIR $MKNOD $FULLNAME $FIFO $ART $NEWS $SIGS $SEMA
+            $GLOBRAND $NAME );
+
+# globals
+use vars qw( $Home $Fortune_Path @Pwd );
+
+################################################################
+# begin configuration section 
+# should really read from ~/.sigrandrc
+
+gethome();
+
+# for rec/humor/funny instead of rec.humor.funny
+$NG_IS_DIR      = 1;    
+
+$MKNOD          = &quot;/bin/mknod&quot;;
+$FULLNAME       = &quot;$Home/.fullname&quot;;
+$FIFO           = &quot;$Home/.signature&quot;;
+$ART            = &quot;$Home/.article&quot;;
+$NEWS           = &quot;$Home/News&quot;;
+$SIGS           = &quot;$NEWS/SIGNATURES&quot;;
+$SEMA           = &quot;$Home/.sigrandpid&quot;;
+$GLOBRAND       = 1/4;  # chance to use global sigs anyway
+
+# $NAME should be (1) left undef to have program guess
+# read address for signature maybe looking in ~/.fullname,
+# (2) set to an exact address, or (3) set to empty string
+# to be omitted entirely.
+
+$NAME           = '';           # means no name used
+## $NAME        = &quot;me\@home.org\n&quot;;     
+
+# end configuration section -- HOME and FORTUNE get autoconf'd
+################################################################
+
+setup();                # pull in inits
+justme();               # make sure program not already running
+fork &amp;&amp; exit;           # background ourself and go away
+
+open (SEMA, &quot;&gt; $SEMA&quot;)      or die &quot;can't write $SEMA: $!&quot;;
+print SEMA &quot;$$\n&quot;;
+close(SEMA)                    or die &quot;can't close $SEMA: $!&quot;;
+
+# now loop forever, writing a signature into the 
+# fifo file.  if you don't have real fifos, change
+# sleep time at bottom of loop to like 10 to update
+# only every 10 seconds.
+for (;;) {
+    open (FIFO, &quot;&gt; $FIFO&quot;)  or die &quot;can't write $FIFO: $!&quot;;
+    my $sig = pick_quote();
+    for ($sig) { 
+        s/^((:?[^\n]*\n){4}).*$/$1/s;   # trunc to 4 lines
+        s/^(.{1,80}).*? *$/$1/gm;       # trunc long lines
+    }
+    # print sig, with name if present, padded to four lines
+    if ($NAME) { 
+        print FIFO $NAME, &quot;\n&quot; x (3 - ($sig =~ tr/\n//)), $sig;
+    } else {
+        print FIFO $sig;
+    }
+    close FIFO;
+
+    # Without a microsleep, the reading process doesn't finish before
+    # the writer tries to open it again, which since the reader exists,
+    # succeeds.  They end up with multiple signatures.  Sleep a tiny bit
+    # between opens to give readers a chance to finish reading and close
+    # our pipe so we can block when opening it the next time.
+
+    select(undef, undef, undef, 0.2);   # sleep 1/5 second
+}
+die &quot;XXX: NOT REACHED&quot;;         # you can't get here from anywhere
+
+################################################################
+
+# Ignore SIGPIPE in case someone opens us up and then closes the fifo
+# without reading it; look in a .fullname file for their login name.
+# Try to determine the fully qualified hostname.  Look our for silly
+# ampersands in passwd entries.  Make sure we have signatures or fortunes.
+# Build a fifo if we need to.
+
+sub setup {
+    $SIG{PIPE} = 'IGNORE';              
+
+    unless (defined $NAME) {            # if $NAME undef in config
+        if (-e $FULLNAME) {
+            $NAME = `cat $FULLNAME`;
+            die &quot;$FULLNAME should contain only 1 line, aborting&quot; 
+                if $NAME =~ tr/\n// &gt; 1;
+        } else {
+            my($user, $host);
+            chop($host = `hostname`);
+            ($host) = gethostbyname($host) unless $host =~ /\./;
+            $user = $ENV{USER} || $ENV{LOGNAME} || $Pwd[0]
+                or die &quot;intruder alert&quot;;
+            ($NAME = $Pwd[6]) =~ s/,.*//;
+            $NAME =~ s/&amp;/\u\L$user/g; # can't believe some folks still do this
+            $NAME = &quot;\t$NAME\t$user\@$host\n&quot;;
+        } 
+    }
+
+    check_fortunes() if !-e $SIGS;
+
+    unless (-p $FIFO) {         # -p checks whether it's a named pipe
+        if (!-e _) {
+             system(&quot;$MKNOD $FIFO p&quot;) &amp;&amp; die &quot;can't mknod $FIFO&quot;;
+             warn &quot;created $FIFO as a named pipe\n&quot;;
+        } else {
+             die &quot;$0: won't overwrite file .signature\n&quot;;
+        } 
+    } else {
+        warn &quot;$0: using existing named pipe $FIFO\n&quot;;
+    } 
+
+    # get a good random number seed.  not needed if 5.004 or better.
+    srand(time() ^ ($$ + ($$ &lt;&lt; 15)));
+}
+
+# choose a random signature
+sub pick_quote {
+    my $sigfile = signame();
+    if (!-e $sigfile) {
+        return fortune();
+    } 
+    open (SIGS, &quot;&lt; $sigfile&quot; ) or die &quot;can't open $sigfile&quot;;
+    local $/  = &quot;%%\n&quot;;
+    local $_;
+    my $quip;
+    rand($.) &lt; 1 &amp;&amp; ($quip = $_) while &lt;SIGS&gt;;
+    close SIGS;
+    chomp $quip;
+    return $quip || &quot;ENOSIG: This signature file is empty.\n&quot;;
+} 
+
+# See whether ~/.article contains a Newsgroups line.  if so, see the first
+# group posted to and find out whether it has a dedicated set of fortunes.
+# otherwise return the global one.  also, return the global one randomly
+# now and then to spice up the sigs.
+sub signame {
+     (rand(1.0) &gt; ($GLOBRAND) &amp;&amp; open ART) || return $SIGS;   
+     local $/  = '';
+     local $_  = &lt;ART&gt;;
+     my($ng)   = /Newsgroups:\s*([^,\s]*)/;
+     $ng =~ s!\.!/!g if $NG_IS_DIR;     # if rn -/,  or SAVEDIR=%p/%c
+     $ng = &quot;$NEWS/$ng/SIGNATURES&quot;;
+     return -f $ng ? $ng : $SIGS;
+} 
+
+# Call the fortune program with -s for short flag until
+# we get a small enough fortune or ask too much.
+sub fortune {
+   local $_;
+   my $tries = 0;
+   do { 
+       $_ = `$Fortune_Path -s`; 
+   } until tr/\n// &lt; 5 || $tries++ &gt; 20;
+   s/^/ /mg;
+   $_ || &quot; SIGRAND: deliver random signals to all processes.\n&quot;;
+} 
+
+# Make sure there's a fortune program.  Search 
+# for its full path and set global to that.
+sub check_fortunes {
+    return if $Fortune_Path;    # already set
+    for my $dir (split(/:/, $ENV{PATH}), '/usr/games') {
+        return if -x ($Fortune_Path = &quot;$dir/fortune&quot;);
+    } 
+    die &quot;Need either $SIGS or a fortune program, bailing out&quot;;
+} 
+
+# figure out our directory
+sub gethome {
+    @Pwd = getpwuid($&lt;);
+    $Home = $ENV{HOME} || $ENV{LOGDIR} || $Pwd[7]
+       or die &quot;no home directory for user $&lt;&quot;;
+}
+
+# &quot;There can be only one.&quot;  --the Highlander
+sub justme {
+    if (open SEMA) {
+        my $pid;
+        chop($pid = &lt;SEMA&gt;);
+        kill(0, $pid) and die &quot;$0 already running (pid $pid), bailing out&quot;;
+        close SEMA;
+    } <a class="indexterm" name="ch16-idx-1000006438-0"></A
+><a class="indexterm" name="ch16-idx-1000006438-1"></A
+><a class="indexterm" name="ch16-idx-1000006438-2"></A
+><a class="indexterm" name="ch16-idx-1000006438-3"></A
+><a class="indexterm" name="ch16-idx-1000006438-4"></A
+>
+} <a class="indexterm" name="ch16-idx-1000006184-0"></A
+></PRE
+></DIV
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_22.htm" title="16.21. Timing Out an Operation"><img src="../gifs/txtpreva.gif" alt="Previous: 16.21. Timing Out an Operation" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="chapter" href="ch17_01.htm" title="17. Sockets"><img src="../gifs/txtnexta.gif" alt="Next: 17. Sockets" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">16.21. Timing Out an Operation</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">17. Sockets</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

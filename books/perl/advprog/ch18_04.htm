@@ -1,0 +1,191 @@
+<html><head>
+<title>[Chapter 18] 18.4 XS Features</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:40:15Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch18_01.htm" title="18. Extending Perl:A First Course"><link rel="prev" href="ch18_03.htm" title="18.3 SWIG Features"><link rel="next" href="ch18_05.htm" title="18.5 Degrees of Freedom"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch18_03.htm" title="18.3 SWIG Features"><img src="../gifs/txtpreva.gif" alt="Previous: 18.3 SWIG Features" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch18_01.htm" title="18. Extending Perl:A First Course">Chapter 18<br>Extending Perl:A First Course</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch18_05.htm" title="18.5 Degrees of Freedom"><img src="../gifs/txtnexta.gif" alt="Next: 18.5 Degrees of Freedom" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch18-39369">18.4 XS Features</A
+></H2
+><p class="para"><a class="indexterm" name="ch18-idx-971939-0"></A
+>XS, as we mentioned earlier, is an interface definition language. Unlike SWIG, XS concentrates solely on C functions and <kbd class="command">#define</KBD
+>'d constants and does not provide any support for <kbd class="command">struct</KBD
+> or <kbd class="command">class</KBD
+> definitions (although there are plans for doing so in the future). In practice, I haven't missed this support for structures and classes too much because I rarely export data structures, in keeping with encapsulation principles.</P
+><p class="para">The XS approach allows you to modify the XS file and supply glue code (in C) in varying degrees. It is analogous to C or Pascal compilers that allow you to insert native assembly code within a program. This gives a lot of power if you know what you are doing, but requires you to be conversant with the internal Perl API and protocols.</P
+><p class="para">By modifying the XS file, you can create <code class="literal">write</CODE
+> function wrappers that take a variable number of input parameters, modify some input parameters (as <kbd class="command">read</KBD
+> does), and return an array of result values. Combine this with the ability to write custom typemaps and modify the Perl module (produced by <em class="emphasis">h2xs</EM
+>), and you have several ways of creating extensions.</P
+><p class="para">Let us take a brief look at XS syntax. <i class="filename">Fractal.xs</I
+>, from our earlier example, looks like this in its most essential form:</P
+><pre class="programlisting">#include &lt;mandel.h&gt;
+
+MODULE = Fractal    PACKAGE = Fractal
+
+int 
+draw_mandel (filename,width,height,origin_real,origin_imag,range,depth)
+      char*  filename
+      int    width
+      int    height
+      double origin_real
+      double origin_imag
+      double range
+      double depth</PRE
+><p class="para">All text preceding a <kbd class="command">MODULE</KBD
+> statement is considered to be raw C code and is sent untranslated into the <i class="filename">Fractal.c</I
+>, the glue code (like the <kbd class="command">%{</KBD
+> ... <kbd class="command">%}</KBD
+> block in SWIG). An XS module can contain more than one package, but since this is not typical, the <kbd class="command">MODULE</KBD
+> and <kbd class="command">PACKAGE</KBD
+> keywords have the same value. All exportable functions are listed in a special way. The return type comes first, on its own line (you must specify <kbd class="command">void</KBD
+> in the absence of a return type), then the name of the function with a list of parameter names, and, finally, each parameter on a separate line. It is important to keep the "*" along with the type, not the name&nbsp;- you must say <kbd class="command">char*</KBD
+> <kbd class="command">filename</KBD
+>, not <kbd class="command">char</KBD
+> <kbd class="command">*filename</KBD
+>. The next function declaration simply starts after a blank line. </P
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch18-pgfId-969518">18.4.1 What Does xsubpp Do?</A
+></H3
+><p class="para">It pays to understand a little bit about the glue code generated by <em class="emphasis">xsubpp</EM
+><a class="indexterm" name="ch18-idx-971943-0"></A
+>. When <em class="emphasis">xsubpp</EM
+> is given the XS snippet shown above, it creates a function called <kbd class="command">Fractal_xs_draw_mandel</KBD
+> (in <i class="filename">Fractal.c</I
+>) with the same signature as the XS declaration. This function translates the arguments supplied in Perl space to the C function's parameters, calls the real <kbd class="command">draw_mandel</KBD
+> function, and finally packages its return value into a Perl value. </P
+><p class="para">XS provides several keywords to either inject your own code at suitable locations inside the generated function or completely replace the generated glue code with your own. For example, you can write typemap functions that handle how Perl arguments get translated to C; you can use the <kbd class="command">CODE</KBD
+> keyword (described later) to specify that you are supplying your own code. </P
+><p class="para">With this brief overview in mind, let us now look at a few of the important aspects of the XS language.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch18-pgfId-968986">18.4.2 Default and Optional Parameters</A
+></H3
+><p class="para"><a class="indexterm" name="ch18-idx-971945-0"></A
+>Parameters can have default values but, as in C++, can be applied only to the rightmost parameters:</P
+><pre class="programlisting">draw_mandel (file,width,height,orig_real,orig_imag,range,depth=30)</PRE
+><p class="para">This allows you to optionally skip the last parameter when calling from Perl.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch18-pgfId-966269">18.4.3 Modifying Parameters</A
+></H3
+><p class="para">XS allows you to modify parameters before they are given to the real <kbd class="command">draw_mandel</KBD
+> function:</P
+><pre class="programlisting">int 
+draw_mandel (filename,width,height,origin_real,origin_imag,range,depth)
+      char*  filename
+      int    width
+      int    height
+      double origin_real
+      double origin_imag
+      double range
+      double depth
+    INIT:
+    if (width &gt; 400) { 
+        fprintf (stderr, &quot;Width cannot exceed 400. Truncating.\n&quot;;
+        width = 400;
+    }</PRE
+><p class="para">The <kbd class="command">INIT:</KBD
+> keyword tells XS to insert the code following it between the argument translation (from Perl to C) and the call to the real function.</P
+><p class="para">In SWIG, you would use a named typemap for the same effect. The XS approach, however, allows you to make a decision based on more than one parameter. For example, if you had to maintain a certain aspect ratio, you would have to look at both width and height and modify one of them. A typemap cannot give you this flexibility because it looks at each parameter in isolation.</P
+><p class="para">Incidentally, the <kbd class="command">PREINIT:</KBD
+> keyword can be used to insert variable declarations; <em class="emphasis">xsubpp</EM
+> puts these declarations ahead of any generated code. Of course, this keyword is not important if you compile the glue code with a C++ compiler, since it allows you to declare variables anywhere in the code.<a class="indexterm" name="ch18-idx-971947-0"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch18-pgfId-966295">18.4.4 Special Code</A
+></H3
+><p class="para">You can write the <a class="indexterm" name="ch18-idx-971949-0"></A
+><a class="indexterm" name="ch18-idx-971949-1"></A
+>glue code yourself if you want. Consider the <kbd class="command">sin()</KBD
+> function in the math library, which requires you to supply the angle in radians. You can create a new function in Perl to accept the angle in degrees using the <kbd class="command">CODE</KBD
+> keyword, like this (the indentation scheme is arbitrary):</P
+><pre class="programlisting">double
+d_sin(angle)
+   double angle
+  CODE:
+   RETVAL = sin(angle  * PI / 180);
+  OUTPUT: 
+   RETVAL</PRE
+><p class="para">When <em class="emphasis">xsubpp</EM
+> sees the <kbd class="command">CODE</KBD
+> keyword, it just maps the arguments from Perl data types to C types and leaves you to supply the rest of the code, which means that you have to make the call to the underlying external subroutine yourself. The <kbd class="command">CODE</KBD
+> directive does not change the essential structure of the C call; you can modify input parameters and you can return at most one result value. </P
+><p class="para">The <kbd class="command">OUTPUT:</KBD
+> directive tells <em class="emphasis">xsubpp</EM
+> to supply some code to package the returned result and load it back into Perl space. <kbd class="command">RETVAL</KBD
+> is automatically declared by <em class="emphasis">xsubpp</EM
+> to match the return value of the function. In the preceding example, the return value of <kbd class="command">sin()</KBD
+> is the only output parameter and is listed under <kbd class="command">OUTPUT</KBD
+>. </P
+><p class="para">The <kbd class="command">CODE</KBD
+> directive does not help if you want a variable number of input parameters or returned results. In this case, you use the <kbd class="command">PPCODE</KBD
+> directive and explicitly manage the entire argument stack. We will have more on this in <a class="xref" href="ch20_01.htm" title="Perl Internals">Chapter 20</A
+>.</P
+><p class="para">Please take a look at the XS documentation for other keywords, details, and examples.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch18-pgfId-968095">18.4.5 C++ Code</A
+></H3
+><p class="para"><a class="indexterm" name="ch18-idx-971950-0"></A
+>XS supports two special procedures for automatically creating and deleting C++ objects. Consider the following XS code for a module called <kbd class="command">Car</KBD
+>:</P
+><pre class="programlisting">Car*
+Car::new()
+
+void
+Car::DESTROY()
+
+void
+Car::turn_left()</PRE
+><p class="para">When you say <kbd class="command">new</KBD
+> <kbd class="command">Car</KBD
+> in Perl, the wrapper code corresponding to <kbd class="command">Car::new</KBD
+> makes the C++ invocation, <kbd class="command">new Car()</KBD
+>. Later on, when you say in Perl space, <kbd class="command">$car-&gt;turn_left()</KBD
+>, the appropriate C++ function is automatically called. If you want to supply <kbd class="command">CODE</KBD
+> or <kbd class="command">PPCODE</KBD
+> directives for C++ interfaces, you can refer to the object as <kbd class="command">THIS</KBD
+> and to the class as <kbd class="command">CLASS</KBD
+>.</P
+><p class="para">This example has one hitch. It has no clue what's in the data type <kbd class="command">Car</KBD
+>. Unlike SWIG, which quite unconcernedly treats a <kbd class="command">Car*</KBD
+> like a <kbd class="command">void*</KBD
+>, <em class="emphasis">xsubpp</EM
+> expects help in the form of a typemap. Since we need to know the internal Perl API to create a typemap, we'll leave this issue unresolved until <a class="xref" href="ch20_01.htm" title="Perl Internals">Chapter 20</A
+>.<a class="indexterm" name="ch18-idx-971941-0"></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch18_03.htm" title="18.3 SWIG Features"><img src="../gifs/txtpreva.gif" alt="Previous: 18.3 SWIG Features" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch18_05.htm" title="18.5 Degrees of Freedom"><img src="../gifs/txtnexta.gif" alt="Next: 18.5 Degrees of Freedom" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">18.3 SWIG Features</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">18.5 Degrees of Freedom</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

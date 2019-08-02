@@ -1,0 +1,155 @@
+<html><head>
+<title>Recipe 15.18. Program: Small termcap program</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:43:32Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch15_01.htm" title="15. User Interfaces"><link rel="prev" href="ch15_18.htm" title="15.17. Removing the DOS Shell Window with Windows Perl/Tk"><link rel="next" href="ch15_20.htm" title="15.19. Program: tkshufflepod"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch15_18.htm" title="15.17. Removing the DOS Shell Window with Windows Perl/Tk"><img src="../gifs/txtpreva.gif" alt="Previous: 15.17. Removing the DOS Shell Window with Windows Perl/Tk" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch15_01.htm" title="15. User Interfaces">Chapter 15<br>User Interfaces</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch15_20.htm" title="15.19. Program: tkshufflepod"><img src="../gifs/txtnexta.gif" alt="Next: 15.19. Program: tkshufflepod" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch15-chap15_program_0">15.18. Program: Small termcap program</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch15-pgfId-2003">Description</A
+></H3
+><p class="para"><a class="indexterm" name="ch15-idx-1000005206-0"></A
+><a class="indexterm" name="ch15-idx-1000005206-1"></A
+>This program clears your screen and scribbles all over it until you interrupt it. It shows how to use Term::Cap to clear the screen, move the cursor, and write anywhere on the screen. It also uses <a class="xref" href="ch16_07.htm" title="Preprocessing Input">Recipe 16.6</A
+>.</P
+><p class="para">The program text is shown in <a class="xref" href="#ch15-24645" title="tcapdemo">Example 15.9</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch15-24645">Example 15.9: tcapdemo</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch15-idx-1000005014-0"></A
+>tcapdemo - show off direct cursor placement
+
+use POSIX;
+use Term::Cap;
+    
+init();                     # Initialize Term::Cap.
+zip();                      # Bounce lines around the screen.
+finish();                   # Clean up afterward.
+exit();
+
+# Two convenience functions.  clear_screen is obvious, and
+# clear_end clears to the end of the screen.
+sub clear_screen { $tcap-&gt;Tputs('cl', 1, *STDOUT) } 
+sub clear_end    { $tcap-&gt;Tputs('cd', 1, *STDOUT) } 
+
+# Move the cursor to a particular location.
+sub gotoxy {
+    my($x, $y) = @_;
+    $tcap-&gt;Tgoto('cm', $x, $y, *STDOUT);
+} 
+
+# Get the terminal speed through the POSIX module and use that
+# to initialize Term::Cap.
+sub init { 
+    $| = 1;
+    $delay = (shift() || 0) * 0.005;
+    my $termios = POSIX::Termios-&gt;new();
+    $termios-&gt;getattr;
+    my $ospeed = $termios-&gt;getospeed;
+    $tcap = Term::Cap-&gt;Tgetent ({ TERM =&gt; undef, OSPEED =&gt; $ospeed });
+    $tcap-&gt;Trequire(qw(cl cm cd));
+}
+
+# Bounce lines around the screen until the user interrupts with
+# Ctrl-C.
+sub zip { 
+    clear_screen();
+    ($maxrow, $maxcol) = ($tcap-&gt;{_li} - 1, $tcap-&gt;{_co} - 1);
+
+    @chars = qw(* - / | \ _ );
+    sub circle { push(@chars, shift @chars); }
+
+    $interrupted = 0;
+    $SIG{INT} = sub { ++$interrupted };
+
+    $col = $row = 0;
+    ($row_sign, $col_sign) = (1,1);
+
+    do {
+        gotoxy($col, $row);
+        print $chars[0];
+        select(undef, undef, undef, $delay);
+
+        $row += $row_sign;
+        $col += $col_sign;
+
+        if    ($row == $maxrow) { $row_sign = -1; circle; } 
+        elsif ($row == 0 )      { $row_sign = +1; circle; }
+
+        if    ($col == $maxcol) { $col_sign = -1; circle; } 
+        elsif ($col == 0 )      { $col_sign = +1; circle; }
+    
+    } until $interrupted;
+
+}
+
+# Clean up the screen.
+sub finish { 
+    gotoxy(0, $maxrow);
+    clear_end();
+}<a class="indexterm" name="ch15-idx-1000005208-0"></A
+><a class="indexterm" name="ch15-idx-1000005208-1"></A
+></PRE
+></DIV
+><p class="para">This is what it looks like in mid-run:</P
+><pre class="programlisting">*     _                       /     |                       \     -
+ *   _ \                     - /   | /                     | \   - *
+  * _   \                   -   / |   /                   |   \ -   *
+   *     \                 -     |     /                 |     -     *
+  _ *     \               -     | /     /               |     - \     *
+ _   *     \             -     |   /     /             |     -   \     *
+*     *     \           -     |     /     /           |     -     \     *
+ *     *     \         -     |       /     /         |     -       \     *
+  *     *     \       -     |         /     /       |     -         \     *
+   *     *     \     -     |           /     /     |     -           \     *
+    *     *     \   -     |             /     /   |     -             \     *
+     *     *     \ -     |               /     / |     -               \     
+      *     -     \     |                 /     /     -                 \    
+       *   - *   - \   |                   /   | /   -                   \   
+        * -   * -   \ |                     / |   / -                     \ _
+         -     -     \                       |     /                       _</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch15-pgfId-1000005759">See Also</A
+></H3
+><p class="para"><i class="filename">termcap </I
+>(5) (if you have it); the documentation for the standard Term::Cap module</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch15_18.htm" title="15.17. Removing the DOS Shell Window with Windows Perl/Tk"><img src="../gifs/txtpreva.gif" alt="Previous: 15.17. Removing the DOS Shell Window with Windows Perl/Tk" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch15_20.htm" title="15.19. Program: tkshufflepod"><img src="../gifs/txtnexta.gif" alt="Next: 15.19. Program: tkshufflepod" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">15.17. Removing the DOS Shell Window with Windows Perl/Tk</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">15.19. Program: tkshufflepod</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

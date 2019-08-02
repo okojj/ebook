@@ -1,0 +1,1175 @@
+<html>
+<head>
+<title>Windows NT/2000 User Identity  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Windows NT/2000 User Identity">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch03_01.htm">Chapter 3: User Accounts</a></td><td align="right" valign="top" width="172"><a href="ch03_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">3.2. Windows NT/2000 User Identity</h2>
+
+
+
+
+
+<p>Now that we've explored the pieces of information that Unix
+systems cobble together to form a user's identity, let's
+take a look at the same topic for NT/2000 users. Much of this info is
+conceptually similar, so we'll dwell mostly on the differences
+between the two operating systems.</p>
+
+
+
+
+
+<a name="ch03-6-fm2xml"></a>
+<h3 class="sect2">3.2.1. NT/2000 User Identity Storage and Access</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-166"></a><a name="INDEX-167"></a><a name="INDEX-168"></a><a name="INDEX-169"></a>NT/2000 stores the persistent
+identity information for a user in a database called the
+<em class="emphasis">SAM</em> (Security Accounts Manager), or
+<em class="emphasis">directory</em>, database. The SAM database is part of
+the NT/2000 registry living in
+<em class="filename">%SYSTEMROOT%/system32/config</em>. The files that
+make up the registry are all stored in a binary format, meaning
+normal Perl text manipulation idioms cannot be used to read or write
+changes to this database. It is theoretically possible to use
+Perl's binary data operators (i.e., <tt class="literal">pack(
+)</tt> and <tt class="literal">unpack( )</tt>) with the SAM,
+providing you do so when NT/2000 is not running, but this way lies
+madness and
+misery.<a name="INDEX-170"></a>
+</p>
+
+
+
+
+
+<p>Luckily, there are better ways to access and manipulate this
+information via Perl.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-171"></a>One approach is to call an external
+binary to interact with the OS for you. Every NT/2000 machine has a
+feature-bloated command called <tt class="command">net</tt> that can add,
+delete, and view users. <tt class="command">net</tt> is quirky and limited,
+and probably the method of last resort. <a name="INDEX-172"></a>
+</p>
+
+
+
+
+
+<p>For example, here's the <tt class="command">net</tt> command in
+action on a machine with two accounts:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">C:\&gt;<tt class="userinput"><b>net users</b></tt>
+
+User accounts for \\HOTDIGGITYDOG
+----------------------------------
+Administrator            Guest
+The command completed successfully.</pre>
+</blockquote>
+
+
+
+
+
+<p>It would be easy to parse the output of this program from Perl if we
+needed to. Besides <tt class="command">net</tt>, there are other commercial
+packages that offer a command-line executable to perform similar
+tasks.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-173"></a><a name="INDEX-174"></a><a name="INDEX-175"></a>Another approach is to use the Perl
+module <tt class="literal">Win32::NetAdmin</tt> (bundled with the
+ActiveState Perl distribution) or one of the modules created to fill
+in the gaps in the functionality of
+<tt class="literal">Win32::NetAdmin</tt>s. These modules include David
+Roth's <tt class="literal">Win32::AdminMisc</tt> (from <a href="http://www.roth.net">http://www.roth.net</a>), or
+<tt class="literal">Win32::UserAdmin</tt> (described in Ashley Meggitt and
+Timothy Ritchey's O'Reilly book, <em class="emphasis">Windows NT
+User Administration</em>, module found at ftp://ftp.oreilly.com/pub/examples/windows/winuser/
+).</p>
+
+
+
+
+
+<p>
+<a name="INDEX-176"></a>I prefer Roth's
+<tt class="literal">Win32::AdminMisc</tt> for most user operations because
+it offers the largest grab-bag of system administration tools and
+Roth actively supports it in a number of online forums. Though the
+online documentation for this module is good, the best documentation
+for this module is the author's book, <em class="citetitle">Win32 Perl
+Programming: The Standard Extensions </em>(Macmillan Technical
+Publishing). It's a good book to have on hand in any case if
+you plan to write Win32-specific Perl programs.</p>
+
+
+
+
+
+<p>Here's some example code that shows the users on the local
+machine and some details about them. It prints out lines that look
+similar to <em class="filename">/etc/passwd</em> under Unix:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::AdminMisc
+
+# retrieve all of the local users
+Win32::AdminMisc::GetUsers('','',\@users) or 
+   die "Unable to get users: $!\n";
+
+# get their attributes and print them
+foreach $user (@users){
+  Win32::AdminMisc::UserGetMiscAttributes('',$user,\%attribs) or 
+    warn "Unable to get attrib: $!\n";
+  print join(":",$user,
+                 '*',
+                 $attribs{USER_USER_ID},
+                 $attribs{USER_PRIMARY_GROUP_ID},
+                 '',
+                 $attribs{USER_COMMENT},
+                 $attribs{USER_FULL_NAME},
+                 $attribs{USER_HOME_DIR_DRIVE}."\\".
+                 $attribs{USER_HOME_DIR},
+                 ''),"\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Finally, you can use the
+<tt class="literal">Win32::OLE</tt><a name="INDEX-177"></a> module to access the Active Directory
+Service Interfaces (ADSI) functionality built in to Windows 2000 and
+installable on Windows NT 4.0. We'll go into this topic in
+great detail in <a href="ch06_01.htm">Chapter 6, "Directory Services"</a>, so we won't look
+at an example here.<a name="INDEX-178"></a><a name="INDEX-179"></a>
+</p>
+
+
+
+
+
+<p>We'll see more Perl code to access and manipulate NT/2000 users
+later on, but for the time being let's return to our
+exploration of the differences between Unix and NT/2000 users.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch03-7-fm2xml"></a>
+<h3 class="sect2">3.2.2. NT/2000 User ID Numbers</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-180"></a>User IDs in NT/2000 are not created by
+mortals, and they cannot be reused. Unlike Unix, where we simply
+picked a UID number out of the air, the OS uniquely generates the
+equivalent identifier in NT/2000 every time a user is created. A
+unique user identifier (which NT/2000 calls a <em class="emphasis">Relative
+ID</em>, or RID) is combined with machine and domain IDs to
+create a large ID number called a SID, or <em class="emphasis">Security
+Identifier,</em> which acts as a users UID. An example RID is
+<tt class="literal">500</tt>, part of a longer SID which looks like this:
+<a name="INDEX-181"></a><a name="INDEX-182"></a><a name="INDEX-183"></a><a name="INDEX-184"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">S-1-5-21-2046255566-1111630368-2110791508-500</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<a name="INDEX-185"></a><a name="INDEX-186"></a><a name="INDEX-187"></a><a name="INDEX-188"></a>The RID is a number we get back as part of
+the <tt class="literal">UserGetMiscAttributes( )</tt> call we saw in our
+last code snippet. Here's the code necessary to print the RID
+for a particular user:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::AdminMisc;
+
+Win32::AdminMisc::UserGetMiscAttributes('',$user,\%attribs);
+print $attribs{USER_USER_ID},"\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>You can't (by normal means) recreate a user after she/he/it is
+deleted. Even if you create a new user with the same name as the
+deleted user, the SID will not be the same. The new user will not
+have access to its predecessor's files and resources.</p>
+
+
+
+
+
+<p>This is why some NT books recommend renaming accounts that are due to
+be inherited by another person. If a new employee is supposed to
+receive all of the files and privileges of a departing employee, they
+suggest renaming the existing account to preserve the SID rather than
+creating a new account, transferring files, and then deleting the old
+account. I personally find this method for account handoffs to be a
+little uncouth because it means the new employee will inherit all of
+the corrupted and useless registry settings of her or his
+predecessor. But it is the most expedient method, and sometimes that
+is important.</p>
+
+
+
+
+
+<p>Part of this recommendation comes from the pain associated with
+transferring ownership of files. In Unix, a privileged user can say,
+"Change the ownership of all of these files so that they are
+now owned by the new user." In NT, however, there's no
+giving of ownership, only taking. Luckily there are two ways to get
+around this restriction and pretend we're using Unix's
+semantics. From Perl we can:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>Call a separate binary, including:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>The <tt class="command">chown</tt> binaries from either the Microsoft NT
+Resource kit (commercial; we'll hear more about this product
+later in this chapter) or the Cygwin distribution found at
+<a href="http://www.cygnus.com">http://www.cygnus.com</a> (free).</p>
+</li>
+<li>
+<p>The <tt class="command">setowner</tt> binary, part of the NTSEC utilities
+sold by Pedestal Software at <a href="http://www.pedestalsoftware.com">http://www.pedestalsoftware.com</a>. I prefer
+this binary because it is the most flexible while still requiring the
+least amount of overhead.</p>
+</li>
+</ul>
+</li>
+<li>
+<p>The <tt class="literal">Win32::Perms</tt> module written by Dave Roth,
+located at <a href="http://www.roth.net/perl/perms">http://www.roth.net/perl/perms</a>. Here's
+some sample code that will change the owner of a directory and its
+contents including subdirectories:</p>
+</li>
+</ul>
+<blockquote>
+<pre class="programlisting">use Win32::Perms;
+    
+$acl  = new Win32::Perms(  );
+$acl-&gt;Owner($NewAccountName);
+$result = $acl-&gt;SetRecurse($dir);
+$acl-&gt;Close(  );</pre>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch03-8-fm2xml"></a>
+<h3 class="sect2">3.2.3. NT/2000 Passwords</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-189"></a>The algorithms used to obscure the
+passwords that protect access to a user's identity in NT/2000
+and Unix are cryptologically incompatible. Once encrypted, you cannot
+transfer the encrypted password information from one OS to the other
+and expect to use it for password changes or account creations. As a
+result, two separate sets of passwords have to be used and/or kept in
+sync. This difference is the bane of every system administrator who
+has to administer a mixed Unix-NT/2000 environment. Some
+administrators get around this by using custom authentication
+modules, commercial or otherwise.</p>
+
+
+
+
+
+<p>As a Perl programmer, the only thing you can do if you are not using
+custom authentication mechanisms is to create a system whereby the
+user provides her or his password in plain text. This plain text
+password then gets used to perform two separate password-related
+operations (changes, etc.), one for each OS.<a name="INDEX-190"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch03-9-fm2xml"></a>
+<h3 class="sect2">3.2.4. NT Groups</h3>
+
+
+
+
+
+<p>So far in our discussion of user identity for both operating
+systems, I've been able to gloss over any distinction between
+storage of a user's identity on a local machine and storage in
+some network service like NIS. For the information we've
+encountered, it hasn't really mattered if that information was
+used on a single system or all of the systems in a network or
+workgroup. In order to talk cogently about NT/2000 user groups and
+their intersection with Perl, we unfortunately have to break from this
+convention. We'll concentrate primarily on Windows NT 4.0
+groups. For Windows 2000, another layer of complication was added, so
+information about Windows 2000 groups has been banished to <a href="ch03_02.htm#ch03-10-fm2xml">the sidebar "Windows 2000 Group Changes"</a> later in this chapter.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-191"></a>On NT systems, a
+user's identity can be stored in one of two places: the SAM of
+a specific machine or the SAM of a domain controller. This is the
+distinction between a <em class="emphasis">local user</em>, who can only
+log into a single machine, and a <em class="emphasis">domain user</em>,
+who can log into any of the permitted machines that participate in
+that domain.</p>
+
+
+
+
+
+<p>NT groups also come in two flavors, <em class="emphasis">global</em> and
+<em class="emphasis">local.</em> The difference between these two is not
+precisely what the name would lead you to expect. One is
+<em class="emphasis">not</em> just composed of domain users while the
+other of local users. Nor, as people with Unix backgrounds might
+expect, is one type effective on only one machine while the other is
+in effect globally on a network. Both of these descriptions are
+partially correct, but let's look at the full story.</p>
+
+
+
+
+
+<p>If we start with the goals behind this mechanism's naming
+scheme and implementation it may make a little more sense.
+Here's what we're trying to accomplish:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>User accounts for an entire domain should be centrally managed.
+Administrators should be able to define arbitrary subsets of these
+user permissions and privileges can be assigned to whole groups at a
+time for administrative ease.</p>
+</li>
+<li>
+<p>All of the machines in a domain should be able to take advantage of
+this centralized management if they so choose. The administrator of
+an individual machine should also be able to create users that live
+only on that machine.</p>
+</li>
+<li>
+<p>The administrator of an individual machine should be able to decide
+which users are granted access to that machine. The administrator
+should be able to do this using the domain-wide user groups rather
+than having to specify each user by name.</p>
+</li>
+<li>
+<p>The members of these groups and certain local users should be able to
+be treated exactly the same from an administrative perspective
+(permissions, etc.).</p>
+</li>
+</ul>
+<p>Global and local groups allow us to do all of the above. The two
+sentence explanation is: global groups hold domain users only. Local
+groups hold local users and hold/import (the users of ) global
+groups.</p>
+
+
+
+
+
+<p>We'll use a simple example to help show how this works. Say you
+have an NT domain for a university department that already has domain
+users created for all of the students, faculty, and staff. When a new
+research project called Omphaloskepsis is started up, the central
+system administration staff creates a new global group called
+<tt class="literal">Global-Omph People</tt>. This global group contains all
+of the domain users working on this project. As staff members and
+students join and leave the project, they are added or removed from
+the group.</p>
+
+
+
+
+
+<p>A computer lab is set aside for the exclusive use of this research
+project. Local guest accounts are created on the machines in this lab
+for a couple of faculty members who are not part of the department
+(and hence not domain users). The system administrator for this lab
+does the following (via Perl, of course) to prevent all but project
+members from using these machines:</p>
+
+
+
+
+
+<ol>
+<li>
+<p>Creates a <em class="emphasis">local</em> group on each machine called
+<tt class="literal">Local-Authorized Omphies</tt>.</p>
+</li>
+<li>
+<p>Adds the local guest accounts to this local group.</p>
+</li>
+<li>
+<p>Adds the <em class="emphasis">global</em> group <tt class="literal">Global-Omph
+People</tt> to this local group.</p>
+</li>
+<li>
+<p>Adds the user right (we'll discuss user rights in the next
+section) <tt class="literal">Log on Locally</tt> to the local group
+<tt class="literal">Local-Authorized Omphies</tt>.</p>
+</li>
+<li>
+<p>Removes the user right <tt class="literal">Log on Locally</tt> from all
+other unauthorized groups.</p>
+</li>
+</ol>
+<p>The result is that only the authorized local users and the users in
+the authorized global group can log on to the machines in this
+exclusive computer lab. A new user placed in the <tt class="literal">Global-Omph
+People</tt> group will instantly be granted permission to log on
+to these machines and nothing has to be changed on any of the
+machines themselves. Once you get a handle on the local/global group
+concepts, it's a pretty handy scheme.<a href="#FOOTNOTE-4">[4]</a>
+</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-4"></a>
+<p>[4]For any
+Unix folks still reading along, a similar scheme can be set up by
+using NIS netgroups and special <em class="filename">/etc/passwd
+</em>entries on each machine in an NIS domain. See your
+machine's <em class="emphasis">netgroup</em> manual page for more
+details.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<a name="ch03-10-fm2xml"></a>
+<div class="sidebar">
+<h4 class="objtitle">Windows 2000 Group Changes</h4>
+
+
+
+
+
+<p>
+<a name="INDEX-192"></a><a name="INDEX-193"></a>Almost everything we've
+described about NT global and local groups is still true in Windows
+2000, but there are few new twists that need to be mentioned:</p>
+
+
+
+
+
+<ol>
+<li>
+<p>Windows 2000 uses Active Directory (more details of which can be
+found in <a href="ch06_01.htm">Chapter 6, "Directory Services"</a>) to store its user data. This
+means that global group information is now stored in an Active
+Directory <em class="emphasis">store</em> on a domain controller, not in
+its SAM.</p>
+</li>
+<li>
+<p>Local groups are now called <em class="emphasis">domain local</em> groups.</p>
+</li>
+<li>
+<p>A third group, <em class="emphasis">scope</em> (as the distinction is now
+called), has been added. In addition to global and domain local
+groups, Windows 2000 adds <em class="emphasis">universal</em> groups.
+Universal groups essentially cut across domain boundaries. They can
+hold accounts, global groups, and universal groups from anywhere in
+the directory. Just as domain local groups can contain global groups,
+now they hold universal groups as well.</p>
+</li>
+</ol>
+<p>As of this writing, the standard Perl user administration
+modules haven't caught up with these changes. The modules can
+still be used because the NT4 SAM interfaces are still operational,
+but they won't be able to access any of the new functionality.
+Because of this lag, this sidebar is the only mention we'll
+make of these Windows 2000 changes. For further access and
+information, you will need to turn to the Active Directory Service
+Interfaces (ADSI) framework we discuss in <a href="ch06_01.htm">Chapter 6, "Directory Services"</a>.</p>
+
+
+
+
+</div>
+
+<p>This scheme would be even handier if it didn't complicate our
+Perl programming. All the Perl modules we mentioned before follow the
+Win32 API lead by providing completely separate functions for local
+and global groups. For instance, with
+<tt class="literal">Win32::NetAdmin</tt>, we have:
+<a name="INDEX-194"></a>
+</p>
+
+
+
+
+
+<a name="ch03-11-fm2xml"></a>
+<table border="1">
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">GroupCreate(  )</tt>
+</p>
+</td>
+<td>
+<blockquote>
+<pre class="programlisting">LocalGroupCreate(  )</pre>
+</blockquote>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">GroupDelete(  )</tt>
+</p>
+</td>
+<td>
+<blockquote>
+<pre class="programlisting">LocalGroupDelete(  )</pre>
+</blockquote>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">GroupGetAttributes(  )</tt>
+</p>
+</td>
+<td>
+<blockquote>
+<pre class="programlisting">LocalGroupGetAttributes(  )</pre>
+</blockquote>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">GroupSetAttributes(  )</tt>
+</p>
+</td>
+<td>
+<blockquote>
+<pre class="programlisting">LocalGroupSetAttributes(  )</pre>
+</blockquote>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">GroupAddUsers(  )</tt>
+</p>
+</td>
+<td>
+<blockquote>
+<pre class="programlisting">LocalGroupAddUsers(  )</pre>
+</blockquote>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">GroupDeleteUsers(  )</tt>
+</p>
+</td>
+<td>
+<blockquote>
+<pre class="programlisting">LocalGroupDeleteUsers(  )</pre>
+</blockquote>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">GroupIsMember(  )</tt>
+</p>
+</td>
+<td>
+<blockquote>
+<pre class="programlisting">LocalGroupIsMember(  )</pre>
+</blockquote>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">GroupGetMembers(  )</tt>
+</p>
+</td>
+<td>
+<blockquote>
+<pre class="programlisting">LocalGroupGetMembers(  )</pre>
+</blockquote>
+</td>
+</tr>
+
+
+
+
+
+</table>
+
+<p>This duality means your code may have to call two functions for the
+same operation. For example, if you need to obtain all of the groups
+a user may be in, you may have to call two functions, one for local
+groups and the other for global groups. The group functions above are
+pretty self-explanatory. See the online documentation and
+Roth's book for more details.<a name="INDEX-195"></a>
+</p>
+
+
+
+
+
+<a name="ch03-12-fm2xml"></a>
+<blockquote class="note">
+<h4 class="objtitle">TIP</h4>
+<p>A quick tip found in Roth's book: your program must run with
+administrative privileges to access the list of local groups, but
+global group names are available to all users.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch03-13-fm2xml"></a>
+<h3 class="sect2">3.2.5. NT/2000 User Rights</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-196"></a><a name="INDEX-197"></a>The last different between
+Unix and NT/2000 user identity that we're going to address is
+the concept of a "user right." In Unix, the actions a
+user can take are either constrained by file permissions or by the
+superuser/non-superuser distinction. Under NT/2000, the permission
+scheme is more like superheroes. Users (and groups) can be imbued
+with special powers that become part of their identity. For instance,
+one can attach the user right <tt class="literal">Change the System
+Time</tt> to an ordinary user and that user will be able to
+effect the setting of the system clock on that machine.</p>
+
+
+
+
+
+<p>Some people find the user rights concept confusing because they have
+attempted to use NT 4.0's heinous <em class="emphasis">User
+Rights</em> dialog in the <tt class="command">User Manager</tt> or
+<tt class="command">User Manager for Domains</tt> application. This dialog
+presents the information in exactly the opposite manner most people
+expect to see it. It shows a list of the possible user rights and
+expects you to add groups or users to a list of entities that already
+have this right. <a href="ch03_02.htm#ch03-60850">Figure 3-1</a> shows a screenshot of
+this UI example in action.</p>
+
+
+
+
+
+<a name="ch03-60850"></a>
+<div class="figure">
+<img alt="figure" src="figs/psa_0301.gif"></div>
+<h4 class="objtitle">Figure 3.1. The User Rights Policy dialog box from the NT4 User Manager</h4>
+
+<p>A more user-centric UI would offer a way to add or remove user rights
+to and from users, instead of the other way around. This is in fact
+how we will operate on rights using Perl.</p>
+
+
+
+
+
+<p>One approach is to call the program <tt class="command">ntrights.exe</tt>
+from the Microsoft <em class="citetitle">NT Resource Kit</em>. If you
+haven't heard of the resource kit, be sure to read the upcoming
+sidebar about it.</p>
+
+
+
+
+
+<a name="ch03-14-fm2xml"></a>
+<div class="sidebar">
+<h4 class="objtitle">The Microsoft Windows NT/ Windows 2000 Resource Kits</h4>
+
+
+
+
+
+<p>
+<a name="INDEX-198"></a><a name="INDEX-199"></a>"You must have the <em class="citetitle">NT 4.0
+Server</em> and/or <em class="citetitle">Workstation Resource
+Kit</em> " is the general consensus among serious NT
+administrators and the media that covers this field. Microsoft Press
+publishes two large tomes, one for each of the NT/2000 OS versions,
+full of nitty-gritty operational information. It is not this
+information that makes these books so desirable; rather, it is the
+CD-ROMs included with the books that makes them worth their weight in
+zlotniks. The CD-ROMs contain a grab bag of crucial utilities for
+NT/2000 administration. The utilities shipped with the NT/2000 Server
+editions are a superset of those shipped with the NT
+Workstation/Windows 2000 Professional version, so if you have to
+choose one of the two to buy, you may wish to get the Server edition.</p>
+
+
+
+
+<p>Many of the utilities were contributed by the NT/2000
+development group who wrote their own code because they
+couldn't find the tools they needed anywhere else. For example,
+there are utilities which add users, change filesystem security
+information, show installed printer drivers, work with roaming
+profiles, help with debugging domain and network browser services,
+and so on.</p>
+
+
+
+
+<p>The tools in the Resource Kit are provided
+"as is," meaning there is virtually no support available
+for them. This no-support policy may sound harsh, but it serves the
+important purpose of allowing Microsoft to put a variety of useful
+code in the hands of administrators without having to pay prohibitive
+support costs. The utilities in the Resource Kits have a few small
+bugs, but on the whole they work great. Updates that fix bugs in some
+of these utilities have been posted to Microsoft's web site.</p>
+
+
+
+
+</div>
+
+<p>
+<a name="INDEX-200"></a>Using <tt class="command">ntrights.exe</tt>
+is straightforward; we call the program from Perl like any other
+(i.e., using backticks or the <tt class="literal">system( )</tt>
+function). In this case, we call <tt class="command">ntrights.exe</tt> with
+a command line of the form:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">C:\&gt;<tt class="userinput"><b>ntrights.exe +r</b></tt> <em class="replaceable">&lt;right name&gt;</em> <tt class="userinput"><b>+u</b></tt> <em class="replaceable">&lt;user or group name&gt;</em> <tt class="userinput"><b>[-m</b></tt> <em class="replaceable">\\machinename]</em>
+</pre>
+</blockquote>
+
+
+
+
+
+<p>to give a right to a user or group (on an optional machine named
+<em class="emphasis">machinename</em>). To take that right away:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">C:\&gt;<tt class="userinput"><b>ntrights.exe</b></tt> <tt class="userinput"><b>-r</b></tt> <em class="replaceable">&lt;right name&gt; </em><tt class="userinput"><b>+u </b></tt><em class="replaceable">&lt;user or group name&gt; </em><tt class="userinput"><b>[-m</b></tt> <tt class="command">\\</tt><em class="replaceable">machinename]</em>
+</pre>
+</blockquote>
+
+
+
+
+
+<p>Unix users will be familiar with the use of the
+<em class="emphasis">+</em> and <em class="emphasis">-</em> characters (as in
+<tt class="command">chmod </tt>), in this case used with the
+-<em class="emphasis">r</em> switch, to give and take away privileges. The
+list of right names like <tt class="literal">SetSystemtimePrivilege</tt>
+(can set the system time) can be found in the Microsoft <em class="citetitle">NT
+Resource Kit</em> documentation for the
+<tt class="command">ntrights</tt> command.</p>
+
+
+
+
+
+<p>A second, pure-Perl approach entails using the
+<tt class="literal">Win32::Lanman</tt> module by Jens
+Helberg, found at either ftp://ftp.roth.net/pub/ntperl/Others/Lanman/
+or at <a href="http://jenda.krynicky.cz">http://jenda.krynicky.cz</a>.
+Let's start off by looking at the process of retrieving an
+account's user rights. This is a multiple-step process;
+let's go over it step by
+step.<a name="INDEX-201"></a>
+</p>
+
+
+
+
+
+<p>First, we need to load the module:<a name="INDEX-202"></a><a name="INDEX-203"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::Lanman;</pre>
+</blockquote>
+
+
+
+
+
+<p>Then, we need to retrieve the actual SID for the account we wish to
+query or modify. In the following sample, we'll get the
+<em class="emphasis">Guest</em> account's SID:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">unless(Win32::Lanman::LsaLookupNames($server, ['Guest'], \@info)
+   die "Unable to lookup SID: ".Win32::Lanman::GetLastError(  )."\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">@info</tt> now contains an array of references to
+anonymous hashes, one element for each account we query (in this
+case, it is just a single element for <em class="emphasis">Guest</em>).
+Each hash contains the following keys: <tt class="literal">domain</tt>,
+<tt class="literal">domainsid</tt>, <tt class="literal">relativeid</tt>,
+<tt class="literal">sid</tt>, and <tt class="literal">use</tt>. We only care
+about <tt class="literal">sid</tt> for our next step. Now we can query the
+rights:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">unless (Win32::Lanman::LsaEnumerateAccountRights($server, ${$info[0]}{sid},
+                                                 \@rights);
+   die "Unable to query rights: ".Win32::Lanman::GetLastError(  )."\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">@rights</tt> now contains a set of names describing the
+rights apportioned to <em class="emphasis">Guest</em>.</p>
+
+
+
+
+
+<p>Knowing the API (Application Program Interface) name of a user right
+and what it represents is tricky. The easiest way to learn which
+names correspond to which rights and what each right offers is to
+look at the SDK (Software Developement Kit) documentation found on
+<a href="http://msdn.microsoft.com">http://msdn.microsoft.com</a>. This
+documentation is easy to find because Helberg has kept the standard
+SDK function names for his Perl function names. To find the names of
+the available rights, we search the MSDN (Microsoft's Developer
+News) site for "LsaEnumerateAccountRights" and
+we'll find pointers to them quickly.</p>
+
+
+
+
+
+<p>This information also comes in handy for the modification of user
+rights. For instance, if we want to add a user right to allow our
+<em class="emphasis">Guest</em> account to shut down the system, we could
+use:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::Lanman;
+
+unless (Win32::Lanman::LsaLookupNames($server, ['Guest'], \@info))
+  die "Unable to lookup SID: ".Win32::Lanman::GetLastError(  )."\n";
+
+
+unless (Win32::Lanman::LsaAddAccountRights($server, ${$info[0]}{sid}, 
+				                [&amp;SE_SHUTDOWN_NAME]))
+    die "Unable to change rights: ".Win32::Lanman::GetLastError(  )."\n"</pre>
+</blockquote>
+
+
+
+
+
+<p>In this case we found the <tt class="literal">SE_SHUTDOWN_NAME</tt> right
+in the SDK doc and used <tt class="literal">&amp;SE_SHUTDOWN_NAME</tt> (a
+subroutine defined by <tt class="literal">Win32::Lanman</tt>), which
+returns the value for this SDK constant.</p>
+
+
+
+
+
+<p>
+<tt class="literal">Win32::Lanman::LsaRemoveAccountRights( )</tt>, a
+function that takes similar arguments to those we used to add rights,
+is used to remove user rights.</p>
+
+
+
+
+
+<p>Before we move on to other topics, it is worth mentioning that
+<tt class="literal">Win32::Lanman</tt> also provides a function that works
+just like <tt class="command">User Manager </tt>'s broken interface
+described earlier. Instead of matching users to rights, we can match
+rights to users. If we use
+<tt class="literal">Win32::Lanman::LsaEnumerateAccountsWithUserRight(
+)</tt> we can retrieve a list of SIDs that has a specific user
+right. This could be useful in certain select situations.<a name="INDEX-204"></a><a name="INDEX-205"></a><a name="INDEX-206"></a>
+</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch03_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">3.1. Unix User Identity</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">3.3. Building an Account System to Manage Users</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

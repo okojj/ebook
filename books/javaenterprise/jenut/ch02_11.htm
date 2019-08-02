@@ -1,0 +1,182 @@
+<html>
+<head>
+<title>Stored Procedures (Java Enterprise in a Nutshell)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David Flanagan, Jim Farley, William Crawford and Kristopher Magnusson">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-483-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Stored Procedures">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm" alt="Java Enterprise in a Nutshell"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch02_10.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch02_10.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch02_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch02_01.htm">Chapter 2: JDBC</a></td><td align="right" valign="top" width="172"><a href="ch02_12.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch02_12.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY --><h2 class="sect1">2.11. Stored Procedures</h2>
+<p>
+<a name="INDEX-353"></a><a name="INDEX-354"></a><a name="INDEX-355"></a><a name="INDEX-356"></a>
+Most RDBMS systems include some sort of internal programming
+language (e.g., Oracle's PL/SQL). These languages allow database
+developers to embed procedural application code directly within the
+database and then call that code from other applications. The
+advantage of this approach is that the code can be written just once
+and then used in multiple different applications (even with different
+platforms and languages). It also allows application code to be
+divorced from the underlying table structure. If stored procedures
+handle all of the SQL, and applications just call the procedures, only
+the stored procedures need to be modified if the table structure is
+changed later on.</p>
+<p>
+<a name="INDEX-357"></a>
+Here is an Oracle PL/SQL stored procedure:<a href="#FOOTNOTE-4">[4]</a>
+</p>
+<blockquote class="footnote">
+<a name="FOOTNOTE-4"></a>
+<p>[4] If it looks familiar, that's because it is from George Reese's <em class="emphasis">Database Programming with JDBC</em> (O'Reilly).</p>
+</blockquote>
+<blockquote>
+<pre class="programlisting">
+CREATE OR REPLACE PROCEDURE sp_interest
+(id IN INTEGER
+bal IN OUT FLOAT) IS
+BEGIN
+SELECT balance
+INTO bal
+FROM accounts
+WHERE account_id = id;
+
+bal := bal + bal * 0.03;
+
+UPDATE accounts
+SET balance = bal
+WHERE account_id = id;
+
+END;</pre>
+</blockquote>
+<p>This PL/SQL procedure takes two input values, an account ID and a balance, and returns an updated balance. </p>
+<p>
+<a name="INDEX-358"></a><a name="INDEX-359"></a><a name="INDEX-360"></a>
+The <tt class="literal">CallableStatement</tt> interface is the JDBC object that supports stored procedures. The <tt class="literal">Connection</tt> class has a <tt class="literal">prepareCall()</tt> method that is very similar to the <tt class="literal">prepareStatement()</tt> method we used to create a <tt class="literal">PreparedStatement</tt>. Because each database has its own syntax for accessing stored procedures, JDBC defines a standardized escape syntax for accessing stored procedures with <tt class="literal">CallableStatement</tt>. The syntax for a stored procedure that does not return a result set is:</p>
+<blockquote>
+<pre class="programlisting">
+{call <em class="replaceable">procedure_name</em>[(?[,?...])]}</pre>
+</blockquote>
+<p>The syntax for a stored procedure that returns a result is:</p>
+<blockquote>
+<pre class="programlisting">
+{? = call <em class="replaceable">procedure_name</em>[(?[,?...])]}</pre>
+</blockquote>
+<p>
+<a name="INDEX-361"></a>
+In this syntax, each question mark (<tt class="literal">?</tt>)
+represents a placeholder for a procedure parameter or a return
+value. Note that the parameters are optional. The JDBC driver is
+responsible for translating the escape syntax into the database's own
+stored procedure syntax.</p>
+<p>Here's a code fragment that uses
+<tt class="literal">CallableStatement</tt> to run the
+<tt class="literal">sp_interest</tt> stored procedure:</p>
+<blockquote>
+<pre class="programlisting">
+CallableStatment cstmt = con.prepareCall("{call sp_interest(?,?)}");
+cstmt.registerOutParameter(2, Types.FLOAT);
+cstmt.setInt(1, accountID);
+cstmt.setFloat(2, 2343.23);
+cstmt.execute();
+out.println("New Balance:" + cstmt.getFloat(2));</pre>
+</blockquote>
+<p>
+<a name="INDEX-362"></a><a name="INDEX-363"></a><a name="INDEX-364"></a><a name="INDEX-365"></a>
+In this example, we first create a
+<tt class="literal">CallableStatement</tt> using the
+<tt class="literal">prepareCall()</tt> method and passing in the appropriate
+escape syntax for the stored procedure. Since this stored procedure
+has an output parameter (actually, in this case, an
+<tt class="literal">IN</tt><tt class="literal">OUT</tt> parameter, which means it
+also serves as an input parameter), we use the
+<tt class="literal">registerOutParameter()</tt> method to identify that
+parameter as an output of type <tt class="literal">FLOAT</tt>. Note that
+just as with prepared statements, substituted parameters are numbered
+from 1 to <em class="emphasis">n</em>, left to right. Any time you have an
+output parameter in a stored procedure, you need to register its type
+using <tt class="literal">registerOutParameter()</tt> before you execute the
+stored procedure.</p>
+<p>Next we set the two input parameters, the account ID and the
+balance, using the appropriate <tt class="literal">setXXX()</tt>
+methods. Finally, we execute the stored procedure and then use the
+<a name="INDEX-366"></a><a name="INDEX-367"></a><tt class="literal">getFloat()</tt> method to display the new balance. The
+<tt class="literal">getXXX()</tt> methods of
+<tt class="literal">CallableStatement</tt> are similar to those of the
+<tt class="literal">ResultSet</tt>.</p>
+<p>You need to use
+<tt class="literal">CallableStatement</tt> only with stored procedures that have
+output values, such as the one we just saw. You can use either of the other
+statement objects to execute stored procedures that take parameters
+but don't return anything.</p>
+<a name="INDEX-368"></a>
+<a name="INDEX-369"></a>
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch02_10.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch02_10.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch02_12.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch02_12.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">2.10. Transactions</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">2.12. Escape Sequences</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

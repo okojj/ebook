@@ -1,0 +1,498 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 9] 9.5 Integrating PLVmsg with Error Handling</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T18:27:00Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates-1-56592-238-7E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-238-7E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="PL/SQL SQL Oracle Packages"><META
+NAME="DC.Title"
+CONTENT="Advanced Oracle PL/SQL Programming with Packages"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch09_01.htm"
+TITLE="9. PLVmsg: Single-Sourcing PL/SQL Message Text"><LINK
+REL="prev"
+HREF="ch09_04.htm"
+TITLE="9.4 The Restriction Toggle"><LINK
+REL="next"
+HREF="ch09_06.htm"
+TITLE="9.6 Implementing load_  from_dbms"></HEAD>
+<BODY><DIV CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Advanced Oracle PL/SQL Programming with Packages"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Advanced Oracle PL/SQL Programming with Packages"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch09_04.htm"
+TITLE="9.4 The Restriction Toggle"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 9.4 The Restriction Toggle"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch09_01.htm"
+TITLE="9. PLVmsg: Single-Sourcing PL/SQL Message Text"
+>Chapter 9<BR>PLVmsg: Single-Sourcing PL/SQL Message Text</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch09_06.htm"
+TITLE="9.6 Implementing load_  from_dbms"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 9.6 Implementing load_  from_dbms"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch09-26743"
+>9.5 Integrating PLVmsg with Error Handling</A
+></H2
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch09-idx-998228-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch09-idx-998228-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch09-idx-998228-2"
+></A
+>Although PLVmsg can be used in other circumstances, PL/Vision uses it inside its exception handler package, PLVexc, and you are most likely to use it that way as well. This section shows you how to do this.</P
+><P
+CLASS="para"
+>Suppose that you have taken the time to write a procedure named <KBD
+CLASS="command"
+>showerr</KBD
+> to consolidate error handling. It accepts an error number-message combination and then both displays the message and records the error. If you do not make use of PLVmsg, a typical exception section might look like this:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>EXCEPTION
+   WHEN DUP_VAL_ON_INDEX
+   THEN
+      showerr (SQLCODE, 'Duplicate employee name.');
+   WHEN OTHERS
+   THEN
+      IF SQLCODE = -20200
+      THEN
+         showerr (-20200, 'Employee too young.');
+      ELSE
+         showerr (SQLCODE, SQLERRM);
+      END IF;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>What's the problem with this approach? I can think of several drawbacks:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>You have to do lots of typing. It took me several minutes to type out this example and I type quickly. It also provides lots of opportunities for errors.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The developer has to know about DUP_VAL_ON_INDEX (I, for one, always get it wrong the first time; it seems that it should be IN_INDEX). </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>There is some dangerous hard-coding in this section: both the -20,200 and the associated error message. What happens if you need to handle the same error in another program? </P
+></LI
+></UL
+><P
+CLASS="para"
+>Now, suppose on the other hand that I had made use of PLVmsg. First, I would have added text to the PLVmsg repository as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PLVmsg.add_text (-1, 'Duplicate employee name.');
+PLVmsg.add_text (-20200, 'Employee too young.');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Sure, I had to know that ORA-00001 goes with the DUP_VAL_ON_INDEX exception, but remember that I will be writing this once for all developers on an application team. After setting these values I would also have called the <KBD
+CLASS="command"
+>norestrict</KBD
+> toggle. This allows PLVmsg to override the usual error message for ORA-00001 with my own message.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PLVmsg.norestrict;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>With the text in place and restrictions removed on accessing override messages, I can reduce my exception section from what you saw earlier to just this:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>EXCEPTION
+   WHEN OTHERS
+   THEN
+      showerr (SQLCODE, PLVmsg.text);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>When the SQLCODE is -1, <KBD
+CLASS="command"
+>PLVmsg.text</KBD
+> is routed to the contents of the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table in row -1 (and does not use SQLERRM). When SQLCODE is -20,200, the value in row -202000 is returned. Finally, for all other regular Oracle error numbers, PLVmsg obtains the text from SQLERRM.</P
+><P
+CLASS="para"
+>The result is a dramatically cleaned-up exception section and an application in which all error text management is performed in one place: the PLVmsg repository.</P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch09-SECT-5.1"
+>9.5.1 Using PLVmsg in PL/Vision<A
+CLASS="indexterm"
+NAME="ch09-idx-998229-0"
+></A
+> </A
+></H3
+><P
+CLASS="para"
+>As mentioned earlier, the PLVexc packages relies on PLVmsg to obtain error message text. The <KBD
+CLASS="command"
+>PLVmsg.text</KBD
+> function is called by <KBD
+CLASS="command"
+>terminate_and_handle</KBD
+><A
+CLASS="indexterm"
+NAME="ch09-idx-998230-0"
+></A
+>, which acts as a bridge between the high-level handlers, such as <KBD
+CLASS="command"
+>recNgo</KBD
+>, and the low-level handle procedure. The implementation of <KBD
+CLASS="command"
+>terminate_and_handle</KBD
+> is shown below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>   PROCEDURE terminate_and_handle
+      (action_in IN VARCHAR2, 
+       err_code_in IN INTEGER)
+   IS
+   BEGIN
+      PLVtrc.terminate;
+      handle 
+         (PLVtrc.prevmod, err_code_in, action_in, 
+          PLVmsg.text (err_code_in)); 
+   END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch09-idx-998231-0"
+></A
+>The value passed in as <KBD
+CLASS="command"
+>err_code_in</KBD
+> might be SQLCODE, or it might be some application-specific value. Whatever its value, <KBD
+CLASS="command"
+>PLVmsg.text</KBD
+> translates the error number into message text and passes that to the low-level handler. The handle procedure then might display this string or store it in the PL/Vision log.</P
+><P
+CLASS="para"
+>By calling <KBD
+CLASS="command"
+>PLVmsg.text</KBD
+> at this point in the exception-handling architecture, PLVexc offers its users a lot of flexibility. Suppose that when you first built your application, you didn't have time to work on error messages. You took advantage of PLVexc, but ignored completely the PLVmsg package capabilities. In this case, <KBD
+CLASS="command"
+>PLVmsg.text</KBD
+> acted simply as a passthrough to SQLERRM. Somewhere down the line, however, you decided to enhance the error messages for your application. </P
+><P
+CLASS="para"
+>To accomplish this enhancement, you would not have to change your application. All of your exception handlers that call the high-level <KBD
+CLASS="command"
+>PLVexc</KBD
+> exception handlers are already calling <KBD
+CLASS="command"
+>PLVmsg.text</KBD
+>. All you have to do is store all of your message text in a database table and then call <KBD
+CLASS="command"
+>PLVmsg.load_from_dbms</KBD
+> at a good startup point for the application (in a When-New-Form-Instance trigger in an Oracle Forms-based application or in the initialization section of a common package). </P
+><P
+CLASS="para"
+>From that point on (and remember: without changing any of your code!), the new error text will be used in the application.</P
+><DIV
+CLASS="sidebar"
+><H4
+CLASS="sidebar"
+><A
+CLASS="title"
+NAME="AUTOID-12139"
+>Special Notes on PLVmsg</A
+></H4
+><P
+CLASS="para"
+>Here are some factors to consider when working with PLVmsg:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The maximum size<A
+CLASS="indexterm"
+NAME="ch09-idx-998232-0"
+></A
+> of a message is 2,000 bytes.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The number 100 and all negative numbers that are not between -20,000 and -20999 are considered to be Oracle error codes.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>load_from_dbms</KBD
+> is a useful example of the kind of code you need to write to transfer data from a database table to a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table&nbsp;-- even to the extent of allowing the user to specify the relevant names. You should be able to easily adapt this PLVmsg procedure to your own purposes.</P
+></LI
+></UL
+></DIV
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch09_04.htm"
+TITLE="9.4 The Restriction Toggle"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 9.4 The Restriction Toggle"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Advanced Oracle PL/SQL Programming with Packages"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Advanced Oracle PL/SQL Programming with Packages"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch09_06.htm"
+TITLE="9.6 Implementing load_  from_dbms"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 9.6 Implementing load_  from_dbms"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>9.4 The Restriction Toggle</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>9.6 Implementing load_  from_dbms</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG
+SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly & Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

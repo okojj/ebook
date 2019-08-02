@@ -1,0 +1,125 @@
+<html><head>
+<title>Recipe 16.8. Controlling Input and Output of Another Program</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:43:51Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch16_01.htm" title="16. Process Management and Communication"><link rel="prev" href="ch16_08.htm" title="16.7. Reading STDERR from a Program"><link rel="next" href="ch16_10.htm" title="16.9. Controlling the Input, Output, and Error of Another Program"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_08.htm" title="16.7. Reading STDERR from a Program"><img src="../gifs/txtpreva.gif" alt="Previous: 16.7. Reading STDERR from a Program" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch16_01.htm" title="16. Process Management and Communication">Chapter 16<br>Process Management and Communication</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch16_10.htm" title="16.9. Controlling the Input, Output, and Error of Another Program"><img src="../gifs/txtnexta.gif" alt="Next: 16.9. Controlling the Input, Output, and Error of Another Program" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch16-17010">16.8. Controlling Input and Output of Another Program</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1394">Problem<a class="indexterm" name="ch16-idx-1000006314-0"></A
+><a class="indexterm" name="ch16-idx-1000006314-1"></A
+><a class="indexterm" name="ch16-idx-1000006314-2"></A
+><a class="indexterm" name="ch16-idx-1000006314-3"></A
+></A
+></H3
+><p class="para">You want to both write to and read from another program. The <code class="literal">open</CODE
+> function lets you do one or the other, but not both.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1400">Solution</A
+></H3
+><p class="para">Use the standard IPC::Open2 module:</P
+><pre class="programlisting">use IPC::Open2;
+
+open2(*README, *WRITEME, $program);
+print WRITEME &quot;here's your input\n&quot;;
+$output = &lt;README&gt;;
+close(WRITEME);
+close(README);</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1420">Discussion</A
+></H3
+><p class="para">Wanting simultaneous read and write access to another program is very common, but surprisingly perilous. That's why <code class="literal">open</CODE
+> doesn't let you say:</P
+><pre class="programlisting">open(DOUBLE_HANDLE, &quot;| program args |&quot;)     # WRONG</PRE
+><p class="para"><a class="indexterm" name="ch16-idx-1000006320-0"></A
+><a class="indexterm" name="ch16-idx-1000006320-1"></A
+>The big problem here is buffering. Because you can't force the other program to unbuffer its output, you can't guarantee that your reads won't block. If you block trying to read at the same time the other process blocks waiting for you to send something, you've achieved the unholy state of deadlock. There you'll both stay, wedged, until someone kills your process or the machine reboots.</P
+><p class="para">If you control the other process's buffering because you wrote the other program and know how it works, then <a class="indexterm" name="ch16-idx-1000006341-0"></A
+>IPC::Open2 may be the module for you. The first two arguments to <code class="literal">open2</CODE
+> that IPC::Open2 exports into your namespace are filehandles. Either pass references to typeglobs as in the Solution, or create your own IO::Handle objects and pass them in:</P
+><pre class="programlisting">use IPC::Open2;
+use IO::Handle;
+
+($reader, $writer) = (IO::Handle-&gt;new, IO::Handle-&gt;new);
+open2($reader, $writer, $program);</PRE
+><p class="para">If you pass in objects, you must have created them (with <code class="literal">IO::Handle-&gt;new</CODE
+>, for instance) first. The <code class="literal">open2</CODE
+> function will not create handles for you if you pass in variables that don't contain filehandles.</P
+><p class="para">Alternatively, you can pass in arguments that look like <code class="literal">&quot;&lt;&amp;OTHERFILEHANDLE&quot;</CODE
+> or <code class="literal">&quot;&gt;&amp;OTHERFILEHANDLE&quot;</CODE
+>, which specify existing filehandles for the child process to read from or write to. These filehandles don't have to be controlled by your program&nbsp;- they may be connected to other programs, files, or sockets.</P
+><p class="para">You can specify the program either as a list (where the first element is the program name and the remaining elements are arguments to the program) or as a single string (which is passed to the shell as a command to start the program). If you also want control over the process's standard error, use the IPC::Open3 module and see the next recipe.</P
+><p class="para">If an error occurs, <code class="literal">open2</CODE
+> and <code class="literal">open3</CODE
+> do not return. Instead, they <code class="literal">die</CODE
+> with an error message that begins with <code class="literal">&quot;open2&quot;</CODE
+> or <code class="literal">&quot;open3&quot;</CODE
+>. To test for failure, use the <code class="literal">eval</CODE
+> <code class="literal">BLOCK</CODE
+> construct:</P
+><pre class="programlisting">eval {
+    open2($readme, $writeme, @program_and_arguments);
+};
+if ($@) { 
+    if ($@ =~ /^open2/) {
+        warn &quot;open2 failed: $!\n$@\n&quot;;
+        return;
+    }
+    die;            # reraise unforeseen exception
+}</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1470">See Also</A
+></H3
+><p class="para">The documentation for the IPC::Open2 and IPC::Open3 modules; <a class="xref" href="ch10_13.htm" title="Handling Exceptions">Recipe 10.12</A
+>; the <a class="olink" href="../prog/ch03_032.htm"><code class="literal">eval</CODE
+></A
+> function in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <em class="emphasis">perlfunc </EM
+>(1); the <code class="literal">$@</CODE
+> variable in the section on <a class="olink" href="../prog/ch02_09.htm#PERL2-CH-2-SECT-9.3">"Global Special Variables"</A
+> in <a class="olink" href="../prog/ch02_01.htm">Chapter 2</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <em class="emphasis">perlvar </EM
+>(1)</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_08.htm" title="16.7. Reading STDERR from a Program"><img src="../gifs/txtpreva.gif" alt="Previous: 16.7. Reading STDERR from a Program" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch16_10.htm" title="16.9. Controlling the Input, Output, and Error of Another Program"><img src="../gifs/txtnexta.gif" alt="Next: 16.9. Controlling the Input, Output, and Error of Another Program" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">16.7. Reading STDERR from a Program</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">16.9. Controlling the Input, Output, and Error of Another Program</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

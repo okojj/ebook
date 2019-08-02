@@ -1,0 +1,181 @@
+<html><head>
+<title>[Chapter 20] 20.6 Easy Embedding API</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:42:50Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch20_01.htm" title="20. Perl Internals"><link rel="prev" href="ch20_05.htm" title="20.5 Meaty Extensions"><link rel="next" href="ch20_07.htm" title="20.7 A Peek into the Future"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch20_05.htm" title="20.5 Meaty Extensions"><img src="../gifs/txtpreva.gif" alt="Previous: 20.5 Meaty Extensions" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch20_01.htm" title="20. Perl Internals">Chapter 20<br>Perl Internals</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch20_07.htm" title="20.7 A Peek into the Future"><img src="../gifs/txtnexta.gif" alt="Next: 20.7 A Peek into the Future" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch20-22641">20.6 Easy Embedding API</A
+></H2
+><p class="para">We have learned enough (and more) to implement the convenience API introduced in <a class="xref" href="ch19_01.htm" title="Embedding Perl:The Easy Way">Chapter 19</A
+>. They are <kbd class="command">perl_call_va</KBD
+><a class="indexterm" name="ch20-idx-973055-0"></A
+><a class="indexterm" name="ch20-idx-973055-1"></A
+><a class="indexterm" name="ch20-idx-973055-2"></A
+><a class="indexterm" name="ch20-idx-973055-3"></A
+>, <kbd class="command">perl_eval_va</KBD
+>, and the set of functions for accessing or modifying scalar values: <kbd class="command">get_int</KBD
+>, <kbd class="command">set_int</KBD
+>, and so on. We'll implement only <kbd class="command">perl_call_va</KBD
+> in this section. <kbd class="command">perl_eval_va</KBD
+> is a shorter form of this procedure since it doesn't expect any input parameters (the string to be <code class="literal">eval</CODE
+>'d contains all the information). The API functions to modify scalars are simple wrappers over <kbd class="command">sv_set*</KBD
+>, <kbd class="command">av_store</KBD
+>, and <kbd class="command">hv_store</KBD
+>, and are left as an exercise to the reader.[<a class="footnote" href="#ch20-pgfId-955229">12</A
+>]</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch20-pgfId-955229">[12]</A
+> I've always wanted to say that! (See the Preface for the FTP site where you can download this code and other examples in this book.) </P
+></DIV
+></BLOCKQUOTE
+><p class="para">Recall that <kbd class="command">perl_call_va</KBD
+> takes a NULL-terminated list of typed arguments. This list contains both input and output parameters. The following implementation processes the entire list by <kbd class="command">XPUSH</KBD
+>'ing the input parameters and storing the output parameters in an array of <kbd class="command">Out_Param</KBD
+> structures. Knowing the number of output parameters expected by the caller allows us to specify <kbd class="command">G_SCALAR</KBD
+>, <kbd class="command">G_ARRAY</KBD
+>, or <kbd class="command">G_DISCARD</KBD
+>. The full code is shown in <a class="xref" href="#ch20-39891" title="perl_call_va Implementation">Example 20.3</A
+>. </P
+><div class="example"><h4 class="example"><a class="title" name="ch20-39891">Example 20.3: perl_call_va Implementation</A
+></H4
+><pre class="programlisting">#define MAX_PARAMS 20
+typedef struct {
+    char type;       
+    void *pdata;
+} Out_Param;                  /* To remember the &quot;Out&quot; section */
+
+int perl_call_va (char *subname, ...)
+{
+    char      *p   = NULL;
+    char      *str = NULL; int i = 0; double d = 0;
+    int       nret = 0;               /* number of return params expected*/
+    int       ii   = 0;
+    va_list   vl;
+    int       out = 0;
+    int       result = 0;
+    Out_Param op[MAX_PARAMS];
+
+    dSP;                               /* Standard ...    */
+    ENTER;                             /*    ... Prologue */
+    SAVETMPS;
+    PUSHMARK(sp);
+    va_start (vl, subname);
+    while (p = va_arg(vl, char *)) {   /* Fetch next argument */
+        switch (*p) {
+        case 's' :                     /* String */
+            if (out) {
+                /* Comes here if we are processing the &quot;Out&quot; section */
+                op[nret].pdata = (void*) va_arg(vl, char *);
+                op[nret++].type = 's';
+            } else {
+                str = va_arg(vl, char *);
+                ii = strlen(str);
+                XPUSHs(sv_2mortal(newSVpv(str,ii)));
+            }
+            break;
+        case 'i' :                    /* Integer */
+            if (out) {
+                op[nret].pdata = (void*) va_arg(vl, int *);
+                op[nret++].type = 'i';
+            } else {
+                ii = va_arg(vl, int);
+                XPUSHs(sv_2mortal(newSViv(ii)));
+            }
+            break;
+        case 'd' :                    /* Double */
+            if (out) {
+                op[nret].pdata = (void*) va_arg(vl, double *);
+                op[nret++].type = 'd';
+            } else {
+               d = va_arg(vl, double);
+               XPUSHs(sv_2mortal(newSVnv(d)));
+            }
+            break;
+        case 'O': 
+            out = 1;                      /* Out parameters starting */
+            break;          
+        default:
+             fprintf (stderr, &quot;perl_eval_va: Unknown option \'%c\'.\n&quot;
+                               &quot;Did you forget a trailing NULL ?\n&quot;, *p);
+            return 0;
+        }
+        if (nret &gt; MAX_PARAMS) {
+            printf (stderr, &quot;Can't accept more than %d return params\n&quot;,
+                    MAX_PARAMS);
+            return -1;
+        }
+    }
+    va_end(vl);
+    PUTBACK;
+    /* All input parameters have been pushed on stack, and &quot;nret&quot; contains
+     * the number of values expected back from the Perl function */
+    result = perl_call_pv(subname, (nret == 0) ? G_DISCARD :
+                                   (nret == 1) ? G_SCALAR  :
+                                                 G_ARRAY  );
+    /* Process output arguments */
+    SPAGAIN;
+    if (nret &gt; result)
+        nret = result;
+ 
+    for (i = --nret; i &gt;= 0; i--) {
+        switch (op[i].type) {
+        case 's':
+            str = POPp;
+            strcpy((char *)op[i].pdata, str);
+            break;
+        case 'i':
+            *((int *)(op[i].pdata)) = POPi;
+            break;
+        case 'd':
+            *((double *) (op[i].pdata)) = POPd;
+            break;
+        }
+    }
+   
+    FREETMPS ;
+    LEAVE ;
+    return result;
+}<kbd class="command"></KBD
+><a class="indexterm" name="ch20-idx-973057-0"></A
+><a class="indexterm" name="ch20-idx-973057-1"></A
+><a class="indexterm" name="ch20-idx-973057-2"></A
+><a class="indexterm" name="ch20-idx-973057-3"></A
+></PRE
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch20_05.htm" title="20.5 Meaty Extensions"><img src="../gifs/txtpreva.gif" alt="Previous: 20.5 Meaty Extensions" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch20_07.htm" title="20.7 A Peek into the Future"><img src="../gifs/txtnexta.gif" alt="Next: 20.7 A Peek into the Future" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">20.5 Meaty Extensions</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">20.7 A Peek into the Future</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

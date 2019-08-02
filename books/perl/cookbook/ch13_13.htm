@@ -1,0 +1,141 @@
+<html><head>
+<title>Recipe 13.12. Solving the Data Inheritance Problem</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:42:28Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch13_01.htm" title="13. Classes, Objects, and Ties"><link rel="prev" href="ch13_12.htm" title="13.11. Generating Attribute Methods Using AUTOLOAD"><link rel="next" href="ch13_14.htm" title="13.13. Coping with Circular Data Structures"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_12.htm" title="13.11. Generating Attribute Methods Using AUTOLOAD"><img src="../gifs/txtpreva.gif" alt="Previous: 13.11. Generating Attribute Methods Using AUTOLOAD" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch13_01.htm" title="13. Classes, Objects, and Ties">Chapter 13<br>Classes, Objects, and Ties</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_14.htm" title="13.13. Coping with Circular Data Structures"><img src="../gifs/txtnexta.gif" alt="Next: 13.13. Coping with Circular Data Structures" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch13-25082">13.12. Solving the Data Inheritance Problem</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-1495">Problem<a class="indexterm" name="ch13-idx-1000004598-0"></A
+><a class="indexterm" name="ch13-idx-1000004598-1"></A
+><a class="indexterm" name="ch13-idx-1000004598-2"></A
+><a class="indexterm" name="ch13-idx-1000004598-3"></A
+><a class="indexterm" name="ch13-idx-1000004598-4"></A
+><a class="indexterm" name="ch13-idx-1000004598-5"></A
+><a class="indexterm" name="ch13-idx-1000004598-6"></A
+><a class="indexterm" name="ch13-idx-1000004598-7"></A
+></A
+></H3
+><p class="para">You want to inherit from an existing class, augmenting it with a few extra methods, but you don't know which data fields your parent class is using. How can you safely carve out your own namespace in the object hash without trampling on any ancestors?</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-1501">Solution</A
+></H3
+><p class="para">Prepend each of your fieldnames with your own class name and a distinctive separator, such as an underscore or two.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-1507">Discussion</A
+></H3
+><p class="para">An irksome problem lurks within the normal Perl OO strategy. The exact class representation must be known, violating the veil of abstraction. The subclass has to get unnaturally chummy with all its parent classes, recursively.</P
+><p class="para">We'll pretend we're a big happy object-oriented family and that everyone always uses hashes for objects, thus dodging the problem of a class choosing an array representation but inheriting from one that instead uses a hash model. (The solution to that problem is aggregation and delegation, as shown in <i class="filename">perlbot </I
+>(1).) Even with this assumption, an inherited class can't safely use a key in the hash. Even if we agree to use only method calls to access attributes we don't ourselves set, how do we know that we aren't setting a key that a parent class is using? Imagine wanting to use a <code class="literal">count</CODE
+> field, but unbeknownst to you, your great-great-grandparent class is using the same thing. Using <code class="literal">_count</CODE
+> to indicate nominal privacy won't help, since gramps might try the same trick.</P
+><p class="para">One reasonable approach is to prefix your own data members with your package name. Thus if you were class Employee and wanted an <code class="literal">age</CODE
+> field, for safety's sake you could use <code class="literal">Employee_age</CODE
+> instead. Here's a sample access method:</P
+><pre class="programlisting">sub Employee::age {
+    my $self = shift;
+    $self-&gt;{Employee_age} = shift if @_;
+    return $self-&gt;{Employee_age};
+} </PRE
+><p class="para">In the spirit of the Class::Struct module described in <a class="xref" href="ch13_06.htm" title="Using Classes as Structs">Recipe 13.5</A
+>, here's a more turnkey solution to the problem. Imagine one file with:</P
+><pre class="programlisting">package Person;
+use Class::Attributes;  # see explanation below
+mkattr qw(name age peers parent);</PRE
+><p class="para">and another like this:</P
+><pre class="programlisting">package Employee;
+@ISA = qw(Person);
+use Class::Attributes;
+mkattr qw(salary age boss);</PRE
+><p class="para">Notice that they both have an <code class="literal">age</CODE
+> attribute? If those are to be logically separate, we can't use <code class="literal">$self-&gt;{age}</CODE
+>, even for ourselves inside the module! Here's an implementation of the <code class="literal">Class::Attributes::mkattr</CODE
+> function that solves this:</P
+><pre class="programlisting">package Class::Attributes;
+use strict;
+use Carp;
+use Exporter ();
+use vars qw(@ISA @EXPORT);
+@ISA = qw(Exporter);
+@EXPORT = qw(mkattr);
+sub mkattr {
+    my $hispack = caller();
+    for my $attr (@_) {
+        my($field, $method);
+        $method = &quot;${hispack}::$attr&quot;;
+        ($field = $method) =~ s/:/_/g; 
+        no strict 'refs'; # here comes the kluglich bit
+        *$method = sub {
+            my $self = shift;
+            confess &quot;too many arguments&quot; if @_ &gt; 1;
+            $self-&gt;{$field} = shift if @_;
+            return $self-&gt;{$field};   
+        };
+    } 
+} 
+1;</PRE
+><p class="para">This way <code class="literal">$self-&gt;{Person_age}</CODE
+> and <code class="literal">$self-&gt;{Employee_age}</CODE
+> remain separate. The only funniness is that <code class="literal">$obj-&gt;age</CODE
+> would only get the first one. Now, you could write <code class="literal">$obj-&gt;Person::age</CODE
+> and <code class="literal">$obj-&gt;Employee::age</CODE
+> to distinguish these, but well-written Perl code shouldn't use double colons to specify an exact package except under extreme duress. If you really are forced to, perhaps that library could have been better designed.</P
+><p class="para">If you didn't want to write it that way, then from inside class Person, just use <code class="literal">age($self)</CODE
+> and you'll always get Person's version, whereas from inside class Employee, <code class="literal">age($self)</CODE
+> would get Employee's version. That's because it's a function call, not a method call.<a class="indexterm" name="ch13-idx-1000004605-0"></A
+><a class="indexterm" name="ch13-idx-1000004605-1"></A
+><a class="indexterm" name="ch13-idx-1000004605-2"></A
+><a class="indexterm" name="ch13-idx-1000004605-3"></A
+><a class="indexterm" name="ch13-idx-1000004605-4"></A
+><a class="indexterm" name="ch13-idx-1000004605-5"></A
+><a class="indexterm" name="ch13-idx-1000004605-6"></A
+><a class="indexterm" name="ch13-idx-1000004605-7"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-1000004048">See Also</A
+></H3
+><p class="para">The documentation on the <code class="literal">use</CODE
+> <code class="literal">fields</CODE
+> and <code class="literal">use</CODE
+> <code class="literal">base</CODE
+> pragmas, standard as of Perl 5.005; <a class="xref" href="ch10_15.htm" title="Redefining a Function">Recipe 10.14</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_12.htm" title="13.11. Generating Attribute Methods Using AUTOLOAD"><img src="../gifs/txtpreva.gif" alt="Previous: 13.11. Generating Attribute Methods Using AUTOLOAD" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_14.htm" title="13.13. Coping with Circular Data Structures"><img src="../gifs/txtnexta.gif" alt="Next: 13.13. Coping with Circular Data Structures" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">13.11. Generating Attribute Methods Using AUTOLOAD</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">13.13. Coping with Circular Data Structures</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

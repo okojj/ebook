@@ -1,0 +1,309 @@
+<html>
+<head>
+<title>Accessing Remote Objects as a Client (Java Enterprise in a Nutshell)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David Flanagan, Jim Farley, William Crawford and Kristopher Magnusson">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-483-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Accessing Remote Objects as a Client">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm" alt="Java Enterprise in a Nutshell"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_03.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_01.htm">Chapter 3: Remote Method Invocation</a></td><td align="right" valign="top" width="172"><a href="ch03_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_05.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY --><h2 class="sect1">3.4. Accessing Remote Objects as a Client</h2>
+<p>
+<a name="INDEX-616"></a><a name="INDEX-617"></a>
+Now that we've defined a remote object interface and its server implementation and generated the stub and skeleton classes that RMI uses to establish the link between the server object and the remote client, it's time to look at how you make your remote objects available to remote clients.</p>
+<a name="ch03-pgfid-959776"></a>
+<h3 class="sect2">3.4.1. The Registry and Naming Services</h3>
+<p>
+<a name="INDEX-618"></a><a name="INDEX-619"></a><a name="INDEX-620"></a><a name="INDEX-621"></a><a name="INDEX-622"></a>
+The first remote object reference in an RMI distributed application is
+typically obtained through the RMI registry facility and the
+<tt class="literal">Naming</tt> interface. Every host that wants to export
+remote references to local Java objects must be running an RMI
+registry daemon of some kind. A registry daemon listens (on a
+particular port) for requests from remote clients for references to
+objects served on that host. The standard Sun Java SDK distribution
+provides an RMI registry daemon,
+<em class="emphasis">rmiregistry</em>. This utility simply creates a
+<tt class="literal">Registry</tt> object that listens to a specified port
+and then goes into a wait loop, waiting for local processes to
+register objects with it or for clients to connect and look up RMI
+objects in its registry. You start the registry daemon by running the
+<em class="emphasis">rmiregistry</em> command, with an optional argument
+that specifies a port to listen to:</p>
+<blockquote>
+<pre class="programlisting">
+objhost% rmiregistry 5000 &amp;</pre>
+</blockquote>
+<p>
+<a name="INDEX-623"></a><a name="INDEX-624"></a>
+Without the port argument, the RMI registry daemon listens on port 1099. Typically, you run the registry daemon in the background (i.e., put an <tt class="literal">&amp;</tt> at the end of the command on a Unix system or run <tt class="literal">start rmiregistry [</tt><em class="replaceable">port</em><tt class="literal">]</tt> in a DOS window on a Windows system) or run it as a service at startup.</p>
+<p>
+<a name="INDEX-625"></a><a name="INDEX-626"></a><a name="INDEX-627"></a><a name="INDEX-628"></a>
+Once the RMI registry is running on a host, you can register remote objects with it using one of these classes: the <tt class="literal">java.rmi.registry.Registry</tt> interface, the <tt class="literal">java.rmi.registry.LocateRegistry</tt> class, or the <tt class="literal">java.rmi.Naming</tt> class.</p>
+<p>
+<a name="INDEX-629"></a><a name="INDEX-630"></a><a name="INDEX-631"></a><a name="INDEX-632"></a><a name="INDEX-633"></a><a name="INDEX-634"></a><a name="INDEX-635"></a>
+A <tt class="literal">Registry</tt> object represents an interface to a
+local or remote RMI object registry. The <tt class="literal">bind()</tt> and
+<tt class="literal">rebind()</tt> methods can register an object with a name
+in the local registry, where the name for an object can be any unique
+string. If you try to <tt class="literal">bind()</tt> an object to a name
+that has already been used, the registry throws an
+<tt class="literal">AlreadyBoundException</tt>. If you think that an object
+may already be bound to the name you want to register, use the
+<tt class="literal">rebind()</tt> method instead. You can remove an object
+binding using the <tt class="literal">unbind()</tt> method. Note that these
+three methods (<tt class="literal">bind()</tt>, <tt class="literal">rebind()</tt>,
+and <tt class="literal">unbind()</tt>) can be called only by clients running
+on the same host as the registry. If a remote client attempts to call
+these methods, the client receives a
+<tt class="literal">java.rmi.AccessException</tt>. You can locate a
+particular object in the registry using the
+<tt class="literal">lookup()</tt> method, while <tt class="literal">list()</tt>
+returns the names of all the objects registered with the local
+registry. Note that only <tt class="literal">Remote</tt> objects can be
+bound to names in the
+<tt class="literal">Registry</tt>. <tt class="literal">Remote</tt> objects are
+capable of supporting remote references. Standard Java classes are
+not, so they can't be exported to remote clients through the
+<tt class="literal">Registry</tt>.
+</p>
+<p>
+<a name="INDEX-636"></a><a name="INDEX-637"></a><a name="INDEX-638"></a><a name="INDEX-639"></a><a name="INDEX-640"></a>
+The <tt class="literal">LocateRegistry</tt> class provides a set of static methods a client can use to get references to local and remote registries, in the form of <tt class="literal">Registry</tt> objects. There are four versions of the static <tt class="literal">getRegistry()</tt> method, so that you can get a reference to either a local registry or a remote registry running on a particular host, listening to either the default port (1099) or a specified port. There's also a static <tt class="literal">createRegistry()</tt> method that takes a port number as an argument. This method starts a registry running within the current Java VM on the given local port and returns the <tt class="literal">Registry</tt> object it creates.</p>
+<p>Using the <tt class="literal">LocateRegistry</tt> and <tt class="literal">Registry</tt> interfaces, we can register one of our <tt class="literal">ThisOrThatServerImpl</tt> remote objects on the local host with the following code:</p>
+<blockquote>
+<pre class="programlisting">
+ThisOrThatServerImpl server = new ThisOrThatServerImpl();
+Registry localRegistry = LocateRegistry.getRegistry();
+try {
+  localRegistry.bind("TTServer", server);
+}
+catch (RemoteException re) { // Handle failed remote operation }
+catch (AlreadyBoundException abe) { // Already one there }
+catch (AccessException ae) { // Shouldn't happen, but... }</pre>
+</blockquote>
+<p>If this operation is successful (i.e., it doesn't raise any exceptions), the local registry has a <tt class="literal">ThisOrThatServerImpl</tt> remote object registered under the name "TTServer." Remote clients can now look up the object using a combination of the <tt class="literal">LocateRegistry</tt> and <tt class="literal">Registry</tt> interfaces, or take the simpler approach and use the <tt class="literal">Naming</tt> class. </p>
+<p>
+<a name="INDEX-641"></a><a name="INDEX-642"></a>
+The <tt class="literal">Naming</tt> class lets a client look up local and remote objects using a URL-like naming syntax. The URL of a registered RMI remote object is typically in the format shown in <a href="#ch03-57262">Figure 3-3</a>. Notice that the only required element of the URL is the actual object name. The protocol defaults to <em class="emphasis">rmi:</em>, the hostname defaults to the local host, and the port number defaults to 1099. Note that the default <tt class="literal">Naming</tt> class provided with Sun's Java SDK accepts only the <em class="emphasis">rmi:</em> protocol on object URLs. If you attempt to use any other protocol, a
+<tt class="literal">java.net.MalformedURLException</tt> is thrown by the
+<tt class="literal">lookup()</tt> method. 
+
+<a name="INDEX-643"></a><a name="INDEX-644"></a><a name="INDEX-645"></a>
+</p>
+<p>If we have a client running on a remote host that wants to look up the <tt class="literal">ThisOrThatServerImpl</tt> we registered, and the <tt class="literal">ThisOrThatServerImpl</tt> object is running on a host named rmiremote.farley.org, the client can get a remote reference to the object with one line of code:</p>
+<blockquote>
+<pre class="programlisting">
+ThisOrThatServer rmtServer =
+  (ThisOrThatServer)Naming.lookup("rmi://rmiremote.farley.org/TTServer");</pre>
+</blockquote>
+<p>If we have a client running on the same host as the <tt class="literal">ThisOrThatServerImpl</tt> object, the remote reference can be retrieved using the degenerate URL:</p>
+<blockquote>
+<pre class="programlisting">
+ThisOrThatServer rmtServer = (ThisOrThatServer)Naming.lookup("TTServer");</pre>
+</blockquote>
+<a name="ch03-57262"></a>
+<div class="figure">
+<img alt="figure" src="figs/Jent.0303.gif" webstripperlinkwas="figs/Jent.0303.gif"></div>
+<h4 class="objtitle">Figure 3-3. Anatomy of an RMI object URL</h4>
+<p>
+<a name="INDEX-646"></a><a name="INDEX-647"></a><a name="INDEX-648"></a>
+Alternately, you can use the <tt class="literal">LocateRegistry</tt> and <tt class="literal">Registry</tt> interfaces to look up the same object, using an extra line of code to find the remote <tt class="literal">Registry</tt> through the <tt class="literal">LocateRegistry</tt> interface:</p>
+<blockquote>
+<pre class="programlisting">
+Registry rmtRegistry = LocateRegistry.getRegistry("rmiremote.farley.org");
+ThisOrThatServer rmtServer =
+	(ThisOrThatServer)rmtRegistry.lookup("TTServer");</pre>
+</blockquote>
+<p>
+When you look up objects through an actual <tt class="literal">Registry</tt> object, you don't have the option of using the URL syntax for the name, because you don't need it. The hostname and port of the remote host are specified when you locate the <tt class="literal">Registry</tt> through the <tt class="literal">LocateRegistry</tt> interface, and the RMI protocol is implied, so all you need is the registered name of the object. With the <tt class="literal">Naming</tt> class, you can reduce a remote object lookup to a single method call, but the name must now include the host, port number, and registered object name, bundled into a URL. Internally, the <tt class="literal">Naming</tt> object parses the host and port number from the URL for you, finds the remote <tt class="literal">Registry</tt> using the <tt class="literal">LocateRegistry</tt> interface, and asks the <tt class="literal">Registry</tt> for the remote object using the object name in the URL. </p>
+<p>The principal use for the <tt class="literal">Registry</tt> and <tt class="literal">Naming</tt> classes in an RMI application is as a means to bootstrap your distributed application. A server process typically exports just a few key objects through its local RMI registry daemon. Clients look up these objects through the <tt class="literal">Naming</tt> facility to get remote references to them. Any other remote objects that need to be shared between the two processes can be exported through remote method calls. </p>
+<a name="INDEX-649"></a>
+<a name="INDEX-650"></a>
+<a name="ch03-pgfid-959778"></a>
+<h3 class="sect2">3.4.2. Remote Method Arguments and Return Values</h3>
+<p>
+<a name="INDEX-651"></a><a name="INDEX-652"></a><a name="INDEX-653"></a><a name="INDEX-654"></a>
+As I've already mentioned, a critical element of executing a remote method call is the marshalling and unmarshalling of the method arguments and, once the method has executed, the reverse marshalling and unmarshalling of the method's return value. RMI handles this process for you automatically, but you need to understand how different types of objects are transmitted from the method caller to the server object and back again and, more importantly, you need to know which types of objects can't be used in remote method calls at all.</p>
+<p>
+<a name="INDEX-655"></a><a name="INDEX-656"></a><a name="INDEX-657"></a><a name="INDEX-658"></a>
+When you call a method on a remote object, the arguments to the method
+  have to be serializable. That is, they need to be primitive
+  Java data types (like <tt class="literal">int</tt>,
+  <tt class="literal">float</tt>, etc.) or Java objects that implement
+  <tt class="literal">java.io.Serializable</tt>. The same restriction
+  applies to the return value of the remote method. This restriction
+  is enforced at runtime, when you actually make the remote method
+  call, rather than at compile time, when
+you generate the stubs and skeletons using the <em class="emphasis">rmic</em> compiler.</p>
+<p>
+<a name="INDEX-659"></a><a name="INDEX-660"></a>
+The RMI stub/skeleton layer decides how to send method arguments and return values over the network, based on whether a particular object is <tt class="literal">Remote</tt>, <tt class="literal">Serializable</tt>, or neither:</p>
+<ul>
+<li>
+<p>
+<a name="INDEX-661"></a>
+If the object is a <tt class="literal">Remote</tt> object, a remote reference for the object is generated, and the reference is marshaled and sent to the remote process. The remote reference is received on the other end and converted into a stub for the original object. This process applies to both method arguments and return values.</p>
+</li>
+<li>
+<p>If the object is <tt class="literal">Serializable</tt> but not <tt class="literal">Remote</tt>, the object is serialized and streamed to the remote process in byte form. The receiver converts the bytes into a copy of the original object.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-662"></a><a name="INDEX-663"></a>
+If the method argument or return value is not serializable (i.e., it's not a primitive data type or an object that implements <tt class="literal">Serializable</tt>), the object can't be sent to the remote client, and a <tt class="literal">java.rmi.MarshalException</tt> is thrown. </p>
+</li>
+</ul>
+<p>
+<a name="INDEX-664"></a><a name="INDEX-665"></a><a name="INDEX-666"></a><a name="INDEX-667"></a><a name="INDEX-668"></a>
+The principal difference between remote and nonremote objects is that
+remote objects are sent <em class="emphasis">by reference</em>, while
+nonremote, serializable objects are sent <em class="emphasis">by
+copy</em>. In other words, a remote reference maintains a link
+to the original object it references, so changes can be made to the
+original object through the remote stub. If the server object calls
+update methods on an argument to a remote method, and you want the
+updates to be made on the original object on the client side, the
+argument needs to be a <tt class="literal">Remote</tt> object that
+automatically exports a stub to the server object. Similarly, if the
+return value of a remote method call is intended to be a reference to
+an object living on the server, the server implementation needs to
+ensure that the object returned is a <tt class="literal">Remote</tt> object.</p>
+<a name="ch03-pgfid-960698"></a>
+<h3 class="sect2">3.4.3. Factory Classes</h3>
+<p>
+<a name="INDEX-669"></a><a name="INDEX-670"></a><a name="INDEX-671"></a><a name="INDEX-672"></a>
+When a reference to a remote object is obtained through the RMI registry and then used to request additional remote references, the registered remote object is often referred to as a <em class="emphasis">factory class</em>.</p>
+<p>Factory classes are useful in distributed applications that use remote objects because in most cases you can't predict beforehand the kind and number of remote objects that will need to be shared between two processes. To make a remote object visible to clients through the RMI registry service, you need to explicitly create the object inside a Java VM on the server and then register that object using the <tt class="literal">bind()</tt> or <tt class="literal">rebind()</tt> method on the <tt class="literal">Registry</tt>. Using remote references obtained through method calls on factory objects, however, the client application can dynamically request the creation of new remote objects, without the objects being registered individually with the server registry.</p>
+<p>As an example, suppose we're building a remote banking system, using the <tt class="literal">Account</tt> object we saw earlier in the chapter. We want to set up a centralized server that provides account services to remote clients running on PCs, embedded in ATMs, etc. On the server, we could run an RMI registry, create an <tt class="literal">Account</tt> object for every account we have on record, and register each one with the RMI registry service using the account name. In this scheme, registering accounts with the RMI registry goes something like this:</p>
+<blockquote>
+<pre class="programlisting">
+Registry local = LocateRegistry.getRegistry();
+local.bind("Abrams, John", new AccountImpl("John Abrams"));
+local.bind("Barts, Homer", new AccountImpl("Homer Barts"));
+  .
+  .
+  .</pre>
+</blockquote>
+<p>
+<a name="INDEX-673"></a>
+As you can imagine, this is quite unwieldy in practice. Starting the
+  server can take a long time, as thousands of accounts need to be
+  registered, many of them unnecessarily, since many accounts may not
+  see any activity before the next downtime. More importantly,
+  accounts that are created or closed during the server's
+  lifetime somehow need to be added or removed from the RMI registry,
+  as well as from the bank's database of accounts. A much more sensible approach is to define a factory class for <tt class="literal">Account</tt> objects, along the lines of the following interface:</p>
+<blockquote>
+<pre class="programlisting">
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+
+public interface AccountManager extends Remote {
+  public Account getAccount(String name) throws RemoteException;
+  public boolean newAccount(Account s) throws RemoteException;
+}</pre>
+</blockquote>
+<p>The <tt class="literal">AccountManager</tt> lets a client ask for an
+account by name, using the <tt class="literal">getAccount()</tt> remote
+method. The method returns a reference to an
+<tt class="literal">Account</tt> object that corresponds to the
+account. Once the client has the <tt class="literal">Account</tt> reference,
+transactions against the account can be done through method calls on
+the <tt class="literal">Account</tt> object. The
+<tt class="literal">AccountManager</tt> also has a
+<tt class="literal">newAccount()</tt> method that allows clients to add new
+accounts to the manager's underlying database.</p>
+<p>The server implementation of the <tt class="literal">getAccount()</tt>
+method simply needs to look up the named account in the account
+database, create an <tt class="literal">AccountImpl</tt> object to represent
+the account, and return the object to the remote client as a remote
+reference. Since <tt class="literal">Account</tt> objects are
+<tt class="literal">Remote</tt> objects, the RMI remote reference layer
+automatically creates a remote reference for the
+<tt class="literal">Account</tt> object, and the client that called the
+<tt class="literal">getAccount()</tt> method receives a stub for the
+<tt class="literal">Account</tt> object on the server. </p>
+<p>
+<a name="INDEX-674"></a><a name="INDEX-675"></a>
+Using the factory object to find accounts is more
+  manageable than using the RMI registry. The bank maintains a
+  database of accounts and their status, so the server implementation
+  of the <tt class="literal">AccountManager</tt> can access that database
+  directly to find accounts and create corresponding
+  <tt class="literal">Account</tt> remote objects. Trying to keep the RMI
+  registry in sync with the bank database makes the registry an
+  unnecessary shadow of the main database of accounts, giving the bank
+  two databases to maintain.</p>
+<a name="INDEX-676"></a>
+<a name="INDEX-677"></a>
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_03.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch03_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_05.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">3.3. Creating the Stubs and Skeletons</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">3.5. Dynamically Loaded Classes</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

@@ -1,0 +1,199 @@
+<html><head>
+<title>[Chapter 2] 2.3 Professors, Students, Courses</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:30:50Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch02_01.htm" title="2. Implementing Complex Data Structures"><link rel="prev" href="ch02_02.htm" title="2.2 Example: Matrices"><link rel="next" href="ch02_04.htm" title="2.4 Pass the Envelope"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch02_02.htm" title="2.2 Example: Matrices"><img src="../gifs/txtpreva.gif" alt="Previous: 2.2 Example: Matrices" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch02_01.htm" title="2. Implementing Complex Data Structures">Chapter 2<br>Implementing Complex Data Structures</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch02_04.htm" title="2.4 Pass the Envelope"><img src="../gifs/txtnexta.gif" alt="Next: 2.4 Pass the Envelope" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch02-19101">2.3 Professors, Students, Courses</A
+></H2
+><p class="para"><a class="indexterm" name="ch02-idx-949533-0"></A
+>This example shows how you might represent professor, student, and course data as hierarchical records and how to link them up. Assume that the data files look like this:</P
+><pre class="programlisting"><b class="emphasis.bold">#file: professor.dat</B
+>
+id          : 42343                #Employee Id
+Name        : E.F.Schumacher
+Office Hours: Mon 3-4, Wed 8-9
+Courses     : HS201, SS343         #Course taught
+...
+
+
+<b class="emphasis.bold">#file: student.dat</B
+>
+id          : 52003                 # Registration id
+Name        : Garibaldi
+Courses     : H301, H302, M201      # Courses taken
+...
+<b class="emphasis.bold">#file: courses.dat</B
+>
+id          : HS201
+Description : Small is beautiful
+Class Hours : Mon 2-4, Wed 9-10, Thu 4-5
+...</PRE
+><p class="para">Each "id:" line starts a new record.</P
+><p class="para">Among other tasks, let us say we are required to find out whether there is a scheduling conflict on professors' and students' hours. Because our focus is on data representation and getting a feel for Perl's reference syntax, we will look at implementing only some parts of the problem.</P
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch02-pgfId-943836">2.3.1 Representation</A
+></H3
+><p class="para"><a class="indexterm" name="ch02-idx-949532-0"></A
+>A hash table is a good representation for a heterogeneous record, as we mentioned earlier, so a student structure may be implemented like this:</P
+><pre class="programlisting">$student{42343} = {
+    'Name'    =&gt; 'Garibaldi',
+    'Courses' =&gt; [ ]};</PRE
+><p class="para">A number of subtle design choices have been made here.</P
+><p class="para">We could have replaced "foreign keys" (to use the database term) such as "HS201" with references to the corresponding course data structures. We didn't, because it is then tempting to directly dereference these references, in which case the student code is aware of how the course data is structured. </P
+><p class="para">We maintain separate global hash tables for students, courses, and professors&nbsp;- yet another effort to keep mostly unrelated data completely separate and to make it possible to change a part of the system without affecting everyone. </P
+><p class="para">There is one piece of data we haven't discussed before: time ranges. Both professors and courses have certain "busy" or "active" hours. What is a good representation for this? You might choose to represent the line "Mon 2-3, Tue 4-6" as follows:</P
+><pre class="programlisting">$time_range = {
+    'Mon' =&gt; [2,3],
+    'Tue' =&gt; [4,6]
+};</PRE
+><p class="para">There is a much simpler representation, in case you haven't already guessed it. The key insight is that since we are concerned only with clashes in time, the system should be able to quickly tell us whether a professor or a course is "active" in a given hour of the week or not. Considering that there are only       24 * 7 = 168 hours in a week, the entire week's schedule can be represented by a bitmap vector of 21 bytes (168/8). If a bit is set, we know that the professor is teaching something in that hour. In fact we can reduce the storage requirements further if we only account for the <em class="emphasis">effective</EM
+> hours in a week (say, 7:00 A.M. to 7:00 P.M., Monday to Friday). That brings it down to 8 bytes (12 hours * 5 days / 8). The nice thing here is that an entire sequence of time ranges boils down to one scalar containing a bitmap vector. The other cool thing is that you can obtain time conflicts by logically AND-ing two bitmaps. </P
+><p class="para">Having settled the representation, let us write some code to read the <em class="emphasis">professor.dat</EM
+> file, and construct the data structures.</P
+><div class="example"><h4 class="example"><a class="title" name="ch02-pgfId-949673">Example 2.3: Read professor.dat and Create Hierarchical Records in Memory</A
+></H4
+><pre class="programlisting">my (%profs);  # prof_read_file() populates this data structure from file
+
+sub <b class="emphasis.bold">prof_read_file</B
+> {
+    my ($filename) = @_;
+    my ($line, $curr_prof);
+    open (F, $filename) || die &quot;Could not open $filename&quot;;
+    while ($line = &lt;F&gt;) {
+        chomp($line);
+        next if $line =~ /^\s*$/;       # skip blank lines
+        if ($line =~ /^id.*:\s*(.*)/) {
+            # Use an anonymous hash to store a professor's data
+            $profs{$1} = $curr_prof = {};
+        } elsif ($line =~ /^Office Hours.*:\s*(.*)/) {
+            # $1 contains a string like 'Mon 2-3, Tue 4-6'
+            $curr_prof-&gt;{Office Hours} = interval_parse($1);
+        } elsif ($line =~ /^Courses.*:\s*(.*)/) {
+            # $1 contains something like 'HS201, MA101'
+            my (@courses_taught) =  split(/[\s,]+/, $1);
+            $curr_prof-&gt;{Courses} = \@courses_taught;
+        }
+    }
+}</PRE
+></DIV
+><p class="para">Notice that the <kbd class="command">courses_taught</KBD
+> array is local to the block. When the block ends, <kbd class="command">$curr_prof-&gt;{Courses}</KBD
+> continues to hang on to this array. You can omit one step like this:</P
+><pre class="programlisting">$curr_prof-&gt;{Courses} = [split(/[\s,]+/, $1)];</PRE
+><p class="para">I prefer the earlier approach because it is more readable. </P
+><p class="para">The <kbd class="command">interval_parse</KBD
+> method parses a string such as "Mon 3-5, Wed 2-6" into a bit string, as was mentioned earlier. The code looks like this:</P
+><pre class="programlisting"># Each hour in a week (with days from 7am to 7pm) gets its own
+# unique bit in an 8-byte string.
+# Mon 7-8 is the 0th bit, Mon 6-7pm is 11, ... Fri 6-7 (pm) is 60th.
+my %base_hours = (
+   mon =&gt; 0, tue =&gt; 12, wed =&gt; 24 , thu =&gt; 36, fri =&gt; 48
+);
+sub <b class="emphasis.bold">interval_parse</B
+> {
+    my ($interval_sequence) = @_; #contains &quot;Mon 3-5, Tue 2-6&quot;
+    my ($time_range) = &quot;&quot;;
+    foreach $day_hours (split /,/, $interval_sequence) {
+       # $day_hours contains &quot;Mon 3-5&quot; etc.
+       my ($day, $from, $to) = 
+           ($day_hours =~ /([A-Za-z]+).*(\d+)-(\d+)/);
+       # if $from or $to is less than 7, it must be afternoon. Normalize
+       # it by adding 12. Then reduce it to a zero base by subtracting 7
+       # (that is, 7 hrs to 19 hrs becomes 0 - 12. Finally, 
+       # normalize each hour in a day with respect to weekly hours, 
+       # by adding in the day's &quot;base hour&quot;
+       $to = 19 if $to == 7;
+       $from += 12 if $from &lt; 7 ; $to += 12  if $to &lt;= 7;
+       my $base = $base_hours{lc $day};
+       $from += $base - 7; $to += $base - 7;
+       # At this point Tue 7a.m ==&gt; 12 and Tue 4 p.m =&gt; 21
+       for ($i = $from; $i &lt; $to;  $i++) {
+           # Set the corresponding bit
+           vec($time_range, $i, 1) = 1;
+       }
+    }
+    $time_range;
+}</PRE
+><p class="para">To check for scheduling constraints on a professor's time, we have to calculate overlapping hours between the professor's office hours and each course he or she teaches and between the courses themselves, as shown in <a class="xref" href="#ch02-30177" title="Checking Constraints on a Professor's Time">Example 2.4</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch02-30177">Example 2.4: Checking Constraints on a Professor's Time</A
+></H4
+><pre class="programlisting">sub prof_check_constraints {
+    my ($prof) = @_;
+    my $r_prof = $profs{$prof};  # %profs created by prof_read_file
+    my $office_hours = $r_prof-&gt;{Office Hours};
+    my $rl_courses = <b class="emphasis.bold">$r_prof-&gt;{Courses}</B
+>; 
+    for $i (0 .. $#{$rl_courses}) {
+       $course_hours = course_get_hours($rl_courses-&gt;[$i]);
+       if (interval_conflicts($office_hours, $course_hours)) {
+           print &quot;Prof. &quot;, $r_prof-&gt;{name},
+               &quot; Office hours conflict with course $course_taught\n&quot;;
+       }
+       for $j ($i .. $#{$rl_courses}) {
+           my ($other_course_hours) = course_get_hours($rl_courses-&gt;[$j]);
+           if (interval_conflicts ($course_hours, $other_course_hours)) {
+               print &quot;Prof. &quot;, $r_prof-&gt;{name},
+                &quot;: Course conflict: &quot;, $rl_courses-&gt;[$i], &quot; &quot;
+                                       $rl_courses-&gt;[$j], &quot;\n&quot;;
+       }
+    }
+}</PRE
+></DIV
+><p class="para">The subroutine <code class="literal">interval_conflicts</CODE
+> simply compares the two bitmaps, as shown below:</P
+><pre class="programlisting">sub interval_conflicts {
+    my ($t1, $t2) = @_;
+    my ($combined) = $t1 &amp; $t2;
+    # $combined will have at least one bit set if there's a conflict
+    my $offset = length($combined) * 8;
+    # start counting down from last bit, and see if any is set
+    while (--$offset &gt;= 0) {
+        return 1 if vec($combined,$offset,1);
+    }
+    return 0;
+}</PRE
+><p class="para">Note that all knowledge of the internal representation of a time interval is encapsulated in functions with the prefix <code class="literal">interval_</CODE
+>. These functions thus encapsulate an <em class="emphasis">abstract data type</EM
+> called "interval." When we study modules and objects in later chapters, we will learn ways of organizing such pieces of code into reusable entities.<a class="indexterm" name="ch02-idx-949548-0"></A
+><a class="indexterm" name="ch02-idx-949548-1"></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch02_02.htm" title="2.2 Example: Matrices"><img src="../gifs/txtpreva.gif" alt="Previous: 2.2 Example: Matrices" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch02_04.htm" title="2.4 Pass the Envelope"><img src="../gifs/txtnexta.gif" alt="Next: 2.4 Pass the Envelope" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">2.2 Example: Matrices</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">2.4 Pass the Envelope</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

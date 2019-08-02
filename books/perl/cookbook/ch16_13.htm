@@ -1,0 +1,142 @@
+<html><head>
+<title>Recipe 16.12. Sharing Variables in Different Processes</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:07Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch16_01.htm" title="16. Process Management and Communication"><link rel="prev" href="ch16_12.htm" title="16.11. Making a Process Look Like a File with Named Pipes"><link rel="next" href="ch16_14.htm" title="16.13. Listing Available Signals"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_12.htm" title="16.11. Making a Process Look Like a File with Named Pipes"><img src="../gifs/txtpreva.gif" alt="Previous: 16.11. Making a Process Look Like a File with Named Pipes" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch16_01.htm" title="16. Process Management and Communication">Chapter 16<br>Process Management and Communication</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch16_14.htm" title="16.13. Listing Available Signals"><img src="../gifs/txtnexta.gif" alt="Next: 16.13. Listing Available Signals" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch16-32637">16.12. Sharing Variables in Different Processes</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-2148">Problem<a class="indexterm" name="ch16-idx-1000006366-0"></A
+><a class="indexterm" name="ch16-idx-1000006366-1"></A
+><a class="indexterm" name="ch16-idx-1000006366-2"></A
+><a class="indexterm" name="ch16-idx-1000006366-3"></A
+></A
+></H3
+><p class="para">You want to share variables across forks or between unrelated processes.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-2154">Solution</A
+></H3
+><p class="para">Use SysV IPC, if your operating system supports it.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-2160">Discussion</A
+></H3
+><p class="para">While SysV IPC (shared memory, semaphores, etc.) isn't as widely used as pipes, named pipes, and sockets for interprocess communication, it still has some interesting properties. Normally, however, you can't expect to use shared memory via <code class="literal">shmget</CODE
+> or the <i class="filename">mmap </I
+>(2) system call to share a variable among several processes. That's because Perl would reallocate your string when you weren't wanting it to.</P
+><p class="para">The CPAN module <a class="indexterm" name="ch16-idx-1000006367-0"></A
+>IPC::Shareable takes care of that. Using a clever <code class="literal">tie</CODE
+> module, SysV shared memory, and the Storable module from CPAN allows data structures of arbitrary complexity to be shared among cooperating processes on the same machine. These processes don't even have to be related to each other.</P
+><p class="para"><a class="xref" href="#ch16-25358" title="sharetest">Example 16.11</A
+> is a simple demonstration of the module.</P
+><div class="example"><h4 class="example"><a class="title" name="ch16-25358">Example 16.11: sharetest</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl 
+# <a class="indexterm" name="ch16-idx-1000006368-0"></A
+>sharetest - test shared variables across forks
+use IPC::Shareable;
+
+$handle = tie $buffer, 'IPC::Shareable', undef, { destroy =&gt; 1 };
+$SIG{INT} = sub { die &quot;$$ dying\n&quot; };
+
+for (1 .. 10) { 
+    unless ($child = fork) {        # i'm the child
+        die &quot;cannot fork: $!&quot; unless defined $child;
+        squabble();
+        exit;
+    } 
+    push @kids, $child;  # in case we care about their pids
+}
+
+while (1) {
+    print &quot;Buffer is $buffer\n&quot;;
+    sleep 1;
+} 
+die &quot;Not reached&quot;;
+
+sub squabble {
+    my $i = 0;
+    while (1) { 
+        next if $buffer =~ /^$$\b/o;  
+        $handle-&gt;shlock();
+        $i++;
+        $buffer = &quot;$$ $i&quot;;
+        $handle-&gt;shunlock();
+    }
+} </PRE
+></DIV
+><p class="para">The starting process creates the shared variable, forks off 10 children, and then sits back and prints out the value of the buffer every second or so, forever, or until you hit Ctrl-C.</P
+><p class="para">Because the SIGINT handler was set before any forking, it got inherited by the squabbling children as well, so they'll also bite the dust when the process group is interrupted. Keyboard interrupts send signals to the whole process group, not just one process.</P
+><p class="para">What do the kids squabble over? They're bickering over who gets to update that shared variable. Each one looks to see whether someone else was here or not. So long as the buffer starts with their own signature (their PID), they leave it alone. As soon as someone else has changed it, they lock the shared variable using a special method call on the handle returned from the <code class="literal">tie</CODE
+>, update it, and release the lock.</P
+><p class="para">The program runs much faster by commenting out the line that starts with <code class="literal">next</CODE
+> where each process is checking that they were the last one to touch the buffer.</P
+><p class="para">The <code class="literal">/^$$\b/o</CODE
+> may look suspicious, since <code class="literal">/o</CODE
+> tells Perl to compile the pattern once only, but then went and changed the variable's value by forking. Fortunately, the value isn't locked at program compile time, but only the first time the pattern is itself compiled in each process, during whose own lifetime <code class="literal">$$</CODE
+> does not alter.</P
+><p class="para">The IPC::Sharable module also supports sharing variables among unrelated processes on the same machine. See its documentation for details.<a class="indexterm" name="ch16-idx-1000008779-0"></A
+><a class="indexterm" name="ch16-idx-1000008779-1"></A
+><a class="indexterm" name="ch16-idx-1000008779-2"></A
+><a class="indexterm" name="ch16-idx-1000008779-3"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1000008287">See Also</A
+></H3
+><p class="para">The <a class="olink" href="../prog/ch03_136.htm"><code class="literal">semctl</CODE
+></A
+>, <a class="olink" href="../prog/ch03_137.htm"><code class="literal">semget</CODE
+></A
+>, <a class="olink" href="../prog/ch03_138.htm"><code class="literal">semop</CODE
+></A
+>, <a class="olink" href="../prog/ch03_136.htm"><code class="literal">shmctl</CODE
+></A
+>, <a class="olink" href="../prog/ch03_137.htm"><code class="literal">shmget</CODE
+></A
+>, <a class="olink" href="../prog/ch03_146.htm"><code class="literal">shmread</CODE
+></A
+>, and <a class="olink" href="../prog/ch03_147.htm"><code class="literal">shmwrite</CODE
+></A
+> functions in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <em class="emphasis">perlfunc </EM
+>(1); the documentation for the IPC::Shareable module from CPAN</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_12.htm" title="16.11. Making a Process Look Like a File with Named Pipes"><img src="../gifs/txtpreva.gif" alt="Previous: 16.11. Making a Process Look Like a File with Named Pipes" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch16_14.htm" title="16.13. Listing Available Signals"><img src="../gifs/txtnexta.gif" alt="Next: 16.13. Listing Available Signals" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">16.11. Making a Process Look Like a File with Named Pipes</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">16.13. Listing Available Signals</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

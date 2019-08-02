@@ -1,0 +1,827 @@
+<html>
+<head>
+<title>A Shared Whiteboard (Java Distributed Computing)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jim Farley">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-206-9E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="A Shared Whiteboard">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm" alt="Java Distributed Computing"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch10_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch10_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch10_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch10_01.htm">Chapter 10: Building Collaborative Applications</a></td><td align="right" valign="top" width="172"><a href="appa_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/appa_01.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">10.2. A Shared Whiteboard</h2>
+
+<p>
+<a name="INDEX-1310"></a><a name="INDEX-1311"></a><a name="INDEX-1312"></a>Now
+we'll look at a collaborative application that's not so
+simple--a shared whiteboard. There are more things to worry
+about in this application because, while we still need to keep track
+of agent identities and communications, the data shared between
+agents is a bit more complicated and can lead to performance problems
+pretty quickly.
+</p>
+
+<p>First let's build a simple shared whiteboard system based on
+our RMI collaborative classes. Like the chat example, our first
+version will use the standard mediator class,
+<tt class="literal">RMIMediatorImpl</tt><a name="INDEX-1313"></a>, because this version will
+only need the mediator to do the default routing of messages to the
+other agents. This initial whiteboard example will also need a new
+subclass of the <tt class="literal">RMICollaborator</tt> that acts as a
+whiteboard user. Actions that the user performs in the local
+whiteboard are broadcast to all other users so that their displays
+are updated properly.
+</p>
+
+<p>
+<a href="#JDP-CH-10-EX-2">Example 10-2</a> shows a
+<tt class="literal">WhiteboardUser</tt><a name="INDEX-1314"></a> class that subclasses
+<tt class="literal">RMICollaboratorImpl</tt>. It has a single constructor
+with four arguments: a name that the whiteboard user goes by, a color
+that is used when the user draws on the whiteboard, a host name for
+the mediator, and the mediator's name. The user name, host, and
+mediator name are passed to the
+<tt class="literal">RMICollaboratorImpl</tt><a name="INDEX-1315"></a> constructor to establish the
+connection to the mediator, and to initialize the
+collaborator's <tt class="literal">Identity</tt>. Once this is
+done, the color is added to the whiteboard user's
+<tt class="literal">Identity</tt>. We include the user's color in
+the <tt class="literal">Identity</tt> so other users of the shared
+whiteboard will know what color to use to draw our scribblings. When
+they receive the <tt class="literal">Identity</tt> in the remote call of
+their <tt class="literal">notify()</tt> methods, they can extract the
+<tt class="literal">Color</tt> object from the
+<tt class="literal">Identity</tt> and use it to draw the remote
+user's inputs. Since the <tt class="literal">java.awt.Color</tt>
+class implements the <tt class="literal">Serializable</tt> interface, we
+know that we can safely send the <tt class="literal">Color</tt> object
+through a remote method call via RMI.
+</p>
+
+<a name="JDP-CH-10-EX-2"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-2. A Shared Whiteboard Client</h4>
+<blockquote>
+<pre class="programlisting">package dcj.examples.Collaborative;
+
+import dcj.util.Collaborative.*;
+import java.awt.event.*;
+import java.awt.*;
+import java.util.Hashtable;
+import java.util.Properties;
+import java.io.IOException;
+import java.rmi.RemoteException;
+
+public class WhiteboardUser extends RMICollaboratorImpl
+                            implements MouseListener, MouseMotionListener
+{
+  protected Hashtable lastPts = new Hashtable();
+  protected Component whiteboard;
+  protected Image buffer;
+
+  public WhiteboardUser(String name, Color color, String host, String mname)
+         throws RemoteException {
+    super(name);
+    Properties p = new Properties();
+    p.put("host", host);
+    p.put("mediatorName", mname);
+    connect(p);
+    getIdentity().setProperty("color", color);
+    System.out.println("color = " + color.getRed()
+                       + " " + color.getGreen() + " "
+                       + color.getBlue());
+    buildUI();
+  }
+
+  protected void buildUI() {
+    Frame f = new Frame();
+    GridBagLayout gridbag = new GridBagLayout();
+    GridBagConstraints c = new GridBagConstraints();
+    f.setLayout(gridbag);
+    f.addNotify();
+    c.fill = GridBagConstraints.BOTH;
+    c.gridwidth = GridBagConstraints.REMAINDER;
+    Canvas canvas1 = new java.awt.Canvas();
+    canvas1.setSize(240,180);
+    canvas1.setBackground(Color.white);
+    gridbag.setConstraints(canvas1, c);
+    f.add(canvas1);
+    String name = null;
+    try {
+      name = getIdentity().getName();
+    }
+    catch (Exception e) {
+      name = "unknown";
+    }
+    Label label1 = new java.awt.Label("Your name: " + name);
+    label1.setSize(100,30);
+    gridbag.setConstraints(label1, c);
+    f.add(label1);
+    f.setSize(240,210);
+    f.show();
+    whiteboard = canvas1;
+    whiteboard.addMouseListener(this);
+    whiteboard.addMouseMotionListener(this);
+    buffer = whiteboard.createImage(f.getSize().width,
+                                    f.getSize().height);
+  }
+
+  public void mousePressed(MouseEvent ev) {
+    Point evPt = ev.getPoint();
+    try {
+      broadcast("start", evPt);
+    }
+    catch (Exception e) {}
+  }
+
+  public void mouseReleased(MouseEvent ev) {
+    Point evPt = ev.getPoint();
+    try {
+      broadcast("end", evPt);
+    }
+    catch (Exception e) {}
+  }
+
+  public void mouseDragged(MouseEvent ev) {
+    Point evPt = ev.getPoint();
+    try {
+      broadcast("drag", evPt);
+    }
+    catch (Exception e) {
+    }
+  }
+
+  public void mouseExited(MouseEvent ev) {}
+  public void mouseMoved(MouseEvent ev) {}
+  public void mouseClicked(MouseEvent ev) {}
+  public void mouseEntered(MouseEvent ev) {}
+
+  public boolean notify(String tag, Object data, Identity src)
+                 throws IOException, RemoteException {
+
+    Color origColor = null;
+    Color agentColor = null;
+    Graphics gr = buffer.getGraphics();
+    try {
+      agentColor = (Color)src.getProperty("color");
+      if (agentColor != null) {
+        gr.setColor(agentColor);
+      }
+      else {
+        System.out.println("No agent color available.");
+      }
+    }
+    catch (Exception exc) {
+      System.out.println("Exception while switching colors.");
+      exc.printStackTrace();
+    }
+
+    if (tag.compareTo("start") == 0) {
+      lastPts.put(src.getName(), data);
+    }
+    else if (tag.compareTo("drag") == 0) {
+      Point lastPt = (Point)lastPts.get(src.getName());
+      Point currPt = (Point)data;
+      gr.drawLine(lastPt.x, lastPt.y, currPt.x, currPt.y);
+      lastPts.put(src.getName(), data);
+    }
+    else if (tag.compareTo("end") == 0) {
+      Point lastPt = (Point)lastPts.get(src.getName());
+      Point currPt = (Point)data;
+      gr.drawLine(lastPt.x, lastPt.y, currPt.x, currPt.y);
+      lastPts.remove(src.getName());
+    }
+
+    whiteboard.getGraphics().drawImage(buffer, 0, 0, whiteboard);
+
+    return true;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>The last thing that the <tt class="literal">WhiteboardUser</tt>
+constructor does is build the user interface by calling the
+<tt class="literal">buildUI()</tt> method. This method assembles the AWT
+elements that make up the whiteboard interface for the user. We
+won't delve into the details of the interface, except to say
+that the main part of the whiteboard interface is a simple
+<tt class="literal">Canvas</tt>, to which we attach the
+<tt class="literal">WhiteboardUser</tt> itself as a
+<tt class="literal">MouseListener</tt> and a
+<tt class="literal">MouseMotionListener</tt> (notice that the
+<tt class="literal">WhiteboardUser</tt> class implements both of these
+AWT interfaces). This is done near the end of the
+<tt class="literal">buildUI()</tt> method.
+</p>
+
+<p>All drawing operations are done using the
+<tt class="literal">nextLine()</tt> method. This method draws a line from
+the last point on the user's drawing path, which is stored in a
+<tt class="literal">Hashtable</tt>, to the next point; it's passed
+in as an argument. The color of the line to be drawn is passed in as
+a <tt class="literal">Color</tt> argument. The line is drawn first on an
+<tt class="literal">Image</tt> buffer, which was initialized in the
+<tt class="literal">buildUI()</tt> method, then the buffer image is
+copied to the <tt class="literal">Canvas</tt>. We do this so that we can
+restore the whiteboard display if the window becomes obscured by
+another window and becomes visible again; all of the scribblings are
+stored in the <tt class="literal">Image</tt> buffer and can be recopied to
+the <tt class="literal">Canvas</tt> when needed.
+</p>
+
+<p>
+<a name="INDEX-1316"></a><a name="INDEX-1317"></a>Since we've attached the
+<tt class="literal">WhiteboardUser</tt> to the
+<tt class="literal">Canvas</tt> as a <tt class="literal">MouseListener</tt>
+and a <tt class="literal">MouseMotionListener</tt>, it will get mouse
+click and motion events from the <tt class="literal">Canvas</tt>, passed
+to it through calls to its <tt class="literal">mouseXXX()</tt> methods.
+When the user presses a mouse button while the cursor is in the
+<tt class="literal">Canvas</tt>, the
+<tt class="literal">WhiteboardUser.mousePressed()</tt> method is called.
+If the user drags the mouse with the button pressed, the
+<tt class="literal">WhiteboardUser.mouseDragged()</tt> method is called
+repeatedly, recording each new position of the cursor. When the user
+releases the mouse, the
+<tt class="literal">WhiteboardUser.mouseReleased()</tt> method is called.
+Each of these methods is passed a <tt class="literal">MouseEvent</tt>
+object as an argument, which includes information about the event
+that triggered the method call. This information includes the
+position of the mouse within the <tt class="literal">Canvas</tt>.
+</p>
+
+<p>To let the rest of the shared whiteboard users know what the local
+user has done (so they can update their displays), the mouse
+event-handling methods in <tt class="literal">WhiteboardUser</tt>
+broadcast a message to them all using the
+<tt class="literal">broadcast()</tt> method inherited from the
+<tt class="literal">RMICollaboratorImpl</tt> parent class. In
+<tt class="literal">mousePressed()</tt>, a "start" message is
+sent along with the coordinates of the mouse press (passed as the
+body of the message). This tells the other whiteboard users that this
+user has started drawing something at those coordinates. In
+<tt class="literal">mouseDragged()</tt>, a "drag" message is
+sent, with the coordinates of the mouse.
+<tt class="literal">mouseReleased()</tt> sends an "end"
+message with the coordinates of the mouse.
+</p>
+
+<p>This gets the drawing actions of each whiteboard user to all of the
+other users; now we need to do something with this information.
+Remember that when the mediator calls the collaborator's
+<tt class="literal">notify()</tt> method, it passes in the message tag,
+the body of the message, and the <tt class="literal">Identity</tt> of the
+sender. The <tt class="literal">WhiteboardUser.notify()</tt> method first
+gets the drawing color of the remote agent from its
+<tt class="literal">Identity</tt>--remember that each agent adds its
+preferred color to its <tt class="literal">Identity</tt> in its
+constructor. The <tt class="literal">notify()</tt> method sets the
+drawing color of the buffer image by getting its
+<tt class="literal">Graphics</tt> object and calling its
+<tt class="literal">setColor()</tt> method with the remote agent's
+color. Next, it checks the message tag. If this is a
+"start" message, then it just stores the mouse location
+in a <tt class="literal">Hashtable</tt>, so that it will know where to
+draw a line when the next mouse position comes as the user moves the
+mouse. When a "drag" message comes in, the last mouse
+position from this user is retrieved from the
+<tt class="literal">Hashtable</tt>, and a line is drawn from that point
+to the new point, using the agent's color. Then the last point
+is set to the current point, for the next drag message. If an
+"end" message is received, then a line is drawn from the
+last point to the new point, and the last point is removed from the
+<tt class="literal">Hashtable</tt>. <a href="#JDP-CH-10-FIG-3">Figure 10-2</a> shows
+the shared whiteboard in action, with two users sharing a whiteboard
+on remote machines.
+</p>
+
+<a name="JDP-CH-10-FIG-3"></a>
+<div class="figure">
+<img alt="figure" src="figs/jdc_1002.gif" webstripperlinkwas="figs/jdc_1002.gif"></div>
+<h4 class="objtitle">Figure 10-2. Our shared whiteboard in use</h4>
+
+<a name="JDP-CH-10-SECT-2.1"></a>
+<h3 class="sect2">10.2.1. Problems with the First Version</h3>
+
+<p>Although this first attempt works, it's not very useful. The
+event-handling methods on the <tt class="literal">WhiteboardUser</tt>
+don't do any drawing on the <tt class="literal">Canvas</tt>; all of
+the drawing is done in the <tt class="literal">notify()</tt> method. So
+even the local user's scribbles on the whiteboard are not shown
+in the local display until a message has been broadcast through the
+mediator, and received back through <tt class="literal">notify()</tt>.
+Even with a pretty fast network connection, users will see a
+noticeable (and annoying) delay between their mouse movements and the
+update of the <tt class="literal">Canvas</tt>.
+</p>
+
+<p>This problem is simple to remedy. We need to draw the user's
+scribblings on the local whiteboard immediately, broadcast the event
+through the mediator, and ignore any incoming notifications from the
+mediator that have our <tt class="literal">Identity</tt> on them (to
+avoid drawing the local stuff twice). We can do this by calling
+<tt class="literal">nextLine()</tt> right in the
+<tt class="literal">mouseDragged()</tt> and
+<tt class="literal">mouseReleased()</tt> methods, before we broadcast the
+event to the other users:
+</p>
+
+<blockquote>
+<pre class="programlisting">public void mouseReleased(MouseEvent ev) {
+    Point evPt = ev.getPoint();
+    try {
+      nextLine(getIdentity().getName(), evPt,
+               (Color)getIdentity().getProperty("color"));
+      lastPts.remove(getIdentity().getName());
+      broadcast("end", evPt);
+    }
+    catch (Exception e) {}
+}
+public void mouseDragged(MouseEvent ev) {
+    Point evPt = ev.getPoint();
+    try {
+      nextLine(getIdentity().getName(), evPt,
+             (Color)getIdentity().getProperty("color"));
+      lastPts.put(getIdentity().getName(), evPt);
+      broadcast("drag", evPt);
+    }
+    catch (Exception e) {}
+}</pre>
+</blockquote>
+
+<p>Then we modify our <tt class="literal">notify()</tt> method to compare the
+identity of the source to our local identity. If they are the same,
+we just ignore the message, since we've already drawn our own
+scribblings locally:
+</p>
+
+<blockquote>
+<pre class="programlisting">    public boolean notify(String tag, Object data, Identity src)
+        throws IOException, RemoteException {
+        if (src.getName().compareTo(getIdentity().getName()) == 0) {
+            return true;
+        }
+            ...</pre>
+</blockquote>
+
+<p>A more subtle problem with this whiteboard client is the choppy
+drawing that results as the user drags the mouse across the
+<tt class="literal">Canvas</tt>. Instead of a smooth, curved line being
+drawn exactly where the mouse goes, I get a choppy line connecting
+points along the path I take. This happens because of the way
+we're handling mouse events in the
+<tt class="literal">WhiteboardUser</tt> class. Each event is passed into
+a call to one of the <tt class="literal">mouseXXX()</tt> methods. These
+methods broadcast the event to the other whiteboard users by calling
+the <tt class="literal">broadcast()</tt> method from
+<tt class="literal">RMICollaboratorImpl</tt>, which in turn remotely
+calls the mediator's <tt class="literal">broadcast()</tt> method.
+While the <tt class="literal">WhiteboardUser</tt> waits for the remote
+method call to complete, the user continues to move the mouse. In
+most AWT implementations, the event is passed into the event handler
+in the same thread that is polling for user events. This is done to
+ensure that events are handled in the order that they are received.
+If the AWT internals simply spawned off an independent thread to
+handle each incoming event, there would be no guarantee of the order
+in which the threads will run--it's up to the
+thread-scheduling process of the local virtual machine. In our case,
+if we blindly start a new thread to handle each draw event from the
+user, then some drag events may be handled out of sequence if their
+threads happen to get some CPU time before the earlier events.
+We'll end up drawing lines between disconnected points along
+the path of the mouse, which will result in a confusing mess. But
+with each event being handled in the same thread as the event poller,
+a lengthy or blocked event-handling thread can cause lost user
+events, which seems to be our problem here. Some of the mouse drag
+events are being lost while the event handling thread waits on the
+remote <tt class="literal">broadcast()</tt> call.
+</p>
+
+<p>Fixing this problem is a bit more involved. We need to split the
+event handling part of our agent and the collaborative broadcasting
+part into separate threads, but we still need to be sure that the
+events are processed in the order in which they come in from the
+user. The easiest part for us to isolate into a new thread is the
+remote method calls, so that's what we'll do. The new
+thread simply broadcasts local events to the other users by calling
+the <tt class="literal">WhiteboardUser</tt>'s
+<tt class="literal">broadcast()</tt> method. The mouse-handling methods
+pass the events on to this thread as they come in. To ensure that the
+events get broadcast through the mediator in the right order,
+we'll put the data for each event onto an event queue, and the
+event broadcasting thread will poll this event queue and send out
+events in the order in which they appear in the queue (first-in,
+first-out).
+</p>
+
+<p>Our event broadcasting thread is implemented using the
+<tt class="literal">Msg</tt> and <tt class="literal">CommHelper</tt> classes
+shown in <a href="#JDP-CH-10-EX-3">Example 10-3</a>. The <tt class="literal">Msg</tt>
+class is simply a container that holds the data for each event. This
+data is just the tag that will be sent in the remote
+<tt class="literal">broadcast()</tt> method call, and the
+<tt class="literal">Object</tt> that is the body of the message (in our
+case, a <tt class="literal">Point</tt> object). The
+<tt class="literal">CommHelper</tt> class extends
+<tt class="literal">Thread</tt>, and has a reference to the collaborator
+that it's helping, and a <tt class="literal">Vector</tt> of
+<tt class="literal">Msgs</tt>. The <tt class="literal">run()</tt> method just
+polls the message list, sending them out as they come by calling the
+collaborator's <tt class="literal">broadcast()</tt> method.
+</p>
+
+<a name="JDP-CH-10-EX-3"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-3. A Thread for Broadcasting Whiteboard Events</h4>
+<blockquote>
+<pre class="programlisting">class Msg {
+  public Object data;
+  public String tag;
+  public Msg(String t, Object o) {
+    data = o;
+    tag = t;
+  }
+}
+
+class CommHelper extends Thread {
+  RMICollaborator collaborator;
+  Vector msgs = new Vector();
+  public CommHelper(RMICollaborator c) {
+    collaborator = c;
+  }
+
+  public static void addMsg(String t, Object o) {
+    synchronized (msgs) {
+      msgs.addElement(new Msg(t, o));
+    }
+  }
+
+  public void run() {
+    while (true) {
+      try {
+        Msg m = null;
+        synchronized (msgs) {
+          m = (Msg)msgs.elementAt(0);
+          msgs.removeElementAt(0);
+        }
+        collaborator.broadcast(m.tag, m.data);
+      }
+      catch (Exception e) {}
+    }
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>We just need to update our <tt class="literal">WhiteboardUser</tt> class
+to use this new thread to broadcast user events rather than calling
+<tt class="literal">broadcast()</tt> directly from the event-handling
+methods. The updated <tt class="literal">WhiteboardUser</tt> class is
+shown in <a href="#JDP-CH-10-EX-4">Example 10-4</a> as the
+<tt class="literal">ThreadedWhiteboardUser</tt><a name="INDEX-1318"></a>
+.<tt class="literal"></tt><a name="INDEX-1319"></a> This updated class also includes the
+changes described previously to avoid the local drawing delay. The
+changes are pretty minor: the
+<tt class="literal">ThreadedWhiteboardUser</tt> has a
+<tt class="literal">CommHelper</tt> reference, which it initializes in
+its constructor, passing a reference to itself as the collaborator;
+the <tt class="literal">mouseDragged()</tt> and
+<tt class="literal">mouseReleased()</tt> methods have also been updated
+to send the message tag and event location to the
+<tt class="literal">CommHelper</tt>, where the event will be queued for
+broadcast through<a name="INDEX-1320"></a><a name="INDEX-1321"></a> the mediator.
+</p>
+
+<a name="JDP-CH-10-EX-4"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-4. A Multithreaded Whiteboard Client</h4>
+<blockquote>
+<pre class="programlisting">package dcj.examples.Collaborative;
+
+import dcj.util.Collaborative.*;
+import java.awt.event.*;
+import java.awt.*;
+import java.util.Hashtable;
+import java.util.Properties;
+import java.io.IOException;
+import java.rmi.RemoteException;
+import java.util.Vector;
+
+public class ThreadedWhiteboardUser 
+    extends RMICollaboratorImpl
+    implements java.awt.event.MouseListener,
+               java.awt.event.MouseMotionListener
+{
+  protected Hashtable lastPts = new Hashtable();
+  protected Component whiteboard;
+  protected Image buffer;
+  protected CommHelper helper;
+
+  public ThreadedWhiteboardUser(String name, Color color,
+                                String host, String mname)
+         throws RemoteException {
+    super(name, host, mname);
+    getIdentity().setProperty("color", color);
+    buildUI();
+    helper = new CommHelper(this);
+    helper.start();
+  }
+
+  protected void buildUI() {
+    Frame f = new Frame();
+    GridBagLayout gridbag = new GridBagLayout();
+    GridBagConstraints c = new GridBagConstraints();
+    f.setLayout(gridbag);
+    f.addNotify();
+    c.fill = GridBagConstraints.BOTH;
+    c.gridwidth = GridBagConstraints.REMAINDER;
+    Canvas canvas1 = new java.awt.Canvas();
+    canvas1.setSize(240,180);
+    canvas1.setBackground(Color.white);
+    gridbag.setConstraints(canvas1, c);
+    f.add(canvas1);
+    String name = null;
+    try {
+      name = getIdentity().getName();
+    }
+    catch (Exception e) {
+      name = "unknown";
+    }
+    Label label1 = new java.awt.Label("Your name: " + name);
+    label1.setSize(100,30);
+    gridbag.setConstraints(label1, c);
+    f.add(label1);
+    f.setSize(240,210);
+    f.show();
+    whiteboard = canvas1;
+    whiteboard.addMouseListener(this);
+    whiteboard.addMouseMotionListener(this);
+    buffer = whiteboard.createImage(f.getSize().width,
+                                    f.getSize().height);
+  }
+
+  protected void nextLine(String agent, Point pt, Color c) {
+    Graphics g = buffer.getGraphics();
+    g.setColor(c);
+    Point lastPt = (Point)lastPts.get(agent);
+    g.drawLine(lastPt.x, lastPt.y, pt.x, pt.y);
+    whiteboard.getGraphics().drawImage(buffer, 0, 0, whiteboard);
+  }
+
+  public void mousePressed(MouseEvent ev) {
+    Point evPt = ev.getPoint();
+    try {
+      lastPts.put(getIdentity().getName(), evPt);
+      CommHelper.addMsg("start", evPt);
+    }
+    catch (Exception e) {}
+  }
+
+  public void mouseReleased(MouseEvent ev) {
+    Point evPt = ev.getPoint();
+    try {
+      nextLine(getIdentity().getName(), evPt,
+               (Color)getIdentity().getProperty("color"));
+      lastPts.remove(getIdentity().getName());
+      helper.addMsg("end", evPt);
+    }
+    catch (Exception e) {}
+  }
+
+  public void mouseDragged(MouseEvent ev) {
+    Point evPt = ev.getPoint();
+    try {
+      nextLine(getIdentity().getName(), evPt,
+             (Color)getIdentity().getProperty("color"));
+      lastPts.put(getIdentity().getName(), evPt);
+      helper.addMsg("drag", evPt);
+    }
+    catch (Exception e) {}
+  }
+
+  public void mouseExited(MouseEvent ev) {}
+  public void mouseMoved(MouseEvent ev) {}
+  public void mouseClicked(MouseEvent ev) {}
+  public void mouseEntered(MouseEvent ev) {}
+
+  public boolean notify(String tag, Object data, Identity src)
+                 throws IOException, RemoteException {
+
+    // If this is our own event, ignore it since it's already been handled.
+    if (src.getName().compareTo(getIdentity().getName()) == 0) {
+      return true;
+    }
+
+    Color agentColor = null;
+    try {
+      agentColor = (Color)src.getProperty("color");
+    }
+    catch (Exception exc) {
+      System.out.println("Exception while getting color.");
+      exc.printStackTrace();
+    }
+
+    if (tag.compareTo("start") == 0) {
+      // First point along a path, save it and continue
+      lastPts.put(src.getName(), data);
+    }
+    else if (tag.compareTo("drag") == 0) {
+      // Next point in a path, draw a line from the last
+      // point to here, and save this point as the last point.
+      nextLine(src.getName(), (Point)data, agentColor);
+      lastPts.put(src.getName(), data);
+    }
+    else if (tag.compareTo("end") == 0) {
+      // Last point in a path, so draw the line and remove
+      // the last point.
+      nextLine(src.getName(), (Point)data, agentColor);
+      lastPts.remove(src.getName());
+    }
+
+    return true;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="INDEX-1322"></a>
+
+<a name="JDP-CH-10-SECT-2.2"></a>
+<h3 class="sect2">10.2.2. Some Further Improvements</h3>
+
+<p>This updated shared whiteboard system is still pretty simple, but
+useful. Each user can have her own color to distinguish herself from
+the other users, local drawing is done right away so there's no
+annoying delay as we drag the mouse over the whiteboard, and
+we've isolated the remote method calls from the event-handling
+thread so that none (or few) of the user's mouse events are
+lost while we block on the remote <tt class="literal">broadcast()</tt>
+call. But there are a few additional improvements that we could make
+so that this distributed application is more pleasant to use.
+</p>
+
+<a name="JDP-CH-10-SECT-2.2.1"></a>
+<h3 class="sect3">10.2.2.1. List of current users</h3>
+
+<p>When a user joins a shared whiteboard session, it would be nice to
+see who is currently using the whiteboard, what color they are using,
+etc. We could add this to our distributed application by defining a
+specialized mediator--a
+<tt class="literal">WhiteboardMediator</tt>--that sends a
+notification to each new agent with a list of all of the identities
+of the current users. The
+<tt class="literal">WhiteboardMediator</tt><a name="INDEX-1323"></a> would also send a notification to
+every existing user when a new user joins. The
+<tt class="literal">WhiteboardUsers</tt> could then update their local
+displays of remote users, using the name and color properties from
+the <tt class="literal">Identity</tt> list. To do this, we would just
+have to write a new implementation of the
+<tt class="literal">register()</tt> method on our
+<tt class="literal">WhiteboardMediator</tt>:
+</p>
+
+<blockquote>
+<pre class="programlisting">public boolean register(Identity i, RMICollaborator c)
+               throws RemoteException {
+    super.register(i, c);
+    send(i, getIdentity(), "userlist", getMembers());
+}</pre>
+</blockquote>
+
+<p>We'd also have to update the <tt class="literal">notify()</tt>
+method on the <tt class="literal">WhiteboardUser</tt> so that it could
+store the list of users and update its local display.
+</p>
+
+
+
+<a name="JDP-CH-10-SECT-2.2.2"></a>
+<h3 class="sect3">10.2.2.2. Maintain whiteboard state at the server</h3>
+
+<p>The most glaring flaw in our whiteboard is that we don't store
+the board's state on the mediator. This means that any new
+agents joining an existing whiteboard session won't be able to
+see what's already been drawn, just what's drawn from the
+time they join forward. It's easy to fix this problem with a
+specialized <tt class="literal">WhiteboardMediator</tt>. The mediator
+would just keep a history of all the scribbles that each user has
+made. New users joining the whiteboard receive a notification that
+includes all of the current scribbles that are on the whiteboard, so
+that they can draw them on their local display. The mediator could
+save the whiteboard state either as a table of point sets indexed by
+user <tt class="literal">Identity</tt>, or as an
+<tt class="literal">Image</tt> buffer. The table of point sets is more
+complicated to maintain, but opens up the possibility of removing
+individual user's actions (an "undo" feature),
+letting users change their personal color, etc. The
+<tt class="literal">Image</tt> buffer is easy to maintain and to send to
+new users, but doesn't allow us to pick out scribblings from
+particular users, since their actions have all been jumbled together
+into a single <tt class="literal">Image</tt>.
+</p>
+
+
+
+<a name="JDP-CH-10-SECT-2.2.3"></a>
+<h3 class="sect3">10.2.2.3. Performance improvements</h3>
+
+<p>We should be able to speed up the broadcasting and processing of
+drawing events by the other users. With the current whiteboard
+system, each mouse event from each whiteboard user is broadcast
+individually to the group through the mediator. The result is a delay
+from the time that one whiteboard user moves the mouse to the time
+that the line is drawn on another user's whiteboard. One way to
+speed things up is to batch the broadcasting of user events across
+the system, so that instead of broadcasting each event individually,
+we're broadcasting sets of events in a single remote
+<tt class="literal">broadcast()</tt> call. We can either batch the events
+at the <tt class="literal">WhiteboardUser</tt>, or on the
+<tt class="literal">WhiteboardMediator</tt>. If we batch them on the
+mediator, then we're still causing a remote method call for
+every mouse event the user makes; so it seems we would get the best
+improvement by doing the batching on the
+<tt class="literal">WhiteboardUser</tt> itself. We could do this by
+adding some code to the <tt class="literal">run()</tt> method of the
+<tt class="literal">CommHelper</tt>, so that local user events are sent a
+group at a time. We would also have to update the
+<tt class="literal">notify()</tt> method on the
+<tt class="literal">WhiteboardUser</tt>, so that it would recognize batch
+notifications and handle them <tt class="literal"></tt><a name="INDEX-1324"></a>
+appropriately.<a name="INDEX-1325"></a><a name="INDEX-1326"></a><a name="INDEX-1327"></a>
+</p>
+
+
+
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch10_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch10_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="appa_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/appa_01.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">10.1. A Simple Chat System</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">A. Using the Examples in Applets</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

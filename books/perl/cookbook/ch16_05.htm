@@ -1,0 +1,150 @@
+<html><head>
+<title>Recipe 16.4. Reading or Writing to Another Program</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:43:41Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch16_01.htm" title="16. Process Management and Communication"><link rel="prev" href="ch16_04.htm" title="16.3. Replacing the Current Program with a Different One"><link rel="next" href="ch16_06.htm" title="16.5. Filtering Your Own Output"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_04.htm" title="16.3. Replacing the Current Program with a Different One"><img src="../gifs/txtpreva.gif" alt="Previous: 16.3. Replacing the Current Program with a Different One" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch16_01.htm" title="16. Process Management and Communication">Chapter 16<br>Process Management and Communication</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch16_06.htm" title="16.5. Filtering Your Own Output"><img src="../gifs/txtnexta.gif" alt="Next: 16.5. Filtering Your Own Output" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch16-16252">16.4. Reading or Writing to Another Program</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-988">Problem<a class="indexterm" name="ch16-idx-1000006259-0"></A
+><a class="indexterm" name="ch16-idx-1000006259-1"></A
+><a class="indexterm" name="ch16-idx-1000006259-2"></A
+><a class="indexterm" name="ch16-idx-1000006259-3"></A
+><a class="indexterm" name="ch16-idx-1000006259-4"></A
+></A
+></H3
+><p class="para">You want to run another program and either read its output or supply the program with input.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-994">Solution</A
+></H3
+><p class="para">Use <code class="literal">open</CODE
+><a class="indexterm" name="ch16-idx-1000006265-0"></A
+><a class="indexterm" name="ch16-idx-1000006265-1"></A
+> with a pipe symbol at the beginning or end. To read from a program, put the pipe symbol at the end:</P
+><pre class="programlisting">$pid = open(README, &quot;program arguments |&quot;)  or die &quot;Couldn't fork: $!\n&quot;;
+while (&lt;README&gt;) {
+    # ...
+}
+close(README)                               or die &quot;Couldn't close: $!\n&quot;;</PRE
+><p class="para">To write to the program, put the pipe at the beginning:</P
+><pre class="programlisting">$pid = open(WRITEME, &quot;| program arguments&quot;) or die &quot;Couldn't fork: $!\n&quot;;
+print WRITEME &quot;data\n&quot;;
+close(WRITEME)                              or die &quot;Couldn't close: $!\n&quot;;</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1018">Discussion</A
+></H3
+><p class="para">In the case of reading, this is similar to using backticks, except you have a process ID and a filehandle. As with the backticks, <code class="literal">open</CODE
+> uses the shell if it sees shell-special characters in its argument, but it doesn't if there aren't any. This is usually a welcome convenience, because it lets the shell do filename wildcard expansion and I/O redirection, saving you the trouble.</P
+><p class="para">However, sometimes this isn't desirable. Piped <code class="literal">open</CODE
+>s that include unchecked user data would be unsafe while running in taint mode or in untrustworthy situations. <a class="xref" href="ch19_07.htm" title="Executing Commands Without Shell Escapes">Recipe 19.6</A
+> shows how to get the effect of a piped <code class="literal">open</CODE
+> without risking using the shell.</P
+><p class="para">Notice how we specifically call <code class="literal">close</CODE
+> on the filehandle. When you use <code class="literal">open</CODE
+> to connect a filehandle to a child process, Perl remembers this and automatically waits for the child when you close the filehandle. If the child hasn't exited by then, Perl waits until it does. This can be a very, very long wait if your child doesn't exit:</P
+><pre class="programlisting">$pid = open(F, &quot;sleep 100000|&quot;);    # child goes to sleep
+close(F);                           # and the parent goes to lala land</PRE
+><p class="para">To avoid this, you can save the PID returned by <code class="literal">open</CODE
+> to kill your child, or use a manual <code class="literal">pipe</CODE
+>-<code class="literal">fork</CODE
+>-<code class="literal">exec</CODE
+> sequence as described in <a class="xref" href="ch16_11.htm" title="Communicating Between Related Processes">Recipe 16.10</A
+>.</P
+><p class="para">If you attempt to write to a process that has gone away, your process will receive a <a class="indexterm" name="ch16-idx-1000006280-0"></A
+>SIGPIPE. The default disposition for this signal is to kill your process, so the truly paranoid install a SIGPIPE handler just in case.</P
+><p class="para">If you want to run another program and be able to supply its STDIN yourself, a similar construct is used:</P
+><pre class="programlisting">$pid = open(WRITEME, &quot;| program args&quot;);
+print WRITEME &quot;hello\n&quot;;            # program will get hello\n on STDIN
+close(WRITEME);                     # program will get EOF on STDIN</PRE
+><p class="para">The leading pipe symbol in the filename argument to <code class="literal">open</CODE
+> tells Perl to start another process instead. It connects the <code class="literal">open</CODE
+>ed filehandle to the process's STDIN. Anything you write to the filehandle can be read by the program through its STDIN. When you <code class="literal">close</CODE
+> the filehandle, the <code class="literal">open</CODE
+>ed process will get an <code class="literal">eof</CODE
+> when it next tries to read from STDIN.</P
+><p class="para">You can also use this technique to change your program's normal output path. For example, to automatically run everything through a pager, use something like:</P
+><pre class="programlisting">$pager = $ENV{PAGER} || '/usr/bin/less';  # XXX: might not exist
+open(STDOUT, &quot;| $pager&quot;);</PRE
+><p class="para">Now, without changing the rest of your program, anything you print to standard output will go through the pager automatically.</P
+><p class="para">As with <code class="literal">open</CODE
+>ing a process for reading, text passed to the shell here is subject to shell metacharacter interpretation. To avoid the shell, a similar solution is called for. As before, the parent should also be wary of <code class="literal">close</CODE
+>. If the parent closes the filehandle connecting it to the child, the parent will block while waiting for the child to finish. If the child doesn't finish, neither will the close. The workaround as before is either to kill your child process prematurely, or else use the low-level <code class="literal">pipe</CODE
+>-<code class="literal">fork</CODE
+>-<code class="literal">exec</CODE
+> scenario.</P
+><p class="para">When using piped opens, always check return values of both <code class="literal">open</CODE
+> and <code class="literal">close</CODE
+>, not just of <code class="literal">open</CODE
+>. That's because the return value from <code class="literal">open</CODE
+> does not indicate whether the command was succesfully launched. With a piped open, you fork a child to execute the command. Assuming the system hadn't run out of processes, the <code class="literal">fork</CODE
+> immediately returns the PID of the child it just created.<code class="literal"></CODE
+><a class="indexterm" name="ch16-idx-1000006267-0"></A
+><a class="indexterm" name="ch16-idx-1000006267-1"></A
+></P
+><p class="para">By the time the child process tries to <code class="literal">exec</CODE
+> the command, it's a separately scheduled process. So if the command can't be found, there's effectively no way to communicate this back to the <code class="literal">open</CODE
+> function, because that function is in a different process!</P
+><p class="para">Check the return value from <code class="literal">close</CODE
+> to see whether the command was successful. If the child process exits with non-zero status&nbsp;- which it will do if the command isn't found&nbsp;- the <code class="literal">close</CODE
+> returns false and <code class="literal">$?</CODE
+> is set to the wait status of that process. You can interpret its contents as described in <a class="xref" href="ch16_20.htm" title="Avoiding Zombie Processes">Recipe 16.19</A
+>.</P
+><p class="para">In the case of a pipe opened for writing, you should also install a SIGPIPE handler, since writing to a child that isn't there will trigger a SIGPIPE.<a class="indexterm" name="ch16-idx-1000006261-0"></A
+><a class="indexterm" name="ch16-idx-1000006261-1"></A
+><a class="indexterm" name="ch16-idx-1000006261-2"></A
+><a class="indexterm" name="ch16-idx-1000006261-3"></A
+><a class="indexterm" name="ch16-idx-1000006261-4"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1064">See Also</A
+></H3
+><p class="para">The <a class="olink" href="../prog/ch03_102.htm"><code class="literal">open</CODE
+></A
+> function in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlfunc </I
+>(1); <a class="xref" href="ch16_11.htm" title="Communicating Between Related Processes">Recipe 16.10</A
+>; <a class="xref" href="ch16_16.htm" title="Installing a Signal Handler">Recipe 16.15</A
+>; <a class="xref" href="ch16_20.htm" title="Avoiding Zombie Processes">Recipe 16.19</A
+>; <a class="xref" href="ch19_07.htm" title="Executing Commands Without Shell Escapes">Recipe 19.6</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_04.htm" title="16.3. Replacing the Current Program with a Different One"><img src="../gifs/txtpreva.gif" alt="Previous: 16.3. Replacing the Current Program with a Different One" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch16_06.htm" title="16.5. Filtering Your Own Output"><img src="../gifs/txtnexta.gif" alt="Next: 16.5. Filtering Your Own Output" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">16.3. Replacing the Current Program with a Different One</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">16.5. Filtering Your Own Output</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

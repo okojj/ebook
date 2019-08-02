@@ -1,0 +1,484 @@
+<html>
+<head>
+<title>Method Invocation (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Method Invocation">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch12_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch12_01.htm">Chapter 12: Objects</a></td><td align="right" valign="top" width="172"><a href="ch12_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">12.3. Method Invocation</h2>
+
+<a name="INDEX-2362"></a><a name="INDEX-2363"></a>
+<p>
+<a name="INDEX-2364"></a><a name="INDEX-2365"></a><a name="INDEX-2366"></a>
+If you were to boil down all of object-oriented programming into one
+quintessential notion, it would be <em class="emphasis">abstraction</em>.  It's the single
+underlying theme you'll find running through all those 10-dollar words
+that OO enthusiasts like to bandy about, like polymorphism and
+inheritance and encapsulation.  We believe in those fancy words, but
+we'll address them from the practical viewpoint of what it means to
+invoke methods.  Methods lie at the heart of the object system because
+they provide the abstraction layer needed to implement all these fancy
+terms.  Instead of directly accessing a piece of data sitting in an
+object, you invoke an instance method.  Instead of directly calling a
+subroutine in some package, you invoke a class method.  By interposing
+this level of indirection between class use and class implementation,
+the program designer remains free to tinker with the internal workings of the
+class, with little risk of breaking programs that use it.</p>
+
+<p>
+<a name="INDEX-2367"></a><a name="INDEX-2368"></a><a name="INDEX-2369"></a><a name="INDEX-2370"></a>
+Perl supports two different syntactic forms for invoking methods.  One
+uses a familiar style you've already seen elsewhere in Perl, and the
+second is a form you may recognize from other programming languages.
+No matter which form of method invocation is used, the subroutine
+constituting the method is always passed an extra initial argument.
+If a class is used to invoke the method, that argument will be the
+name of the class.  If an object is used to invoke the method, that
+argument will be the reference to the object.  Whichever it is, we'll
+call it the method's <em class="emphasis">invocant</em>.  For a class method, the invocant is
+the name of a package.  For an instance method, the invocant is a
+reference that specifies an object.</p>
+
+<p>In other words, the invocant is whatever the method was invoked
+<em class="emphasis">with</em>.  Some OO literature calls this the method's <em class="emphasis">agent</em> or its
+<em class="emphasis">actor</em>.  Grammatically, the invocant is neither the subject of the
+action nor the receiver of that action.  It's more like an indirect
+object, the beneficiary on whose behalf the action is performed--just
+like the word "me" in the command, "Forge me a sword!"  Semantically,
+you can think of the invocant as either an invoker or an invokee,
+whichever fits better into your mental apparatus.  We're not going
+to tell you how to think.  (Well, not about that.)</p>
+
+<p>
+<a name="INDEX-2371"></a><a name="INDEX-2372"></a><a name="INDEX-2373"></a>
+Most methods are invoked explicitly, but methods may also be invoked
+implicitly when triggered by object destructors, overloaded operators,
+or tied variables.  Properly speaking, these are not regular
+subroutine calls, but rather method invocations automatically triggered
+by Perl on behalf of an object.  Destructors are described later in
+this chapter, overloading is described in
+<a href="ch13_01.htm">Chapter 13, "Overloading"</a>,
+and ties are described in <a href="ch14_01.htm">Chapter 14, "Tied Variables"</a>.</p>
+
+<p>
+<a name="INDEX-2374"></a><a name="INDEX-2375"></a><a name="INDEX-2376"></a><a name="INDEX-2377"></a>
+One difference between methods and regular subroutines is when their
+packages are resolved--that is, how early (or late) Perl decides which
+code should be executed for the method or subroutine.  A subroutine's
+package is resolved during compilation, before your program begins to
+run.<a href="#FOOTNOTE-3">[3]</a> In contrast, a method's package
+isn't resolved until it is actually invoked.  (Prototypes are checked
+at compile time, which is why regular subroutines can use them but
+methods can't.)</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-3"></a>
+<p>[3] More precisely, the subroutine call is resolved
+down to a particular typeglob, a reference to which is stuffed into
+the compiled opcode tree.  The meaning of that typeglob is negotiable
+even at run time--this is how <tt class="literal">AUTOLOAD</tt> can autoload
+a subroutine for you.  Normally, however, the meaning of the typeglob
+is also resolved at compile time by the definition of an appropriately
+named subroutine.</p>
+
+</blockquote>
+
+<p>The reason a method's package can't be resolved earlier is relatively
+straightforward: the package is determined by the class of the
+invocant, and the invocant isn't known until the method is actually
+invoked.  At the heart of OO is this simple chain of logic: once
+the invocant is known, the invocant's class is known, and once the
+class is known, the class's inheritance is known, and once the class's
+inheritance is known, the actual subroutine to call is known.</p>
+
+<p>The logic of abstraction comes at a price.  Because of the late
+resolution of methods, an object-oriented solution in Perl is likely to
+run slower than the corresponding non-OO solution.  For some of the
+fancier techniques described later, it could be a <em class="emphasis">lot</em> slower.  However, many
+common problems are solved not by working faster, but by working
+smarter.  That's where OO shines.</p>
+
+
+<h3 class="sect2">12.3.1. Method Invocation Using the Arrow Operator</h3>
+
+<p>
+<a name="INDEX-2378"></a><a name="INDEX-2379"></a><a name="INDEX-2380"></a>
+We mentioned that there are two styles of method invocation.  The
+first style for invoking a method looks like this:
+<blockquote>
+<pre class="programlisting">
+<em class="replaceable">INVOCANT</em>-&gt;<em class="replaceable">METHOD</em>(<em class="replaceable">LIST</em>)
+<em class="replaceable">INVOCANT</em>-&gt;<em class="replaceable">METHOD</em>
+</pre>
+</blockquote>
+</p>
+
+<p>For obvious reasons, this style is usually called the arrow form of
+invocation.  (Do not confuse <tt class="literal">-&gt;</tt> with <tt class="literal">=&gt;</tt>, the
+"double-barreled" arrow used as a fancy comma.)  Parentheses are
+required if there are any arguments.  When executed, the invocation
+first locates the subroutine determined jointly by the class of the
+<em class="replaceable">INVOCANT</em> and the <em class="replaceable">METHOD</em> name, and then calls that subroutine, passing
+<em class="replaceable">INVOCANT</em> as its first argument.</p>
+
+<p>When <em class="replaceable">INVOCANT</em> is a reference, we say that
+<em class="replaceable">METHOD</em> is invoked as an instance method,
+and when <em class="replaceable">INVOCANT</em> is a package name, we say
+that <em class="replaceable">METHOD</em> is invoked as a class method.
+There really is no difference between the two, other than that the
+package name is more obviously associated with the class itself than
+with the objects of the class.  You'll have to take our word for it
+that the objects also know their class.  We'll tell you in a bit how
+
+to associate an object with a class name, but you can use objects
+without knowing that.</p>
+
+<p>For example, to construct an object using the class method <tt class="literal">summon</tt>
+and then invoke the instance method <tt class="literal">speak</tt> on the resulting object,
+you might say this:
+<blockquote>
+<pre class="programlisting">$mage = Wizard-&gt;summon("Gandalf");  # class method
+$mage-&gt;speak("friend");             # instance method</pre>
+</blockquote>
+
+The <tt class="literal">summon</tt> and <tt class="literal">speak</tt> methods are defined by the <tt class="literal">Wizard</tt>
+class--or one of the classes from which it inherits.  But you shouldn't
+worry about that.  Do not meddle in the affairs of Wizards.</p>
+
+<p>Since the arrow operator is left associative (see 
+<a href="ch03_01.htm">Chapter 3, "Unary and Binary Operators"</a>), you can even combine the two statements into one:
+<blockquote>
+<pre class="programlisting">Wizard-&gt;summon("Gandalf")-&gt;speak("friend");</pre>
+</blockquote>
+
+Sometimes you want to invoke a method without knowing its name ahead
+of time.  You can use the arrow form of method invocation and replace
+the method name with a simple scalar variable:
+<blockquote>
+<pre class="programlisting">$method = "summon";
+$mage = Wizard-&gt;$method("Gandalf");  # Invoke Wizard-&gt;summon
+
+$travel = $companion eq "Shadowfax" ? "ride" : "walk";
+$mage-&gt;$travel("seven leagues");     # Invoke $mage-&gt;ride or $mage-&gt;walk</pre>
+</blockquote>
+
+Although you're using the name of the method to invoke it indirectly,
+this usage is not forbidden by <tt class="literal">use strict 'refs'</tt>, since <em class="emphasis">all</em> method
+calls are in fact looked up symbolically at the time they're resolved.</p>
+
+<p>In our example, we stored the name of a subroutine in <tt class="literal">$travel</tt>, but
+you could also store a subroutine reference.   This bypasses the method
+lookup algorithm, but sometimes that's exactly what you want to do.  See both
+the section <a href="ch12_05.htm#ch12-sect-pm">Section 12.5.5, "Private Methods"</a> and the discussion of the <tt class="literal">can</tt>
+method in the section <a href="ch12_05.htm#ch12-sect-uni">Section 12.5.3, "UNIVERSAL: The Ultimate Ancestor Class"</a>.  To
+create a reference to a particular method being called on a particular
+instance, see the section <a href="ch08_03.htm#ch08-sect-closure">Section 12.3.7, "Closures"</a> in <a href="ch08_01.htm">Chapter 8, "References"</a>.</p>
+
+
+
+
+
+
+<h3 class="sect2">12.3.2. Method Invocation Using Indirect Objects</h3>
+
+<p>
+<a name="INDEX-2381"></a><a name="INDEX-2382"></a><a name="INDEX-2383"></a>
+The second style of method invocation looks like this:
+<blockquote>
+<pre class="programlisting">
+<em class="replaceable">METHOD</em> <em class="replaceable">INVOCANT</em> (<em class="replaceable">LIST</em>)
+<em class="replaceable">METHOD</em> <em class="replaceable">INVOCANT</em> <em class="replaceable">LIST</em>
+<em class="replaceable">METHOD</em> <em class="replaceable">INVOCANT</em>
+</pre>
+</blockquote>
+</p>
+
+<p>The parentheses around <em class="replaceable">LIST</em> are optional;
+if omitted, the method acts as a list operator.  So you can have
+statements like the following, all of which use this style of method
+call:
+<blockquote>
+<pre class="programlisting">$mage = summon Wizard "Gandalf";
+$nemesis = summon Balrog home =&gt; "Moria", weapon =&gt; "whip";
+move $nemesis "bridge";
+speak $mage "You cannot pass";
+break $staff;               # safer to use: break $staff ();</pre>
+</blockquote>
+
+The list operator syntax should be familiar to you; it's the same style
+used for passing filehandles to <tt class="literal">print</tt> or <tt class="literal">printf</tt>:
+<blockquote>
+<pre class="programlisting">print STDERR "help!!!\n";</pre>
+</blockquote>
+
+It's also similar to English sentences like "Give Gollum the
+Preciousss", so we call it the <em class="emphasis">indirect object</em> form.  The invocant
+is expected in the <em class="emphasis">indirect object slot</em>.  When you read about
+passing a built-in function like <tt class="literal">system</tt> or <tt class="literal">exec</tt> something in its
+"indirect object slot", this means that you're supplying this extra,
+comma-less argument in the same place you would when you invoke a method
+using the indirect object syntax.</p>
+
+<p>The indirect object form even permits you to specify the <em class="replaceable">INVOCANT</em>
+as a <em class="replaceable">BLOCK</em> that evaluates to an object (reference) or class
+(package).  This lets you combine those two invocations into one
+statement this way:
+<blockquote>
+<pre class="programlisting">speak { summon Wizard "Gandalf" } "friend";</pre>
+</blockquote>
+</p>
+
+
+
+
+
+
+<h3 class="sect2">12.3.3. Syntactic Snafus with Indirect Objects</h3>
+
+<p>
+<a name="INDEX-2384"></a>
+One syntax will often be more readable than the other.  The indirect
+object syntax is less cluttered, but suffers from several forms of
+syntactic ambiguity.  The first is that the <em class="replaceable">LIST</em> part of an
+indirect object invocation is parsed the same as any other list
+operator.  Thus, the parentheses of:
+<blockquote>
+<pre class="programlisting">enchant $sword ($pips + 2) * $cost;</pre>
+</blockquote>
+
+are assumed to surround all the arguments, regardless of what comes
+afterward.  It would therefore be be equivalent to this:
+<blockquote>
+<pre class="programlisting">($sword-&gt;enchant($pips + 2)) * $cost;</pre>
+</blockquote>
+<a name="INDEX-2385"></a><a name="INDEX-2386"></a><a name="INDEX-2387"></a><a name="INDEX-2388"></a><a name="INDEX-2389"></a><a name="INDEX-2390"></a><a name="INDEX-2391"></a>
+That's unlikely to do what you want: <tt class="literal">enchant</tt> is only being
+called with <tt class="literal">$pips + 2</tt>, and the method's return value is then
+multiplied by <tt class="literal">$cost</tt>.  As with other list operators,
+you must also be careful of the precedence of <tt class="literal">&amp;&amp;</tt> and <tt class="literal">||</tt>
+versus <tt class="literal">and</tt> and <tt class="literal">or</tt>.</p>
+
+<p>For example, this:
+<blockquote>
+<pre class="programlisting">name $sword $oldname || "Glamdring";   # can't use "or" here!</pre>
+</blockquote>
+
+becomes the intended:
+<blockquote>
+<pre class="programlisting">$sword-&gt;name($oldname || "Glamdring");</pre>
+</blockquote>
+
+but this:
+<blockquote>
+<pre class="programlisting">speak $mage "friend" &amp;&amp; enter();        # should've been "and" here!</pre>
+</blockquote>
+
+becomes the dubious:
+<blockquote>
+<pre class="programlisting">$mage-&gt;speak("friend" &amp;&amp; enter());</pre>
+</blockquote>
+
+which could be fixed by rewriting into one of these equivalent forms:
+<blockquote>
+<pre class="programlisting">enter() if $mage-&gt;speak("friend");
+$mage-&gt;speak("friend") &amp;&amp; enter();
+speak $mage "friend" and enter();</pre>
+</blockquote>
+
+The second syntactic infelicity of the indirect object form is that
+its <em class="replaceable">INVOCANT</em> is limited to a name, an unsubscripted scalar
+variable, or a block.<a href="#FOOTNOTE-4">[4]</a> As soon as the
+parser sees one of these, it has its <em class="replaceable">INVOCANT</em>, so it starts looking
+for its <em class="replaceable">LIST</em>.  So these invocations:
+<blockquote>
+<pre class="programlisting">move $party-&gt;{LEADER};               # probably wrong!
+move $riders[$i];                    # probably wrong!</pre>
+</blockquote>
+
+actually parse as these:
+<blockquote>
+<pre class="programlisting">$party-&gt;move-&gt;{LEADER};
+$riders-&gt;move([$i]);</pre>
+</blockquote>
+
+rather than what you probably wanted:
+<blockquote>
+<pre class="programlisting">$party-&gt;{LEADER}-&gt;move;
+$riders[$i]-&gt;move;</pre>
+</blockquote>
+
+The parser only looks a little ways ahead to find the invocant for an
+indirect object, not even as far as it would look for a unary
+operator.  This oddity does not arise with the first
+notation, so you might wish to stick with the arrow as your weapon of
+choice.</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-4"></a>
+<p>[4] Attentive readers will recall that this
+is precisely the same list of syntactic items that are allowed after a
+funny character to indicate a variable dereference--for example,
+<tt class="literal">@ary</tt>, <tt class="literal">@$aryref</tt>, or <tt class="literal">@{$aryref}</tt>.</p>
+
+</blockquote>
+
+<p>Even English has a similar issue here.  Think about the command, "Throw
+your cat out the window a toy mouse to play with."  If you parse that
+sentence too quickly, you'll end up throwing the cat, not the mouse
+(unless you notice that the cat is already out the window).  Like Perl,
+English has two different syntaxes for expressing the agent: "Throw
+your cat the mouse" and "Throw the mouse to your cat."  Sometimes the
+longer form is clearer and more natural, and sometimes the shorter one
+is.  At least in Perl, you're required to use braces around any complicated
+indirect object.</p>
+
+
+
+
+
+
+<h3 class="sect2">12.3.4. Package-Quoted Classes</h3>
+
+<a name="INDEX-2392"></a><a name="INDEX-2393"></a><a name="INDEX-2394"></a><a name="INDEX-2395"></a>
+<p>The final syntactic ambiguity with the indirect object style of
+method invocation is that it may not be parsed as a method call at
+all, because the current package may have a subroutine of the same
+name as the method.  When using a class method with a literal package
+name as the invocant, there is a way to resolve this ambiguity
+while still keeping the indirect object syntax: package-quote the
+classname by appending a double colon to it.
+<blockquote>
+<pre class="programlisting">$obj = method <em class="replaceable">CLASS</em>::;   # forced to be "<em class="replaceable">CLASS</em>"-&gt;method</pre>
+</blockquote>
+
+This is important because the commonly seen notation:
+<blockquote>
+<pre class="programlisting">$obj = new <em class="replaceable">CLASS</em>;        # might not parse as method</pre>
+</blockquote>
+
+will not always behave properly if the current package has a
+subroutine named <tt class="literal">new</tt> or <em class="replaceable">CLASS</em>.  Even if you studiously use
+the arrow form instead of the indirect object form to invoke methods,
+this can, on rare occasion, still be a problem.  At the cost of
+extra punctuation noise, the <em class="replaceable">CLASS</em><tt class="literal">::</tt> notation guarantees how
+Perl will parse your method invocation.  The first two examples below do
+not always parse the same way, but the second two do:
+<blockquote>
+<pre class="programlisting">$obj = new ElvenRing;               # could be new("ElvenRing")
+                                    # or even new(ElvenRing())
+$obj = ElvenRing-&gt;new;              # could be ElvenRing()-&gt;new()
+
+$obj = new ElvenRing::;             # always "ElvenRing"-&gt;new()
+$obj = ElvenRing::-&gt;new;            # always "ElvenRing"-&gt;new()</pre>
+</blockquote>
+
+This package-quoting notation can be made prettier with some creative
+alignment:
+<blockquote>
+<pre class="programlisting">$obj = new ElvenRing::
+            name    =&gt; "Narya",
+            owner   =&gt; "Gandalf",
+            domain  =&gt; "fire",
+            stone   =&gt; "ruby";</pre>
+</blockquote>
+<a name="INDEX-2396"></a>
+Still, you may say, "Oh, ugh!" at that double colon, so we'll tell you
+that you can almost always get away with a bare class name, provided
+two things are true.  First, there is no subroutine of the same
+name as the class.  (If you follow the convention that subroutine names like
+<tt class="literal">new</tt> start lowercase and class names like <tt class="literal">ElvenRing</tt> start
+uppercase, this is never a problem.)  Second, the class has
+been loaded with one of:
+<blockquote>
+<pre class="programlisting">use ElvenRing;
+require ElvenRing;</pre>
+</blockquote>
+
+Either of these declarations ensures that Perl knows <tt class="literal">ElvenRing</tt> is a
+module name, which forces any bare name like <tt class="literal">new</tt> before the class
+name <tt class="literal">ElvenRing</tt> to be interpreted as a method call, even if you
+happen to have declared a <tt class="literal">new</tt> subroutine of your own in the current
+package.  People don't generally get into trouble with indirect objects
+unless they start cramming multiple classes into the same file, in
+which case Perl might not know that a particular package name was
+supposed to be a class name.  People who name subroutines with names
+that look like <tt class="literal">ModuleNames</tt> also come to grief eventually.
+<a name="INDEX-2397"></a><a name="INDEX-2398"></a>
+</p>
+
+<a name="INDEX-2399"></a><a name="INDEX-2400"></a>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch12_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch12_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">12.2. Perl's Object System</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">12.4. Object Construction</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

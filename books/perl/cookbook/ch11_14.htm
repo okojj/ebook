@@ -1,0 +1,123 @@
+<html><head>
+<title>Recipe 11.13. Storing Data Structures to Disk</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:40:53Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch11_01.htm" title="11. References and Records"><link rel="prev" href="ch11_13.htm" title="11.12. Copying Data Structures"><link rel="next" href="ch11_15.htm" title="11.14. Transparently Persistent Data Structures"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch11_13.htm" title="11.12. Copying Data Structures"><img src="../gifs/txtpreva.gif" alt="Previous: 11.12. Copying Data Structures" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch11_01.htm" title="11. References and Records">Chapter 11<br>References and Records</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch11_15.htm" title="11.14. Transparently Persistent Data Structures"><img src="../gifs/txtnexta.gif" alt="Next: 11.14. Transparently Persistent Data Structures" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch11-38864">11.13. Storing Data Structures to Disk</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-1342">Problem<a class="indexterm" name="ch11-idx-1000004872-0"></A
+><a class="indexterm" name="ch11-idx-1000004872-1"></A
+><a class="indexterm" name="ch11-idx-1000004872-2"></A
+></A
+></H3
+><p class="para">You want to save your large, complex data structure to disk so you don't have to build it up each time your program runs.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-1348">Solution</A
+></H3
+><p class="para">Use the CPAN module Storable's <code class="literal">store</CODE
+> and <code class="literal">retrieve</CODE
+> functions:</P
+><pre class="programlisting">use Storable; 
+store(\%hash, &quot;filename&quot;);
+
+# later on...  
+$href = retrieve(&quot;filename&quot;);        # by ref
+%hash = %{ retrieve(&quot;filename&quot;) };   # direct to hash</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-1366">Discussion</A
+></H3
+><p class="para">The Storable module uses C functions and a binary format to walk Perl's internal data structures and lay out its data. It's more efficient than a pure Perl and string-based approach, but it's also more fragile.</P
+><p class="para"><code class="literal">The</CODE
+> <code class="literal">store</CODE
+> and <code class="literal">retrieve</CODE
+> functions expect binary data using the machine's own byte-ordering. This means files created with these functions cannot be shared across different architectures. <code class="literal">nstore</CODE
+><a class="indexterm" name="ch11-idx-1000004878-0"></A
+> does the same job <code class="literal">store</CODE
+> does, but keeps data in canonical (network) byte order, at a slight speed cost:</P
+><pre class="programlisting">use Storable qw(nstore); 
+nstore(\%hash, &quot;filename&quot;); 
+# later ...  
+$href = retrieve(&quot;filename&quot;);</PRE
+><p class="para">No matter whether <code class="literal">store</CODE
+> or <code class="literal">nstore</CODE
+> was used, you need to call the same <code class="literal">retrieve</CODE
+> routine to restore the objects in memory. The producer must commit to portability, but the consumer doesn't have to. Code needs only to be changed in one place when the producer changes their mind and the code thus offers a consistent interface on the consumer side, who does not need to know or care.</P
+><p class="para">The <code class="literal">store</CODE
+> and <code class="literal">nstore</CODE
+> functions don't lock any of the files they work on. If you're worried about concurrent access, open the file yourself, lock it using <a class="xref" href="ch07_12.htm" title="Locking a File">Recipe 7.11</A
+>, and then use <code class="literal">store_fd</CODE
+> or its slower but machine-independent version <code class="literal">nstore_fd</CODE
+>.</P
+><p class="para">Here's code to save a hash to a file, with locking. We don't open with the <code class="literal">O_TRUNC</CODE
+> flag because we have to wait to get the lock before we can clobber the file.</P
+><pre class="programlisting">use Storable qw(nstore_fd);
+use Fcntl qw(:DEFAULT :flock);
+sysopen(DF, &quot;/tmp/datafile&quot;, O_RDWR|O_CREAT, 0666) 
+    or die &quot;can't open /tmp/datafile: $!&quot;;
+flock(DF, LOCK_EX)           or die &quot;can't lock /tmp/datafile: $!&quot;;
+nstore_fd(\%hash, *DF)
+    or die &quot;can't store hash\n&quot;;
+truncate(DF, tell(DF));
+close(DF);</PRE
+><p class="para">Here's code to restore that hash from a file, with locking:</P
+><pre class="programlisting">use Storable;
+use Fcntl qw(:DEFAULT :flock);
+open(DF, &quot;&lt; /tmp/datafile&quot;)      or die &quot;can't open /tmp/datafile: $!&quot;;
+flock(DF, LOCK_SH)               or die &quot;can't lock /tmp/datafile: $!&quot;;
+$href = retrieve(*DF);
+close(DF);</PRE
+><p class="para">With care, you can pass large data objects efficiently between processes with this strategy, since a filehandle connected to a pipe or socket is still a byte stream, just like a plain file.</P
+><p class="para">Unlike the various DBM bindings, Storable does not restrict you to using only hashes (or arrays, with DB_File). Arbitrary data structures, including objects, can be stored to disk. The whole structure must be read in or written out in its entirety.<a class="indexterm" name="ch11-idx-1000004874-0"></A
+><a class="indexterm" name="ch11-idx-1000004874-1"></A
+><a class="indexterm" name="ch11-idx-1000004874-2"></A
+><a class="indexterm" name="ch11-idx-1000004874-3"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-1430">See Also</A
+></H3
+><p class="para">The section on <a class="olink" href="../advprog/ch13_02.htm">"Remote Procedure Calls (RPC)"</A
+> in <a class="olink" href="../advprog/ch13_01.htm">Chapter 13</A
+> of <a class="citetitle" href="../advprog/index.htm" title="Advanced Perl Programming"><cite class="citetitle">Advanced Perl Programming</CITE
+></A
+>; <a class="xref" href="ch11_15.htm" title="Transparently Persistent Data Structures">Recipe 11.14</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch11_13.htm" title="11.12. Copying Data Structures"><img src="../gifs/txtpreva.gif" alt="Previous: 11.12. Copying Data Structures" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch11_15.htm" title="11.14. Transparently Persistent Data Structures"><img src="../gifs/txtnexta.gif" alt="Next: 11.14. Transparently Persistent Data Structures" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">11.12. Copying Data Structures</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">11.14. Transparently Persistent Data Structures</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

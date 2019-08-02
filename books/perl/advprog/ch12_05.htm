@@ -1,0 +1,117 @@
+<html><head>
+<title>[Chapter 12] 12.5 IO Objects and Filehandles</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:37:06Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch12_01.htm" title="12. Networking with Sockets"><link rel="prev" href="ch12_04.htm" title="12.4 Real-World Servers"><link rel="next" href="ch12_06.htm" title="12.6 Prebuilt Client Modules"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch12_04.htm" title="12.4 Real-World Servers"><img src="../gifs/txtpreva.gif" alt="Previous: 12.4 Real-World Servers" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch12_01.htm" title="12. Networking with Sockets">Chapter 12<br>Networking with Sockets</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch12_06.htm" title="12.6 Prebuilt Client Modules"><img src="../gifs/txtnexta.gif" alt="Next: 12.6 Prebuilt Client Modules" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch12-30242">12.5 IO Objects and Filehandles</A
+></H2
+><p class="para">Perl supports the BSD <kbd class="command">socket</KBD
+><a class="indexterm" name="ch12-idx-978620-0"></A
+> call, which returns a <a class="indexterm" name="ch12-idx-978621-0"></A
+><a class="indexterm" name="ch12-idx-978621-1"></A
+><a class="indexterm" name="ch12-idx-978621-2"></A
+><a class="indexterm" name="ch12-idx-978621-3"></A
+>filehandle, as <kbd class="command">open</KBD
+> does for files and pipes. This filehandle can be used as an argument for all the built-in input-output operators: <kbd class="command">&lt;&gt; </KBD
+>, <kbd class="command">read</KBD
+>, <kbd class="command">sysread</KBD
+>, <kbd class="command">print</KBD
+>, <kbd class="command">write</KBD
+>, <kbd class="command">syswrite</KBD
+><a class="indexterm" name="ch12-idx-978607-0"></A
+><a class="indexterm" name="ch12-idx-978607-1"></A
+>, and so on. In addition, it can be used by socket-specific functions such as <kbd class="command">send</KBD
+>, <kbd class="command">recv</KBD
+>, and <kbd class="command">setsockopt</KBD
+>. </P
+><p class="para">The IO::Socket module's <kbd class="command">new</KBD
+><a class="indexterm" name="ch12-idx-978625-0"></A
+> method returns an object that can also be used as a parameter to these I/O routines. Internally, it calls <kbd class="command">socket</KBD
+> and uses the typeglob corresponding to the filehandle to store other attributes; we described this hideous-looking trick in <a class="xref" href="ch08_01.htm#ch08-40982" title="Efficient Attribute Storage">Section 8.1, "Efficient Attribute Storage"</A
+>. In other words, its return value is the same object that was given to <kbd class="command">socket</KBD
+>, which is why it does not matter to the I/O operators which option you choose. My recommendation is to go for the considerably easier to use IO::Socket option.</P
+><p class="para"><a class="indexterm" name="ch12-idx-978626-0"></A
+><a class="indexterm" name="ch12-idx-978626-1"></A
+>IO::Select is another story, however. If performance is absolutely crucial, you may prefer to do yourself what IO::Select implements:</P
+><pre class="programlisting">$r_bitset = $w_bitset = $e_bitset = '';
+# Monitor $sock1 for reading
+vec($r_bitset, $sock1-&gt;fileno(), 1) = 1;
+# Monitor $sock2 for writing
+vec($w_bitset, $sock2-&gt;fileno(), 1) = 1;
+# Monitor both for errors
+$e_bitset = $r_bitset | $w_bitset;
+
+($nfound, $timeleft) = 
+    select ($r_bitset, $w_bitset, $e_bitset, $timeout);</PRE
+><p class="para">The native <kbd class="command">select</KBD
+> function requires three bit vectors representing collections of open files, sockets, or pipes. Each bit in these bit sets corresponds to an integer file descriptor, which in turn is tracked by the appropriate filehandles or IO objects. The <kbd class="command">fileno()</KBD
+><a class="indexterm" name="ch12-idx-978627-0"></A
+> method of IO::Socket, or the built-in function, <kbd class="command">fileno</KBD
+>, can be used to retrieve this number. The rest is simple: we create three bit sets, for checking readability, writability, and error conditions, and use <kbd class="command">vec</KBD
+> to set the appropriate bits in each bit set. Before <kbd class="command">select</KBD
+> returns, it modifies the bit sets to indicate which file descriptors are ready for doing input or output. </P
+><p class="para">Because these bit sets are modified, we have to construct them all over again before going back to <kbd class="command">select</KBD
+>, which gets to be somewhat expensive. Instead, a common technique is to make a copy of these sets before getting them clobbered by <kbd class="command">select</KBD
+>:</P
+><pre class="programlisting"># Set up $r_bitset and $w_bitset once
+...
+
+while (1) {
+    ($nfound, $timeout) = select ($r_copy = $r_bitset, 
+                                  $w_copy = $w_bitset, 
+                                  $e_copy = $e_bitset, $timeout);
+
+    # Check $r_copy, $w_copy for readiness ...
+}</PRE
+><p class="para">Note that the assignment happens before <kbd class="command">select</KBD
+> gets control, and <kbd class="command">select</KBD
+> sees only <kbd class="command">$r_copy</KBD
+>, <kbd class="command">$w_copy</KBD
+>, and <kbd class="command">$e_copy</KBD
+>, which it feels free to modify.</P
+><p class="para">The only place where we really save time over using IO::Select is that we don't have to make a list of ready filehandles; we can process the bit set directly. For the applications I have built, this marginal gain in efficiency is not worth it, so I use IO::Select.<a class="indexterm" name="ch12-idx-978623-0"></A
+><a class="indexterm" name="ch12-idx-978623-1"></A
+><a class="indexterm" name="ch12-idx-978623-2"></A
+><a class="indexterm" name="ch12-idx-978623-3"></A
+><a class="indexterm" name="ch12-idx-978623-4"></A
+><a class="indexterm" name="ch12-idx-978623-5"></A
+></P
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch12_04.htm" title="12.4 Real-World Servers"><img src="../gifs/txtpreva.gif" alt="Previous: 12.4 Real-World Servers" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch12_06.htm" title="12.6 Prebuilt Client Modules"><img src="../gifs/txtnexta.gif" alt="Next: 12.6 Prebuilt Client Modules" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">12.4 Real-World Servers</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">12.6 Prebuilt Client Modules</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

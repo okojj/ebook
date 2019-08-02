@@ -1,0 +1,231 @@
+<html>
+<head>
+<title>Threads (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Threads">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch16_05.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="part3.htm">Part 3: Perl as Technology</a></td><td align="right" valign="top" width="172"><a href="ch17_02.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h1 class="chapter">Chapter 17.  Threads</h1>
+<div class="htmltoc">
+<h4 class="tochead">Contents:</h4>
+<p>
+<a href="ch17_01.htm">The Process Model</a>
+<br>
+<a href="ch17_02.htm">The Thread Model</a>
+<br>
+</p>
+</div>
+
+<p>
+<a name="INDEX-3119"></a>
+Parallel programming is much harder than it looks.  Imagine taking a
+recipe from a cookbook and converting it into something that several
+dozen chefs can work on all at the same time.  You can take two
+approaches.</p>
+
+<p>One approach is to give each chef a private kitchen, complete
+with its own supply of raw materials and utensils.  For recipes that can be
+divided up into parts easily, and for foods that can be transported
+from kitchen to kitchen easily, this approach works well because it
+keeps the chefs out of each other's kitchens.</p>
+
+<p>Alternatively, you can just put all the chefs into one kitchen, and let them
+work things out, like who gets to use the mixer when.  This can get messy,
+especially when the meat cleavers start to fly.</p>
+
+<p>
+<a name="INDEX-3120"></a>
+These two approaches correspond to two models of parallel programming
+on computers.  The first is the multiprocessing model typical of
+traditional Unix systems, in which each thread of control has its own
+set of resources, which taken together we call a process.  The second
+model is the multithreading model, in which each thread of control
+shares resources with all other threads of control.  Or doesn't share,
+as the case may be (and upon occasion must be).</p>
+
+<p>We all know that chefs like to be in control; that's okay, because chefs
+<em class="emphasis">need</em> to be in control in order to accomplish what we want them to
+accomplish.  But chefs need to be organized, one way or another.</p>
+
+<p>Perl supports both models of organization.  In this chapter we'll
+call them the <em class="emphasis">process model</em> and the <em class="emphasis">thread model</em>.</p>
+
+
+<h2 class="sect1">17.1. The Process Model</h2>
+
+<p>
+<a name="INDEX-3121"></a><a name="INDEX-3122"></a><a name="INDEX-3123"></a>
+We'll not discuss the process model in great detail here, simply
+because it's pervasive throughout the rest of this book.  Perl
+originated on Unix systems, so it is steeped in the notion that each
+process does its own thing.  If a process wants to start some parallel
+processing, then logically it has to start a parallel process; that is,
+it must fork a new heavyweight process, which by default shares little
+with the parent process except some file descriptors.  (It may seem
+like parent and child are sharing a lot more, but most of the state of
+the parent process is merely duplicated in the child process and not
+really shared in a logical sense.  The operating system may of course
+exhibit laziness in enforcing that logical separation, in which case we
+call it copy-on-write semantics, but we wouldn't be doing the copy at
+all unless there were a logical separation first.)
+<a name="INDEX-3124"></a>
+</p>
+
+<p>Historically, this industrial-strength view of multiprocessing has
+posed a bit of a problem on Microsoft systems, because Windows has not
+had a well-developed multiprocessing model (and what it does have in
+that regard, it doesn't often rely on for parallel programming).  It has
+typically taken a multithreading approach instead.
+<a name="INDEX-3125"></a>
+</p>
+
+<p>
+<a name="INDEX-3126"></a>
+However, through heroic efforts, version 5.6 of Perl now implements the
+<tt class="literal">fork</tt> operation on Windows by cloning a new interpreter object within
+the same process.  That means that most examples using <tt class="literal">fork</tt> in the
+rest of the book will now work on Windows.  The cloned interpreter
+shares immutable code with other interpreters but gets its own copy of
+data to play with.  (There can still be problems with C libraries that
+don't understand threads, of course.)</p>
+
+<p>
+<a name="INDEX-3127"></a><a name="INDEX-3128"></a>
+This approach to multiprocessing has been christened <em class="emphasis">ithreads</em>, short
+for "interpreter threads".  The initial impetus for implementing
+ithreads was to emulate <tt class="literal">fork</tt> for Microsoft systems.  However, we quickly realized that, although the other interpreters are
+running as distinct threads, they're running in the same process,
+so it would be easy to make these separate interpreters share data,
+even though they don't share by default.</p>
+
+<p>This is the opposite of the typical threading model, in which everything
+is shared by default, and you have to take pains <em class="emphasis">not</em> to share something.
+But you should not view these two models as totally distinct from each
+other, because they are both trying to bridge the same river;
+they're just building from opposite shores.  The actual solution
+to any parallel processing problem is going to involve some degree of
+sharing, together with some degree of selfishness.</p>
+
+<p>So over the long run, the intent is to extend the ithreads model to
+allow as much sharing as you need or want.  However, as of this
+writing, the only user-visible interface for ithreads is the
+<tt class="literal">fork</tt> call under Microsoft ports of Perl.  We think
+that, eventually, this approach will produce cleaner programs than the
+standard threading approach.  Basically, it's easier to run an economy
+where you assume everyone owns what they own, rather than assuming
+that everyone owns everything.  Not that people aren't expected to
+share in a capitalist economy, or peculate<a href="#FOOTNOTE-1">[1]</a> in a communist economy.
+These things tend toward the middle.  Socialism happens.  But with
+large groups of people, sharing everything by default only works when
+you have a "head chef" with a big meat cleaver who thinks he
+owns everything.</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-1"></a>
+<p>[1] peculate:
+<em class="emphasis">v.i.</em>, to swipe the People's Property from the
+commons in the middle of the night; to embezzle from the public
+something that is not necessarily money
+(~L. <em class="emphasis">peculiar</em>, "not common"), cf
+<em class="emphasis">embrace</em>, <em class="emphasis">extend</em>,
+<em class="emphasis">GPL</em>.</p>
+
+</blockquote>
+
+<p>Of course, the actual government of any computer is run by that fascist
+dictator known as the operating system.  But a wise dictator knows when
+to let the people think they're capitalists--and when to let them think
+they're communists.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="INDEX-3219"></a>
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch16_05.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch17_02.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">16.5. Sockets</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">17.2. The Thread Model</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

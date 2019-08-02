@@ -1,0 +1,485 @@
+<html>
+<head>
+<title>NIS, NIS+, and WINS  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="NIS, NIS+, and WINS">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch05_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch05_01.htm">Chapter 5: TCP/IP Name Services</a></td><td align="right" valign="top" width="172"><a href="ch05_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">5.2. NIS, NIS+, and WINS</h2>
+
+
+
+
+
+<p>
+<a name="INDEX-458"></a><a name="INDEX-459"></a>Developers at Sun
+Microsystems realized that the "edit one file per
+machine" approach endemic to host files didn't scale, so
+they invented something called <em class="emphasis">Yellow Pages</em>
+(YP). Yellow Pages was designed to distribute all the network-wide
+configuration file information found in files like
+<em class="filename">/etc/hosts</em>, <em class="filename">/etc/passwd</em>,
+<em class="filename">/etc/services</em>, etc. In this chapter, we'll
+concentrate on its use as a network name service to distribute the
+machine name-to-IP address mapping information.</p>
+
+
+
+
+
+<p>YP was renamed <em class="emphasis">Network Information Service</em>, or
+NIS, in 1990, shortly after British Telecom asserted (with lawyers)
+that it held the trademark for "Yellow Pages" in the U.K.
+The ghost of the name "Yellow Pages" still haunts many a
+Unix box today in the names used for NIS commands and library calls
+(e.g., <tt class="command">ypcat</tt>, <tt class="command">ypmatch</tt>,
+<tt class="command">yppush</tt>). All modern Unix variants support NIS. NT
+machines can be made to use NIS for authentication through the use of
+special home-brewed authentication libraries,<a href="#FOOTNOTE-2">[2]</a> but I know of no NT-based NIS servers. I do not know of
+any Mac ports of NIS.</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-2"></a>
+<p>[2]One
+such library is NISGINA, which was originally developed by Nigel
+Williams; this library can be found at <a href="http://www.dcs.qmw.ac.uk/~williams/">http://www.dcs.qmw.ac.uk/~williams/</a>. Be sure
+to check the mailing list archives found off that page for
+information on the latest versions of this software.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<p>
+<a name="INDEX-460"></a>In NIS, an administrator designates one
+or more machines as servers from which other machines will receive
+client services. One server is the <em class="emphasis">master</em>
+server, the others <em class="emphasis">slave</em> servers. The master
+server holds the master copies of the actual text files (e.g.,
+<em class="filename">/etc/hosts</em> or <em class="filename">/etc/passwd </em>
+) all machines normally use. Changes to these files take place on the
+master and are then propagated to the slave servers.
+<a name="INDEX-461"></a><a name="INDEX-462"></a><a name="INDEX-463"></a>
+</p>
+
+
+
+
+
+<p>Any machine on the network that needs hostname-to-IP address mapping
+information can query a server instead of keeping a local copy of the
+information. A client can request this information from either the
+master or any of the slave servers. Client queries are looked up in
+the <em class="emphasis">NIS maps</em>, another name for the
+master's data files after they've been converted to the
+Unix DBM database format and propagated to the slave servers. The
+details of this conversion process (which involves
+<tt class="command">makedbm</tt> and some other random munging) can be
+found in the <em class="filename">Makefile</em> located in
+<em class="filename">/var/yp</em> on most machines. A collection of NIS
+servers and clients that share the same maps is called an
+<em class="emphasis">NIS domain</em>.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-464"></a>With NIS, network administration becomes
+considerably easier. For instance, if <em class="emphasis">oog.org</em> purchases more machines for
+their network, it is no problem to integrate them into the network.
+The network manager simply edits the host file on the master NIS
+server and pushes the new version out to the slave servers. Every
+client in the NIS domain now "knows" about the new
+machine. NIS offers one-touch administration ease coupled with some
+redundancy (if one server goes down, a client can ask another) and
+load sharing (not all of the clients in a network have to rely on a
+single server).</p>
+
+
+
+
+
+<p>
+<a name="INDEX-465"></a>With this theory in mind, let's
+see how Perl can help us with NIS-related tasks. We can start with
+the process of getting data into NIS. You may be surprised to know
+that we've already done the work for this task. The host files
+we created in the previous section can be imported into NIS by just
+dropping them into place in the NIS master server's source file
+directory, and activating the usual push mechanisms (usually by
+typing <tt class="command">make</tt> in <em class="filename">/var/yp</em>). By
+default, the <em class="filename">Makefile</em> in
+<em class="filename">/var/yp</em> uses the contents of the master
+server's configuration files as the source for the NIS
+maps.<a name="INDEX-466"></a>
+</p>
+
+
+
+
+
+<a name="ch05-4-fm2xml"></a>
+<blockquote class="note">
+<h4 class="objtitle">TIP</h4>
+<p>It is usually a good idea to set up a separate directory for your NIS
+map source files, changing the <em class="filename">Makefile</em>
+accordingly. This allows you to keep separate data for your NIS
+master server and other members of your NIS domain. For example, you
+might not want to have the <em class="filename">/etc/passwd</em> file for
+your NIS master as the password map for the entire domain, and vice
+versa.</p>
+
+
+
+
+</blockquote>
+
+<p>A more interesting task is getting data out of NIS by querying an NIS
+server. The easiest way to do this is via Rik Harris'
+<tt class="literal">Net::NIS</tt> module. This particular module has been
+in alpha release state since 1995, but it is still quite
+functional.<a href="#FOOTNOTE-3">[3]</a><a name="INDEX-467"></a><a name="INDEX-468"></a><a name="INDEX-469"></a><a name="INDEX-470"></a>
+</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-3"></a>
+<p>[3]There's only one true bug in the a2
+version that I know of. The documentation suggests you compare the
+return status of this module's calls against a set of
+predefined constants like <tt class="literal">$Net::NIS::ERR_KEY</tt> and
+<tt class="literal">$Net::NIS::ERR_MAP</tt>. Unfortunately, the module
+never actually defines these constants. The simplest way to test for
+a successful query is to examine the returned data's
+length.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<p>Here's an example of how to grab and print the entire contents
+of the host map with a single function call using
+<tt class="literal">Net::NIS</tt>, similar to the NIS command
+<tt class="command">ypcat</tt>:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Net::NIS;
+# get our default NIS domain name
+$domain = Net::NIS::yp_get_default_domain(  ); 
+# grab the map
+($status, $info) = Net::NIS::yp_all($domain,"hosts.byname"); 
+foreach my $name (sort keys %{$info}){
+    print "$name =&gt; $info-&gt;{$name}\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>First we query the local host for its default domain name. With this
+info, we can call <tt class="literal">Net::NIS::yp_all()</tt> to retrieve
+the entire hosts map. The function call returns a status variable
+(bogus, as mentioned in the footnote) and a reference to a hash table
+containing the contents of that map. We print this information using
+Perl's usual dereference syntax.</p>
+
+
+
+
+
+<p>If we want to look up the IP address of a single host, it is more
+efficient to query the server specifically for that
+value:<a name="INDEX-471"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Net::NIS;
+$hostname = "olaf.oog.org";
+$domain = Net::NIS::yp_get_default_domain(  ); 
+($status,$info) = Net::NIS::yp_match($domain,"hosts.byname",$hostname);
+print $info,"\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">Net::NIS::yp_match()</tt> returns another bogus
+status variable and the appropriate value (as a scalar) for the info
+being queried.</p>
+
+
+
+
+
+<p>If the <tt class="literal">Net::NIS</tt> module does not compile or work
+for you, there's always the "call an external program
+method." For example:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">@hosts='<em class="replaceable">&lt;path to&gt;</em>/ypcat hosts'</pre>
+</blockquote>
+
+
+
+
+
+<p>or:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">open(YPCAT,"<em class="replaceable">&lt;path to&gt;</em>/ypcat hosts|");
+while (&lt;YPCAT&gt;){...}</pre>
+</blockquote>
+
+
+
+
+
+<p>Let's wind up this section with a useful example of both this
+technique and <tt class="literal">Net::NIS</tt> in action. This small but
+handy piece of code will query NIS for the list of NIS servers
+currently running and query each one of them in turn using the
+<tt class="command">yppoll</tt> program. If any of the servers fails to
+respond properly, it complains loudly: <a name="INDEX-472"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Net::NIS;
+
+$yppollex = "/usr/etc/yp/yppoll"; # full path to the yppoll executable
+
+$domain = Net::NIS::yp_get_default_domain(  ); 
+
+($status,$info) = Net::NIS::yp_all($domain,"ypservers");
+
+foreach my $name (sort keys %{$info}) {
+    $answer = '$yppollex -h $name hosts.byname';
+    if ($answer !~ /has order number/) {
+        warn "$name is not responding properly!\n";
+    }
+}<a name="INDEX-473"></a>
+</pre>
+</blockquote>
+
+
+
+
+
+<a name="ch05-5-fm2xml"></a>
+<h3 class="sect2">5.2.1. NIS+</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-474"></a><a name="INDEX-475"></a>Sun included the next version of NIS, called
+NIS+, with the Solaris operating system. NIS+ addresses many of the
+most serious problems of NIS, such as security. Unfortunately (or
+fortunately, since NIS+ can be a bit difficult to administer), NIS+
+has not caught on in the Unix world nearly as well NIS did. Until
+recently, there was virtually no support for it on machines not
+manufactured by Sun. It is slowly making its way into standard Linux
+distributions thanks to the work of Thorsten Kukuk (see <a href="http://www.suse.de/~kukuk/nisplus/index.html">http://www.suse.de/~kukuk/nisplus/index.html</a>), but it is far from prevalent in the Unix world and
+nonexistent in the NT and MacOS
+world.<a name="INDEX-476"></a>
+</p>
+
+
+
+
+
+<p>Given its marginal status, we're not going to look any deeper
+into NIS+ in this book. If you need to work with NIS+ from Perl,
+Harris also has a <tt class="literal">Net::NISPlus</tt> module up to the
+task.<a name="INDEX-477"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch05-6-fm2xml"></a>
+<h3 class="sect2">5.2.2. Windows Internet Name Server ( WINS)</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-478"></a><a name="INDEX-479"></a>When Microsoft
+began to run its proprietary networking protocol NetBIOS over TCP/IP
+(NetBT), it also found a need to handle the name-to-IP address
+mapping question. The first shot was the <em class="filename">lmhosts</em>
+file, modeled after the standard host file. This was quickly
+supplemented with an NIS-like mechanism. As of NT Version 3.5,
+Microsoft has offered a centralized scheme called Windows Internet
+Name Server (WINS). WINS differs in several ways from
+NIS:<a name="INDEX-480"></a><a name="INDEX-481"></a><a name="INDEX-482"></a><a name="INDEX-483"></a>
+</p>
+
+
+
+
+
+<ul>
+<li>
+<p>WINS is specialized for the distribution of host-to-IP address
+mappings. It is not used like NIS to centralize distribution of other
+information (e.g., password, network, port mappings, and user
+groups).</p>
+</li>
+<li>
+<p>WINS servers receive most of the information they distribute from
+preconfigured client registrations (they can be pre-loaded with
+information). WINS clients, once they receive an IP address either
+manually or via Dynamic Host Configuration Protocol (DHCP), are
+responsible for registering and re-registering their information.
+This is different from NIS, in that client machines ask the server
+for information that has been pre-loaded, and with only one exception
+(passwords), do not update the information on that server.</p>
+</li>
+</ul>
+<p>WINS, like NIS, offers the ability to have multiple servers available
+for reliability and load sharing through the use of a push-pull
+partner model. As of Windows 2000, WINS is deprecated (read
+"killed off") in favor of Dynamic Domain Name Service, an
+extension to the basic DNS system we're just about to discuss.</p>
+
+
+
+
+
+<p>Given that WINS is not long for this earth, we're not going to
+explore Perl code to work with it. There is currently very little
+support for working directly with WINS from Perl. I know of no Perl
+modules designed specifically to interact with WINS. Your best bet
+may be to call some of the command-line utilities found in the
+Windows NT Server Resource Kit, such as <tt class="command">WINSCHK</tt>
+and <tt class="command">WINSCL</tt>. <a name="INDEX-484"></a>
+</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch05_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch05_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">5.1. Host Files</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">5.3. Domain Name Service (DNS)</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

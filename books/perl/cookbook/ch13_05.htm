@@ -1,0 +1,152 @@
+<html><head>
+<title>Recipe 13.4. Managing Class Data</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:42:18Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch13_01.htm" title="13. Classes, Objects, and Ties"><link rel="prev" href="ch13_04.htm" title="13.3. Managing Instance Data"><link rel="next" href="ch13_06.htm" title="13.5. Using Classes as Structs"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_04.htm" title="13.3. Managing Instance Data"><img src="../gifs/txtpreva.gif" alt="Previous: 13.3. Managing Instance Data" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch13_01.htm" title="13. Classes, Objects, and Ties">Chapter 13<br>Classes, Objects, and Ties</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_06.htm" title="13.5. Using Classes as Structs"><img src="../gifs/txtnexta.gif" alt="Next: 13.5. Using Classes as Structs" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch13-chap13_managing_1">13.4. Managing Class Data</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-581">Problem<em class="emphasis"></EM
+><a class="indexterm" name="ch13-idx-1000004515-0"></A
+><a class="indexterm" name="ch13-idx-1000004515-1"></A
+><a class="indexterm" name="ch13-idx-1000004515-2"></A
+></A
+></H3
+><p class="para">You need a method to be called on behalf of the whole class, not just on one object. This might be a procedural request, or it might be a global data attribute shared by all instances of the class.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-587">Solution</A
+></H3
+><p class="para">Instead of expecting a reference as their first argument as object methods do, <a class="indexterm" name="ch13-idx-1000004519-0"></A
+>class methods expect a string containing name of the class. Class methods access package data, not object data, as in the <code class="literal">population</CODE
+> method shown here:</P
+><pre class="programlisting">package Person;
+
+$Body_Count = 0; 
+
+sub population { return $Body_Count }
+
+sub new {                                   # constructor
+    $Body_Count++;
+    return bless({}, shift);
+}
+
+sub DESTROY { --$BodyCount }                # destructor
+
+# later, the user can say this:
+package main;
+
+for (1..10) { push @people, Person-&gt;new }
+printf &quot;There are %d people alive.\n&quot;, Person-&gt;population();
+
+<b class="emphasis.bold">There are 10 people alive.</B
+></PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-633">Discussion</A
+></H3
+><p class="para">Normally, each object has its own complete state stored within itself. The value of a data attribute in one object is unrelated to the value that attribute might have in another instance of the same class. For example, setting <em class="emphasis">her</EM
+> gender here does nothing to <em class="emphasis">his</EM
+> gender, because they are different objects with distinct states:</P
+><pre class="programlisting">$him = Person-&gt;<code class="literal">new()</CODE
+>;
+$him-&gt;gender(&quot;male&quot;);
+
+$her = Person-&gt;<code class="literal">new()</CODE
+>;
+$her-&gt;gender(&quot;female&quot;);</PRE
+><p class="para">Imagine a classwide attribute where changing the attribute for one instance changes it for all of them. Just as some programmers prefer capitalized global variables, some prefer uppercase names when the method affects class data instead of instance data. Here's an example of using a class method called <code class="literal">Max_Bounds</CODE
+>:</P
+><pre class="programlisting">FixedArray-&gt;Max_Bounds(100);                # set for whole class
+$alpha = FixedArray-&gt;new();
+printf &quot;Bound on alpha is %d\n&quot;, $alpha-&gt;Max_Bounds();
+<code class="userinput"><b><code class="replaceable"><i>100</I
+></CODE
+></B
+></CODE
+>
+$beta = FixedArray-&gt;new();
+$beta-&gt;Max_Bounds(50);                      # still sets for whole class
+printf &quot;Bound on alpha is %d\n&quot;, $alpha-&gt;Max_Bounds();
+<code class="userinput"><b><code class="replaceable"><i>50</I
+></CODE
+></B
+></CODE
+></PRE
+><p class="para">The implementation is simple:</P
+><pre class="programlisting">package FixedArray;
+$Bounds = 7;  # default
+sub new { bless( {}, shift ) }
+sub Max_Bounds {
+    my $proto  = shift;
+    $Bounds    = shift if @_;          # allow updates
+    return $Bounds;
+} </PRE
+><p class="para">To make the value effectively read only, simply remove the update possibility, as in:</P
+><pre class="programlisting">sub Max_Bounds { $Bounds }</PRE
+><p class="para">If you're deeply paranoid, make <code class="literal">$Bounds</CODE
+> a lexical variable private to the scope of the file containing the class. Then no one could say <code class="literal">$FixedArray::Bounds</CODE
+> to discover its values. They'd be forced to go through the method interface instead.</P
+><p class="para">Here's a tip to help build scalable classes: store object data on the object's namespace (in the hash), and store class data in the class namespace (package variables or file-scoped lexicals). Only class methods should directly access classwide attributes. Object methods should only access instance data. If the object method needs access to class data, its constructor should store a reference to that data in the object. Here's an example:</P
+><pre class="programlisting">sub new {
+    my $class = shift;
+    my $self = bless({}, $class);
+    $self-&gt;{Max_Bounds_ref} = \$Bounds;
+    return $self;
+} <em class="emphasis"></EM
+><a class="indexterm" name="ch13-idx-1000004521-0"></A
+><a class="indexterm" name="ch13-idx-1000004521-1"></A
+><a class="indexterm" name="ch13-idx-1000004521-2"></A
+></PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-705">See Also</A
+></H3
+><p class="para"><i class="filename">perltoot </I
+>(1), <i class="filename">perlobj </I
+>(1), and <i class="filename">perlbot </I
+>(1); the section on <a class="olink" href="../prog/ch05_05.htm#PERL2-CH-5-SECT-5.9">"Class Context and the Object"</A
+> in <a class="olink" href="../prog/ch05_01.htm">Chapter 5</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; <a class="xref" href="ch13_04.htm" title="Managing Instance Data">Recipe 13.3</A
+>; the <code class="literal">places</CODE
+> method in the <a class="xref" href="ch13_15.htm#ch13-16506" title="Example: Overloaded FixNum Class">"Example: Overloaded FixNum Class</A
+>" example in <a class="xref" href="ch13_15.htm" title="Overloading Operators">Recipe 13.14</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_04.htm" title="13.3. Managing Instance Data"><img src="../gifs/txtpreva.gif" alt="Previous: 13.3. Managing Instance Data" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_06.htm" title="13.5. Using Classes as Structs"><img src="../gifs/txtnexta.gif" alt="Next: 13.5. Using Classes as Structs" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">13.3. Managing Instance Data</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">13.5. Using Classes as Structs</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

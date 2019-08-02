@@ -1,0 +1,427 @@
+<html>
+<head>
+<title>Using the ODBC Framework  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Using the ODBC Framework">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch07_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch07_01.htm">Chapter 7: SQL Database Administration</a></td><td align="right" valign="top" width="172"><a href="ch07_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">7.3. Using the ODBC Framework</h2>
+
+
+
+
+
+<p>
+<a name="INDEX-710"></a><a name="INDEX-711"></a><a name="INDEX-712"></a><a name="INDEX-713"></a>The basic steps for using ODBC are similar
+to the DBI steps we just discussed.</p>
+
+
+
+
+<dl>
+<dt>
+<b>Step 1: Load the necessary Perl module</b>
+</dt>
+<dd>
+<blockquote>
+<pre class="programlisting">
+<a name="INDEX-714"></a>
+<a name="INDEX-715"></a>use Win32::ODBC;</pre>
+</blockquote>
+</dd>
+
+
+
+
+
+<dt>
+<b>Step 2: Connect to the database and receive a connection handle<a name="INDEX-716"></a>
+<a name="INDEX-717"></a></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-718"></a><a name="INDEX-719"></a><a name="INDEX-720"></a>ODBC requires one preliminary step
+before making a connection. We need to create a <em class="emphasis">Data Source
+Name</em>. A DSN is a named reference that stores the
+configuration information (e.g., server and database name) needed to
+reach an information source like an SQL server. DSNs come in two
+flavors, <em class="emphasis">user</em> and <em class="emphasis">system</em>,
+distinguishing between connections available to a single user on a
+machine and connections available to any user or service.<a href="#FOOTNOTE-3">[3]</a>
+</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-3"></a>
+<p>[3]There's a third flavor, <em class="emphasis">file</em>, which
+writes the DSN configuration information out to a file so it can be
+shared among several computers, but it isn't created by the
+<tt class="literal">Win32::ODBC</tt> method call we're about to use.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<p>DSNs can be created either through the ODBC control panel under
+Windows NT/2000, or programmatically via Perl. We'll take the
+latter route, if just to keep the snickering down among the Unix
+folks. Here's some code to create a user DSN to our database on
+an MS-SQL server:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># creates a user DSN to a Microsoft SQL Server
+# note: to create a system DSN, substitute ODBC_ADD_SYS_DSN 
+# for ODBC_ADD_DSN
+if (Win32::ODBC::ConfigDSN(
+                   ODBC_ADD_DSN, 
+                   "SQL Server", 
+                   ("DSN=PerlSysAdm", 
+                    "DESCRIPTION=DSN for PerlSysAdm", 
+                    "SERVER=mssql.happy.edu",  # server name
+                    "ADDRESS=192.168.1.4",     # server IP addr
+                    "DATABASE=sysadm",         # our database
+                    "NETWORK=DBMSSOCN",        # TCP/IP Socket Lib
+                   ))){
+                               print "DSN created\n";
+                             }
+else {
+   die "Unable to create DSN:" . Win32::ODBC::Error(  ) . "\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Once we have a DSN in place, we can use it to open a connection to
+our database:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># connect to the named DSN, returns a database handle
+$dbh=new Win32::ODBC("DSN=PerlSysAdm;UID=$username;PWD=$pw;");
+die "Unable to connect to DSN PerlSysAdm:" . Win32::ODBC::Error(  ) . "\n" 
+  unless (defined $dbh);</pre>
+</blockquote>
+</dd>
+
+
+
+
+
+<dt>
+<b>Step 3: Send SQL commands to the server<a name="INDEX-721"></a>
+<a name="INDEX-722"></a></b>
+</dt>
+<dd>
+<p>The ODBC equivalent of DBI's
+<tt class="literal">do()</tt><tt class="command">, </tt><tt class="literal">prepare(
+)</tt>, and <tt class="literal">execute( )</tt> is a little bit
+simpler because the <tt class="literal">Win32::ODBC</tt> module has a
+single method, <tt class="literal">Sql( )</tt>, for sending commands to a
+server. Though ODBC theoretically has a notion of prepared statements
+and placeholders, they are not implemented in the current
+<tt class="literal">Win32::ODBC</tt> module.<a href="#FOOTNOTE-4">[4]</a><tt class="literal">Win32::ODBC</tt> also does not use statement handles;
+all communication takes place through the initial database handle
+opened by the <tt class="literal">new</tt> method above. We're left
+with the simplest of command structures:</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-4"></a>
+<p>[4]At the time of
+this writing, Dave Roth was beta testing a new version of
+<tt class="literal">Win32::ODBC</tt> that allows for parameter binding. It
+uses a similar syntax to DBI (i.e., <tt class="literal">Prepare(
+)</tt>and then <tt class="literal">Sql( )</tt>) with a few ODBC
+twists thrown in. See <a href="http://www.roth.net">http://www.roth.net</a> for more information.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$rc = $dbh-&gt;Sql(q{SELECT * from hosts});</pre>
+</blockquote>
+
+
+
+
+
+<a name="ch07-3-fm2xml"></a>
+<blockquote class="note">
+<h4 class="objtitle">TIP</h4>
+<p>An important distinction between the ODBC and DBI methods: unlike
+DBI's <tt class="literal">do( )</tt>, the ODBC <tt class="literal">Sql(
+)</tt> call returns <tt class="literal">undef</tt> if it
+<em class="emphasis">succeeds</em>, and some non-zero number if it fails.</p>
+
+
+
+
+</blockquote>
+
+<p>If you need to know how many rows were affected by an
+<tt class="literal">INSERT</tt><b class="emphasis-bold">,
+</b><tt class="literal">DELETE</tt>, or <tt class="literal">UPDATE</tt>
+query, you would use the <tt class="literal">RowCount( )</tt>
+method. <tt class="literal">Win32::ODBC</tt>'s documentation notes
+that not all ODBC drivers implement this call (or implement it for all
+SQL operations), so be sure to test your driver before relying on
+it. Like the return code for DBI's <tt class="literal">execute(
+)</tt>, <tt class="literal">RowCount( )</tt> will return
+-<tt class="literal">1</tt> if the number of rows returned is not available
+to the driver.</p>
+
+
+
+
+
+<p>Here's the equivalent ODBC code for the DBI <tt class="literal">do( )</tt> example in the previous section:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">if (defined $dbh-&gt;Sql(q{UPDATE hosts 
+                        SET bldg = 'Main' 
+                        WHERE name = 'bendir'})){
+  die "Unable to perform update: ".Win32::ODBC::Error(  )."\n"
+}
+else {
+  $results = $dbh-&gt;RowCount(  );
+}</pre>
+</blockquote>
+</dd>
+
+
+
+
+
+<dt>
+<b>Step 4: Retrieve SELECT results</b>
+</dt>
+<dd>
+<p>Retrieving the results of a <tt class="literal">SELECT</tt> query under
+ODBC is performed in a fashion similar to DBI's method, with
+one twist. First, <em class="emphasis">fetching</em> the data from the
+server and <em class="emphasis">accessing</em> it are two separate steps
+under <tt class="literal">Win32::ODBC</tt>. <tt class="literal">FetchRow( )
+</tt>gets the next row, returning <tt class="literal">1</tt> if it
+succeeds, <tt class="literal">undef</tt> if it does not. Once we've
+got the row we can choose one of two methods to access it.</p>
+
+
+
+
+
+<p>
+<tt class="literal">Data( )</tt> returns a list of the returned columns
+when called in a list context. It returns all of the columns
+concatenated together if called in a scalar context. <tt class="literal">Data(
+)</tt> can take an optional list argument to specify which
+columns are returned and in what order (otherwise they are returned
+in an "unspecified" order according to the
+documentation).</p>
+
+
+
+
+
+<p>
+<tt class="literal">DataHash( )</tt> returns a hash with the column names
+as keys for the column values. This is similar to DBI's
+<tt class="literal">fetchrow_hashref( )</tt> except it returns a hash
+instead of a <em class="emphasis">hash reference</em>. Like<tt class="literal">
+Data( )</tt>, <tt class="literal">DataHash( )</tt> can also take an
+optional list argument to specify which columns are returned.</p>
+
+
+
+
+
+<p>In context, they look like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">if ($dbh-&gt;FetchRow(  )){
+  @ar = $dbh-&gt;Data(  ); 
+<em class="replaceable">  </em><em class="replaceable">do-stuff-with-@ar-values</em><em class="replaceable"> </em>
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>and:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">if ($dbh-&gt;FetchRow(  )){
+   $ha = $dbh-&gt;DataHash('name','ipaddr'); 
+<em class="replaceable">   </em><em class="replaceable">do-stuff-with-$ha{name}-and-$ha{ipaddr}</em>
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Just for parity's sake in this discussion, the information we
+found through DBI's statement handle attribute
+<tt class="literal">{NAME}</tt> can be found in
+<tt class="literal">Win32::ODBC</tt>-land via the <tt class="literal">FieldNames(
+)</tt> call. If you need to know the number of fields (like in
+<tt class="literal">{NUM_OF_FIELDS}</tt>), you'll have to count the
+number of elements in the list returned by <tt class="literal">FieldNames(
+)</tt>.</p>
+</dd>
+
+
+
+
+
+<dt>
+<b>Step 5: Close the connection to the server</b>
+</dt>
+<dd>
+<blockquote>
+<pre class="programlisting">$dbh-&gt;close(  );</pre>
+</blockquote>
+
+
+
+
+
+<p>If you created a DSN and want to delete it to clean up after
+yourself, use a statement similar to the one used to create it:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># replace ODBC_REMOVE_DSN with ODBC_REMOVE_SYS_DSN if you created a system DSN
+if (Win32::ODBC::ConfigDSN(ODBC_REMOVE_DSN,
+                           "SQL Server","DSN=PerlSysAdm")){
+  print "DSN deleted\n";
+}
+else {
+  die "Unable to delete DSN:".Win32::ODBC::Error(  )."\n";
+}</pre>
+</blockquote>
+</dd>
+
+</dl>
+
+
+
+
+
+<p>You now know how to work with a database from Perl using both DBI and
+ODBC. Let's put your knowledge to work with some more extended
+examples from the database administration realm.<a name="INDEX-723"></a><a name="INDEX-724"></a><a name="INDEX-725"></a><a name="INDEX-726"></a><a name="INDEX-727"></a><a name="INDEX-728"></a>
+</p>
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch07_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch07_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">7.2. Using the DBI Framework</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">7.4. Server Documentation</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

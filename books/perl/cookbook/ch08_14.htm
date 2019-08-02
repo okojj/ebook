@@ -1,0 +1,144 @@
+<html><head>
+<title>Recipe 8.13. Updating a Random-Access File</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:38:49Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch08_01.htm" title="8. File Contents"><link rel="prev" href="ch08_13.htm" title="8.12. Using Random-Access I/O"><link rel="next" href="ch08_15.htm" title="8.14. Reading a String from a Binary File"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch08_13.htm" title="8.12. Using Random-Access I/O"><img src="../gifs/txtpreva.gif" alt="Previous: 8.12. Using Random-Access I/O" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch08_01.htm" title="8. File Contents">Chapter 8<br>File Contents</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch08_15.htm" title="8.14. Reading a String from a Binary File"><img src="../gifs/txtnexta.gif" alt="Next: 8.14. Reading a String from a Binary File" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch08-14803">8.13. Updating a Random-Access File</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch08-pgfId-1156">Problem</A
+></H3
+><p class="para">You want to read in an old record from a binary file, change its values, and write back the record.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch08-pgfId-1162">Solution</A
+></H3
+><p class="para">After <code class="literal">read</CODE
+>ing the old record, <code class="literal">pack</CODE
+><a class="indexterm" name="ch08-idx-1000004687-0"></A
+> up the updated values, <code class="literal">seek</CODE
+> to the previous address, and write it back.</P
+><pre class="programlisting">use Fcntl;                          # for SEEK_SET and SEEK_CUR
+
+$ADDRESS = $RECSIZE * $RECNO;
+seek(FH, $ADDRESS, SEEK_SET)        or die &quot;Seeking: $!&quot;;
+read(FH, $BUFFER, $RECSIZE) == $RECSIZE
+                                    or die &quot;Reading: $!&quot;;
+@FIELDS = unpack($FORMAT, $BUFFER);
+# update fields, then
+$BUFFER = pack($FORMAT, @FIELDS);
+seek(FH, -$RECSIZE, SEEK_CUR)       or die &quot;Seeking: $!&quot;;
+print FH $BUFFER;
+close FH                            or die &quot;Closing: $!&quot;;</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch08-pgfId-1192">Discussion</A
+></H3
+><p class="para">You don't have to use anything fancier than <code class="literal">print</CODE
+> in Perl to output a record. Remember that the opposite of <code class="literal">read</CODE
+> is not <code class="literal">write</CODE
+> but <code class="literal">print</CODE
+>, although oddly enough, the opposite of <code class="literal">sysread</CODE
+> actually is <code class="literal">syswrite</CODE
+>. (<code class="literal">split</CODE
+> and <code class="literal">join</CODE
+> are opposites, but there's no <code class="literal">speak</CODE
+> to match <code class="literal">listen</CODE
+>, no <code class="literal">resurrect</CODE
+> for <code class="literal">kill</CODE
+>, and no <code class="literal">curse</CODE
+> for <code class="literal">bless</CODE
+>.)</P
+><p class="para">The example program shown in <a class="xref" href="#ch08-24725" title="weekearly">Example 8.4</A
+>, <em class="emphasis">weekearly</EM
+><a class="indexterm" name="ch08-idx-1000004686-0"></A
+>, takes one argument: the user whose record you want to backdate by a week. (Of course, in practice, you wouldn't really want to (nor be able to!) mess with the system accounting files.) This program requires write access to the file to be updated, since it opens the file in update mode. After fetching and altering the record, it packs it up again, skips backwards in the file one record, and writes it out.</P
+><div class="example"><h4 class="example"><a class="title" name="ch08-24725">Example 8.4: weekearly</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl
+# <a class="indexterm" name="ch08-idx-1000004828-0"></A
+>weekearly -- set someone's login date back a week
+use User::pwent;
+use IO::Seekable;
+
+$typedef = 'L A12 A16';         # linux fmt; sunos is &quot;L A8 A16&quot;
+$sizeof  = length(pack($typedef, ()));
+$user    = shift(@ARGV) || $ENV{USER} || $ENV{LOGNAME};
+
+$address = getpwnam($user)-&gt;uid * $sizeof;
+
+open (LASTLOG, &quot;+&lt;/var/log/lastlog&quot;)
+    or die &quot;can't update /usr/adm/lastlog: $!&quot;;
+seek(LASTLOG, $address, SEEK_SET)
+    or die &quot;seek failed: $!&quot;;
+read(LASTLOG, $buffer, $sizeof) == $sizeof
+    or die &quot;read failed: $!&quot;;
+
+($time, $line, $host) = unpack($typedef, $buffer);
+$time  -= 24 * 7 * 60 * 60;         # back-date a week
+$buffer = pack($typedef, $time, $line, $time);
+
+seek(LASTLOG, -$sizeof, SEEK_CUR)   # backup one record
+    or die &quot;seek failed: $!&quot;;
+print LASTLOG $record;
+    
+close(LASTLOG)
+    or die &quot;close failed: $!&quot;;<a class="indexterm" name="ch08-idx-1000004682-0"></A
+><a class="indexterm" name="ch08-idx-1000004682-1"></A
+><a class="indexterm" name="ch08-idx-1000004682-2"></A
+><a class="indexterm" name="ch08-idx-1000004682-3"></A
+><a class="indexterm" name="ch08-idx-1000004682-4"></A
+></PRE
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch08-pgfId-1256">See Also</A
+></H3
+><p class="para">The <code class="literal">open</CODE
+>, <code class="literal">seek</CODE
+>, <code class="literal">read</CODE
+>, <code class="literal">pack</CODE
+>, and <code class="literal">unpack</CODE
+> functions in the <i class="filename">perlfunc </I
+>(1) and in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; <a class="xref" href="ch08_13.htm" title="Using Random-Access I/O">Recipe 8.12</A
+>; <a class="xref" href="ch08_15.htm" title="Reading a String from a Binary File">Recipe 8.14</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch08_13.htm" title="8.12. Using Random-Access I/O"><img src="../gifs/txtpreva.gif" alt="Previous: 8.12. Using Random-Access I/O" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch08_15.htm" title="8.14. Reading a String from a Binary File"><img src="../gifs/txtnexta.gif" alt="Next: 8.14. Reading a String from a Binary File" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">8.12. Using Random-Access I/O</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">8.14. Reading a String from a Binary File</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

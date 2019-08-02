@@ -1,0 +1,448 @@
+<html><head>
+<title>[Chapter 20] The checkcompat() Cookbook</TITLE>
+<meta name="DC.title" content="sendmail"><meta name="DC.creator" content="Bryan Costales &amp; Eric Allman"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-01-06T19:24:05Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-222-0" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="part02.htm" title="II. Build and Install"><link rel="prev" href="ch19_06.htm" title="19.6 Alphabetized m4 Macros"><link rel="next" href="ch20_02.htm" title="20.2 The Cookbook"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="sendmail" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="sendmail"><area shape="RECT" coords="467,0,514,18" href="../search/ssrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch19_06.htm" title="19.6 Alphabetized m4 Macros"><img src="../gifs/txtpreva.gif" alt="Previous: 19.6 Alphabetized m4 Macros" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 20</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch20_02.htm" title="20.2 The Cookbook"><img src="../gifs/txtnexta.gif" alt="Next: 20.2 The Cookbook" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="CHAPTER"><h1 class="chapter"><a class="title" name="SML2-CH-20">20. The checkcompat() Cookbook</A
+></H1
+><div class="htmltoc"><p><b>Contents:</B
+><br><a class="sect1" href="#SML2-CH-20-SECT-1" title="20.1 How checkcompat() Works">How checkcompat() Works</A
+><br><a class="sect1" href="ch20_02.htm" title="20.2 The Cookbook">The Cookbook</A
+><br><a class="sect1" href="ch20_03.htm" title="20.3 Alphabetized V8.8 Subroutines">Alphabetized V8.8 Subroutines</A
+></P
+><p></P
+></DIV
+><p class="para"></P
+><p class="para">Inside <em class="emphasis">sendmail</EM
+> is the often overlooked
+<em class="emphasis">checkcompat</EM
+>() routine. It has existed since Version 3 and
+is intended to allow the site administrator to accept, reject,
+and log mail delivery attempts.
+Among its uses, and those we will illustrate, are the following:<a class="indexterm" name="SML2-CH-20-IX-CHECKCOMPAT-ROUTINE"></A
+></P
+><ul class="itemizedlist"><li class="listitem"><p class="para">Refuse to act as a mail gateway. Reject any mail that is both
+from and to any outside address.</P
+></LI
+><li class="listitem"><p class="para">Limit the size of guest messages. Screen messages based on
+user <em class="emphasis">uid</EM
+>, and reject those for the class of users
+who are guests when the message is over a specified limit
+in bytes.</P
+></LI
+><li class="listitem"><p class="para">Verify <em class="emphasis">identd</EM
+>(8) information. Compare the host information
+in <code class="literal">$s</CODE
+> to that in <code class="literal">$_</CODE
+> and log a warning if they
+differ.</P
+></LI
+><li class="listitem"><p class="para">Prune <code class="literal">Received:</CODE
+> headers at a firewall. Make all outgoing
+mail appear fresh as it exits the internal network via a firewall.</P
+></LI
+><li class="listitem"><p class="para">Reject mail from spamming or mail-bombing sites. Look up the
+sender in an external database and bounce the message if the
+sender is listed as &quot;bad.&quot;</P
+></LI
+></UL
+><p class="para">The <em class="emphasis">checkcompat</EM
+>() routine is located in the file
+<em class="emphasis">src/conf.c</EM
+>.
+That file contains comments describing one way to code 
+<em class="emphasis">checkcompat</EM
+>().
+In this chapter we show you other ways to code it.</P
+><p class="para">The <em class="emphasis">checkcompat</EM
+>() routine is inherently &quot;internal,&quot;
+meaning that it must understand internal data structures that may
+change. 
+[1]
+Since you are modifying source 
+code, you have to
+be prepared to read source code.
+In this chapter we offer examples of ways to use <em class="emphasis">checkcompat</EM
+>().
+Be aware that they are examples only, and you will need C programming
+skill to extend them to real-world situations.</P
+><blockquote class="footnote"><p class="para">[1] V8.8 <em class="emphasis">sendmail</EM
+> also offers a <code class="literal">check_compat</CODE
+> rule set (see
+<a class="xref" href="ch29_10.htm#SML2-CH-29-SECT-10-4" title="The check_compat Rule Set">Section 29.10.4, "The check_compat Rule Set"</A
+>) that can perform some of the
+<em class="emphasis">checkcompat</EM
+>() routine's functionality at the
+rule set level. This is one way to avoid having to program in the C language.</P
+></BLOCKQUOTE
+><p class="para">The <em class="emphasis">checkcompat</EM
+>() routine is called for every delivery attempt
+to every recipient. When designing a <em class="emphasis">checkcompat</EM
+>() routine
+of your own, be aware that a cascade of errors may propagate if
+you are not careful with your design. Logging a warning based on the
+sender, for example, may result in multiple warnings when there are
+multiple recipients.&#13;</P
+><div class="sect1"><h2 class="sect1"><a class="title" name="SML2-CH-20-SECT-1">20.1 How checkcompat() Works</A
+></H2
+><p class="para">When <em class="emphasis">sendmail</EM
+> prepares to deliver mail, it first checks the
+size of the mail message and rejects (bounces) it if it is
+larger than the limit imposed by the <code class="literal">M=</CODE
+>
+delivery agent equate (see <a class="xref" href="ch30_04.htm#SML2-CH-30-SECT-4-7" title="">Section 30.4.7, M=</A
+>).
+V8.8 <em class="emphasis">sendmail</EM
+> then calls the <code class="literal">check_compat</CODE
+> rule set
+(see <a class="xref" href="ch29_10.htm#SML2-CH-29-SECT-10-4" title="The check_compat Rule Set">Section 29.10.4</A
+>).
+Next, all versions of <em class="emphasis">sendmail</EM
+> call the <em class="emphasis">checkcompat</EM
+>()
+routine.</P
+><p class="para">The <em class="emphasis">checkcompat</EM
+>() routine lies in a unique position within
+the <em class="emphasis">sendmail</EM
+> code. It is the one place where both the sender and
+recipient addresses are available at the same time. Since it precedes
+actual delivery, all the information needed for delivery is available
+to you for checking.</P
+><p class="para">If <em class="emphasis">checkcompat</EM
+>() returns EX_OK,
+as defined in <em class="emphasis">&lt;sysexits.h&gt;</EM
+>, the mail message is considered
+okay and delivered.
+Otherwise, the message is bounced. 
+If you wish the message to be requeued instead of bounced, you
+can return EX_TEMPFAIL.</P
+><p class="para">Again note that the <em class="emphasis">checkcompat</EM
+>() routine
+is called once for each recipient.&#13;</P
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-20-SECT-1-1">20.1.1 Arguments Passed to checkcompat()</A
+></H3
+><p class="para">The <em class="emphasis">checkcompat</EM
+>() is found in the C language source
+file <em class="emphasis">src/conf.c</EM
+>.
+Inside that file you will find it declared like this:</P
+><p class="para"><blockquote class="screen"><pre class="screen">checkcompat(to, e)
+        register ADDRESS *to;
+        register ENVELOPE *e;</PRE
+></BLOCKQUOTE
+></P
+><p class="para">Here, <code class="literal">to</CODE
+> is a pointer to a structure of <em class="emphasis">typedef</EM
+>
+ADDRESS that contains information about the recipient.
+And <code class="literal">e</CODE
+> is a pointer to a structure
+(actually a linked list of structures) of <em class="emphasis">typedef</EM
+>
+ENVELOPE that contains information about the current envelope.</P
+><p class="para"><a class="indexterm" name="AUTOID-16064"></A
+>The members of the <code class="literal">ADDRESS *to</CODE
+> structure are shown in
+<a class="xref" href="#SML2-CH-20-TAB-0" title="ADDRESS *to Members">Table 20.1</A
+>.
+Note that these members are correct for V8.8 <em class="emphasis">sendmail</EM
+> only.
+Also note that the table shows only those members that may be
+useful in a <em class="emphasis">checkcompat</EM
+>() routine (see <em class="emphasis">sendmail.h</EM
+>
+for the other members of <code class="literal">*to</CODE
+>).</P
+><table class="table"><caption class="table"><a class="title" name="SML2-CH-20-TAB-0">Table 20.1: ADDRESS *to Members</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1">Type</TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1">Member</TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1">Description</TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">char *</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">q_paddr</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">The address in a form suitable for printing</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">char *</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">q_user</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">The user part (<code class="literal">$:</CODE
+>) from rule set 0 (see <a class="xref" href="ch29_06.htm" title="Rule Set 0">Section 29.6, "Rule Set 0"</A
+>)</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">char *</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">q_ruser</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">The login name for this user, if known</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">char *</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">q_host</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">The host part (<code class="literal">$@</CODE
+>) from rule set 0 (see <a class="xref" href="ch29_06.htm" title="Rule Set 0">Section 29.6</A
+>)</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">struct mailer *</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">q_mailer</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">The delivery agent (<code class="literal">$#</CODE
+>) from rule set 0 (see <a class="xref" href="ch29_06.htm" title="Rule Set 0">Section 29.6</A
+>)</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">u_long</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">q_flags</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">Status flags (see <a class="xref" href="ch37_03.htm#SML2-CH-37-SECT-3-1" title="The Output Produced by printaddr()">Section 37.3.1, "The Output Produced by printaddr()"</A
+> in <a class="xref" href="ch37_03.htm#SML2-CH-37-SECT-3-1" title="The Output Produced by printaddr()">Section 37.3.1</A
+>)</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">uid_t</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">q_uid</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">The <em class="emphasis">uid</EM
+> of the <code class="literal">q_ruser</CODE
+>, if known</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">gid_t</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">q_gid</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">The <em class="emphasis">gid</EM
+> of the <code class="literal">q_ruser</CODE
+>, if known</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">char *</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">q_home</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">The home directory (path), if delivery is local</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">char *</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">q_fullname</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">The (gecos) full name of <code class="literal">q_ruser</CODE
+>, if known</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">struct address *</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">q_next</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">Link to the next ADDRESS in the chain</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">struct address *</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">q_alias</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">The alias that yielded this address</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">char *</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">q_owner</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">The owner of <code class="literal">q_alias</CODE
+></TD
+></TR
+></TBODY
+></TABLE
+><p class="para"><a class="indexterm" name="AUTOID-16174"></A
+>The members of the <code class="literal">ENVELOPE *e</CODE
+> structure are shown in
+<a class="xref" href="#SML2-CH-20-TAB-1" title="ENVELOPE *e Members">Table 20.2</A
+>.
+Note that these members are correct for V8.8 <em class="emphasis">sendmail</EM
+> only.
+Also note that the table shows only those members that may be
+useful in a <em class="emphasis">checkcompat</EM
+>() routine (see <em class="emphasis">sendmail.h</EM
+>
+for other members of <code class="literal">*e</CODE
+>).</P
+><table class="table"><caption class="table"><a class="title" name="SML2-CH-20-TAB-1">Table 20.2: ENVELOPE *e Members</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1">Type</TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1">Member</TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1">Description</TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">HDR *</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">e_header</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">Linked list of headers</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">time_t</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">e_ctime</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">Time message first placed into the queue</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">ADDRESS</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">e_from</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">The sender</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">ADDRESS *</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">e_sendqueue</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">Linked list of recipients</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">long</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">e_msgsize</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">Size of the message in bytes</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">long</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">e_flags</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">Envelope flags (see <a class="xref" href="ch37_05.htm#SML2-CH-37-TAB-2" title="Hexadecimal Envelope Flags">Table 37.3</A
+> in <a class="xref" href="ch37_05.htm#SML2-CH-37-SECT-5-12" title="">Section 37.5.12, -d2.1</A
+>)</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">int</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">e_nrcpts</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">Number of recipients</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">short</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1"><code class="literal">e_hopcount</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">The hop count for the message</TD
+></TR
+></TBODY
+></TABLE
+><p class="para">The <em class="emphasis">checkcompat</EM
+>() routine is a powerful internal hook inside
+<em class="emphasis">sendmail</EM
+>. It is so internal and powerful, in fact, that if
+you are truly clever, you can even use <em class="emphasis">checkcompat</EM
+>() to
+modify rewrite rules at runtime (scary but possible).&#13;</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-20-SECT-1-2">20.1.2 Global Variables</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-16248"></A
+><a class="indexterm" name="AUTOID-16250"></A
+>Over 100 global variables are used by V8.8 <em class="emphasis">sendmail</EM
+>. They are all
+listed in <em class="emphasis">sendmail.h</EM
+> and <em class="emphasis">conf.c</EM
+> with &quot;lite&quot; comments.
+Global variables store information such as <em class="emphasis">sendmail</EM
+>'s option values,
+file descriptor values, macro values, class lists,
+and database access information.
+Any can be modified inside <em class="emphasis">checkcompat</EM
+>(), but before
+attempting to do so, study the <em class="emphasis">sendmail</EM
+> C source code
+to anticipate any unexpected side effects.</P
+><p class="para">In general, you can use almost any of the global variables
+when designing your own <em class="emphasis">checkcompat</EM
+>() routine. 
+The four most interesting are the following:</P
+><dl class="variablelist"><dt class="term"><code class="literal">RealHostAddr</CODE
+></DT
+><dd class="listitem"><p class="para"><a class="indexterm" name="AUTOID-16267"></A
+><a class="indexterm" name="AUTOID-16269"></A
+><a class="indexterm" name="AUTOID-16272"></A
+>The IP address of the sending host.
+This is a union of several <em class="emphasis">sockaddr_</EM
+>
+types depending on your selection of protocol type.
+This can be zero for locally submitted mail.</P
+></DD
+><dt class="term"><code class="literal">RealHostName</CODE
+></DT
+><dd class="listitem"><p class="para"><a class="indexterm" name="AUTOID-16281"></A
+><a class="indexterm" name="AUTOID-16283"></A
+>A string containing the definitive canonical name of the sending host.
+If it can't be resolved to a name, it will contain
+the host's IP number in text form, surrounded by square brackets.</P
+></DD
+><dt class="term"><code class="literal">LogLevel</CODE
+></DT
+><dd class="listitem"><p class="para"><a class="indexterm" name="AUTOID-16291"></A
+>This variable determines the amount of logging that <em class="emphasis">sendmail</EM
+> does.
+It is initially set with the <code class="literal">LogLevel</CODE
+> (<code class="literal">L</CODE
+>) option (see <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-33" title="">Section 34.8.33, LogLevel (L)</A
+>).
+You might want to use <em class="emphasis">checkcompat</EM
+>() to detect questionable 
+connections and, if any are detected, to increase the value in <code class="literal">LogLevel</CODE
+> to 12. This will cause
+both sides of every subsequent SMTP connection to be logged.</P
+></DD
+><dt class="term"><code class="literal">MatchGecos</CODE
+></DT
+><dd class="listitem"><p class="para"><a class="indexterm" name="AUTOID-16305"></A
+>Whether or not unmatched local looking names are looked up in the <em class="emphasis">passwd</EM
+>(5)
+file is under the control of the <code class="literal">MatchGECOS</CODE
+> (<code class="literal">G</CODE
+>) option
+(see <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-34" title="">Section 34.8.34, MatchGECOS (G)</A
+>). Because this kind of lookup is expensive, you
+might wish to enable it only during nonbusiness hours. One way to do this
+would be by modifying the <code class="literal">MatchGecos</CODE
+> variable inside <em class="emphasis">checkcompat</EM
+>().&#13;</P
+></DD
+></DL
+></DIV
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch19_06.htm" title="19.6 Alphabetized m4 Macros"><img src="../gifs/txtpreva.gif" alt="Previous: 19.6 Alphabetized m4 Macros" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="sendmail"><img src="../gifs/txthome.gif" alt="sendmail" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch20_02.htm" title="20.2 The Cookbook"><img src="../gifs/txtnexta.gif" alt="Next: 20.2 The Cookbook" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">19.6 Alphabetized m4 Macros</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">20.2 The Cookbook</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.htm" title="The Networking CD Bookshelf">Library Home</A
+> | <a href="../dnsbind/index.htm" title="DNS &amp; BIND">DNS &amp; BIND</A
+> | <a href="../tcpip/index.htm" title="TCP/IP Network Administration">TCP/IP</A
+> | <a href="index.htm" title="sendmail">sendmail</A
+> | <a href="../smdref/index.htm" title="sendmail Desktop Reference">sendmail Reference</A
+> | <a href="../firewall/index.htm" title="Building Internet Firewalls">Firewalls</A
+> | <a href="../puis/index.htm" title="Practical UNIX &amp; Internet Security">Practical Security</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

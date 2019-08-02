@@ -1,0 +1,2074 @@
+<html>
+<head>
+<title>Daytime Server (Java Servlet Programming)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jason Hunter and William Crawford">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-391-XE" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Daytime Server">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm" alt="Java Servlet Programming"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch10_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch10_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch10_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch10_01.htm">Chapter 10: Applet-Servlet Communication</a></td><td align="right" valign="top" width="172"><a href="ch10_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch10_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">10.2. Daytime Server</h2>
+
+<p>For a simple demonstration of each communication technique,
+we're going to write an applet that asks its server for the
+<a name="INDEX-1815"></a><a name="INDEX-1816"></a>current time of day. The applet first
+uses an HTTP connection, then a non-HTTP socket connection, and
+finally an RMI connection. Of course, an applet can normally get the
+current time from the system on which it's running. To give
+this example an air of practicality, let's assume the applet
+needs an approximate time stamp for some event and cannot rely on the
+client machine to have a correctly set clock.
+</p>
+
+<a name="ch10-7-fm2xml"></a>
+<h3 class="sect2">10.2.1. The Applet</h3>
+
+<p>We're going to be using the same example applet throughout this
+section. The skeleton code for this applet,
+<tt class="literal">DaytimeApplet</tt>, is shown in <a href="#ch10-27882">Example 10-1</a>. Right now, the applet just creates a user
+interface where the times it retrieves can be displayed, as shown in
+<a href="#ch10-20895">Figure 10-1</a>. As we proceed with this example,
+we'll implement its <tt class="literal">getDateUsingHttpText()</tt>,
+<tt class="literal">getDateUsingHttpObject()</tt>,
+<tt class="literal">getDateUsingSocketText()</tt>,
+<tt class="literal">getDateUsingSocketObject()</tt>, and
+<tt class="literal">getDateUsingRMIObject()</tt> methods. Note that the
+examples in this chapter use several JDK 1.0 methods that are
+deprecated in JDK 1.1. This is to maximize portability.
+</p>
+
+<a name="ch10-20895"></a>
+<div class="figure">
+<img alt="figure" src="figs/jsp_1001.gif" webstripperlinkwas="figs/jsp_1001.gif"></div>
+<h4 class="objtitle">Figure 10-1. The DaytimeApplet user interface</h4>
+
+<a name="ch10-27882"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-1. DaytimeApplet, without all the good stuff </h4>
+<blockquote>
+<pre class="programlisting">import java.applet.*;
+import java.awt.*;
+import java.io.*;
+import java.util.*;
+
+public class DaytimeApplet extends Applet {
+
+  TextField httpText, httpObject, socketText, socketObject, RMIObject;
+  Button refresh;
+
+  public void init() {
+    // Construct the user interface
+
+    setLayout(new BorderLayout());
+
+    // On the left create labels for the various communication
+    // mechanisms
+    Panel west = new Panel();
+    west.setLayout(new GridLayout(5, 1));
+    west.add(new Label("HTTP text: ", Label.RIGHT));
+    west.add(new Label("HTTP object: ", Label.RIGHT));
+    west.add(new Label("Socket text: ", Label.RIGHT));
+    west.add(new Label("Socket object: ", Label.RIGHT));
+    west.add(new Label("RMI object: ", Label.RIGHT));
+    add("West", west);
+
+    // On the right create text fields to display the retrieved time values
+    Panel center = new Panel();
+    center.setLayout(new GridLayout(5, 1));
+
+    httpText = new TextField();
+    httpText.setEditable(false);
+    center.add(httpText);
+
+    httpObject = new TextField();
+    httpObject.setEditable(false);
+    center.add(httpObject);
+
+    socketText = new TextField();
+    socketText.setEditable(false);
+    center.add(socketText);
+
+    socketObject = new TextField();
+    socketObject.setEditable(false);
+    center.add(socketObject);
+
+    RMIObject = new TextField();
+    RMIObject.setEditable(false);
+    center.add(RMIObject);
+
+    add("Center", center);
+
+    // On the bottom create a button to update the times
+    Panel south = new Panel();
+    refresh = new Button("Refresh");
+    south.add(refresh);
+    add("South", south);
+  }
+
+  public void start() {
+    refresh();
+  }
+
+  private void refresh() {
+    // Fetch and display the time values
+    httpText.setText(getDateUsingHttpText());
+    httpObject.setText(getDateUsingHttpObject());
+    socketText.setText(getDateUsingSocketText());
+    socketObject.setText(getDateUsingSocketObject());
+    RMIObject.setText(getDateUsingRMIObject());
+  }
+
+  private String getDateUsingHttpText() {
+    // Retrieve the current time using an HTTP text-based connection
+    return "unavailable";
+  }
+
+  private String getDateUsingHttpObject() {
+    // Retrieve the current time using an HTTP object-based connection
+    return "unavailable";
+  }
+
+  private String getDateUsingSocketText() {
+    // Retrieve the current time using a non-HTTP text-based socket
+    // connection
+    return "unavailable";
+  }
+
+  private String getDateUsingSocketObject() {
+    // Retrieve the current time using a non-HTTP object-based socket
+    // connection
+    return "unavailable";
+  }
+
+  private String getDateUsingRMIObject() {
+    // Retrieve the current time using RMI communication
+    return "unavailable";
+  }
+
+  public boolean handleEvent(Event event) {
+    // When the refresh button is pushed, refresh the display
+    // Use JDK 1.0 events for maximum portability
+    switch (event.id) {
+      case Event.ACTION_EVENT:
+        if (event.target == refresh) {
+          refresh();
+          return true;
+        }
+    }
+    return false;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>For this applet to be available for downloading to the client
+browser, it has to be placed under the server's document root,
+along with an HTML file referring to it. The HTML might look like
+this:
+</p>
+
+<blockquote>
+<pre class="programlisting">&lt;HTML&gt;
+&lt;HEAD&gt;&lt;TITLE&gt;Daytime Applet&lt;/TITLE&gt;&lt;/HEAD&gt;
+&lt;BODY&gt;
+&lt;CENTER&gt;&lt;H1&gt;Daytime Applet&lt;/H1&gt;&lt;/CENTER&gt;
+&lt;CENTER&gt;&lt;APPLET CODE=DaytimeApplet CODEBASE=/ WIDTH=300 HEIGHT=180&gt;
+&lt;/APPLET&gt;&lt;/CENTER&gt;
+&lt;/BODY&gt;&lt;/HTML&gt;</pre>
+</blockquote>
+
+<p>The <tt class="literal">CODEBASE</tt><a name="INDEX-1817"></a> parameter indicates the directory
+where the applet's class file has been placed. The parameter is
+relative to the document root, which for the Java Web Server is
+generally
+<em class="replaceable">server_root</em><em class="filename">/public_html</em>.
+Assuming the HTML file was named <em class="filename">daytime.html</em>,
+this applet can be viewed at the URL <em class="emphasis">http://<em class="replaceable">server</em>:<em class="replaceable">port</em>/daytime.html</em>.
+</p>
+
+
+<a name="ch10-8-fm2xml"></a>
+<h3 class="sect2">10.2.2. Text-based HTTP Communication</h3>
+
+<p>Let's start by implementing the lowest-common-denominator
+approach--<a name="INDEX-1818"></a><a name="INDEX-1819"></a><a name="INDEX-1820"></a>
+text-based HTTP communication.
+</p>
+
+<a name="ch10-9-fm2xml"></a>
+<h3 class="sect3">10.2.2.1. The servlet</h3>
+
+<p>For the <tt class="literal">DaytimeApplet</tt> to retrieve the current time
+from the server, it has to communicate with a servlet that returns
+the current time. <a href="#ch10-14149">Example 10-2</a> shows such a servlet.
+It responds to all GET and POST requests with a textual
+representation of the current time.
+</p>
+
+<a name="ch10-14149"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-2. The DaytimeServlet supporting basic HTTP access </h4>
+<blockquote>
+<pre class="programlisting">import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class DaytimeServlet extends HttpServlet {
+
+  public Date getDate() {
+    return new Date();
+  }
+
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+                               throws ServletException, IOException {
+    res.setContentType("text/plain");
+    PrintWriter out = res.getWriter();
+    out.println(getDate().toString());
+  }
+
+  public void doPost(HttpServletRequest req, HttpServletResponse res)
+                                throws ServletException, IOException {
+    doGet(req, res);
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>This servlet's class files should be placed in the standard
+location for servlets, typically
+<em class="replaceable">server_root</em><em class="filename">/servlets</em>.
+Once you place them there, they can be accessed by any web browser
+using the URL <em class="emphasis">http://<em class="replaceable">server</em>:<em class="replaceable">port</em>/servlet/DaytimeServlet</em>.
+</p>
+
+
+
+<a name="ch10-10-fm2xml"></a>
+<h3 class="sect3">10.2.2.2. Back to the applet</h3>
+
+<p>Now, for our <tt class="literal">DaytimeApplet</tt> to access this servlet,
+it must behave just like a browser and make an HTTP connection to the
+servlet URL, as the implementation of
+<tt class="literal">getDateUsingHttpText()</tt> in <a href="#ch10-11671">Example 10-3</a> shows.
+</p>
+
+<a name="ch10-11671"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-3. DaytimeApplet getting the time using HTTP </h4>
+<blockquote>
+<pre class="programlisting">import java.net.URL;                     // New addition
+import com.oreilly.servlet.HttpMessage;  // A support class, shown later
+
+  private String getDateUsingHttpText() {
+    try {
+      // Construct a URL referring to the servlet
+      URL url = new URL(getCodeBase(), "/servlet/DaytimeServlet");
+
+      // Create a com.oreilly.servlet.HttpMessage to communicate with that URL
+      HttpMessage msg = new HttpMessage(url);
+
+      // Send a GET message to the servlet, with no query string
+      // Get the response as an InputStream
+      InputStream in = msg.sendGetMessage();
+
+      // Wrap the InputStream with a DataInputStream
+      DataInputStream result =
+        new DataInputStream(new BufferedInputStream(in));
+
+      // Read the first line of the response, which should be
+      // a string representation of the current time
+      String date = result.readLine();
+
+      // Close the InputStream
+      in.close();
+
+      // Return the retrieved time
+      return date;
+    }
+    catch (Exception e) {
+      // If there was a problem, print to System.out
+      // (typically the Java console) and return null
+      e.printStackTrace();
+      return null;
+    }
+  }</pre>
+</blockquote>
+</div>
+
+<p>This method retrieves the current time on the server using a
+text-based HTTP connection. First, it creates a
+<tt class="literal">URL</tt> object that refers to the
+<tt class="literal">DaytimeServlet</tt> running on the server. The server
+host and port for this URL come from the applet's own
+<tt class="literal">getCodeBase()</tt> method. This guarantees that it
+matches the host and port from which the applet was downloaded. Then,
+the method creates an <tt class="literal">HttpMessage</tt> object to
+communicate with that URL. This object does all the dirty work
+involved in making the connection. The applet asks it to make a GET
+request of the <tt class="literal">DaytimeServlet</tt> and then reads the
+response from the returned <tt class="literal">InputStream</tt>.
+</p>
+
+<p>The code for <tt class="literal">HttpMessage</tt> is shown in <a href="#ch10-16733">Example 10-4</a>. It is loosely modeled after the
+<tt class="literal">ServletMessage</tt> class written by Rod McChesney of
+Sun Microsystems.
+</p>
+
+<a name="ch10-16733"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-4. The HttpMessage support class </h4>
+<blockquote>
+<pre class="programlisting">package com.oreilly.servlet;
+
+import java.io.*;
+import java.net.*;
+import java.util.*;
+
+public class HttpMessage {
+
+  URL servlet = null;
+  String args = null;
+
+  public HttpMessage(URL servlet) {
+    this.servlet = servlet;
+  }
+
+  // Performs a GET request to the previously given servlet
+  // with no query string.
+  public InputStream sendGetMessage() throws IOException {
+    return sendGetMessage(null);
+  }
+
+  // Performs a GET request to the previously given servlet.
+  // Builds a query string from the supplied Properties list.
+  public InputStream sendGetMessage(Properties args) throws IOException {
+    String argString = "";  // default
+
+    if (args != null) {
+      argString = "?" + toEncodedString(args);
+    }
+    URL url = new URL(servlet.toExternalForm() + argString); 
+
+    // Turn off caching
+    URLConnection con = url.openConnection();
+    con.setUseCaches(false);
+
+    return con.getInputStream();
+  }
+
+  // Performs a POST request to the previously given servlet
+  // with no query string.
+  public InputStream sendPostMessage() throws IOException {
+    return sendPostMessage(null);
+  }
+
+  // Performs a POST request to the previously given servlet.
+  // Builds post data from the supplied Properties list.
+  public InputStream sendPostMessage(Properties args) throws IOException {
+    String argString = "";  // default
+    if (args != null) {
+      argString = toEncodedString(args);  // notice no "?"
+    }
+
+    URLConnection con = servlet.openConnection();
+
+    // Prepare for both input and output
+    con.setDoInput(true);
+    con.setDoOutput(true);
+
+    // Turn off caching
+    con.setUseCaches(false);
+
+    // Work around a Netscape bug
+    con.setRequestProperty("Content-Type",
+                           "application/x-www-form-urlencoded");
+
+    // Write the arguments as post data
+    DataOutputStream out = new DataOutputStream(con.getOutputStream());
+    out.writeBytes(argString);
+    out.flush();
+    out.close();
+
+    return con.getInputStream();
+  }
+
+  // Converts a Properties list to a URL-encoded query string
+  private String toEncodedString(Properties args) {
+    StringBuffer buf = new StringBuffer();
+    Enumeration names = args.propertyNames();
+    while (names.hasMoreElements()) {
+      String name = (String) names.nextElement();
+      String value = args.getProperty(name);
+      buf.append(URLEncoder.encode(name) + "=" + URLEncoder.encode(value));
+      if (names.hasMoreElements()) buf.append("&amp;");
+    }
+    return buf.toString();
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>Some of you may have been expecting the
+<tt class="literal">HttpMessage</tt> class to establish a raw socket
+connection to the server and proceed to speak HTTP. This approach
+would certainly work, but it isn't necessary. The higher-level
+<tt class="literal">java.net.URL</tt> and
+<tt class="literal">java.net.URLConnection</tt> classes already provide
+this functionality in a convenient abstraction.
+</p>
+
+<p>Let's do a quick walk-through of
+<tt class="literal">HttpMessage</tt>. <tt class="literal">HttpMessage</tt> is
+designed to communicate with just one URL, the URL given in its
+constructor. It can send multiple GET and/or POST requests to that
+URL, but it always communicates with just the one URL.
+</p>
+
+<p>The code <tt class="literal">HttpMessage</tt> uses to send a GET message is
+fairly simple. First, <tt class="literal">sendGetMessage()</tt> creates a
+URL-encoded query string from the passed-in
+<tt class="literal">java.util.Properties</tt> list. Then, it appends this
+query string to the saved <tt class="literal">URL</tt>, creating a new
+<tt class="literal">URL</tt> object. At this point, it could elect to use
+this new URL (named <tt class="literal">url</tt>) to communicate with the
+servlet. A call to <tt class="literal">url.openStream()</tt> would return
+an <tt class="literal">InputStream</tt> that contains the response. But,
+unfortunately for our purposes, by default all connections made using
+a <tt class="literal">URL</tt> object are cached. We don't want
+this--we want the current time, not the time of the last
+request. So <tt class="literal">HttpMessage</tt> has to turn caching
+off.<a href="#FOOTNOTE-3">[3]</a> The
+<tt class="literal">URL</tt> class doesn't directly support this
+low-level control, so <tt class="literal">HttpMessage</tt> gets the
+<tt class="literal">URL</tt> object's
+<tt class="literal">URLConnection</tt> and instructs it not to use caching.
+Finally, <tt class="literal">HttpMessage</tt> returns the
+<tt class="literal">URLConnection</tt> object's
+<tt class="literal">InputStream</tt>, which contains the servlet's
+response.
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-3"></a>
+<p>[3] Actually, we could leave it up to the servlet
+to turn caching off, by having it set its
+<tt class="literal">Pragma</tt><a name="INDEX-1821"></a><a name="INDEX-1822"></a>
+header to <tt class="literal">"no-cache"</tt>. But it can't hurt to
+have it in the applet as well.</p> </blockquote>
+
+<p>The code <tt class="literal">HttpMessage</tt> uses to send a POST request
+(<tt class="literal">sendPostMessage()</tt>) is similar. The major
+difference is that it directly writes the URL-encoded parameter
+information in the body of the request. This follows the protocol for
+how POST requests submit their information. The other difference is
+that <tt class="literal">HttpMessage</tt> manually sets the request's
+content type to
+<tt class="literal">"application/x-www-form-urlencoded"</tt><a name="INDEX-1823"></a><a name="INDEX-1824"></a>. This should be set automatically by
+Java, but setting it manually works around a bug in some versions of
+<a name="INDEX-1825"></a>Netscape's
+browser.
+</p>
+
+<p>We should mention that <tt class="literal">HttpMessage</tt> is a
+general-purpose class for HTTP communication. It doesn't have
+to be used by applets, and it doesn't have to connect to
+servlets. It's usable by any Java client that needs to connect
+to an HTTP resource. It's included in the
+<tt class="literal">com.oreilly.servlet</tt> package, though, because
+it's often useful for applet-servlet communication.
+</p>
+
+<p>For the <tt class="literal">HttpMessage</tt> class to be usable by applets,
+it has to be made available for downloading along with the applet
+classes. This means it must be placed in the proper location under
+the web server's document root. For the Java Web Server, this
+location is
+<em class="replaceable">server_root</em><em class="filename">/public_html/com/oreilly/servlet</em>.
+We recommend you copy the class there from wherever you originally
+installed the <tt class="literal">com.oreilly.servlet</tt> package
+(probably
+<em class="replaceable">server_root</em><em class="filename">/classes/com/oreilly/servlet</em>).
+</p>
+
+<p>Note that <tt class="literal">HttpMessage</tt> as currently written does
+not provide a mechanism for an applet to either set or get the HTTP
+headers associated with its request and response. The
+<tt class="literal">URLConnection</tt><a name="INDEX-1826"></a><a name="INDEX-1827"></a>
+class, however, supports HTTP header access with its
+<tt class="literal">setRequestProperty()</tt><a name="INDEX-1828"></a><a name="INDEX-1829"></a>
+and
+<tt class="literal">getHeaderField()</tt><a name="INDEX-1830"></a><a name="INDEX-1831"></a>
+methods. You can add this functionality if you need it.
+</p>
+
+<p>Now, with all this code working together, we have an applet that
+retrieves the current time from its server using text-based HTTP
+applet-servlet communication. If you try it yourself, you should see
+the "HTTP text" date filled in, while the rest of the
+dates are still marked "unavailable."
+</p>
+
+
+
+<a name="ch10-11-fm2xml"></a>
+<h3 class="sect2">10.2.3. Object-based HTTP Communication</h3>
+
+<p>With a few modifications, we can have the
+<tt class="literal">DaytimeApplet</tt> receive the current time as a
+serialized <tt class="literal">Date</tt> object.
+</p>
+
+<a name="ch10-12-fm2xml"></a>
+<h3 class="sect3">10.2.3.1. The servlet</h3>
+
+<p>For backward compatibility, let's change our
+<tt class="literal">DaytimeServlet</tt> to return a serialized
+<tt class="literal">Date</tt> only if the request asks for it by passing a
+<tt class="literal">"format"</tt> parameter with the value
+"<tt class="literal">object</tt>". The code is given in <a href="#ch10-33642">Example 10-5</a>.
+</p>
+
+<a name="ch10-33642"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-5. The DaytimeServlet using HTTP to serve an object </h4>
+<blockquote>
+<pre class="programlisting">import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class DaytimeServlet extends HttpServlet {
+
+  public Date getDate() {
+    return new Date();
+  }
+
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+                               throws ServletException, IOException {
+    // If the client says "format=object" then
+    // return the Date as a serialized object
+    if ("object".equals(req.getParameter("format"))) {
+      ObjectOutputStream out = new ObjectOutputStream(res.getOutputStream());
+      out.writeObject(getDate());
+    }
+    // Otherwise send the Date as a normal string
+    else {
+      PrintWriter out = res.getWriter();
+      out.println(getDate().toString());
+    }
+  }
+
+  public void doPost(HttpServletRequest req, HttpServletResponse res)
+                                throws ServletException, IOException {
+    doGet(req, res);
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>As the code shows, sending a serialized Java object is quite simple.
+This technique can be used to send any primitive types and/or any
+Java objects that implement the <tt class="literal">Serializable</tt>
+interface, including a <tt class="literal">Vector</tt> that contains
+<tt class="literal">Serializable</tt> objects. Multiple objects can also be
+written to the same <tt class="literal">ObjectOutputStream</tt>, as long
+as the class receiving the objects reads them in the same order and
+casts them to the same types.
+</p>
+
+<p>You may notice that the servlet didn't set the content type of
+the response to indicate it contained a serialized Java object. The
+reason is that currently there are no standard MIME types to
+<a name="INDEX-1832"></a><a name="INDEX-1833"></a>represent serialized objects. This
+doesn't really matter, though. A content type acts solely as an
+indication to the client of how to handle or display the response. If
+an applet already assumes it's receiving a specific serialized
+Java object, everything works fine. Sometimes, though, it's
+useful to use a <a name="INDEX-1834"></a>custom MIME
+type (specific to your application), so that a servlet can indicate
+to an applet the contents of its response.
+</p>
+
+
+
+<a name="ch10-13-fm2xml"></a>
+<h3 class="sect3">10.2.3.2. The applet</h3>
+
+<p>The applet code to retrieve the serialized <tt class="literal">Date</tt>
+object is very similar to the code to retrieve plain text. The
+<tt class="literal">getDateUsingHttpObject()</tt><a name="INDEX-1835"></a><a name="INDEX-1836"></a>
+method is shown in <a href="#ch10-18703">Example 10-6</a>.
+</p>
+
+<a name="ch10-18703"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-6. The DaytimeApplet using HTTP to retrieve an object </h4>
+<blockquote>
+<pre class="programlisting">private String getDateUsingHttpObject() {
+  try {
+    // Construct a URL referring to the servlet
+    URL url = new URL(getCodeBase(), "/servlet/DaytimeServlet");
+
+    // Create a com.oreilly.servlet.HttpMessage to communicate with that URL
+    HttpMessage msg = new HttpMessage(url);
+
+    // Construct a Properties list to say format=object
+    Properties props = new Properties();
+    props.put("format", "object");
+
+    // Send a GET message to the servlet, passing "props" as a query string
+    // Get the response as an ObjectInputStream
+    InputStream in = msg.sendGetMessage(props);
+    ObjectInputStream result = new ObjectInputStream(in);
+
+    // Read the Date object from the stream
+    Object obj = result.readObject();
+    Date date = (Date)obj;
+
+    // Return the string representation of the Date
+    return date.toString();
+  }
+  catch (Exception e) {
+    // If there was a problem, print to System.out
+    // (typically the Java console) and return null
+    e.printStackTrace();
+    return null;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>There are two differences between this method and the
+<tt class="literal">getDateUsingHttpText()</tt><a name="INDEX-1837"></a><a name="INDEX-1838"></a>
+method. First, this method creates a <tt class="literal">Properties</tt>
+list to set the <tt class="literal">"format"</tt> parameter to the value
+<tt class="literal">"object"</tt>. This tells
+<tt class="literal">DaytimeServlet</tt> to return a serialized object.
+Second, the new method reads the returned content as an
+<tt class="literal">Object</tt>, using an
+<tt class="literal">ObjectInputStream</tt> and its
+<tt class="literal">readObject()</tt> method.
+</p>
+
+<p>If the class being serialized is not part of the Java Core API (and
+therefore isn't already available to the applet), it too has to
+be made available in the proper location under the web server's
+document root. An applet can always receive an object's
+serialized contents, but it needs to download its class file to fully
+reconstruct the object.
+</p>
+
+<p>Now the applet can retrieve the current time using both text-based
+and object-based HTTP communication. If you try it yourself now (with
+a web browser or applet viewer that supports JDK 1.1), you should see
+both the "HTTP text" and "HTTP object" fields
+filled in.
+</p>
+
+
+
+<a name="ch10-14-fm2xml"></a>
+<h3 class="sect3">10.2.3.3. Posting a serialized object</h3>
+
+<p>Before we go on, we should look at one more (hitherto unmentioned)
+method from the <tt class="literal">HttpMessage</tt> class:
+<tt class="literal">sendPostMessage(Serializable)</tt><a name="INDEX-1839"></a><a name="INDEX-1840"></a>
+. This method helps an applet upload a
+<a name="INDEX-1841"></a><a name="INDEX-1842"></a><a name="INDEX-1843"></a>serialized object to a servlet using
+the POST method. This object transfer isn't particularly useful
+to our daytime server example (and is kind of out of place here), but
+we mention it because it can come in handy when an applet needs to
+upload complicated data structures to its server. <a href="#ch10-26038">Example 10-7</a> contains the code for this method.
+</p>
+
+<a name="ch10-26038"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-7. Posting a serialized object </h4>
+<blockquote>
+<pre class="programlisting">// Uploads a serialized object with a POST request.
+// Sets the content type to java-internal/classname.
+public InputStream sendPostMessage(Serializable obj) throws IOException {
+  URLConnection con = servlet.openConnection();
+
+  // Prepare for both input and output
+  con.setDoInput(true);
+  con.setDoOutput(true);
+
+  // Turn off caching
+  con.setUseCaches(false);
+
+  // Set the content type to be java-internal/classname
+  con.setRequestProperty("Content-Type",
+                         "java-internal/" + obj.getClass().getName());
+
+  // Write the serialized object as post data
+  ObjectOutputStream out = new ObjectOutputStream(con.getOutputStream());
+  out.writeObject(obj);
+  out.flush();
+  out.close();
+
+  return con.getInputStream();
+}</pre>
+</blockquote>
+</div>
+
+<p>An applet uses <tt class="literal">sendPostMessage(Serializable)</tt> just
+as it uses <tt class="literal">sendPostMessage(Properties)</tt>. Here is
+the code for an applet that uploads any exceptions it encounters to a
+servlet:
+</p>
+
+<blockquote>
+<pre class="programlisting">catch (Exception e) {
+  URL url = new URL(getCodeBase(), "/servlet/ExceptionLogger");
+  HttpMessage msg = new HttpMessage(url);
+  InputStream in = msg.sendPostMessage(e);
+}</pre>
+</blockquote>
+
+<p>The servlet, meanwhile, receives the <tt class="literal">Exception</tt> in
+its <tt class="literal">doPost()</tt><a name="INDEX-1844"></a><a name="INDEX-1845"></a>
+method like this:
+</p>
+
+<blockquote>
+<pre class="programlisting">ObjectInputStream objin = new ObjectInputStream(req.getInputStream());
+Object obj = objin.readObject();
+Exception e = (Exception) obj;</pre>
+</blockquote>
+
+<p>The servlet can receive the type of the uploaded object as the
+subtype (second half) of the content type. Note that this
+<tt class="literal">sendPostMessage(Serializable)</tt> method uploads just
+one object at a time and uploads only
+<a name="INDEX-1846"></a><a name="INDEX-1847"></a><a name="INDEX-1848"></a>serializable objects (that is, no
+primitive types).
+</p>
+
+
+
+<a name="ch10-15-fm2xml"></a>
+<h3 class="sect2">10.2.4. Socket Communication</h3>
+
+<p>Now let's take a look at how an applet and servlet can
+communicate using non-HTTP socket communication.
+</p>
+
+<a name="ch10-16-fm2xml"></a>
+<h3 class="sect3">10.2.4.1. The servlet</h3>
+
+<p>The servlet's role in this communication technique is that of a
+passive listener. Due to security restrictions, only the applet can
+initiate a <a name="INDEX-1849"></a><a name="INDEX-1850"></a>socket
+connection. A servlet must be content to listen on a socket port and
+wait for an applet to connect. Generally speaking, a servlet should
+begin listening for applet connections in its
+<tt class="literal">init()</tt> method and stop listening in its
+<tt class="literal">destroy()</tt> method. In between, for every connection
+it receives, it should spawn a handler thread to communicate with the
+client.
+</p>
+
+<p>With HTTP socket connections, these nitty-gritty details are managed
+by the web server. The server listens for incoming HTTP requests and
+dispatches them as appropriate, calling a servlet's
+<tt class="literal">service()</tt>, <tt class="literal">doGet()</tt>, or
+<tt class="literal">doPost()</tt> methods as necessary. But when a servlet
+opts not to use HTTP communication, the web server can't
+provide any help. The servlet acts, in essence, like its own server
+and thus has to manage the socket connections itself.
+</p>
+
+<p>Okay, maybe we scared you a bit more than we had to there. The truth
+is that we can write a
+<a name="INDEX-1851"></a><a name="INDEX-1852"></a><a name="INDEX-1853"></a>servlet superclass that abstracts away
+the details involved in managing socket connections. This class,
+which we call <tt class="literal">DaemonHttpServlet</tt>, can be extended
+by any servlet wanting to make itself available via
+<a name="INDEX-1854"></a><a name="INDEX-1855"></a><a name="INDEX-1856"></a>
+non-HTTP socket communication.<a href="#FOOTNOTE-4">[4]</a>
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-4"></a>
+<p>[4] The name
+"<a name="INDEX-1857"></a>daemon" was chosen to refer to
+Unix daemons, programs that run in the background quietly handling
+certain events. And where did those programs get the
+"daemon" moniker? According to the <em class="emphasis">New
+Hacker's Dictionary</em><a name="INDEX-1858"></a><a name="INDEX-1859"></a>, it originally came "from
+the mythological meaning, (but was) later rationalized as the acronym
+`Disk And Execution MONitor'".</p> </blockquote>
+
+<p>
+<tt class="literal">DaemonHttpServlet</tt> starts listening for client
+requests in its <tt class="literal">init()</tt> method and stops listening
+in its <tt class="literal">destroy()</tt> method. In between, for every
+connection it receives, it calls the abstract
+<tt class="literal">handleClient(Socket)</tt> method. This method should be
+implemented by any servlet that subclasses
+<tt class="literal">DaemonHttpServlet</tt>.
+</p>
+
+<p>
+<a href="#ch10-37384">Example 10-8</a> shows how
+<tt class="literal">DaytimeServlet</tt> extends
+<tt class="literal">DaemonHttpServlet</tt> and implements
+<tt class="literal">handleClient()</tt><a name="INDEX-1860"></a><a name="INDEX-1861"></a>
+to make itself available via non-HTTP socket communication.
+</p>
+
+<a name="ch10-37384"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-8. The DaytimeServlet acting as a non-HTTP server </h4>
+<blockquote>
+<pre class="programlisting">import java.io.*;
+import java.net.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+import com.oreilly.servlet.DaemonHttpServlet;
+
+public class DaytimeServlet extends DaemonHttpServlet {
+
+  public Date getDate() {
+    return new Date();
+  }
+
+  public void init(ServletConfig config) throws ServletException {
+    // As before, if you override init() you have to call super.init()
+    super.init(config);
+  }
+
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+                               throws ServletException, IOException {
+    // If the client says "format=object" then
+    // send the Date as a serialized object
+    if ("object".equals(req.getParameter("format"))) {
+      ObjectOutputStream out = new ObjectOutputStream(res.getOutputStream());
+      out.writeObject(getDate());
+    }
+    // Otherwise send the Date as a normal ASCII string
+    else {
+      PrintWriter out = res.getWriter();
+      out.println(getDate().toString());
+    }
+  }
+
+  public void doPost(HttpServletRequest req, HttpServletResponse res)
+                                throws ServletException, IOException {
+    doGet(req, res);
+  }
+
+  public void destroy() {
+    // Now, unlike before, if you override destroy() you also have to call
+    // super.destroy()
+    super.destroy();
+  }
+
+  // Handle a client's socket connection by spawning a DaytimeConnection
+  // thread.
+  public void handleClient(Socket client) {
+    new DaytimeConnection(this, client).start();
+  }
+}
+
+class DaytimeConnection extends Thread {
+
+  DaytimeServlet servlet;
+  Socket client;
+
+  DaytimeConnection(DaytimeServlet servlet, Socket client) {
+    this.servlet = servlet;
+    this.client = client;
+    setPriority(NORM_PRIORITY - 1);
+  }
+
+  public void run() {
+    try {
+      // Read the first line sent by the client
+      DataInputStream in = new DataInputStream(
+                           new BufferedInputStream(
+                           client.getInputStream()));
+      String line = in.readLine();
+
+      // If it was "object" then return the Date as a serialized object
+      if ("object".equals(line)) {
+        ObjectOutputStream out =
+          new ObjectOutputStream(client.getOutputStream());
+        out.writeObject(servlet.getDate());
+        out.close();
+      }
+      // Otherwise, send the Date as a normal string
+      else {
+        // Wrap a PrintStream around the Socket's OutputStream
+        PrintStream out = new PrintStream(client.getOutputStream());
+        out.println(servlet.getDate().toString());
+        out.close();
+      }
+
+      // Be sure to close the connection
+      client.close();
+    }
+    catch (IOException e) {
+      servlet.getServletContext()
+        .log(e, "IOException while handling client request");
+    }
+    catch (Exception e) {
+      servlet.getServletContext()
+        .log("Exception while handling client request");
+    }
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>The <tt class="literal">DaytimeServlet</tt> class remains largely unchanged
+from its previous form. The major difference is that it extends
+<tt class="literal">DaemonHttpServlet</tt> and implements a
+<tt class="literal">handleClient(Socket)</tt> method that spawns a new
+<tt class="literal">DaytimeConnection</tt> thread. This
+<tt class="literal">DaytimeConnection</tt> instance bears the
+responsibility for handling a specific socket connection.
+</p>
+
+<p>
+<tt class="literal">DaytimeConnection</tt> works as follows. When it is
+created, it saves a reference to the
+<tt class="literal">DaytimeServlet</tt>, so that it can call the
+servlet's <tt class="literal">getDate()</tt> method, and a reference
+to the <tt class="literal">Socket</tt>, so that it can communicate with the
+client. <tt class="literal">DaytimeConnection</tt> also sets its running
+priority to one less than normal, to indicate that this communication
+can wait if necessary while other threads perform more time-critical
+work.
+</p>
+
+<p>Immediately after it creates the <tt class="literal">DaytimeConnection</tt>
+thread, <tt class="literal">DaytimeServlet</tt> starts the thread, causing
+its <tt class="literal">run()</tt> method to be called. In this method, the
+<tt class="literal">DaytimeConnection</tt> communicates with the client
+using some unnamed (but definitely not <a name="INDEX-1862"></a><a name="INDEX-1863"></a>HTTP) protocol. It begins by reading
+the first line sent by the client. If the line is
+<tt class="literal">"object"</tt>, it returns the current time as a
+serialized <tt class="literal">Date</tt> object. If the line is anything
+else, it returns the current time as a normal string. When it is
+done, it closes the connection.
+</p>
+
+
+
+<a name="ch10-17-fm2xml"></a>
+<h3 class="sect3">10.2.4.2. The superclass</h3>
+
+<p>The <a name="INDEX-1864"></a><a name="INDEX-1865"></a>low-level socket management is
+done in the <tt class="literal">DaemonHttpServlet</tt> class. Generally,
+this class can be used without modification, but it is useful to
+understand the internals. The code is shown in <a href="#ch10-21360">Example 10-9</a>.
+</p>
+
+<a name="ch10-21360"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-9. The DaemonHttpServlet superclass </h4>
+<blockquote>
+<pre class="programlisting">package com.oreilly.servlet;
+
+import java.io.*;
+import java.net.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public abstract class DaemonHttpServlet extends HttpServlet {
+
+  protected int DEFAULT_PORT = 1313;  // not static or final
+  private Thread daemonThread;
+
+  public void init(ServletConfig config) throws ServletException {
+    super.init(config);
+
+    // Start a daemon thread
+    try {
+      daemonThread = new Daemon(this);
+      daemonThread.start();
+    }
+    catch (Exception e) {
+      getServletContext().log(e, "Problem starting socket server daemon thread");
+    }
+  }
+
+  // Returns the socket port on which this servlet will listen.
+  // A servlet can specify the port in three ways: by using the socketPort
+  // init parameter, by setting the DEFAULT_PORT variable before calling
+  // super.init(), or by overriding this method's implementation
+  protected int getSocketPort() {
+    try { return Integer.parseInt(getInitParameter("socketPort")); }
+    catch (NumberFormatException e) { return DEFAULT_PORT; }
+  }
+
+  abstract public void handleClient(Socket client);
+
+  public void destroy() {
+    // Stop the daemon thread
+    try {
+      daemonThread.stop();
+      daemonThread = null;
+    }
+    catch (Exception e) {
+      getServletContext().log(e, "Problem stopping server socket daemon thread");
+    }
+  }
+}
+
+// This work is broken into a helper class so that subclasses of
+// DaemonHttpServlet can define their own run() method without problems.
+
+class Daemon extends Thread {
+
+  private ServerSocket serverSocket;
+  private DaemonHttpServlet servlet;
+
+  public Daemon(DaemonHttpServlet servlet) {
+    this.servlet = servlet;
+  }
+
+  public void run() {
+    try {
+      // Create a server socket to accept connections
+      serverSocket = new ServerSocket(servlet.getSocketPort());
+    }
+    catch (Exception e) {
+      servlet.getServletContext().log(e, "Problem establishing server socket");
+      return;
+    }
+
+    try {
+      while (true) {
+        // As each connection comes in, call the servlet's handleClient().
+        // Note this method is blocking. It's the servlet's responsibility
+        // to spawn a handler thread for long-running connections.
+        try {
+          servlet.handleClient(serverSocket.accept());
+        }
+        catch (IOException ioe) {
+          servlet.getServletContext()
+            .log(ioe, "Problem accepting client's socket connection");
+        }
+      }
+    }
+    catch (ThreadDeath e) {
+      // When the thread is killed, close the server socket
+      try {
+        serverSocket.close();
+      }
+      catch (IOException ioe) {
+        servlet.getServletContext().log(ioe, "Problem closing server socket");
+      }
+    }
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>The <tt class="literal">init()</tt> method of
+<tt class="literal">DaemonHttpServlet</tt> creates and starts a new
+<tt class="literal">Daemon</tt> thread that is in charge of listening for
+incoming connections. The <tt class="literal">destroy()</tt> method stops
+the thread. This makes it imperative that any servlet subclassing
+<tt class="literal">DaemonHttpServlet</tt> call
+<tt class="literal">super.init(config)</tt> and
+<tt class="literal">super.destroy()</tt> if the servlet implements its own
+<tt class="literal">init()</tt> and <tt class="literal">destroy()</tt> methods.
+</p>
+
+<p>The <tt class="literal">Daemon</tt> thread begins by establishing a
+<tt class="literal">ServerSocket</tt> to listen on some specific socket
+port. Which socket port is determined with a call to the
+servlet's <tt class="literal">getSocketPort()</tt> method. The value
+returned is either the value of the init parameter
+<tt class="literal">"socketPort"</tt>, or, if that init parameter
+doesn't exist, the current value of the variable
+<tt class="literal">DEFAULT_PORT</tt>. A servlet may choose to override the
+<tt class="literal">getSocketPort()</tt> implementation if it so desires.
+</p>
+
+<p>After establishing the <tt class="literal">ServerSocket</tt>, the
+<tt class="literal">Daemon</tt> thread waits for incoming requests with a
+call to
+<tt class="literal">serverSocket.accept()</tt><a name="INDEX-1866"></a><a name="INDEX-1867"></a>
+. This method is blocking--it stops this thread's
+execution until a client attaches to the server socket. When this
+happens, the <tt class="literal">accept()</tt> method returns a
+<tt class="literal">Socket</tt> object that the <tt class="literal">Daemon</tt>
+thread passes immediately to the servlet's
+<tt class="literal">handleClient()</tt> method. This
+<tt class="literal">handleClient()</tt> method usually spawns a handler
+thread and returns immediately, leaving the <tt class="literal">Daemon</tt>
+thread ready to accept another connection.
+</p>
+
+<p>The server socket clean-up is equally as important as its set-up. We
+have to be sure the server socket lives as long as the servlet, but
+no longer. To this end, the <tt class="literal">destroy()</tt> method of
+<tt class="literal">DaemonHttpServlet</tt> calls the
+<tt class="literal">Daemon</tt> thread's <tt class="literal">stop()</tt>
+method. This call doesn't immediately stop the
+<tt class="literal">Daemon</tt> thread, however. It just causes a
+<tt class="literal">ThreadDeath</tt> exception to be thrown in the
+<tt class="literal">Daemon</tt> thread at its current point of execution.
+The <tt class="literal">Daemon</tt> thread catches this exception and
+closes the server socket.
+</p>
+
+<p>There are two caveats in writing a servlet that acts like a
+<a name="INDEX-1868"></a><a name="INDEX-1869"></a><a name="INDEX-1870"></a>
+non-HTTP server. First, only one servlet at a time can listen to any
+particular socket port. This makes it vital that each
+<a name="INDEX-1871"></a><a name="INDEX-1872"></a>daemon servlet choose its own socket
+port--by setting its <tt class="literal">socketPort</tt> init
+parameter, setting the <tt class="literal">DEFAULT_PORT</tt> variable
+before calling <tt class="literal">super.init(config)</tt>, or overriding
+<tt class="literal">getSocketPort()</tt> directly. Second, a daemon servlet
+must be loaded into its server and have its <tt class="literal">init()</tt>
+method called before it can accept incoming non-HTTP connections.
+Thus, you should either tell your server to load it at start-up or be
+sure it is always accessed via HTTP before it is accessed
+directly.<a name="INDEX-1873"></a><a name="INDEX-1874"></a>
+</p>
+
+
+
+<a name="ch10-18-fm2xml"></a>
+<h3 class="sect3">10.2.4.3. The applet</h3>
+
+<p>The <a name="INDEX-1875"></a><a name="INDEX-1876"></a><a name="INDEX-1877"></a>
+applet code to connect to the servlet using non-HTTP communication,
+primarily the
+<tt class="literal">getDateUsingSocketText()</tt><a name="INDEX-1878"></a><a name="INDEX-1879"></a>
+and
+<tt class="literal">getDateUsingSocketObject()</tt><a name="INDEX-1880"></a><a name="INDEX-1881"></a>
+methods, is shown in <a href="#ch10-24867">Example 10-10</a>.
+</p>
+
+<a name="ch10-24867"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-10. The DaytimeApplet getting the time using a socket connection </h4>
+<blockquote>
+<pre class="programlisting">import java.net.Socket;                    // New addition
+
+static final int DEFAULT_PORT = 1313;   // New addition
+
+private int getSocketPort() {
+  try { return Integer.parseInt(getParameter("socketPort")); }
+  catch (NumberFormatException e) { return DEFAULT_PORT; }
+}
+
+private String getDateUsingSocketText() {
+  InputStream in = null;
+  try {
+    // Establish a socket connection with the servlet
+    Socket socket = new Socket(getCodeBase().getHost(), getSocketPort());
+
+    // Print an empty line, indicating we want the time as plain text
+    PrintStream out = new PrintStream(socket.getOutputStream());
+    out.println();
+    out.flush();
+
+    // Read the first line of the response
+    // It should contain the current time
+    in = socket.getInputStream();
+    DataInputStream result =
+      new DataInputStream(new BufferedInputStream(in));
+    String date = result.readLine();
+
+    // Return the retrieved string
+    return date;
+  }
+  catch (Exception e) {
+    // If there was a problem, print to System.out
+    // (typically the Java console) and return null
+    e.printStackTrace();
+    return null;
+  }
+  finally {
+    // Always close the connection
+    // This code executes no matter how the try block completes
+    if (in != null) {
+      try { in.close(); }
+      catch (IOException ignored) { }
+    }
+  }
+}
+
+private String getDateUsingSocketObject() {
+  InputStream in = null;
+  try {
+    // Establish a socket connection with the servlet
+    Socket socket = new Socket(getCodeBase().getHost(), getSocketPort());
+
+    // Print a line saying "object", indicating we want the time as 
+    // a serialized Date object
+    PrintStream out = new PrintStream(socket.getOutputStream());
+    out.println("object");
+    out.flush();
+
+    // Create an ObjectInputStream to read the response
+    in = socket.getInputStream();
+    ObjectInputStream result =
+      new ObjectInputStream(new BufferedInputStream(in));
+
+    // Read an object, and cast it to be a Date
+    Object obj = result.readObject();
+    Date date = (Date)obj;
+
+    // Return a string representation of the retrieved Date
+    return date.toString();
+  }
+  catch (Exception e) {
+    // If there was a problem, print to System.out
+    // (typically the Java console) and return null
+    e.printStackTrace();
+    return null;
+  }
+  finally {
+    // Always close the connection
+    // This code executes no matter how the try block completes
+    if (in != null) {
+      try { in.close(); }
+      catch (IOException ignored) { }
+    }
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>For both these methods, the applet begins by creating a
+<tt class="literal">Socket</tt> that is used to communicate with the
+servlet. To do this, it needs to know both the host name and the port
+number on which the servlet is listening. Determining the host is
+easy--it has to be the same host from which it was downloaded,
+accessible with a call to <tt class="literal">getCodeBase().getHost()</tt>.
+The port is harder, as it depends entirely on the servlet to which
+this applet is connecting. This applet uses the
+<tt class="literal">getSocketPort()</tt> method to make this determination.
+The implementation of <tt class="literal">getSocketPort()</tt> shown here
+returns the value of the applet's <tt class="literal">socketPort</tt>
+parameter, or (if that parameter isn't given) returns the value
+of the <tt class="literal">DEFAULT_PORT</tt> variable.
+</p>
+
+<p>Once it has established a socket connection, the applet follows an
+unnamed protocol to communicate with the servlet. This protocol
+requires that the applet send one line to indicate whether it wants
+the current time as text or as an object. If the line says
+<tt class="literal">"object"</tt>, it receives an object. If it says
+anything else, it receives plain text. After sending this line, the
+applet can read the response as appropriate.
+</p>
+
+<p>The applet and servlet could continue to communicate using this
+socket. That's one of the major advantages of not using HTTP
+communication. But, in this case, the applet got what it wanted and
+just needs to close the connection. It performs this close in a
+<tt class="literal">finally</tt><a name="INDEX-1882"></a> block. Putting the close here guarantees
+that the connection is closed whether the <tt class="literal">try</tt>
+throws an exception or not.
+</p>
+
+<p>With the addition of these two methods our applet is nearly complete.
+If you run it now, you should see that all of the fields except
+"RMI object" contain dates.
+</p>
+
+
+
+<a name="ch10-19-fm2xml"></a>
+<h3 class="sect2">10.2.5. RMI Communication</h3>
+
+<p>Earlier in this chapter, we pointed out that one of the reasons not
+to use RMI communication is that it's complicated. Although
+that's true, it's also true that with the help of another
+servlet superclass, the code required for a servlet to make itself
+available via <a name="INDEX-1883"></a><a name="INDEX-1884"></a>
+RMI communication can be ridiculously simple. First, we'll lead
+you through the step-by-step instructions on how to make a servlet a
+remote object. Then, after you've seen how simple and easy that
+is, we'll explain all the work going on behind the scenes.
+</p>
+
+<a name="ch10-20-fm2xml"></a>
+<h3 class="sect3">10.2.5.1. The servlet</h3>
+
+<p>To begin with, all RMI remote objects must implement a specific
+interface. This interface does two things: it declares which methods
+of the remote object are to be made available to remote clients, and
+it extends the <tt class="literal">Remote</tt> interface to indicate
+it's an interface for a remote object. For our
+<tt class="literal">DaytimeServlet</tt>, we can write the
+<tt class="literal">DaytimeServer</tt> interface shown in <a href="#ch10-36289">Example 10-11</a>.
+</p>
+
+<a name="ch10-36289"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-11. The DaytimeServer interface </h4>
+<blockquote>
+<pre class="programlisting">import java.util.Date;
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+
+public interface DaytimeServer extends Remote {
+  public Date getDate() throws RemoteException;
+}</pre>
+</blockquote>
+</div>
+
+<p>This interface declares that our <tt class="literal">DaytimeServlet</tt>
+makes its <tt class="literal">getDate()</tt> method available to remote
+clients. Notice that the <tt class="literal">getDate()</tt> signature has
+been altered slightly--it now throws a
+<tt class="literal">RemoteException</tt>. Every method made available via
+RMI must declare that it throws this exception. Although the method
+itself may not throw the exception, it can be thrown by the system to
+indicate a network service failure.
+</p>
+
+<p>The code for <tt class="literal">DaytimeServlet</tt> remains mostly
+unchanged from its original version. In fact, the only changes are
+that it now implements <tt class="literal">DaytimeServer</tt> and extends
+<tt class="literal">com.oreilly.servlet.RemoteHttpServlet</tt>, the
+superclass that allows this servlet to remain so unchanged. The
+servlet also implements a <tt class="literal">destroy()</tt> method that
+calls <tt class="literal">super.destroy()</tt>. It's true that this
+method is perfectly useless in this example, but it points out that
+any <tt class="literal">destroy()</tt> method implemented in a remote
+servlet must call <tt class="literal">super.destroy()</tt> to give the
+<tt class="literal">RemoteHttpServlet</tt> object's
+<tt class="literal">destroy()</tt> method a chance to terminate RMI
+communication. <a href="#ch10-10218">Example 10-12</a> shows the new
+<tt class="literal">DaytimeServlet</tt> code.
+</p>
+
+<a name="ch10-10218"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-12. The DaytimeServlet now supporting RMI access </h4>
+<blockquote>
+<pre class="programlisting">import java.io.*;
+import java.net.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+import com.oreilly.servlet.RemoteHttpServlet;          // New addition
+
+public class DaytimeServlet extends RemoteHttpServlet  // New addition
+                            implements DaytimeServer { // New addition
+
+  // The single method from DaytimeServer
+  // Note: the throws clause isn't necessary here
+  public Date getDate() {
+    return new Date();
+  }
+
+  public void init(ServletConfig config) throws ServletException {
+    super.init(config);
+    // Additional code could go here
+  }
+
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+                            throws ServletException, IOException {
+    // If the client says "format=object" then
+    // send the Date as a serialized object
+    if ("object".equals(req.getParameter("format"))) {
+      ObjectOutputStream out = new ObjectOutputStream(res.getOutputStream());
+      out.writeObject(getDate());
+    }
+    // Otherwise send the Date as a normal ASCII string
+    else {
+      PrintWriter out = res.getWriter();
+      out.println(getDate().toString());
+    }
+  }
+
+  public void doPost(HttpServletRequest req, HttpServletResponse res)
+                                throws ServletException, IOException {
+    doGet(req, res);
+  }
+
+  public void destroy() {
+    // If you override destroy() you have to call super.destroy()
+    super.destroy();
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>So that's how to write a <a name="INDEX-1885"></a><a name="INDEX-1886"></a>remote object servlet. We suggest you
+place such servlets directly in the server's classpath
+(<em class="replaceable">server_root</em><em class="filename">/classes</em>)
+so they aren't reloaded, since reloading a remote object tends
+to cause unexpected results. Compiling a remote object servlet is the
+same as for every other servlet, with one additional step. After
+compiling the servlet source code, you now have to compile the
+servlet class with the RMI compiler
+<tt class="command"></tt><a name="INDEX-1887"></a><a name="INDEX-1888"></a><a name="INDEX-1889"></a><em class="emphasis">rmic</em>. The RMI
+compiler takes a remote object's class file and generates
+<em class="emphasis">stub</em><a name="INDEX-1890"></a><a name="INDEX-1891"></a><a name="INDEX-1892"></a>and
+<em class="emphasis">skeleton</em> versions of the class. These classes
+work behind the scenes to enable RMI communication. You don't
+need to worry about the details, but you should know that the stub
+helps the client invoke methods on the remote object and the skeleton
+helps the server handle those invocations.
+</p>
+
+<p>Using <em class="emphasis">rmic</em><tt class="command"> </tt>is similar to
+using <em class="emphasis">javac</em>. For this example you can compile
+<tt class="literal">DaytimeServlet</tt> with the following command:
+</p>
+
+<blockquote>
+<pre class="programlisting">% <tt class="userinput"><b>rmic DaytimeServlet</b></tt>
+</pre>
+</blockquote>
+
+<p>Notice that you provide <em class="emphasis">rmic</em> with a Java class
+name to compile, not a file. Thus, if the servlet to compile is part
+of a package it should be given to <em class="emphasis">rmic</em> as
+<tt class="literal">package.name.ServletName</tt>. The
+<em class="emphasis">rmic</em> program can take a classpath to search with
+the <tt class="literal">-classpath</tt> parameter, as well as a destination
+directory for the stub and skeleton files with the
+<tt class="literal">-d</tt> parameter.
+</p>
+
+<p>After executing the above <em class="emphasis">rmic</em> command, you
+should see two new class files: <em class="filename">DaytimeServlet_Stub.class
+</em>and <em class="filename">DaytimeServlet_Skel.class</em>.
+We'll tell you what to do with these in just a minute. First,
+you should know that you don't have to rerun the RMI compiler
+every time you modify the remote servlet's code. This is
+because the stub and skeleton classes are built in terms of the
+servlet's interface, not its implementation of that interface.
+Accordingly, you need to regenerate them only when you modify the
+<tt class="literal">DaytimeServer</tt> interface (or your equivalent
+interface).
+</p>
+
+<p>Now, for the final step in writing a remote servlet: copying a few
+class files to the server's document root, where they can be
+downloaded by an applet. There are two class files that need to be
+downloaded: the stub class <em class="filename">DaytimeServlet_Stub.class
+</em> and the remote interface class
+<em class="filename">DaytimeServer.class</em>. The client (in this case
+the applet) needs the stub class to perform its half of the RMI
+communication, and the stub class itself uses the remote interface
+class. Be aware that the servlet needs to use these classes, too, so
+copy them to the server's document root and leave them in the
+server's classpath.<a href="#FOOTNOTE-5">[5]</a><a href="#ch10-16527">Figure 10-2</a> shows where all the server
+files go.
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-5"></a>
+<p>[5] Managing multiple class
+files can become a serious headache during development. On a Unix
+system, you can use soft links to simplify the task. Or, on any
+system, you can implement a more general-purpose solution: change the
+server's classpath to include
+<em class="replaceable">server_root</em><em class="filename">/public_html/classes</em>.
+Put the interface class and stub class in there. Then the server can
+find them in its new classpath and the applet's codebase can be
+set to <em class="filename">/classes</em> to find them as well.</p>
+</blockquote>
+
+<a name="ch10-16527"></a>
+<div class="figure">
+<img alt="figure" src="figs/jsp_1002.gif" webstripperlinkwas="figs/jsp_1002.gif"></div>
+<h4 class="objtitle">Figure 10-2. File locations for RMI communication</h4>
+
+<p>That's it! If you follow these instructions you should be able
+to get a remote servlet operating in short order. Now let's
+look at the <tt class="literal">RemoteHttpServlet</tt> class and see
+what's going on behind the scenes.
+</p>
+
+
+
+<a name="ch10-21-fm2xml"></a>
+<h3 class="sect3">10.2.5.2. The superclass</h3>
+
+<p>A <a name="INDEX-1893"></a><a name="INDEX-1894"></a>remote object needs to do two things
+to prepare itself for RMI communication: it needs to export itself
+and register itself. When a remote object exports itself, it begins
+listening on a port for incoming method invocation requests. When a
+remote object registers itself, it tells a <a name="INDEX-1895"></a><a name="INDEX-1896"></a><a name="INDEX-1897"></a>
+registry server its name and port number, so that clients can locate
+it (essentially, find out its port number) and communicate with it.
+These two tasks are handled by the
+<tt class="literal">RemoteHttpServlet</tt> class, shown in <a href="#ch10-36368">Example 10-13</a>.
+</p>
+
+<a name="ch10-36368"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-13. The RemoteHttpServlet superclass </h4>
+<blockquote>
+<pre class="programlisting">package com.oreilly.servlet;
+
+import java.io.*;
+import java.net.*;
+import java.rmi.*;
+import java.rmi.server.*;
+import java.rmi.registry.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public abstract class RemoteHttpServlet extends HttpServlet
+                                        implements Remote {
+
+  protected Registry registry;
+
+  public void init(ServletConfig config) throws ServletException {
+    super.init(config);
+    try {
+      // Export ourself
+      UnicastRemoteObject.exportObject(this);
+      // Register ourself
+      bind();
+    }
+    catch (RemoteException e) {
+      getServletContext().log(e, "Problem binding to RMI registry");
+    }
+  }
+
+  public void destroy() {
+    // Unregister ourself
+    unbind();
+  }
+
+  // Returns the name under which we are to be registered
+  protected String getRegistryName() {
+    // First name choice is the "registryName" init parameter
+    String name = getInitParameter("registryName");
+    if (name != null) return name;
+
+    // Fallback choice is the name of this class
+    return this.getClass().getName();
+  }
+
+  // Returns the port on which the registry server is listening
+  // (or should be listening)
+  protected int getRegistryPort() {
+    // First port choice is the "registryPort" init parameter
+    try { return Integer.parseInt(getInitParameter("registryPort")); }
+
+    // Fallback choice is the default registry port (1099)
+    catch (NumberFormatException e) { return Registry.REGISTRY_PORT; }
+  }
+
+  protected void bind() {
+    // Try to find the appropriate registry already running
+    try {
+      registry = LocateRegistry.getRegistry(getRegistryPort());
+      registry.list();  // Verify it's alive and well
+    }
+    catch (Exception e) {
+      // Couldn't get a valid registry
+      registry = null;
+    }
+
+    // If we couldn't find it, we need to create it.
+    // (Equivalent to running "rmiregistry")
+    if (registry == null) {
+      try {
+        registry = LocateRegistry.createRegistry(getRegistryPort());
+      }
+      catch (Exception e) { 
+        log("Could not get or create RMI registry on port " +
+            getRegistryPort() + ": " + e.getMessage());
+        return;
+      }
+    }
+
+    // If we get here, we must have a valid registry.
+    // Now register this servlet instance with that registry.
+    // "Rebind" to replace any other objects using our name.
+    try {
+      registry.rebind(getRegistryName(), this);
+    }
+    catch (Exception e) {
+      log("Could not bind to RMI registry: " + e.getMessage());
+      return;
+    }
+  }
+
+  protected void unbind() {
+    try {
+      if (registry != null) registry.unbind(getRegistryName());
+    }
+    catch (Exception e) {
+      getServletContext().log(e, "Problem unbinding from RMI registry");
+    }
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>If you've ever used or read about RMI before, you've
+probably seen <a name="INDEX-1898"></a><a name="INDEX-1899"></a>remote objects that extend the
+<tt class="literal">java.rmi.server.UnicastRemoteObject</tt><a name="INDEX-1900"></a><a name="INDEX-1901"></a>
+class. This is the standard--and, in fact, recommended--way
+to write a remote object. The
+<tt class="literal">RemoteHttpServlet</tt><a name="INDEX-1902"></a><a name="INDEX-1903"></a>
+class, however, doesn't extend
+<tt class="literal">UnicastRemoteObject</tt>; it extends
+<tt class="literal">HttpServlet</tt>. As you may know, Java doesn't
+support multiple inheritance. This means that
+<tt class="literal">RemoteHttpServlet</tt> has to choose to extend
+<em class="emphasis">either</em><tt class="literal">UnicastRemoteObject</tt> or
+<tt class="literal">HttpServlet</tt>even though it needs functionality
+from both classes. It's a difficult choice. Whichever class
+<tt class="literal">RemoteHttpServlet</tt> doesn't extend it has to
+basically reimplement on its own. In the end, we've extended
+<tt class="literal">HttpServlet</tt> because it's easier to rewrite
+the functionality of <tt class="literal">UnicastRemoteObject</tt> than that
+of <tt class="literal">HttpServlet</tt>.
+</p>
+
+<p>This rewrite requires <tt class="literal">RemoteHttpServlet</tt> to do two
+things it wouldn't have to do if it extended
+<tt class="literal">UnicastRemoteObject</tt>. First, it must declare that
+it implements the <tt class="literal">Remote</tt> interface. All remote
+objects must implement this interface, but normally, by extending
+<tt class="literal">UnicastRemoteObject</tt>, a class gets this for free.
+Still, the price for going it alone isn't too bad, as the
+<tt class="literal">Remote</tt> interface doesn't actually define any
+methods. An object declares that it implements
+<tt class="literal">Remote</tt> solely to express its desire to be treated
+as a remote object.
+</p>
+
+<p>The second thing <tt class="literal">RemoteHttpServlet</tt> has to do is
+manually export itself. Normally, this is performed automatically in
+the <tt class="literal">UnicastRemoteObject()</tt> constructor. But again,
+doing this without that constructor is not a problem. The
+<tt class="literal">UnicastRemoteObject</tt> class has a static
+<tt class="literal">exportObject(Remote)</tt> method that any
+<tt class="literal">Remote</tt> object can use to export itself.
+<tt class="literal">RemoteHttpServlet</tt> uses this method and exports
+itself with this single line:
+</p>
+
+<blockquote>
+<pre class="programlisting">UnicastRemoteObject.exportObject(this);</pre>
+</blockquote>
+
+<p>Those two steps, implementing <tt class="literal">Remote</tt> and exporting
+itself, are done by <tt class="literal">RemoteHttpServlet</tt> in lieu of
+extending <tt class="literal">UnicastRemoteObject</tt>.<a href="#FOOTNOTE-6">[6]</a>
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-6"></a>
+<p>[6] To
+be absolutely correct, there is more we need to do. According to the
+<tt class="literal">java.rmi.remote.UnicastRemoteObject</tt> documentation,
+"If <tt class="literal">UnicastRemoteObject</tt> is not extended, the
+implementation class must then assume the responsibility for the
+correct semantics of the <tt class="literal">hashCode</tt>,
+<tt class="literal">equals</tt>, and <tt class="literal">toString</tt> methods
+inherited from the <tt class="literal">Object</tt> class, so that they
+behave appropriately for remote objects." According to the
+<tt class="literal">java.rmi.remote.RemoteRef</tt> documentation,
+"These methods should guarantee that two remote object stubs
+that refer to the same remote object will have the same hash code (in
+order to support remote objects as keys in hash tables)."
+Implementing the mechanism to support this guarantee is fairly
+difficult and, we believe, not commonly necessary for applet-servlet
+communication; thus we've taken the liberty of shirking this
+responsibility with <tt class="literal">RemoteHttpServlet</tt>.</p>
+</blockquote>
+
+<p>The rest of the <tt class="literal">RemoteHttpServlet</tt> code involves
+registering and unregistering itself with an RMI <a name="INDEX-1904"></a><a name="INDEX-1905"></a><a name="INDEX-1906"></a>
+registry. As we said before, an RMI registry server acts as a
+location where clients can locate server objects. A remote object
+(server object) registers itself with the registry under a certain
+name. Clients can then go to the registry to look up the object by
+that name. To make itself available to clients then, our servlet has
+to find (or create) a registry server and register itself with that
+server under a specific name. In registry parlance, this is called
+<em class="emphasis">binding</em> to the registry.
+<tt class="literal">RemoteHttpServlet</tt> performs this binding with its
+<tt class="literal">bind()</tt> method, called from within its
+<tt class="literal">init()</tt> method.
+</p>
+
+<p>The <tt class="literal">bind()</tt> method uses two support methods,
+<tt class="literal">getRegistryPort()</tt> and
+<tt class="literal">getRegistryName()</tt>, to determine the port on which
+the servlet should be running and the name under which the servlet
+should be registered. With the current implementations, the port is
+fetched from the <tt class="literal">registryPort</tt> init parameter, or
+it defaults to 1099. The name is taken from the
+<tt class="literal">registryName</tt> init parameter or defaults to the
+servlet's class name--in this case,
+<tt class="literal">DaytimeServlet</tt>.
+</p>
+
+<p>Let's step through the <tt class="literal">bind()</tt> method. It
+begins by using the following code to try to find an appropriate
+registry that is already running:
+</p>
+
+<blockquote>
+<pre class="programlisting">registry = LocateRegistry.getRegistry(getRegistryPort());
+registry.list();</pre>
+</blockquote>
+
+<p>The first line attempts to get the registry running on the given
+port. The second asks the registry to list its currently registered
+objects. If both calls succeed, we have a valid registry. If either
+call throws an <tt class="literal">Exception</tt>, the
+<tt class="literal">bind()</tt> method determines there is no valid
+registry and creates one itself. It does this with the following line
+of code:
+</p>
+
+<blockquote>
+<pre class="programlisting">registry = LocateRegistry.createRegistry(getRegistryPort());</pre>
+</blockquote>
+
+<p>After this, the <tt class="literal">bind()</tt> method should have either
+found or created a registry server. If it failed in getting the
+registry and failed again in creating it, it returns and the servlet
+remains unregistered. <tt class="literal">RemoteHttpServlet</tt> next binds
+itself to the registry using this line of code:
+</p>
+
+<blockquote>
+<pre class="programlisting">registry.rebind(getRegistryName(), this);</pre>
+</blockquote>
+
+<p>It uses the <tt class="literal">Registry.rebind()</tt> method instead of
+the <tt class="literal">Registry.bind()</tt> method to indicate that this
+binding should replace any previous binding using our name. This
+binding persists until the servlet is destroyed, at which time the
+<tt class="literal">destroy()</tt> method of
+<tt class="literal">RemoteHttpServlet</tt> calls its
+<tt class="literal">unbind()</tt> method. The code
+<tt class="literal">unbind()</tt> uses to unbind from the registry is
+remarkably simple:
+</p>
+
+<blockquote>
+<pre class="programlisting">if (registry != null) registry.unbind(getRegistryName());</pre>
+</blockquote>
+
+<p>It simply asks the registry to unbind its name.</p>
+
+<a name="ch10-22-fm2xml"></a>
+<div class="sidebar">
+<h4 class="objtitle">Where to run the registry?</h4>
+
+<p>The commonly accepted way to run an RMI registry server is with the
+standalone Java program <em class="emphasis">rmiregistry</em>. We
+recommend, however, that you don't run
+<em class="emphasis">rmiregistry</em> and instead let the
+<tt class="literal">RemoteHttpServlet</tt> create the registry itself.
+It's easier and it's more efficient. The first servlet
+that needs the registry can create the registry. And, by starting the
+registry within a servlet, the registry runs using the same JVM as
+the servlet. That makes it possible to use just one JVM for the Java
+Web Server, all of its servlets (the remote objects), and the
+registry.
+</p>
+</div>
+
+<p>Please note that a remote servlet must be loaded into its server and
+have its <tt class="literal">init()</tt> method called before it is ready
+for RMI communication. Thus, just as with a daemon servlet, you
+should either tell your server to load it at start-up or be sure it
+is always accessed via HTTP before it is accessed directly.<a name="INDEX-1907"></a><a name="INDEX-1908"></a>
+</p>
+
+
+
+<a name="ch10-23-fm2xml"></a>
+<h3 class="sect3">10.2.5.3. The applet</h3>
+
+<p>Now let's turn our attention from the server and focus it on
+the client. The code our <tt class="literal">DaytimeApplet</tt> uses to
+invoke the <tt class="literal">getDate()</tt> method of our new
+<tt class="literal">DaytimeServlet</tt> is shown in <a href="#ch10-28566">Example 10-14</a>.
+</p>
+
+<a name="ch10-28566"></a>
+<div class="example">
+<h4 class="objtitle">Example 10-14. The DaytimeApplet getting the time using RMI </h4>
+<blockquote>
+<pre class="programlisting">import java.rmi.*;           // New addition
+import java.rmi.registry.*;  // New addition
+
+private String getRegistryHost() {
+  return getCodeBase().getHost();
+}
+
+private int getRegistryPort() {
+  try { return Integer.parseInt(getParameter("registryPort")); }
+  catch (NumberFormatException e) { return Registry.REGISTRY_PORT; }
+}
+
+private String getRegistryName() {
+  String name = getParameter("registryName");
+  if (name == null) {
+    name = "DaytimeServlet";  // default
+  }
+  return name;
+}
+
+private String getDateUsingRMIObject() {
+  try {
+    Registry registry =
+      LocateRegistry.getRegistry(getRegistryHost(), getRegistryPort());
+    DaytimeServer daytime =
+      (DaytimeServer)registry.lookup(getRegistryName());
+    return daytime.getDate().toString();
+  }
+  catch (ClassCastException e) {
+    System.out.println("Retrieved object was not a DaytimeServer: " +
+                       e.getMessage());
+  }
+  catch (NotBoundException e) {
+    System.out.println(getRegistryName() + " not bound: " + e.getMessage());
+  }
+  catch (RemoteException e) {
+    System.out.println("Hit remote exception: " + e.getMessage());
+  }
+  catch (Exception e) {
+    System.out.println("Problem getting DaytimeServer reference: " +
+                       e.getClass().getName() + ": " + e.getMessage());
+  }
+  return null;
+}</pre>
+</blockquote>
+</div>
+
+<p>The first three methods are support methods.
+<tt class="literal">getRegistryHost()</tt> returns the host on which the
+registry server should be running. This must always be the host from
+which the applet was downloaded. <tt class="literal">getRegistryPort()</tt>
+returns the port on which the registry server should be listening.
+It's normally the default registry port 1099, though it can be
+overridden with the <tt class="literal">registryPort</tt> parameter.
+<tt class="literal">getRegistryName()</tt> returns the name under which the
+servlet should have been registered. It defaults to
+<tt class="literal">"DaytimeServlet"</tt>, but it can be overridden with
+the <tt class="literal">registryName</tt> parameter.
+</p>
+
+<p>The actual lookup of the remote servlet object and invocation of its
+<tt class="literal">getDate()</tt> method occur in these three lines of the
+<tt class="literal">getDateUsingRMIObject()</tt> method:
+</p>
+
+<blockquote>
+<pre class="programlisting">Registry registry =
+  LocateRegistry.getRegistry(getRegistryHost(), getRegistryPort());
+DaytimeServer daytime =
+  (DaytimeServer)registry.lookup(getRegistryName());
+return daytime.getDate().toString();</pre>
+</blockquote>
+
+<p>The first line locates the registry for the given host and the given
+port. The second line uses this registry to look up the remote object
+registered under the given name, in the process casting the object to
+a <tt class="literal">DaytimeServer</tt> object. The third line invokes
+this object's <tt class="literal">getDate()</tt> method and receives
+a serialized <tt class="literal">Date</tt> object in return. Then, in the
+same line, it returns the <tt class="literal">String</tt> representation of
+that <tt class="literal">Date</tt>.
+</p>
+
+<p>The rest of the <tt class="literal">getDateUsingRMIObject()</tt> method
+handles the exceptions that could occur during these three lines. It
+catches a <tt class="literal">ClassCastException</tt> if the retrieved
+object is not a <tt class="literal">DaytimeServer</tt>, a
+<tt class="literal">NotBoundException</tt> if the registry has no object
+registered under the given name, and a
+<tt class="literal">RemoteException</tt> if there is a network service
+failure. It also catches a general <tt class="literal">Exception</tt>, in
+case there's some other problem.
+</p>
+
+<p>You may be wondering why <tt class="literal">DaytimeApplet</tt> uses
+<tt class="literal">Registry.lookup(String)</tt> instead of
+<tt class="literal">java.rmi.Naming.lookup(String)</tt> to retrieve its
+reference to the remote servlet. There's really no
+reason--it's simply a matter of personal taste. It would
+work just as well to replace the first two lines in
+<tt class="literal">getDateUsingRMIOb-ject()</tt> with the following code:
+</p>
+
+<blockquote>
+<pre class="programlisting">DaytimeServer daytime =
+  (DaytimeServer)Naming.lookup("rmi://" + getRegistryHost() +
+                               ":" + getRegistryPort() +
+                               "/" + getRegistryName());</pre>
+</blockquote>
+
+<p>That's it for the fifth and final method of
+<tt class="literal">DaytimeApplet</tt>. Go ahead and run the applet now. Do
+you see every date field nicely filled in? You shouldn't. You
+should instead see empty values for the socket communication options.
+If you remember, we removed support for socket communication when we
+made <tt class="literal">DaytimeServlet</tt> a remote object. Now
+let's put socket communication back in.<a name="INDEX-1909"></a><a name="INDEX-1910"></a><a name="INDEX-1911"></a>
+</p>
+
+
+
+<a name="ch10-24-fm2xml"></a>
+<h3 class="sect3">10.2.5.4. A full-service servlet</h3>
+
+<p>What we need now is a
+<a name="INDEX-1912"></a>single servlet that can
+make itself available via HTTP communication, non-HTTP socket
+communication, and RMI communication. A servlet of this sort can
+extend a new superclass,
+<tt class="literal">com.oreilly.servlet.RemoteDaemonHttpServlet</tt>,
+implementing the capabilities discussed so far for both an
+<tt class="literal">RemoteHttpServlet</tt> and a
+<tt class="literal">DaemonHttpServlet</tt>.
+</p>
+
+<p>Here's the code that declares this full-service servlet:</p>
+
+<blockquote>
+<pre class="programlisting">import java.io.*;
+import java.net.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+import com.oreilly.servlet.RemoteDaemonHttpServlet;
+
+public class DaytimeServlet extends RemoteDaemonHttpServlet
+                            implements DaytimeServer {
+
+  public Date getDate() {
+    return new Date();
+  }
+
+  // The rest is unchanged</pre>
+</blockquote>
+
+<p>This code is almost the same as <a href="#ch10-37384">Example 10-8</a>.
+It's basically that example rewritten to declare that it
+extends <tt class="literal">RemoteDaemonHttpServlet</tt> and that it
+implements <tt class="literal">DaytimeServer</tt>.
+</p>
+
+<p>The code for the <tt class="literal">RemoteDaemonHttpServlet</tt>
+superclass also nearly matches the code for
+<tt class="literal">RemoteHttpServlet</tt>. There are just two changes: it
+extends <tt class="literal">DaemonHttpServlet</tt> instead of
+<tt class="literal">HttpServlet</tt>, and its <tt class="literal">destroy()</tt>
+method first calls <tt class="literal">super.destroy()</tt>:
+</p>
+
+<blockquote>
+<pre class="programlisting">package com.oreilly.servlet;
+
+import java.io.*;
+import java.net.*;
+import java.rmi.*;
+import java.rmi.server.*;
+import java.rmi.registry.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public abstract class RemoteDaemonHttpServlet extends DaemonHttpServlet
+                                              implements Remote {
+
+  public void destroy() {
+    super.destroy();
+    unbind();
+  }
+
+  // The rest is unchanged</pre>
+</blockquote>
+
+<p>Now our <tt class="literal">DaytimeApplet</tt> can connect to this revised
+remote daemon servlet and produce the full and complete output shown
+earlier in <a href="#ch10-20895">Figure 10-1</a>.<a name="INDEX-1913"></a><a name="INDEX-1914"></a>
+</p>
+
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch10_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch10_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch10_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch10_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">10.1. Communication Options</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">10.3. Chat Server</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

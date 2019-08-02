@@ -1,0 +1,209 @@
+<html><head>
+<title>[Chapter 30] 30.6 How Executed</TITLE>
+<meta name="DC.title" content="sendmail"><meta name="DC.creator" content="Bryan Costales &amp; Eric Allman"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-01-06T19:57:22Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-222-0" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch30_01.htm" title="30. Delivery Agents"><link rel="prev" href="ch30_05.htm" title="30.5 Internally Defined Names"><link rel="next" href="ch30_07.htm" title="30.7 Pitfalls"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="sendmail" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="sendmail"><area shape="RECT" coords="467,0,514,18" href="../search/ssrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch30_05.htm" title="30.5 Internally Defined Names"><img src="../gifs/txtpreva.gif" alt="Previous: 30.5 Internally Defined Names" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 30<br>Delivery Agents</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch30_07.htm" title="30.7 Pitfalls"><img src="../gifs/txtnexta.gif" alt="Next: 30.7 Pitfalls" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="SML2-CH-30-SECT-6">30.6 How Executed</A
+></H2
+><p class="para">For safety and efficiency, <em class="emphasis">sendmail</EM
+> undertakes a complicated
+series of steps to run (execute) a delivery agent.
+[14]
+Some (such as setting the environment) are intended to improve
+security. Others (such as forking) are intended to improve
+efficiency by creating parallel actions. 
+Here, we discuss those steps in the order in which they
+are taken by <em class="emphasis">sendmail</EM
+>.</P
+><blockquote class="footnote"><p class="para">[14] For the purpose
+of this discussion we will exclude the internal agents (such as
+IPC) and focus on actual programs (such as <em class="emphasis">/bin/mail</EM
+>).</P
+></BLOCKQUOTE
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-30-SECT-6-1">30.6.1 Fork</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-30772"></A
+>When <em class="emphasis">sendmail</EM
+> performs delivery, it cannot
+simply replace itself with the delivery agent program. Instead, it
+must <em class="emphasis">fork</EM
+>(2), and the child will replace itself.</P
+><p class="para">If <em class="emphasis">sendmail</EM
+> is running in verbose mode (see <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-76" title="">Section 34.8.76, Verbose</A
+>), it
+shows that it is about to start this process:</P
+><p class="para"><blockquote class="screen"><pre class="screen">Connecting to <i class="lineannotation">delivery agent</I
+></PRE
+></BLOCKQUOTE
+></P
+><p class="para">If a traffic-logging file was specified with <code class="literal">-X</CODE
+>
+command-line switch (see <a class="xref" href="ch26_04.htm" title="Log Transactions with -X">Section 26.4, "Log Transactions with -X"</A
+>), <em class="emphasis">sendmail</EM
+> appends the
+following line to that file:</P
+><p class="para"><blockquote class="screen"><pre class="screen"><i class="lineannotation">pid</I
+> === EXEC <i class="lineannotation">the expanded A= here</I
+></PRE
+></BLOCKQUOTE
+></P
+><p class="para">Here, the <code class="literal">A=</CODE
+> equate (see <a class="xref" href="ch30_04.htm#SML2-CH-30-SECT-4-1" title="">Section 30.4.1</A
+>) from the delivery
+agent's declaration is printed with all its macros expanded
+and with the recipients listed.</P
+><p class="para">Next <em class="emphasis">sendmail</EM
+> creates a <em class="emphasis">pipe</EM
+> so that it
+will be able to print the email message to the
+delivery agent and so that it can read errors
+emitted by the delivery agent. See the <code class="literal">-d11</CODE
+> debugging
+switch (see <a class="xref" href="ch37_05.htm#SML2-CH-37-SECT-5-44" title="">Section 37.5.44, -d11.1</A
+>) for a description of what
+can go wrong.</P
+><p class="para">If all has gone well, <em class="emphasis">sendmail</EM
+> <em class="emphasis">fork</EM
+>(2)s
+a copy of itself. The parent then pipes the email
+message to the child.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-30-SECT-6-2">30.6.2 The Child</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-30804"></A
+>The child is the copy of <em class="emphasis">sendmail</EM
+> that will transform
+into the delivery agent. But before the child can transform, it
+must perform a few more necessary steps.</P
+><p class="para">If <em class="emphasis">sendmail</EM
+> was compiled with HASSETUSERCONTEXT
+defined (see <a class="xref" href="ch18_08.htm#SML2-CH-18-SECT-8-9" title="">Section 18.8.9, HAS...</A
+>), it calls 
+<em class="emphasis">setusercontext</EM
+>(3) like this:</P
+><p class="para"><blockquote class="screen"><pre class="screen">setusercontext(NULL, <code class="replaceable"><i>pwd</I
+></CODE
+>, <code class="replaceable"><i>uid</I
+></CODE
+>, LOGIN_SETRESOURCES|LOGIN_SETPRIORITY);</PRE
+></BLOCKQUOTE
+></P
+><p class="para">Here, <code class="replaceable"><i>pwd</I
+></CODE
+> is a pointer to a structure of type
+<em class="emphasis">passwd</EM
+> for the user whose <em class="emphasis">uid</EM
+> is <code class="replaceable"><i>uid</I
+></CODE
+>.
+The <code class="replaceable"><i>uid</I
+></CODE
+> is that of the controlling user
+(see <a class="xref" href="ch24_02.htm#SML2-CH-24-SECT-2-2" title="Delivery to Files">Section 24.2.2, "Delivery to Files"</A
+>) or the
+recipient (see <a class="xref" href="ch30_08.htm#SML2-CH-30-SECT-8-33" title="">Section 30.8.33, F=o</A
+>).</P
+><p class="para">If the <code class="literal">N=</CODE
+> equate (see <a class="xref" href="ch30_04.htm#SML2-CH-30-SECT-4-8" title="">Section 30.4.8</A
+>) has a
+nonzero value, <em class="emphasis">sendmail</EM
+> calls <em class="emphasis">nice</EM
+>(3) to &quot;re-nice&quot;
+the delivery agent to that value.</P
+><p class="para">The <em class="emphasis">sendmail</EM
+> program next sets its <em class="emphasis">uid</EM
+> and
+<em class="emphasis">gid</EM
+> as appropriate. If the <code class="literal">DontInitGroups</CODE
+> option
+(see <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-19" title="">Section 34.8.19, DontInitGroups</A
+>) is false, <em class="emphasis">sendmail</EM
+>
+calls <em class="emphasis">initgroups</EM
+>(3).
+The identity used is that described under the <code class="literal">DefaultUser</CODE
+>
+option (see <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-15" title="">Section 34.8.15</A
+>).</P
+><p class="para">Next <em class="emphasis">sendmail</EM
+> attempts to <em class="emphasis">chdir</EM
+>(2) into one of
+the directories listed in the <code class="literal">D=</CODE
+> equate (see <a class="xref" href="ch30_04.htm#SML2-CH-30-SECT-4-3" title="">Section 30.4.3</A
+>).
+This process can be watched with the <code class="literal">-d11.20</CODE
+> debugging
+switch (see <a class="xref" href="ch37_05.htm#SML2-CH-37-SECT-5-46" title="">Section 37.5.46</A
+>).</P
+><p class="para">Finally, <em class="emphasis">sendmail</EM
+> calls <em class="emphasis">setsid</EM
+>(2) to become a process-group
+leader and <em class="emphasis">execve</EM
+>(2)
+to become the delivery agent. That latter
+call looks like this:</P
+><p class="para"><blockquote class="screen"><pre class="screen">execve(<code class="replaceable"><i>agent</I
+></CODE
+>, <code class="replaceable"><i>argv</I
+></CODE
+>, <code class="replaceable"><i>envp</I
+></CODE
+>);</PRE
+></BLOCKQUOTE
+></P
+><p class="para">Here, <code class="replaceable"><i>agent</I
+></CODE
+> is the full path of the delivery agent
+as specified in the <code class="literal">P=</CODE
+> equate (see <a class="xref" href="ch30_04.htm#SML2-CH-30-SECT-4-9" title="">Section 30.4.9</A
+>).
+The argument vector (contents of the <code class="literal">A=</CODE
+> equate with
+all the macros expanded and all the recipients added) is passed
+as <code class="replaceable"><i>argv</I
+></CODE
+>. The environment is that originally given
+to <em class="emphasis">sendmail</EM
+>, massaged for security and augmented
+by the <code class="literal">E=</CODE
+> configuration command (see <a class="xref" href="ch22_02.htm#SML2-CH-22-SECT-2-1" title="The E Configuration Command">Section 22.2.1</A
+>).</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch30_05.htm" title="30.5 Internally Defined Names"><img src="../gifs/txtpreva.gif" alt="Previous: 30.5 Internally Defined Names" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="sendmail"><img src="../gifs/txthome.gif" alt="sendmail" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch30_07.htm" title="30.7 Pitfalls"><img src="../gifs/txtnexta.gif" alt="Next: 30.7 Pitfalls" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">30.5 Internally Defined Names</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">30.7 Pitfalls</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.htm" title="The Networking CD Bookshelf">Library Home</A
+> | <a href="../dnsbind/index.htm" title="DNS &amp; BIND">DNS &amp; BIND</A
+> | <a href="../tcpip/index.htm" title="TCP/IP Network Administration">TCP/IP</A
+> | <a href="index.htm" title="sendmail">sendmail</A
+> | <a href="../smdref/index.htm" title="sendmail Desktop Reference">sendmail Reference</A
+> | <a href="../firewall/index.htm" title="Building Internet Firewalls">Firewalls</A
+> | <a href="../puis/index.htm" title="Practical UNIX &amp; Internet Security">Practical Security</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

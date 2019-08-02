@@ -1,0 +1,453 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 4] 4.5 Working with Objects and Collections</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T19:25:28Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates CDROM-1-56592-675-7E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-675-7E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle 8i Features"><META
+NAME="DC.Title"
+CONTENT="Oracle PL/SQL Programming Guide to Oracle 8i Features"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch04_01.htm"
+TITLE="4. Native Dynamic SQL in Oracle8i"><LINK
+REL="prev"
+HREF="ch04_04.htm"
+TITLE="4.4 Binding Variables"><LINK
+REL="next"
+HREF="ch04_06.htm"
+TITLE="4.6 Building Applications with NDS"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch04_04.htm"
+TITLE="4.4 Binding Variables"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 4.4 Binding Variables"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch04_01.htm"
+TITLE="4. Native Dynamic SQL in Oracle8i"
+>Chapter 4<BR>Native Dynamic SQL in Oracle8i</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch04_06.htm"
+TITLE="4.6 Building Applications with NDS"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 4.6 Building Applications with NDS"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch04-62493"
+>4.5 Working with Objects and Collections</A
+></H2
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch-04-obcall"
+></A
+> <A
+CLASS="indexterm"
+NAME="ch-04-objcolnat4"
+></A
+>One of the most important advantages of NDS over DBMS_SQL is its support for new Oracle8 datatypes: objects and collections. You don't need to change the structure of the code you write in NDS to use it with objects and collections. </P
+><P
+CLASS="para"
+>Suppose that I am building an internal administrative system for the national health management corporation Health$.Com. To reduce costs, the system will work in a distributed manner, creating and maintaining separate tables of customer information for each for-profit hospital owned by Health$.Com.</P
+><P
+CLASS="para"
+>I'll start by defining an object type (person) and VARRAY type (preexisting_conditions), as follows: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE TYPE person AS OBJECT (
+   name VARCHAR2(50), dob DATE, income NUMBER);
+/
+
+CREATE TYPE preexisting_conditions IS TABLE OF VARCHAR2(25);
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Once these types are defined, I can build a package to manage my most critical health-related information&nbsp;-- data needed to maximize profits at Health$.Com. Here is the specification:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: health$.pkg */
+CREATE OR REPLACE PACKAGE health$
+AS
+   PROCEDURE setup_new_hospital (hosp_name IN VARCHAR2);
+
+   PROCEDURE add_profit_source (
+      hosp_name IN VARCHAR2, 
+      pers IN Person, 
+      cond IN preexisting_conditions);
+
+   PROCEDURE weed_out_poor_and_sick (
+      hosp_name VARCHAR2,
+      min_income IN NUMBER := 100000,
+      max_preexist_cond IN INTEGER := 0);
+
+   PROCEDURE show_profit_centers (hosp_name VARCHAR2);
+ END health$;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>With this package, I can do the following:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Set up a new hospital, which means create a new table to hold information about that hospital. Here's the implementation from the body:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION tabname (hosp_name IN VARCHAR2) IS
+BEGIN
+   RETURN hosp_name || '_profit_center';
+END;
+
+PROCEDURE setup_new_hospital (hosp_name IN VARCHAR2) IS
+BEGIN
+   EXECUTE IMMEDIATE 
+      'CREATE TABLE ' || tabname (hosp_name) || ' (
+         pers Person, 
+         cond preexisting_conditions)
+         NESTED TABLE cond STORE AS cond_st';
+END;</PRE
+></BLOCKQUOTE
+><BLOCKQUOTE
+CLASS="tip"
+><P
+CLASS="para"
+><STRONG
+>TIP:</STRONG
+> Since preexisting_conditions is a nested table, I must specify the &quot;store table&quot; that will hold it.</P
+></BLOCKQUOTE
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Add a "profit source" (formerly known as a "patient") to the hospital, including his or her preexisting conditions. Here's the implementation from the body:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE add_profit_source (
+   hosp_name IN VARCHAR2, 
+   pers IN Person, 
+   cond IN preexisting_conditions)
+IS
+BEGIN
+   EXECUTE IMMEDIATE 
+      'INSERT INTO ' || tabname (hosp_name) || 
+          ' VALUES (:revenue_generator, :revenue_inhibitors)' 
+      USING pers, cond;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The use of objects and collections is transparent. I could be inserting scalars like numbers and dates, and the syntax and code would be the same.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Remove from the hospital all the really poor and sick people, those individuals who are not contributing to the profit margins of my corporation (hey, maybe we shouldn't mix profit margins and health care!). This is the most complex of the programs; here is the implementation:</P
+></LI
+></OL
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE weed_out_poor_and_sick (
+   hosp_name VARCHAR2,
+   min_income IN NUMBER := 100000,
+   max_preexist_cond IN INTEGER := 1)
+IS
+   cv RefCurTyp;
+   human Person;
+   known_bugs preexisting_conditions;
+   
+   v_table VARCHAR2(30) := tabname (hosp_name);
+   v_rowid ROWID;
+BEGIN
+   /* Find all rows with more than the specified number
+      of preconditions and deny them coverage. */  
+   OPEN cv FOR
+      'SELECT ROWID, pers, cond
+         FROM ' || v_table || ' alias
+        WHERE (SELECT COUNT(*) FROM TABLE (alias.cond))
+               &gt; ' ||
+               max_preexist_cond || 
+         ' OR
+               alias.pers.income &lt; ' || min_income;        
+   LOOP
+      FETCH cv INTO v_rowid, human, known_bugs;
+      EXIT WHEN cv%NOTFOUND; 
+      EXECUTE IMMEDIATE 
+         'DELETE FROM ' || v_table ||
+         ' WHERE ROWID = :rid'
+         USING v_rowid;
+   END LOOP;
+   CLOSE cv;
+END;</PRE
+></BLOCKQUOTE
+><BLOCKQUOTE
+CLASS="tip"
+><P
+CLASS="para"
+><STRONG
+>TIP:</STRONG
+>  <A
+CLASS="indexterm"
+NAME="AUTOID-2069"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-2071"
+></A
+><A
+CLASS="indexterm"
+NAME="AUTOID-2073"
+></A
+>I decided to retrieve the ROWID of each profit source so that when I do the DELETE it would be easy to identify the row. It would be awfully convenient to make the query FOR UPDATE, and then use WHERE CURRENT OF cv in the DELETE statement, but that is not possible, for two reasons: (1) The cursor variable would have to be globally accessible to be referenced inside a dynamic SQL statement, and (2) You cannot declare cursor variable in packages, because they don't have persistent state. See <A
+CLASS="xref"
+HREF="ch04_06.htm#ch04-22394"
+>Section 4.6.3, "Dynamic PL/SQL </A
+> for more details.<A
+CLASS="indexterm"
+NAME="AUTOID-2076"
+></A
+><A
+CLASS="indexterm"
+NAME="AUTOID-2077"
+></A
+></P
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch04_04.htm"
+TITLE="4.4 Binding Variables"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 4.4 Binding Variables"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch04_06.htm"
+TITLE="4.6 Building Applications with NDS"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 4.6 Building Applications with NDS"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>4.4 Binding Variables</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>4.6 Building Applications with NDS</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

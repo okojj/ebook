@@ -1,0 +1,128 @@
+<html><head>
+<title>[Chapter 14] 14.6 Sending and Receiving Signals</TITLE>
+<meta name="DC.title" content="Learning Perl"><meta name="DC.creator" content="Randal Schwartz, Tom Christiansen &amp; Larry Wall"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:35:09Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-284-0" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch14_01.htm" title="14. Process Management"><link rel="prev" href="ch14_05.htm" title="14.5 Summary of Process Operations"><link rel="next" href="ch14_07.htm" title="14.7 Exercises"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Learning Perl" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Learning Perl"><area shape="RECT" coords="467,0,514,18" href="../search/lsrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch14_05.htm" title="14.5 Summary of Process Operations"><img src="../gifs/txtpreva.gif" alt="Previous: 14.5 Summary of Process Operations" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch14_01.htm" title="14. Process Management">Chapter 14<br>Process Management</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch14_07.htm" title="14.7 Exercises"><img src="../gifs/txtnexta.gif" alt="Next: 14.7 Exercises" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch14-25513">14.6 Sending and Receiving Signals</A
+></H2
+><p class="para">One method of <a class="indexterm" name="ch14-idx-744359-0"></A
+>interprocess communication is to send and receive <a class="indexterm" name="ch14-idx-744358-0"></A
+>signals. A signal is a one-bit message (meaning "this signal happened") sent to a process from another process or from the kernel. Signals are numbered, usually from one to some small number like 15 or 31. Some signals have predefined meanings and are sent automatically to a process under certain conditions (such as <a class="indexterm" name="ch14-idx-744360-0"></A
+>memory faults or <a class="indexterm" name="ch14-idx-744361-0"></A
+>floating-point exceptions); others are strictly user-generated from other processes. Those processes must have permission to send such a signal. Only if you are the superuser or if the sending process has the same user ID as the receiving process is the signal permitted.</P
+><p class="para">The response to a signal is called the signal's <a class="indexterm" name="ch14-idx-744362-0"></A
+><em class="emphasis">action</EM
+>. Predefined signals have certain useful default actions, such as aborting the process or suspending it. Other signals are completely ignored by default. Nearly all signals can have their default action overridden, to either be ignored or else <em class="emphasis">caught</EM
+> (invoking a user-specified section of code automatically).</P
+><p class="para">So far, this is all standard stuff; here's where it gets Perl-specific. When a Perl process <a class="indexterm" name="ch14-idx-744363-0"></A
+>catches a signal, a subroutine of your choosing gets invoked asynchronously and automatically, momentarily interrupting whatever was executing. When the subroutine exits, whatever was executing resumes as if nothing had happened (except for the actions performed by the subroutine, if any).</P
+><p class="para">Typically, the signal-catching subroutine will do one of two things: abort the program after executing some cleanup code, or set some flag (such as a global variable) that the program routinely checks.[<a class="footnote" href="#ch14-pgfId-611">6</A
+>]</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch14-pgfId-611">[6]</A
+> In fact, doing anything more complicated than this is likely to mess things up; most of Perl's inner workings do not like to be executed in the main program and from the subroutine at the same time. Neither do your system libraries.</P
+></DIV
+></BLOCKQUOTE
+><p class="para">You need to know the signal names to register a signal handler with Perl. By registering a signal handler, Perl will call the selected subroutine when the signal is received.</P
+><p class="para">Signal names are defined in the <em class="emphasis">signal </EM
+>(2) manpage, and usually also in the C include file <em class="emphasis">/usr/include/sys/signal.h</EM
+>. Names generally start with <code class="literal">SIG</CODE
+>, such as <a class="indexterm" name="ch14-idx-744364-0"></A
+><code class="literal">SIGINT</CODE
+>, <code class="literal">SIGQUIT</CODE
+>, and <code class="literal">SIGKILL</CODE
+>. To declare the subroutine <code class="literal">my_sigint_catcher()</CODE
+> as the signal handler to deal with the <code class="literal">SIGINT</CODE
+>, we set a value into the magic <a class="indexterm" name="ch14-idx-744365-0"></A
+><code class="literal">%SIG</CODE
+> hash. In this hash, we set the value of the key <code class="literal">INT</CODE
+> (that's <code class="literal">SIGINT</CODE
+> without the <code class="literal">SIG</CODE
+>) to the name of the subroutine that will catch the <code class="literal">SIGINT</CODE
+> signal, like so:</P
+><pre class="programlisting">$SIG{'INT'} = 'my_sigint_catcher';</PRE
+><p class="para">But we also need a definition for that subroutine. Here's a simple one:</P
+><pre class="programlisting">sub my_sigint_catcher {
+    $saw_sigint = 1; # set a flag
+}</PRE
+><p class="para">This signal catcher sets a global variable and then returns immediately. Returning from this subroutine causes execution to resume wherever it was interrupted. Typically, you'd first zero the <code class="literal">$saw_sigint</CODE
+> flag, set this subroutine up as a <code class="literal">SIGINT</CODE
+> catcher, and then do your long-running routine, like so:</P
+><pre class="programlisting">$saw_sigint = 0;                   # clear the flag
+$SIG{'INT'} = 'my_sigint_catcher'; # register the catcher
+foreach (@huge_array) {
+                                   # do something
+                                   # do more things
+                                   # do still more things
+    if ($saw_sigint) {             # interrupt wanted?
+                                   # some sort of cleanup here
+        last;
+    }
+}
+$SIG{'INT'} = 'DEFAULT'; # restore the default action</PRE
+><p class="para">The trick here is that the value of the flag is checked at useful points during the evaluation and is used to exit the loop prematurely, here also handling some cleanup actions. Note the last statement in the preceding code: setting the action to <a class="indexterm" name="ch14-idx-744366-0"></A
+><code class="literal">DEFAULT</CODE
+> restores the <a class="indexterm" name="ch14-idx-744368-0"></A
+>default action on a particular signal (another <code class="literal">SIGINT</CODE
+> will abort the program immediately). Another useful special value like this is <a class="indexterm" name="ch14-idx-744367-0"></A
+><code class="literal">IGNORE</CODE
+>, meaning to <a class="indexterm" name="ch14-idx-744369-0"></A
+>ignore the signal (if the default action is not to ignore the signal, like <code class="literal">SIGINT</CODE
+>). You can make a signal action <code class="literal">IGNORE</CODE
+> if no cleanup actions are required, and you don't want to terminate operations early.</P
+><p class="para">One of the ways that the <code class="literal">SIGINT</CODE
+> signal is generated is by having the user press the selected interrupt character (like <a class="indexterm" name="ch14-idx-744371-0"></A
+>CTRL-C) on the terminal. But a process can also generate the <code class="literal">SIGINT</CODE
+> signal directly using the <a class="indexterm" name="ch14-idx-744372-0"></A
+><code class="literal">kill</CODE
+> function. This function takes a signal number or name, and <a class="indexterm" name="ch14-idx-744373-0"></A
+><a class="indexterm" name="ch14-idx-744373-1"></A
+>sends that signal to the list of processes (identified by process ID) following the signal. So sending a signal from a program requires determining the process IDs of the recipient processes. (Process IDs are returned from some of the functions, such as <code class="literal">fork</CODE
+> and&nbsp;- when opening a program as a filehandle&nbsp;- <code class="literal">open</CODE
+>). Suppose you want to send a signal 2 (also known as <code class="literal">SIGINT</CODE
+>) to the processes 234 and 237. It's as simple as this:</P
+><pre class="programlisting">kill(2,234,237); # send SIGINT to 234 and 237
+kill ('INT', 234, 237); #same</PRE
+><p class="para">For more about signal handling, see <a class="olink" href="../prog/ch06_01.htm">Chapter 6</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> or the <em class="emphasis">perlipc </EM
+>(1) manpage.</P
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch14_05.htm" title="14.5 Summary of Process Operations"><img src="../gifs/txtpreva.gif" alt="Previous: 14.5 Summary of Process Operations" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Learning Perl"><img src="../gifs/txthome.gif" alt="Learning Perl" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch14_07.htm" title="14.7 Exercises"><img src="../gifs/txtnexta.gif" alt="Next: 14.7 Exercises" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">14.5 Summary of Process Operations</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">14.7 Exercises</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

@@ -1,0 +1,415 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 5] 5.5 Analyzing the Impact of Bulk Operations</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T19:25:57Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates CDROM-1-56592-675-7E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-675-7E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle 8i Features"><META
+NAME="DC.Title"
+CONTENT="Oracle PL/SQL Programming Guide to Oracle 8i Features"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch05_01.htm"
+TITLE="5. Bulking Up with PL/SQL 8.1"><LINK
+REL="prev"
+HREF="ch05_04.htm"
+TITLE="5.4 Using Cursor Attributes"><LINK
+REL="next"
+HREF="ch06_01.htm"
+TITLE="6. New Trigger Features in Oracle8i"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch05_04.htm"
+TITLE="5.4 Using Cursor Attributes"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 5.4 Using Cursor Attributes"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch05_01.htm"
+TITLE="5. Bulking Up with PL/SQL 8.1"
+>Chapter 5<BR>Bulking Up with PL/SQL 8.1</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch06_01.htm"
+TITLE="6. New Trigger Features in Oracle8i"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 6. New Trigger Features in Oracle8i"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch05-68554"
+>5.5 Analyzing the Impact of Bulk Operations</A
+></H2
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch-05-bops"
+></A
+><A
+CLASS="indexterm"
+NAME="ch-05-bulkimpt"
+></A
+>Now that you know all about FORALL and BULK COLLECT, let's see if it's really worth the time to learn these new features. These statements are supposed to provide significant performance improvements over the context-switch-heavy, row-by-row processing of earlier versions of PL/SQL. </P
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-2804"
+></A
+>Let's run some tests to document the gains by running the <EM
+CLASS="emphasis"
+>bulktiming.sql</EM
+> script (using the PLVtmr package described in the <A
+CLASS="xref"
+HREF="prf2_01.htm"
+><CITE
+CLASS="preface"
+>Preface</CITE
+></A
+>, in ).</P
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-2810"
+></A
+><A
+CLASS="indexterm"
+NAME="AUTOID-2812"
+></A
+>Leaving out portions of the script not central to the timing, here is the code I used to compare the performance of a FOR loop and FORALL:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: bulktiming.sql */
+BEGIN
+   /* Load up the collection. */
+   FOR indx IN 1..num LOOP
+      pnums(indx) := indx;
+      pnames(indx) := 'Part ' || TO_CHAR(indx);
+   END LOOP;
+   
+   /* Do a bunch of individual inserts. */
+   PLVtmr.capture;
+   FOR indx IN 1..num LOOP
+      INSERT INTO parts VALUES (pnums(indx), pnames(indx));
+   END LOOP;
+   PLVtmr.show_elapsed ('FOR loop');
+   
+   ROLLBACK;
+   
+   /* Perform the inserts via FORALL */
+   PLVtmr.capture;
+   FORALL indx IN 1..num
+      INSERT INTO parts VALUES (pnums(indx), pnames(indx));
+   PLVtmr.show_elapsed ('FORALL');
+   
+   ROLLBACK;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>And here are the results (drumroll, please!) for the specified number of rows (1000, 10,000, and 20,000):</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FOR loop 1000 Elapsed: .39 seconds.
+FORALL 1000 Elapsed: .05 seconds.
+
+FOR loop 10000 Elapsed: 5.73 seconds.
+FORALL 10000 Elapsed: .79 seconds.
+
+FOR loop 20000 Elapsed: 10.34 seconds.
+FORALL 20000 Elapsed: 1.49 seconds.</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The results indicate that we can expect a single order of magnitude improvement in performance, always something to appreciate. And the timings increase in a linear fashion, giving us a comfortable feeling as to the scalability of this feature.</P
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-2819"
+></A
+><A
+CLASS="indexterm"
+NAME="AUTOID-2821"
+></A
+>Finally, here is the script (minus various administrative tasks; see <EM
+CLASS="emphasis"
+>bulktiming.sql</EM
+> for all the details) I wrote to compare row-by-row fetching and BULK COLLECT:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: bulktiming.sql */
+BEGIN
+   /* Fetch the data row by row */
+   PLVtmr.capture;
+   FOR rec IN (SELECT * FROM parts)
+   LOOP
+      pnums(SQL%ROWCOUNT)  := rec.partnum;
+      pnames(SQL%ROWCOUNT) := rec.partname;
+   END LOOP;
+   PLVtmr.show_elapsed ('Single row fetch '|| num);
+ 
+   /* Fetch the data row by row */
+   PLVtmr.capture;
+   SELECT * BULK COLLECT INTO pnums, pnames FROM parts;
+   PLVtmr.show_elapsed ('BULK COLLECT '|| num);   
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The results are as follows for the specified number of rows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>Single row fetch 1000 Elapsed: .14 seconds.
+BULK COLLECT 1000 Elapsed: .02 seconds.
+
+Single row fetch 10000 Elapsed: 1.56 seconds.
+BULK COLLECT 10000 Elapsed: .4 seconds.
+
+Single row fetch 20000 Elapsed: 2.75 seconds.
+BULK COLLECT 20000 Elapsed: 1.48 seconds.
+
+Single row fetch 100000 Elapsed: 18.91 seconds.
+BULK COLLECT 100000 Elapsed: 85.18 seconds.</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Again, we see improvements in performance, but notice that the gains through BULK COLLECT diminish with high numbers of rows. In fact, for 100,000 rows, BULK COLLECT was actually much slower than the single-row fetch. I am not sure what might be causing this slowdown.<A
+CLASS="indexterm"
+NAME="AUTOID-2828"
+></A
+><A
+CLASS="indexterm"
+NAME="AUTOID-2829"
+></A
+></P
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch05_04.htm"
+TITLE="5.4 Using Cursor Attributes"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 5.4 Using Cursor Attributes"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch06_01.htm"
+TITLE="6. New Trigger Features in Oracle8i"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 6. New Trigger Features in Oracle8i"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>5.4 Using Cursor Attributes</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>6. New Trigger Features in Oracle8i</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

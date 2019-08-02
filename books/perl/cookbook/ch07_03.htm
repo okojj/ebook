@@ -1,0 +1,135 @@
+<html><head>
+<title>Recipe 7.2. Opening Files with Unusual Filenames</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:36:03Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch07_01.htm" title="7. File Access"><link rel="prev" href="ch07_02.htm" title="7.1. Opening a File"><link rel="next" href="ch07_04.htm" title="7.3. Expanding Tildes in Filenames"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_02.htm" title="7.1. Opening a File"><img src="../gifs/txtpreva.gif" alt="Previous: 7.1. Opening a File" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch07_01.htm" title="7. File Access">Chapter 7<br>File Access</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch07_04.htm" title="7.3. Expanding Tildes in Filenames"><img src="../gifs/txtnexta.gif" alt="Next: 7.3. Expanding Tildes in Filenames" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch07-17895">7.2. Opening Files with Unusual Filenames</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-382">Problem<a class="indexterm" name="ch07-idx-1000009593-0"></A
+></A
+></H3
+><p class="para">You want to open a file with a funny filename, like <code class="literal">&quot;-&quot;</CODE
+> or one that starts with &lt;, &gt;, or <code class="literal">|</CODE
+>, has leading or trailing whitespace; or ends with <code class="literal">|</CODE
+>. You don't want these to trigger <code class="literal">open</CODE
+>'s do-what-I-mean behavior, since in this case, that's <em class="emphasis">not</EM
+> what you mean.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-388">Solution</A
+></H3
+><p class="para">Use <code class="literal">open</CODE
+> like this: <a class="indexterm" name="ch07-idx-1000009592-0"></A
+><a class="indexterm" name="ch07-idx-1000009592-1"></A
+></P
+><pre class="programlisting">$filename =~ s#^(\s)#./$1#;
+open(HANDLE, &quot;&lt; $filename\0&quot;)          or die &quot;cannot open $filename : $!\n&quot;;</PRE
+><p class="para">Or simply use <code class="literal">sysopen</CODE
+>:</P
+><pre class="programlisting">sysopen(HANDLE, $filename, O_RDONLY)   or die &quot;cannot open $filename: $!\n&quot;;</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-402">Discussion</A
+></H3
+><p class="para">The <code class="literal">open</CODE
+> function uses a single string to determine both the filename and the mode &nbsp;-  the way the file is to be opened. If your filename begins with the characters used to indicate the mode, <code class="literal">open</CODE
+> can easily do something unexpected. Imagine the following code:</P
+><pre class="programlisting">$filename = shift @ARGV;
+open(INPUT, $filename)               or die &quot;Couldn't open $filename : $!\n&quot;;</PRE
+><p class="para">If the user gave <code class="literal">&quot;&gt;/etc/passwd&quot;</CODE
+> as the filename on the command line, this code would attempt to open <em class="emphasis">/etc/passwd</EM
+> for writing &nbsp;-  definitely unsafe! We can try to give an explicit mode, say for writing:</P
+><pre class="programlisting">open(OUTPUT, &quot;&gt;$filename&quot;)
+    or die &quot;Couldn't open $filename for writing: $!\n&quot;;</PRE
+><p class="para">but even this would let the user give a filename of <code class="literal">&quot;</CODE
+>&gt;<code class="literal">data&quot;</CODE
+> and the code would append to the file <code class="literal">data</CODE
+> instead of erasing the old contents.</P
+><p class="para">The easiest solution is <code class="literal">sysopen</CODE
+>, which takes the mode and filename as separate arguments:</P
+><pre class="programlisting">use Fcntl;                          # for file constants
+
+sysopen(OUTPUT, $filename, O_WRONLY|O_TRUNC)
+    or die &quot;Can't open $filename for writing: $!\n&quot;;</PRE
+><p class="para">To get the same effect with <code class="literal">open</CODE
+> requires chicanery if the filename has leading or trailing whitespace:</P
+><pre class="programlisting">$file =~ s#^(\s)#./$1#;
+open(OUTPUT, &quot;&gt; $file\0&quot;)
+        or die &quot;Couldn't open $file for OUTPUT : $!\n&quot;;</PRE
+><p class="para">The substitution protects initial whitespace (this cannot occur in fully specified filenames like <code class="literal">&quot;/etc/passwd&quot;</CODE
+>, but only in relative filenames like <code class="literal">&quot;</CODE
+> <code class="literal">passwd&quot;</CODE
+>). The NULL byte (<code class="literal">&quot;\0&quot;</CODE
+>) isn't considered part of the filename by <code class="literal">open,</CODE
+> but it does prevent any trailing whitespace from being ignored.</P
+><p class="para">The magic way <code class="literal">open</CODE
+> interprets filenames is nearly always a good thing. You never have to use the special case of <code class="literal">&quot;-&quot;</CODE
+> to mean standard input or output. If you write a filter and use a simple <code class="literal">open</CODE
+>, users can pass <code class="literal">&quot;gzip</CODE
+> <code class="literal">-dc</CODE
+> <code class="literal">bible.gz|&quot;</CODE
+> as a filename, and your filter will automatically run the decoding program.</P
+><p class="para">It's only those programs that run under special privilege that should worry about security with <code class="literal">open</CODE
+>. When designing programs that will be run on someone else's behalf, like setuid programs or CGI scripts, the prudent programmer always considers whether the user can supply their own filename and thereby cajole what would otherwise appear to be a normal <code class="literal">open</CODE
+> used for simple reading into overwriting a file or even running another program. Perl's <b class="emphasis.bold">-T</B
+> command-line flag to enable taint-checking would take care of this.<a class="indexterm" name="ch07-idx-1000009588-0"></A
+><a class="indexterm" name="ch07-idx-1000009588-1"></A
+><a class="indexterm" name="ch07-idx-1000009588-2"></A
+><a class="indexterm" name="ch07-idx-1000009588-3"></A
+><a class="indexterm" name="ch07-idx-1000009588-4"></A
+><a class="indexterm" name="ch07-idx-1000009588-5"></A
+><a class="indexterm" name="ch07-idx-1000009588-6"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-444">See Also</A
+></H3
+><p class="para">The <code class="literal">open</CODE
+> and <code class="literal">sysopen</CODE
+> functions in <i class="filename">perlfunc </I
+>(1) and <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; <a class="xref" href="ch07_02.htm" title="Opening a File">Recipe 7.1</A
+>; <a class="xref" href="ch07_08.htm" title="Writing a Filter">Recipe 7.7</A
+>; <a class="xref" href="ch16_03.htm" title="Running Another Program">Recipe 16.2</A
+>; <a class="xref" href="ch19_05.htm" title="Writing a Safe CGI Program">Recipe 19.4</A
+>; <a class="xref" href="ch19_07.htm" title="Executing Commands Without Shell Escapes">Recipe 19.6</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_02.htm" title="7.1. Opening a File"><img src="../gifs/txtpreva.gif" alt="Previous: 7.1. Opening a File" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch07_04.htm" title="7.3. Expanding Tildes in Filenames"><img src="../gifs/txtnexta.gif" alt="Next: 7.3. Expanding Tildes in Filenames" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">7.1. Opening a File</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">7.3. Expanding Tildes in Filenames</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

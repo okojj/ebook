@@ -1,0 +1,156 @@
+<html><head>
+<title>Recipe 7.11. Locking a File</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:36:48Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch07_01.htm" title="7. File Access"><link rel="prev" href="ch07_11.htm" title="7.10. Modifying a File in Place Without a Temporary File"><link rel="next" href="ch07_13.htm" title="7.12. Flushing Output"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_11.htm" title="7.10. Modifying a File in Place Without a Temporary File"><img src="../gifs/txtpreva.gif" alt="Previous: 7.10. Modifying a File in Place Without a Temporary File" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch07_01.htm" title="7. File Access">Chapter 7<br>File Access</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch07_13.htm" title="7.12. Flushing Output"><img src="../gifs/txtnexta.gif" alt="Next: 7.12. Flushing Output" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch07-37375">7.11. Locking a File</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-1060">Problem<a class="indexterm" name="ch07-idx-1000009689-0"></A
+><a class="indexterm" name="ch07-idx-1000009689-1"></A
+><a class="indexterm" name="ch07-idx-1000009689-2"></A
+><a class="indexterm" name="ch07-idx-1000009689-3"></A
+><a class="indexterm" name="ch07-idx-1000009689-4"></A
+></A
+></H3
+><p class="para">Many processes need to update the same file simultaneously.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-1066">Solution</A
+></H3
+><p class="para">Have all processes honor advisory locking by using <code class="literal">flock</CODE
+>:</P
+><pre class="programlisting">open(FH, &quot;+&lt; $path&quot;)                or die &quot;can't open $path: $!&quot;;
+flock(FH, 2)                        or die &quot;can't flock $path: $!&quot;;
+# update file, then...
+close(FH)                           or die &quot;can't close $path: $!&quot;;</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-1080">Discussion</A
+></H3
+><p class="para">Operating systems vary greatly in the type and reliability of locking techniques available. Perl tries hard to give you something that works, even if your operating system uses its own underlying technique. The <code class="literal">flock</CODE
+> function takes two arguments: a filehandle and a number representing what to do with the lock on that filehandle. The numbers are normally represented by names like LOCK_EX, which you can get from the Fcntl or IO::File modules.</P
+><p class="para">The LOCK_SH, LOCK_EX, LOCK_UN, and LOCK_NB symbolic values were not available in the Fcntl module before the 5.004 release, and even now they are available only if you ask for them specifically using the <code class="literal">:flock</CODE
+> tag. Their values are 1, 2, 4, and 8 respectively, which you may supply yourself instead of using the symbolic constants. You'll therefore often see people write:</P
+><pre class="programlisting">sub LOCK_SH()  { 1 }     #  Shared lock (for reading)
+sub LOCK_EX()  { 2 }     #  Exclusive lock (for writing)
+sub LOCK_NB()  { 4 }     #  Non-blocking request (don't stall)
+sub LOCK_UN()  { 8 }     #  Free the lock (careful!)</PRE
+><p class="para"><a class="indexterm" name="ch07-idx-1000009695-0"></A
+><a class="indexterm" name="ch07-idx-1000009695-1"></A
+>Locks come in two varieties: shared and exclusive. Despite what you might infer by "exclusive," processes aren't required to obey locks on files. Another way of saying this is that <code class="literal">flock</CODE
+> implements <em class="emphasis">advisory locking</EM
+>. It allows processes to let the operating system suspend would-be writers of a file until any readers are finished with it.</P
+><p class="para">Flocking files is like putting up a stoplight at an intersection. It works only if people pay attention to whether the light is red or green &nbsp;-  or yellow in the case of a shared lock. The red light doesn't stop traffic; it merely signals that traffic should stop. A desperate, ignorant, or rude person will still go flying through the intersection no matter what the light says. Likewise, <code class="literal">flock</CODE
+> only blocks out other flockers &nbsp;-  not processes trying to do I/O. Unless everyone is polite, accidents can (and will) happen.</P
+><p class="para">The polite process customarily indicates its intent to read from the file by requesting a LOCK_SH. Many processes can have simultaneous shared locks on the file because they (presumably) won't be changing the data. If a process intends to write to the file, it should request an exclusive lock via LOCK_EX. The operating system then suspends the requesting process until all other processes have released their locks, at which point it grants the lock to the suspended process and unblocks it. You are guaranteed that no other process will be able to run <code class="literal">flock(FH,</CODE
+> <code class="literal">LOCK_EX)</CODE
+> on the same file while you hold the lock. This is almost but not quite like saying that there can be only one exclusive lock on the file. Forked children inherit not only their parents' open files, but, on some systems, also any locks held. That means if you hold an exclusive lock and <code class="literal">fork</CODE
+> without <code class="literal">exec</CODE
+>ing, your child may also have that same exclusive lock on the file.</P
+><p class="para">The <code class="literal">flock</CODE
+> function is therefore by default a blocking operation. You can also acquire a lock without wedging your process by using the LOCK_NB flag when you request a lock. This lets you warn the user that there may be a wait until other processes with locks are done:</P
+><pre class="programlisting">unless (flock(FH, LOCK_EX|LOCK_NB)) {
+    warn &quot;can't immediately write-lock the file ($!), blocking ...&quot;;
+    unless (flock(FH, LOCK_EX)) {
+        die &quot;can't get write-lock on numfile: $!&quot;;
+    }
+}</PRE
+><p class="para">If you use LOCK_NB and are refused a LOCK_SH, then you know that someone else has a LOCK_EX and is updating the file. If you are refused a LOCK_EX, then someone holds either a LOCK_SH or a LOCK_EX, so you shouldn't try to update the file.</P
+><p class="para"><a class="indexterm" name="ch07-idx-1000009696-0"></A
+>Locks dissolve when the file is closed, which may not be until your process exits. Manually unlocking the file without closing can be perilous due to buffering. The buffer might not have been flushed, leading to a time between unlocking and closing when another process could read data that the contents of your buffer were supposed to replace. A safer way to deal with this is:</P
+><pre class="programlisting">if ($] &lt; 5.004) {                   # test Perl version number
+     my $old_fh = select(FH);
+     local $| = 1;                  # enable command buffering
+     local $\ = '';                 # clear output record separator
+     print &quot;&quot;;                      # trigger output flush
+     select($old_fh);               # restore previous filehandle
+}
+flock(FH, LOCK_UN);</PRE
+><p class="para">Before version 5.004 of Perl, you had to force a flush. Because folks would often forget to do that, 5.004 changed LOCK_UN so that any pending unwritten buffers are automatically flushed right before the lock is released.</P
+><p class="para">Here's how you increment a number in a file, using <code class="literal">flock</CODE
+>:</P
+><pre class="programlisting">use Fcntl qw(:DEFAULT :flock);
+
+sysopen(FH, &quot;numfile&quot;, O_RDWR|O_CREAT)
+                                    or die &quot;can't open numfile: $!&quot;;
+flock(FH, LOCK_EX)                  or die &quot;can't write-lock numfile: $!&quot;;
+# Now we have acquired the lock, it's safe for I/O
+$num = &lt;FH&gt; || 0;                   # DO NOT USE &quot;or&quot; THERE!!
+seek(FH, 0, 0)                      or die &quot;can't rewind numfile : $!&quot;;
+truncate(FH, 0)                     or die &quot;can't truncate numfile: $!&quot;;
+print FH $num+1, &quot;\n&quot;               or die &quot;can't write numfile: $!&quot;;
+close(FH)                           or die &quot;can't close numfile: $!&quot;;</PRE
+><p class="para">Closing the filehandle flushes the buffers and unlocks the file. The <code class="literal">truncate</CODE
+> function is discussed in <a class="xref" href="ch08_01.htm" title="File Contents">Chapter 8</A
+>.</P
+><p class="para">File locking is not as easy as you might think &nbsp;-  or wish. Because locks are advisory, if one process uses locking and another doesn't, all bets are off. Never use the existence of a file as a locking indication because there exists a race condition between the test for the existence of the file and its creation. Furthermore, because file locking is an intrinsically stateful concept, it doesn't get along well with the stateless model embraced by network filesystems such as NFS. Although some vendors claim that <code class="literal">fcntl</CODE
+> addresses such matters, practical experience suggests otherwise.</P
+><p class="para">NFS locking intimately involves both server and client. Consequently, we know of no general mechanism for guaranteed reliable locking over NFS. You can do it if you know certain operations are atomic in the server or client implementation. You can do it if you know that both server and client support <code class="literal">flock</CODE
+> or <code class="literal">fcntl </CODE
+>; most don't. But in general you can't hope to write code that works everywhere.</P
+><p class="para">Don't confuse Perl's <code class="literal">flock</CODE
+> with the SysV function <code class="literal">lockf</CODE
+>. Unlike <code class="literal">lockf</CODE
+>, <code class="literal">flock</CODE
+> locks entire files at once. Perl doesn't support <code class="literal">lockf</CODE
+> directly. The only way to lock a portion of a file is to use the <code class="literal">fnctl</CODE
+> function, as demonstrated in the <em class="emphasis">lockarea</EM
+> program at the end of this chapter.<a class="indexterm" name="ch07-idx-1000009691-0"></A
+><a class="indexterm" name="ch07-idx-1000009691-1"></A
+><a class="indexterm" name="ch07-idx-1000009691-2"></A
+><a class="indexterm" name="ch07-idx-1000009691-3"></A
+><a class="indexterm" name="ch07-idx-1000009691-4"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-1170">See Also</A
+></H3
+><p class="para">The <code class="literal">flock</CODE
+> and <code class="literal">fcntl</CODE
+> functions in <i class="filename">perlfunc </I
+>(1) and in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; the documentation for the standard Fcntl and DB_File modules (also in <a class="olink" href="../prog/ch07_01.htm">Chapter 7</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>); <a class="xref" href="ch07_22.htm" title="Program: netlock">Recipe 7.21</A
+>; <a class="xref" href="ch07_23.htm" title="Program: lockarea">Recipe 7.22</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_11.htm" title="7.10. Modifying a File in Place Without a Temporary File"><img src="../gifs/txtpreva.gif" alt="Previous: 7.10. Modifying a File in Place Without a Temporary File" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch07_13.htm" title="7.12. Flushing Output"><img src="../gifs/txtnexta.gif" alt="Next: 7.12. Flushing Output" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">7.10. Modifying a File in Place Without a Temporary File</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">7.12. Flushing Output</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

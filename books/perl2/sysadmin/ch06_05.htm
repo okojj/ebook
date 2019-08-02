@@ -1,0 +1,2024 @@
+<html>
+<head>
+<title>ADSI (Active Directory Service Interfaces)  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="ADSI (Active Directory Service Interfaces)">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_04.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch06_01.htm">Chapter 6: Directory Services</a></td><td align="right" valign="top" width="172"><a href="ch06_06.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">6.5. ADSI (Active Directory Service Interfaces)</h2>
+
+
+
+
+
+<p>For the final section of this chapter we'll discuss a
+platform-dependent directory service framework that is heavily based
+on the material we've just covered.</p>
+
+
+
+
+
+<p>Microsoft created a sophisticated LDAP-based directory service called
+Active Directory for use at the heart of their Windows 2000
+administration framework. Active Directory serves as the repository
+for all of the important configuration information (users, groups,
+system policies, software installation support, etc.) used in a
+network of Windows 2000 machines.<a name="INDEX-618"></a>
+</p>
+
+
+
+
+
+<p>
+<a name="INDEX-619"></a>During the development
+of Active Directory, Microsoft realized a higher-level applications
+interface to this service was needed. ADSI, or Active Directory
+Service Interfaces, was invented to provide this interface. To their
+credit, the developers at Microsoft also realized that their new ADSI
+framework could be extended to cover other system administration
+realms like printers and NT services. This coverage makes ADSI
+immensely useful to people who script and automate system
+administration tasks. Before we show this power in action, there are
+a few basic concepts and terms we need to cover.</p>
+
+
+
+
+
+<a name="ch06-13-fm2xml"></a>
+<h3 class="sect2">6.5.1. ADSI Basics</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-620"></a>ADSI can be thought of as a wrapper
+around any directory service that wishes to participate in the ADSI
+framework. There are <em class="emphasis">providers</em>, as these ADSI
+glue implementations are called, for LDAP, WinNT 4.0, and Novell
+Directory Service among others. In ADSI-speak, each of these
+directory services and data domains (WinNT isn't a directory
+service) are called <em class="emphasis">namespaces</em>. ADSI gives you a
+uniform way to query and change the data found in these
+namespaces.<a name="INDEX-621"></a><a name="INDEX-622"></a>
+</p>
+
+
+
+
+
+<p>
+<a name="INDEX-623"></a>To understand ADSI, you have to know a
+little about the Microsoft Component Object Model (COM) upon which
+ADSI is built. There are many books about COM, but we can distill
+down to these key points:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>Everything we want to work with via COM is an
+<em class="emphasis">object.<a href="#FOOTNOTE-4">[4]</a></em>
+</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-4"></a>
+<p>[4]COM is in fact the protocol used to
+communicate with these objects as part of the larger framework called
+OLE, for Object Linking and Embedding. In this section, I've
+tried to keep us out of the Microsoft morass of acronyms, but if you
+want to dig deeper, there are some good resources that are available
+at <a href="http://www.microsoft.com/com">http://www.microsoft.com/com</a>.</p>
+
+
+
+
+</blockquote>
+</li>
+<li>
+<p>Objects have <em class="emphasis">interfaces</em> that provide a set of
+<em class="emphasis">methods</em> for us to use to interact with these
+objects. From Perl, we can use the methods provided by or inherited
+from the interface called <tt class="command">IDispatch</tt>. Luckily most
+of the ADSI methods provided by the ADSI interfaces and their
+children (e.g., IADsUser, IADsComputer, IADsPrintQueue) are inherited
+from <tt class="command">IDispatch</tt>.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-624"></a><a name="INDEX-625"></a><a name="INDEX-626"></a>The values
+encapsulated by an object, which is queried and changed through these
+methods, are called <em class="emphasis">properties</em>. We'll
+refer to two kinds of properties in this chapter:
+<em class="emphasis">interface-defined properties</em> (those that are
+defined as part of an interface), and <em class="emphasis">schema-defined
+properties</em> (those that are defined in a schema object,
+more on this in just a moment). Unless we refer explicitly to
+"schema properties" in the following dicussion,
+we'll only be using interface properties.</p>
+</li>
+</ul>
+<p>This is standard object-oriented programming fare. It starts to get
+tricky when the nomenclature for ADSI/COM and other object-oriented
+worlds like LDAP collide.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-627"></a><a name="INDEX-628"></a>For
+instance, in ADSI we speak of two different kinds of objects:
+<em class="emphasis">leaf</em> and <em class="emphasis">container</em>. Leaf
+objects encapsulate real data; container objects hold, or
+<em class="emphasis">parent,</em> other objects. In LDAP-speak a close
+translation for these terms might be "entry" and
+"branching point." On one hand we talk about objects with
+properties and on the other, entries with attributes. So how do you
+deal with this discrepancy, since both names refer to the exact same
+data?</p>
+
+
+
+
+
+<p>Here's one way to think about it: an LDAP server does indeed
+provide access to a tree full of entries and their associated
+attributes. When you use ADSI instead of native LDAP to get at an
+entry in that tree, ADSI sucks the entry out of the LDAP server,
+wraps it up in a few layers of shiny wrapping paper, and hands it to
+you as a COM object. You use the necessary methods to get the
+contents of that parcel, which are now called
+"properties." If you make any changes to the properties
+of this object, you can hand the object back to ADSI, which will take
+care of unwrapping the information and putting it back in the LDAP
+tree for you.</p>
+
+
+
+
+
+<p>A reasonable question at this point is "Why not go directly to
+the LDAP server?" Two good answers: once we know how to use
+ADSI to communicate with one kind of directory service, we know how
+to communicate with them all (or at least the ones that have ADSI
+providers). The second answer will be demonstrated in a few moments
+when we see how ADSI's encapsulation can make directory service
+programming a little easier.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-629"></a>To head in the
+direction of ADSI programming from Perl, we need to introduce
+<em class="emphasis">ADsPaths</em>. ADsPaths give us a unique way to refer
+to objects in any of our namespaces. They look like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">
+<em class="replaceable">&lt;progID&gt;:&lt;path to object&gt; </em>
+</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">&lt;progID&gt;</tt> is the programmatic identifier for
+a provider (e.g., WinNT or LDAP), and <tt class="literal">&lt;path to object&gt;
+</tt>is a provider-specific way of finding the object in its
+namespace. The <tt class="literal">&lt;progID&gt;</tt> portion is
+<em class="emphasis">case-sensitive</em>. Using <tt class="literal">winnt</tt>,
+<tt class="literal">ldap</tt>, or <tt class="literal">WINNT</tt> instead of
+<tt class="literal">WinNT</tt> and <tt class="literal">LDAP</tt> will cause your
+programs to fail.</p>
+
+
+
+
+
+<p>Here are some ADsPath examples taken from the ADSI SDK documentation:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">WinNT://MyDomain/MyServer/User
+WinNT://MyDomain/JohnSmith,user
+LDAP://ldapsvr/CN=TopHat,DC=DEV,DC=MSFT,DC=COM,O=Internet 
+LDAP://MyDomain.microsoft.com/CN=TopH,DC=DEV,DC=MSFT,DC=COM,O=Internet</pre>
+</blockquote>
+
+
+
+
+
+<p>It's no coincidence that these look like URLs, since both URLs
+and ADsPaths serve roughly the same purpose. They both try to provide
+an unambiguous way to reference a piece of data made available by
+different data services. In the case of LDAP ADsPaths, we are using
+the LDAP URL syntax from the RFC we mention in <a href="appb_01.htm">Appendix B, "The Ten-Minute LDAP Tutorial"</a> (RFC2255).</p>
+
+
+
+
+
+<p>We'll look more closely at ADsPaths when we discuss the two
+namespaces, <em class="emphasis">WinNT</em> and <em class="emphasis">LDAP</em>,
+referenced earlier. Before we get there, let's see how ADSI in
+general is used from Perl.<em class="emphasis"></em><a name="INDEX-630"></a>
+</p>
+
+
+
+
+
+<a name="ch06-91973"></a>
+<div class="sidebar">
+<h4 class="objtitle">The Tools of the ADSI Trade</h4>
+
+
+
+
+
+<p>To use the material in this chapter you will need ADSI
+installed on at least one machine on your network. This machine can
+act (via DCOM) as an ADSI gateway for the other machines. See Toby
+Everett's site, given below, for more information on how to set
+ADSI up to work with DCOM.<a name="INDEX-631"></a>
+</p>
+
+
+
+
+<p>Any machine running
+Windows 2000 has ADSI built into the OS. For all other Win32
+machines, you will need to download and install the free ADSI 2.5
+distribution found at <a href="http://www.microsoft.com/adsi">http://www.microsoft.com/adsi</a>. At this link
+you will also find crucial ADSI documentation including
+<em class="emphasis">adsi25.chm </em>, a compressed HTML help file that
+contains some of the best ADSI documentation available.</p>
+
+
+
+
+<p>Even if you are using Windows 2000, I recommend downloading the
+ADSI SDK found at the Microsoft URL because it provides this
+documentation and a handy ADSI object browser called
+<tt class="command">ADsVW</tt>. The SDK comes with ADSI programming
+examples in a number of languages including Perl. Unfortunately, the
+examples in the current ADSI distribution rely on the deprecated
+<em class="emphasis">OLE.pm</em> module, so at best you
+might be able to pick up a few tips, but you should not use these
+examples as your starting point.</p>
+
+
+
+
+<p>Before you begin to
+code, you will also want to pick up Toby Everett's ADSI object
+browser (written in Perl) from <a href="http://opensource.activestate.com/authors/tobyeverett">http://opensource.activestate.com/authors/tobyeverett</a>.
+It will help you navigate around the ADSI namespaces. Be sure to
+visit this site early in your ADSI programming career because it is
+one of the best available on using ADSI from Perl.</p>
+
+
+
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch06-14-fm2xml"></a>
+<h3 class="sect2">6.5.2. Using ADSI from Perl</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-632"></a><a name="INDEX-633"></a><a name="INDEX-634"></a>The <tt class="literal">Win32::OLE</tt>
+family of modules maintained by Jan Dubois and Gurusamy Sarathy give
+us the Perl bridge to ADSI (which is built on COM as part of OLE).
+After loading the main module, we use it to request an ADSI object:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE;
+
+$adsobj = Win32::OLE-&gt;GetObject($ADsPath) or 
+    die "Unable to retrieve the object for $ADsPath\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">Win32::OLE-&gt;GetObject( )</tt> takes an OLE
+<em class="emphasis">moniker</em> (a unique identifier to an object, which
+in this case is an ADsPath) and returns an ADSI object for us. This
+call also handles the process of <em class="emphasis">binding</em> to the
+object, a process you should be familiar with from our LDAP
+discussion. By default we bind to the object using the credentials of
+the user running the script.</p>
+
+
+
+
+
+<a name="ch06-15-fm2xml"></a>
+<blockquote class="note">
+<h4 class="objtitle">TIP</h4>
+<p>Here's a tip that may save you some consternation. If you run
+these two lines of code in the Perl debugger and examine the contents
+of the returned object reference, you might see something like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">DB&lt;3&gt; <tt class="userinput"><b>x $adsobj</b></tt>
+0  Win32::OLE=HASH(0x10fe0d4)
+     empty hash</pre>
+</blockquote>
+
+
+
+
+
+<p>Don't panic. <tt class="literal">Win32::OLE</tt> uses the power of
+tied variables. The seemingly empty data structure you see here will
+magically yield information from our object when we access it
+properly.</p>
+
+
+
+
+</blockquote>
+
+<p>Perl's hash reference syntax is used to access the interface
+property values of an ADSI object:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$value = $adsobj-&gt;{key}</pre>
+</blockquote>
+
+
+
+
+
+<p>For instance, if that object had a <tt class="literal">Name</tt> property
+defined as part of its interface (and they all do), you could:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">print $adsobj-&gt;{Name}."\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>Interface property values can be assigned using the same notation:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$adsobj-&gt;{FullName}= "Oog";  # set the property in the cache</pre>
+</blockquote>
+
+
+
+
+
+<p>An ADSI object's properties are stored in an in-memory cache
+(called the <em class="emphasis">property cache</em>). The first request
+for an object's properties populates this cache. Subsequent
+queries for the same property will retrieve the information from this
+cache, <em class="emphasis">not the directory service</em>. If you want to
+populate the cache by hand, you can call that object instance's
+<tt class="literal">GetInfo( )</tt> or <tt class="literal">GetInfoEx( )</tt>
+(an extended version of <tt class="literal">GetInfo( )</tt>) method using
+the syntax we'll see in a moment.</p>
+
+
+
+
+
+<p>Because the initial fetch is automatic, <tt class="literal">GetInfo(
+)</tt> and <tt class="literal">GetInfoEx( )</tt> are often
+overlooked. Though we won't see any in this book, there are
+cases where you will need them. Two example cases:</p>
+
+
+
+
+
+<ol>
+<li>
+<p>Some object properties are only fetched by an explicit
+<tt class="literal">GetInfoEx( )</tt> call. Microsoft Exchange
+5.5's LDAP provider offers a particularly egregious example
+because many of its properties are not available without calling
+<tt class="literal">GetInfoEx( )</tt> first. See <a href="http://opensource.activestate.com/authors/tobyeverett">http://opensource.activestate.com/authors/tobyeverett</a>
+for more details on this inconsistency.</p>
+</li>
+<li>
+<p>If you have a directory that multiple people can change, an object
+you may have just retrieved could be changed while you are still
+working with it. If this happens, the data in your property cache for
+that object will be stale. <tt class="literal">GetInfo( )</tt> and
+<tt class="literal">GetInfoEx( )</tt> will refresh this cache for you.</p>
+</li>
+</ol>
+<p>To actually update the backend directory service and data source
+provided through ADSI, you <em class="emphasis">must</em> call the special
+method <tt class="literal">SetInfo( )</tt> after changing an object.
+<tt class="literal">SetInfo( )</tt> flushes the changes from the property
+cache to the actual directory service and data source. (This should
+remind you of our need in <tt class="literal">Mozilla::LDAP</tt> to call
+the <tt class="literal">update( )</tt> method. It's the same
+concept.)</p>
+
+
+
+
+
+<p>Calling methods from an ADSI object instance is easy:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$adsobj-&gt;Method($arguments...)</pre>
+</blockquote>
+
+
+
+
+
+<p>So, if we changed an object's properties as mentioned in the
+previous warning, we might use this line right after the code that
+made the change:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$adsobj-&gt;SetInfo(  );</pre>
+</blockquote>
+
+
+
+
+
+<p>This would flush the data from the property cache back into the
+underlying directory service or data source.</p>
+
+
+
+
+
+<p>One <tt class="literal">Win32::OLE</tt> call you'll want to use often
+is <tt class="literal">Win32::OLE-&gt;LastError( )</tt>. This will return
+the error, if any, generated by the last OLE operation. Using the
+<em class="emphasis">-w</em> switch with Perl (e.g., <tt class="command">perl -w
+script</tt>) also causes any OLE failures to complain in a
+verbose manner. Often these error messages are all the debugging help
+you have, so be sure to make good use of them.</p>
+
+
+
+
+
+<p>The ADSI code we've shown so far should look like fairly
+standard Perl to you, because on the surface, it is. Now let's
+introduce a few of the plot complications.<a name="INDEX-635"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch06-16-fm2xml"></a>
+<h3 class="sect2">6.5.3. Dealing with Container/Collection Objects</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-636"></a><a name="INDEX-637"></a>Early in this section we mentioned there
+are two kinds of ADSI objects: leaf and container. Leaf objects
+represent pure data, whereas container objects (also called
+collection objects in OLE/COM terms) contain other objects. Another
+way to distinguish between the two in the ADSI context is by noting
+that leaf objects have no children in a hierarchy, but container
+objects do.</p>
+
+
+
+
+
+<p>Container objects require special handling, since most of the time
+we're interested in the data encapsulated by their child
+objects. There are two ways to access these objects from Perl.
+<tt class="literal">Win32::OLE</tt> offers a special function called
+<tt class="literal">in( ),</tt> which is not available by default when
+the module is loaded in the standard fashion. We have to use the
+following at the beginning of our code to make use of it:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE 'in';</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">in( )</tt> will return a list of references to the
+child objects held by that container. This allows us to write
+easy-to-read Perl code like:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">foreach $child (in $adsobj){
+    print $child-&gt;{Name}
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Alternatively, we can load one of
+<tt class="literal">Win32::OLE</tt>'s helpful progeny, which is
+called <tt class="literal">Win32::OLE::Enum</tt>.
+<tt class="literal">Win32::OLE::Enum-&gt;new( )</tt> will create an
+enumerator object from one of our container objects:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE::Enum;
+
+$enobj = Win32::OLE::Enum-&gt;new($adsobj);</pre>
+</blockquote>
+
+
+
+
+
+<p>We can then call a few methods on this enumerator object to get at
+<tt class="literal">$adsobj</tt>'s children. These methods should
+remind you of the methods we used with
+<tt class="literal">Mozilla::LDAP</tt>'s search operations; it is the
+same process.</p>
+
+
+
+
+
+<p>
+<tt class="literal">$enobj-&gt;Next( )</tt> will return a reference to the
+next child object instance (or the next X objects if given an
+optional parameter). <tt class="literal">$enobj-&gt;All</tt> returns a list
+of object instance references. <tt class="literal">Win32::OLE::Enum</tt>
+offers a few more methods (see the documentation for details), but
+these are the ones you'll use most often.<a name="INDEX-638"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch06-17-fm2xml"></a>
+<h3 class="sect2">6.5.4. Identifying a Container Object</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-639"></a>You
+can't know if an object is a container object <em class="emphasis">a
+priori</em>. There is no way to ask an object itself about its
+"containerness" from Perl. The closest you can come is to
+try to create an enumerator object and fail gracefully if this does
+not succeed. Here's some code that does just that:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE;
+use Win32::OLE::Enum;
+
+eval {$enobj = Win32::OLE::Enum-&gt;new($adsobj)};
+print "object is " . ($@ ? "not " : "") . "a container\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>Alternatively, you can look to other sources that describe the
+object. This segues nicely into our third plot complication.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch06-18-fm2xml"></a>
+<h3 class="sect2">6.5.5. So How Do You Know Anything About an Object?</h3>
+
+
+
+
+
+<p>We've avoided the biggest and perhaps the most important
+question until now. In a moment we'll be dealing with objects
+in two of our namespaces. We understand how to retrieve and set
+object properties and how to call object methods for these objects,
+but only if we already know the names of these properties and
+methods. Where did these names come from? How did we find them in the
+first place?</p>
+
+
+
+
+
+<p>There's no single place to find an answer to these questions,
+but there are a few sources we can draw upon to get most of the
+picture. The first place is the ADSI documentation, especially the
+help file mentioned in the earlier sidebar, <a href="ch06_05.htm#ch06-91973">the sidebar "The Tools of the ADSI Trade"</a>. This file has an huge amount of
+material. For the answer to our question about property and methods
+names, the place to start in the file is <em class="emphasis">Active Directory Service Interfaces
+2.5</em><img alt="figure" src="figs/U2192.gif"><em class="emphasis">ADSI
+Reference</em><img alt="figure" src="figs/U2192.gif"><em class="emphasis">ADSI System
+Providers</em>.</p>
+
+
+
+
+
+<p>The documentation is sometimes the only place to find method names,
+but there's a second, more interesting approach we can take
+when looking for property names. We can use metadata provided by ADSI
+itself. This is where the schema properties concept we mentioned
+earlier comes into the picture.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-640"></a><a name="INDEX-641"></a>Every ADSI object
+has a property called <tt class="literal">Schema</tt> that yields an
+ADsPath to its schema object. For instance, the following code:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE;
+
+$ADsPath = "WinNT://BEESKNEES,computer";
+$adsobj  = Win32::OLE-&gt;GetObject($ADsPath) or 
+    die "Unable to retrieve the object for $ADsPath\n";
+print "This is a ".$adsobj-&gt;{Class}."object, schema is at:\n".
+       $adsobj-&gt;{Schema},"\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>will print:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">This is a Computer object, schema is at: WinNT://DomainName/Schema/Computer</pre>
+</blockquote>
+
+
+
+
+
+<p>The value of
+<tt class="literal">$adsobj</tt><img alt="figure" src="figs/U2192.gif"><tt class="literal">{Schema}</tt> is an
+ADsPath to an object that describes the schema for the objects of
+class <tt class="literal">Computer</tt> in that domain. Here we're
+using the term "schema" in the same way we used it when
+talking about LDAP schemas. In LDAP, schemas define which attributes
+can and must be present in entries of specific object classes. In
+ADSI, a schema object holds the same information about objects of a
+certain class and their schema properties.</p>
+
+
+
+
+
+<p>If we want to see the possible attribute names for an object, we can
+look at the values of two properties in its schema object:
+<tt class="literal">MandatoryProperties</tt> and
+<tt class="literal">OptionalProperties</tt>. Let's change the
+<tt class="literal">print</tt> statement above to the following:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$schmobj = Win32::OLE-&gt;GetObject($adsobj-&gt;{Schema}) or 
+              die "Unable to retrieve the object for $ADsPath\n";
+print join("\n",@{$schmobj-&gt;{MandatoryProperties}},
+                @{$schmobj-&gt;{OptionalProperties}}),"\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>This prints:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Owner
+Division
+OperatingSystem
+OperatingSystemVersion
+Processor
+ProcessorCount</pre>
+</blockquote>
+
+
+
+
+
+<p>Now we know the possible schema interface property names in the WinNT
+namespace for our <tt class="literal">Computer</tt> objects. Pretty nifty.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-642"></a>Schema properties are retrieved and
+set in a slightly different manner than interface properties. You
+recall that interface properties are retrieved and set like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># retrieving and setting INTERFACE properties
+$value = $obj-&gt;{property};
+$obj-&gt;{property} = $value;</pre>
+</blockquote>
+
+
+
+
+
+<p>Schema properties are retrieved and set using special methods:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># retrieving and setting SCHEMA properties
+$value = $obj-&gt;Get("property");
+$obj-&gt;Put("property","value");</pre>
+</blockquote>
+
+
+
+
+
+<p>Everything we've talked about so far regarding interface
+properties holds true for schema properties as well (i.e., property
+cache, <tt class="literal">SetInfo( )</tt>, etc). Besides the need to use
+special methods to retrieve and set values, the only other place
+where you'll need to distinguish between the two is in their
+names. Sometimes the same object may have two different names for
+essentially the same property, one for the interface property and one
+for the schema property. For example, these two retrieve the same
+basic setting for a user:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$len = $userobj-&gt;{PasswordMinimumLength};  # the interface property
+$len = $userobj-&gt;Get("MinPasswordLength"); # the same schema property</pre>
+</blockquote>
+
+
+
+
+
+<p>There are two kinds of properties because interface properties exist
+as part of the underlying COM model. When developers define an
+interface as part of developing a program, they also define the
+interface properties. Later on, if they want to extend the property
+set, they have to modify both the COM interface and any code that
+uses that interface. In ADSI, developers can change the schema
+properties in a provider without having to modify the underlying COM
+interface for that provider. It is important to become comfortable
+with dealing with both kinds of properties because sometimes a piece
+of data in an object is only made available from within one kind of
+property and not in the other.</p>
+
+
+
+
+
+<p>On a practical note, if you are just looking for interface or schema
+property names and don't want to bother writing a program to
+find them, I recommend using the Toby Everett ADSI browser mentioned
+earlier. <a href="ch06_05.htm#ch06-46849">Figure 6-2</a> is a sample screen shot of this
+browser in action.</p>
+
+
+
+
+
+<a name="ch06-46849"></a>
+<div class="figure">
+<img alt="figure" src="figs/psa_0602.gif"></div>
+<h4 class="objtitle">Figure 6.2. Everett's ADSI browser displaying an Administrators group object </h4>
+
+<p>Alternatively, there is a program called <tt class="command">ADSIDump</tt>
+in the <em class="emphasis">General</em> folder of the SDK samples that
+can dump the contents of an entire ADSI tree for
+you.<a name="INDEX-643"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch06-19-fm2xml"></a>
+<h3 class="sect2">6.5.6. Searching</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-644"></a><a name="INDEX-645"></a>This is the last
+complication we'll discuss before moving on. In <a href="ch06_04.htm#ch06-81166">Section 6.4, "LDAP: A Sophisticated Directory Service"</a>, we spent considerable time talking
+about LDAP searches. But here in ADSI-land, we've breathed
+hardly a word about the subject. This is because from Perl (and any
+other language that uses the same OLE automation interface),
+searching with ADSI is a pain -- that is, sub-tree searches, or
+searches that entail anything but the simplest of search filters are
+excruciatingly painful. (Others are not so bad.) Complex searches are
+troublesome because they require you to step out of the ADSI
+framework and use a whole different methodology to get at your data
+(not to mention learn more Microsoft acronyms).</p>
+
+
+
+
+
+<p>But people who do system administration are trained to laugh at pain,
+so let's start with simple searches before tackling the hard
+stuff. Simple searches that encompass one object (scope of
+<tt class="literal">base</tt>) or an object's immediate children
+(scope of <tt class="literal">one</tt>) can be handled manually with Perl.
+Here's how:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>For a single object, retrieve the properties of interest and use the
+normal Perl comparison operators to determine if this object is a
+match:</p>
+</li>
+</ul>
+<blockquote>
+<pre class="programlisting">if ($adsobj-&gt;{cn} eq "Mark Sausville" and $adsobj-&gt;{State} eq "CA"){...}</pre>
+</blockquote>
+
+
+
+
+
+<ul>
+<li>
+<p>To search the children of an object, use the container object access
+techniques we discussed previously and then examine each child object
+in turn. We'll see some examples of this type of search in a
+moment.</p>
+</li>
+</ul>
+<p>
+<a name="INDEX-646"></a><a name="INDEX-647"></a>If you want to do more
+complex searches like those that entail searching a whole directory
+tree or sub-tree, you need to switch to using a different
+"middleware" technology called ADO (ActiveX Data
+Objects). ADO offers scripting languages an interface to
+Microsoft's OLE DB layer. OLE DB provides a common
+database-oriented interface to data sources like relational databases
+and directory services. In our case we'll be using ADO to talk
+to ADSI (which then talks to the actual directory service). Because
+ADO is a database-oriented methodology, the code you are about to see
+foreshadows the ODBC material we cover in <a href="ch07_01.htm">Chapter 7, "SQL Database Administration"</a>.</p>
+
+
+
+
+
+<a name="ch06-20-fm2xml"></a>
+<blockquote class="note">
+<h4 class="objtitle">TIP</h4>
+<p>ADO only works when talking to the LDAP ADSI provider. It will not
+work for the WinNT namespace.</p>
+
+
+
+
+</blockquote>
+
+<p>ADO is a whole subject in itself that is only peripherally related to
+the subject of directory services, so we're only going to look
+at one example and provide a little bit of explanation before moving
+on to some more relevant ADSI examples. For more information on ADO
+itself, please see <a href="http://www.microsoft.com/ado">http://www.microsoft.com/ado</a>.</p>
+
+
+
+
+
+<p>Here's some code that displays the name of all of the groups to
+be found in a given domain. We'll go through this code piece by
+piece in a moment.</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE 'in';
+
+# get ADO object, set the provider, open the connection
+$c = Win32::OLE-&gt;new("ADODB.Connection");
+$c-&gt;{Provider} = "ADsDSOObject";
+$c-&gt;Open("ADSI Provider");
+die Win32::OLE-&gt;LastError() if Win32::OLE-&gt;LastError(  );
+
+# prepare and then execute the query
+$ADsPath = "LDAP://ldapserver/dc=example,dc=com"; 
+$rs = $c-&gt;Execute("&lt;$ADsPath&gt;;(objectClass=Group);Name;SubTree");
+die Win32::OLE-&gt;LastError() if Win32::OLE-&gt;LastError(  );
+
+until ($rs-&gt;EOF){
+    print $rs-&gt;Fields(0)-&gt;{Value},"\n";
+    $rs-&gt;MoveNext;
+}
+
+$rs-&gt;Close;
+$c-&gt;Close;<a name="INDEX-648"></a>
+</pre>
+</blockquote>
+
+
+
+
+
+<p>The block of code after the module load gets an ADO Connection object
+instance sets that object instance's provider name, and then
+instructs it to open the connection. This connection is opened on
+behalf of the user running the script, though we could have set some
+other object properties to change this.</p>
+
+
+
+
+
+<p>We then perform the actual search using <tt class="literal">Execute(
+)</tt>. This search can be specified using one of two
+"dialects," SQL or ADSI.<a href="#FOOTNOTE-5">[5]</a> The ADSI dialect, as shown, uses a command string
+consisting as four arguments, each separated by semicolons.<a href="#FOOTNOTE-6">[6]</a> The arguments are:</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-5"></a>
+<p>[5]If you know SQL,
+you may find the SQL dialect a little easier. The SQL dialect offers
+some interesting possibilities. For instance, MS SQL Server 7 can be
+configured to know about ADSI providers in addition to normal
+databases. This means that you can execute SQL queries which
+simultaneously access ActiveDirectory objects via ADSI.</p>
+
+
+
+
+</blockquote>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-6"></a>
+<p>[6]Be careful of this ADSI ADO provider quirk: there cannot be any
+whitespace around the semicolons or the query will fail.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<ul>
+<li>
+<p>An ADsPath (in angle brackets) that sets the server and base DN for
+the search</p>
+</li>
+<li>
+<p>A search filter (using the same LDAP filter syntax we saw before)</p>
+</li>
+<li>
+<p>The name or names (separated by commas) of the properties to return</p>
+</li>
+<li>
+<p>A search scope of either Base, OneLevel, or SubTree (as per the LDAP
+standard)</p>
+</li>
+</ul>
+<p>
+<tt class="literal">Execute( )</tt> returns a reference to the first of
+the ADO <tt class="literal">RecordSet</tt> objects returned by our query.
+We ask for each <tt class="literal">RecordSet</tt> object in turn,
+unpacking the objects it holds and printing the
+<tt class="literal">Value</tt> property returned by the <tt class="literal">Fields(
+)</tt> method for each of these objects. The
+<tt class="literal">Value</tt> property contains the value we requested in
+our command string (the name of the <tt class="literal">Group</tt> object).
+Here's some sample output from a Windows 2000 machine:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Administrators
+Users
+Guests
+Backup Operators
+Replicator
+Server Operators
+Account Operators
+Print Operators
+DHCP Users
+DHCP Administrators
+Domain Computers
+Domain Controllers
+Schema Admins
+Enterprise Admins
+Cert Publishers
+Domain Admins
+Domain Users
+Domain Guests
+Group Policy Admins
+RAS and IAS Servers
+DnsAdmins
+DnsUpdateProxy<a name="INDEX-649"></a>
+<a name="INDEX-650"></a>
+<a name="INDEX-651"></a>
+</pre>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch06-21-fm2xml"></a>
+<h3 class="sect2">6.5.7. Performing Common Tasks Using the WinNT and LDAP Namespaces</h3>
+
+
+
+
+
+<p>Now that we've safely emerged from our list of complications,
+we can turn to performing some common administrative tasks using ADSI
+from Perl. The goal is to give you a taste of the things you can do
+with the ADSI information we've presented. Then you can use the
+code we're going to see as starter recipes for your own
+programming.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-652"></a><a name="INDEX-653"></a>For
+these tasks, we'll use one of two namespaces. The first
+namespace is <em class="emphasis">WinNT</em>, which gives us access to
+Windows 4.0 objects like users, groups, printers, services, etc.</p>
+
+
+
+
+
+<p>The second is our friend <em class="emphasis">LDAP</em>.
+<em class="emphasis">LDAP</em> becomes the provider of choice when we move
+on to Windows 2000 and its LDAP-based Active Directory. Most of the
+<em class="emphasis">WinNT</em> objects can be accessed via
+<em class="emphasis">LDAP</em> as well. But even with Windows 2000, there
+are still tasks that can only be performed using the WinNT namespace
+(like the creation of local machine accounts).</p>
+
+
+
+
+
+<p>
+<a name="INDEX-654"></a>The code that works
+with these different namespaces looks similar (after all,
+that's part of the point of using ADSI), but you should note
+two important differences. First, the ADsPath format is slightly
+different. The WinNT ADsPath takes one of these forms according to
+the ADSI SDK:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">WinNT:[//DomainName[/ComputerName[/ObjectName[,className]]]]
+WinNT:[//DomainName[/ObjectName[,className]]]
+WinNT:[//ComputerName,computer] 
+WinNT:</pre>
+</blockquote>
+
+
+
+
+
+<p>The LDAP ADsPath looks like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">LDAP://HostName[:PortNumber][/DistinguishedName]</pre>
+</blockquote>
+
+
+
+
+
+<p>Note that the LDAP ADsPath requires a server hostname under NT4 (this
+changes in Windows 2000). This means that the LDAP namespace
+isn't browsable from its top-level like the WinNT namespace,
+since you have to point it at a starting server. With the WinNT
+namespace, one can begin with an ADsPath of just
+<tt class="literal">WinNT:</tt> to start drilling down into the domain
+hierarchy.</p>
+
+
+
+
+
+<p>Also note that the properties of the objects in the two namespaces
+are similar, but they are not the same. For instance, you can access
+the same user objects from both the WinNT and LDAP namespaces, but
+you can only get to some Active Directory properties for a particular
+user object through the LDAP namespace.</p>
+
+
+
+
+
+<p>It's especially important to pay attention to the differences
+between the schema found in the two namespaces. For example, the
+<tt class="literal">User</tt> class for WinNT has no mandatory properties
+while the LDAP <tt class="literal">User</tt> class requires
+<tt class="literal">cn</tt> and <tt class="literal">samAccountName</tt> to be
+present in every user object.</p>
+
+
+
+
+
+<p>With these differences in mind, let's look at some actual code.
+To save space, we're going to omit most of the error checking,
+but you'll want to run your scripts with the
+<em class="emphasis">-w</em> switch and liberally sprinkle lines like this
+throughout your code:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">die "OLE error :".Win32::OLE-&gt;LastError() if Win32::OLE-&gt;LastError(  );</pre>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch06-22-fm2xml"></a>
+<h3 class="sect2">6.5.8. Working with Users via ADSI</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-655"></a><a name="INDEX-656"></a>To dump the list of users in a
+domain:<a name="INDEX-657"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE 'in';
+
+$AdsPath = "WinNT://DomainName/PDCName,computer";
+$c = Win32::OLE-&gt;GetObject($ADsPath) or die "Unable to get $ADsPath\n";
+foreach $adsobj (in $c){
+    print $adsobj-&gt;{Name},"\n" if ($adsobj-&gt;{Class} eq "User");
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>To create a user and set her or his Full Name:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE;
+
+$ADsPath="WinNT://DomainName/ComputerName,computer";
+$c = Win32::OLE-&gt;GetObject($ADsPath) or die "Unable to get $ADsPath\n";
+
+# create and return a User object
+$u = $c-&gt;Create("user",$username);
+$u-&gt;SetInfo(  );  # we have to create the user before we modify it
+
+# no space between "Full" and "Name" allowed with WinNT: namespace
+$u-&gt;{FullName} = $fullname; 
+$su-&gt;SetInfo(  );</pre>
+</blockquote>
+
+
+
+
+
+<p>If <tt class="literal">ComputerName</tt> is a Primary Domain Controller,
+then a domain user is created. If not, that user is local to the
+specified machine.</p>
+
+
+
+
+
+<p>The equivalent code to create a global user (you can't create
+local users using LDAP) in an Active Directory looks like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE;
+
+$AdsPath = "LDAP://ldapserver,CN=Users,dc=example,dc=com";
+
+$c = Win32::OLE-&gt;GetObject($ADsPath) or die "Unable to get $ADsPath\n";
+
+# create and return a User object
+$u=$c-&gt;Create("user","cn=".$commonname);
+$u-&gt;{samAccountName} = $username;
+# we have to create the user in the dir before we modify it
+$u-&gt;SetInfo(  );
+
+# space between "Full" and "Name" required with LDAP: namespace, sigh
+$u-&gt;{'Full Name'} = $fullname; 
+$u-&gt;SetInfo(  );</pre>
+</blockquote>
+
+
+
+
+
+<p>Deleting a user requires just a small change:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE;
+
+$AdsPath = "WinNT://DomainName/ComputerName,computer";
+$c = Win32::OLE-&gt;GetObject($ADsPath) or die "Unable to get $ADsPath\n";
+
+# delete the User object, note that we are bound to the container object
+$c-&gt;Delete("user",$username);
+$u-&gt;SetInfo(  );</pre>
+</blockquote>
+
+
+
+
+
+<p>Changing a user's password is a single method's work:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE;
+
+$AdsPath = "WinNT://DomainName/ComputerName/".$username;
+$u = Win32::OLE-&gt;GetObject($ADsPath) or die "Unable to get $ADsPath\n";
+
+$u-&gt;ChangePasssword($oldpassword,$newpassword);
+$u-&gt;SetInfo(  );</pre>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch06-23-fm2xml"></a>
+<h3 class="sect2">6.5.9. Working with Groups via ADSI</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-658"></a><a name="INDEX-659"></a>You
+can enumerate the available groups with just a minor tweak of our
+user enumeration code above. The one changed line is:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">print $adsobj-&gt;{Name},"\n" if ($adsobj-&gt;{Class} eq "Group");</pre>
+</blockquote>
+
+
+
+
+
+<p>Creation and deletion of groups is performed using the same
+<tt class="literal">Create( )</tt> and <tt class="literal">Delete( )</tt>
+methods we just saw for user account and creation. The only
+difference is the first argument needs to be "group." For
+example:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$g = $c-&gt;Create("group",$groupname);</pre>
+</blockquote>
+
+
+
+
+
+<p>To add a user to a group (specified as a
+<tt class="literal">GroupName</tt>) once you've created it:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE;
+
+$AdsPath = "WinNT://DomainName/GroupName,group";
+
+$g = Win32::OLE-&gt;GetObject($ADsPath) or die "Unable to get $ADsPath\n";
+
+# this uses the ADsPath to a specific user object
+$g-&gt;Add($userADsPath);</pre>
+</blockquote>
+
+
+
+
+
+<p>The same rules we saw before about local versus domain (global) users
+apply here as well. If we want to add a domain user to our group, our
+<tt class="literal">$userADsPath</tt> should reference the user at the PDC
+for that domain.</p>
+
+
+
+
+
+<p>To remove a user from a group, use:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$c-&gt;Remove($userADsPath);</pre>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch06-24-fm2xml"></a>
+<h3 class="sect2">6.5.10. Working with File Shares via ADSI</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-660"></a><a name="INDEX-661"></a>Now we start to get into some of the
+more interesting ADSI esoterica. It is possible to use ADSI to
+instruct a machine to start sharing a part of its local storage to
+other computers:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE;
+
+$AdsPath = "WinNT://ComputerName/lanmanserver";
+
+$c = Win32::OLE-&gt;GetObject($ADsPath) or die "Unable to get $ADsPath\n";
+
+$s = $c-&gt;Create("fileshare",$sharename);
+$s-&gt;{path}        = 'C:\directory';
+$s-&gt;{description} = "This is a Perl created share";
+$s-&gt;SetInfo(  );</pre>
+</blockquote>
+
+
+
+
+
+<p>File shares are deleted using the <tt class="literal">Delete( )</tt>
+method.</p>
+
+
+
+
+
+<p>Before we move on to other tasks, let me take this opportunity to
+remind you to closely consult the SDK documentation before using any
+of these ADSI objects. Sometimes, you'll find useful surprises.
+If you look at this section in the ADSI 2.5 help file: <em class="emphasis">Active Directory Service Interfaces
+2.5</em><img alt="figure" src="figs/U2192.gif"><em class="emphasis">ADSI
+Reference</em><img alt="figure" src="figs/U2192.gif"><em class="emphasis">ADSI
+Interfaces</em><img alt="figure" src="figs/U2192.gif"><em class="emphasis">Persistent
+Object Interfaces</em><img alt="figure" src="figs/U2192.gif"><em class="emphasis">IADsFileShare</em>, you'll see that a
+<tt class="literal">fileshare</tt> object has a
+<tt class="literal">CurrentUserCount</tt> property that shows how many
+users are currently connected to this file share. This could be a
+very handy detail.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch06-25-fm2xml"></a>
+<h3 class="sect2">6.5.11. Working with Print Queues and Print Jobs via ADSI</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-662"></a><a name="INDEX-663"></a>Here's how to determine the names of
+the queues on a particular server and the models of the printers
+being used to serve those queues:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE 'in';
+
+$ADsPath="WinNT://DomainName/PrintServerName,computer";
+
+$c = Win32::OLE-&gt;GetObject($ADsPath) or die "Unable to get $ADsPath\n";
+
+foreach $adsobj (in $c){
+    print $adsobj-&gt;{Name}.":".$adsobj-&gt;{Model}."\n" 
+      if ($adsobj-&gt;{Class} eq "PrintQueue");
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Once you have the name of a print queue, you can bind to it directly
+to query and control it:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE 'in';
+
+# this table comes from this section in the ADSI 2.5 SDK:
+# 'Active Directory Service Interfaces 2.5-&gt;ADSI Reference-&gt;
+# ADSI Interfaces-&gt;Dynamic Object Interfaces-&gt;IADsPrintQueueOperations-&gt;
+# IADsPrintQueueOperations Property Methods' (phew)
+
+%status = 
+  (0x00000001 =&gt; 'PAUSED',            0x00000002 =&gt; 'PENDING_DELETION',
+   0x00000003 =&gt; 'ERROR' ,            0x00000004 =&gt; 'PAPER_JAM',
+<tt class="userinput"><b>   </b></tt>0x00000005 =&gt; 'PAPER_OUT',         0x00000006 =&gt; 'MANUAL_FEED',
+<tt class="userinput"><b>   </b></tt>0x00000007 =&gt; 'PAPER_PROBLEM',     0x00000008 =&gt; 'OFFLINE',
+<tt class="userinput"><b>   </b></tt>0x00000100 =&gt; 'IO_ACTIVE',         0x00000200 =&gt; 'BUSY',
+   0x00000400 =&gt; 'PRINTING',          0x00000800 =&gt; 'OUTPUT_BIN_FULL',
+   0x00001000 =&gt; 'NOT_AVAILABLE',     0x00002000 =&gt; 'WAITING',
+   0x00004000 =&gt; 'PROCESSING',        0x00008000 =&gt; 'INITIALIZING',
+   0x00010000 =&gt; 'WARMING_UP',        0x00020000 =&gt; 'TONER_LOW',
+   0x00040000 =&gt; 'NO_TONER',          0x00080000 =&gt; 'PAGE_PUNT',
+   0x00100000 =&gt; 'USER_INTERVENTION', 0x00200000 =&gt; 'OUT_OF_MEMORY',
+   0x00400000 =&gt; 'DOOR_OPEN',         0x00800000 =&gt; 'SERVER_UNKNOWN',
+   0x01000000 =&gt; 'POWER_SAVE');
+
+$ADsPath = "WinNT://PrintServerName/PrintQueueName";
+
+$p = Win32::OLE-&gt;GetObject($ADsPath) or die "Unable to get $ADsPath\n";
+
+print "The printer status for " . $c-&gt;{Name} . " is " .
+   ((exists $p-&gt;{status}) ? $status{$c-&gt;{status}} : "NOT ACTIVE") . "\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>The <tt class="literal">PrintQueue</tt> object offers the set of print
+queue control methods you'd hope for: <tt class="literal">Pause(
+)</tt>, <tt class="literal">Resume( )</tt>, and <tt class="literal">Purge(
+)</tt>. These allow us to control the actions of the queue
+itself. But what if we want to examine or manipulate the actual jobs
+in this queue?</p>
+
+
+
+
+
+<p>To get at the actual jobs, you call a <tt class="literal">PrintQueue</tt>
+object method called <tt class="literal">PrintJobs( )</tt>.
+<tt class="literal">PrintJobs( )</tt> returns a collection of
+<tt class="literal">PrintJob</tt> objects, each of which has a set of
+properties and methods. For instance, here's how to show the
+jobs in a particular queue:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE 'in';
+
+# this table comes from this section in the ADSI 2.5 SDK:
+# 'Active Directory Service Interfaces 2.5-&gt;ADSI Reference-&gt;
+# ADSI Interfaces-&gt;Dynamic Object Interfaces-&gt;IADsPrintJobOperations-&gt;
+# IADsPrintJobOperations Property Methods' (double phew)
+
+%status = (0x00000001 =&gt; 'PAUSED',  0x00000002 =&gt; 'ERROR',
+           0x00000004 =&gt; 'DELETING',0x00000010 =&gt; 'PRINTING',
+           0x00000020 =&gt; 'OFFLINE', 0x00000040 =&gt; 'PAPEROUT',
+           0x00000080 =&gt; 'PRINTED', 0x00000100 =&gt; 'DELETED');
+
+$ADsPath = "WinNT://PrintServerName/PrintQueueName";
+
+$p = Win32::OLE-&gt;GetObject($ADsPath) or die "Unable to get $ADsPath\n";
+
+$jobs = $p-&gt;PrintJobs(  );
+foreach $job (in $jobs){
+  print $job-&gt;{User} . "\t" . $job-&gt;{Description} . "\t" . 
+        $status{$job-&gt;{status}} . "\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Each job can be <tt class="literal">Pause( )</tt>d and <tt class="literal">Resume(
+)</tt>d as well.<a name="INDEX-664"></a><a name="INDEX-665"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch06-26-fm2xml"></a>
+<h3 class="sect2">6.5.12. Working with NT/2000 Services via ADSI</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-666"></a>For our last set of examples,
+we're going to look at how to locate, start, and stop the
+services on an NT/2000 machine. Like the other examples in this
+chapter, these code snippets must be run from an account with
+sufficient privileges on the target computer to effect changes.</p>
+
+
+
+
+
+<p>To list the services on a computer and their status, we could use
+this code:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE 'in';
+
+# this table comes from this section in the ADSI 2.5 SDK:
+# 'Active Directory Service Interfaces 2.5-&gt;ADSI Reference-&gt;
+# ADSI Interfaces-&gt;Dynamic Object Interfaces-&gt;IADsServiceOperations-&gt;
+# IADsServiceOperations Property Methods'
+
+%status = 
+  (0x00000001 =&gt; 'STOPPED',         0x00000002 =&gt; 'START_PENDING',
+   0x00000003 =&gt; 'STOP_PENDING',    0x00000004 =&gt; 'RUNNING',
+<tt class="userinput"><b>   </b></tt>0x00000005 =&gt; 'CONTINUE_PENDING',0x00000006 =&gt; 'PAUSE_PENDING',
+   0x00000007 =&gt; 'PAUSED',          0x00000008 =&gt; 'ERROR');
+<tt class="userinput"><b> </b></tt>
+$ADsPath = "WinNT://DomainName/ComputerName,computer";
+
+$c = Win32::OLE-&gt;GetObject($ADsPath) or die "Unable to get $ADsPath\n";
+
+foreach $adsobj (in $c){
+  print $adsobj-&gt;{DisplayName} . ":" . $status{$adsobj-&gt;{status}} . "\n" 
+      if ($adsobj-&gt;{Class} eq "Service");
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>To start, stop, pause, or continue a service, we call the obvious
+method (<tt class="literal">Start( )</tt>, <tt class="literal">Stop( )</tt>,
+etc.). Here's how we might start the Network Time service on a
+Windows 2000 machine if it were stopped:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE;
+
+$ADsPath = "WinNT://DomainName/ComputerName/W32Time,service";
+
+$s = Win32::OLE-&gt;GetObject($ADsPath) or die "Unable to get $ADsPath\n";
+
+$s-&gt;Start(  );
+# may wish to check status at this point, looping until it is started</pre>
+</blockquote>
+
+
+
+
+
+<p>To avoid potential user- and computer name conflicts, the previous
+code can also be written as:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE;
+
+$d = Win32::OLE-&gt;GetObject("WinNT://Domain");
+$c = $d-&gt;GetObject("Computer", $computername);
+$s = $c-&gt;GetObject("Service", "W32Time");
+
+$s-&gt;Start(  );</pre>
+</blockquote>
+
+
+
+
+
+<p>Stopping it is just a matter of changing the last line to:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$s-&gt;Stop(  );
+# may wish to check status at this point, looping until it is stopped</pre>
+</blockquote>
+
+
+
+
+
+<p>These examples should give you some idea of the amount of control
+ADSI from Perl can give you over your system administration work.
+Directory services and their interfaces can be a very powerful part
+of your computing infrastructure. <a name="INDEX-667"></a><a name="INDEX-668"></a><a name="INDEX-669"></a>
+</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_04.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch06_06.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">6.4. LDAP: A Sophisticated Directory Service</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">6.6. Module Information for This Chapter</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

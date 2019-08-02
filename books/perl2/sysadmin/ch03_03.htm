@@ -1,0 +1,2781 @@
+<html>
+<head>
+<title>Building an Account System to Manage Users  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Building an Account System to Manage Users">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch03_01.htm">Chapter 3: User Accounts</a></td><td align="right" valign="top" width="172"><a href="ch03_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">3.3. Building an Account System to Manage Users</h2>
+
+
+
+
+
+<p>
+<a name="INDEX-207"></a><a name="INDEX-208"></a>Now that we've had a good look at
+user identity, we can begin to address the administration aspect of
+user accounts. Rather than just show you the select Perl subroutines
+or function calls you need for user addition and deletion,
+we're going to take this topic to the next level by showing
+these operations in a larger context. In the remainder of this
+chapter, we're going to work towards writing a bare-bones
+account system that starts to really manage both NT and Unix users.</p>
+
+
+
+
+
+<p>Our account system will be constructed in four parts: user interface,
+data storage, process scripts (Microsoft would call them the
+"business logic"), and low-level library routines. From a
+process perspective they work together (see <a href="ch03_03.htm#ch03-84421">Figure 3-2</a>).</p>
+
+
+
+
+
+<a name="ch03-84421"></a>
+<div class="figure">
+<img alt="figure" src="figs/psa_0302.gif"></div>
+<h4 class="objtitle">Figure 3.2. The structure of a basic account system</h4>
+
+<p>Requests come into the system through a user interface and get placed
+into an "add account queue" file for processing.
+We'll just call this an "add queue" from here on
+in. A process script reads this queue, performs the required account
+creations, and stores information about the created accounts in a
+separate database. That takes care of adding the users to our
+system<a name="INDEX-209"></a>.</p>
+
+
+
+
+
+<p>For removing a user, the process is similar. A user interface is used
+to create a "remove queue." A second process script reads
+this queue and deletes the users from our system and updates the
+central database.</p>
+
+
+
+
+
+<p>We isolate these operations into separate conceptual parts because it
+gives us the maximum possible flexibility should we decide to change
+things later. For instance, if some day we decide to change our
+database backend, we only need to modify the low-level library
+routines. Similarly, if we want our user addition process to include
+additional steps (perhaps cross-checking against another database in
+Human Resources), we will only need to change the process script in
+question.Let's start by looking at the first component: the
+user interface used to create the initial account queue. For the
+bare-bones purposes of this book, we'll use a simple text-based
+user interface to query for account parameters:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub CollectInformation{
+    # list of fields init'd here for demo purposes, this should 
+    # really be kept in a central configuration file
+    my @fields = qw{login fullname id type password};
+    my %record;
+
+    foreach my $field (@fields){
+        print "Please enter $field: ";
+        chomp($record{$field} = &lt;STDIN&gt;);
+    }
+    $record{status}="to_be_created";
+    return \%record; 
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>This routine creates a list and populates it with the different
+fields of an account record. As the comment mentions, this list is
+in-lined in the code here only for brevity's sake. Good
+software design suggests the field name list really should be read
+from an additional configuration file.</p>
+
+
+
+
+
+<p>Once the list has been created, the routine iterates through it and
+requests the value for each field. Each value is then stored back
+into the record hash. At the end of the question and answer session,
+a reference to this hash is returned for further processing. Our next
+step will be to write the information to the add queue. Before we see
+this code, we should talk about data storage and data formats for our
+account system.</p>
+
+
+
+
+
+<a name="ch03-15-fm2xml"></a>
+<h3 class="sect2">3.3.1. The Backend Database</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-210"></a><a name="INDEX-211"></a>The center of any account system is a
+database. Some administrators use their
+<em class="filename">/etc/passwd</em> file or SAM database as the only
+record of the users on their system, but this practice is often
+shortsighted. In addition to the pieces of user identity we've
+discussed, a separate database can be used to store metadata about
+each account, like its creation and expiration date, account sponsor
+(if it is a guest account), user's phone numbers, etc. Once a
+database is in place, it can be used for more than just basic account
+management. It can be useful for all sorts of niceties, such as
+automatic mailing list creation, LDAP services, and personal web page
+indexes.</p>
+
+
+
+
+
+<a name="ch03-16-fm2xml"></a>
+<div class="sidebar">
+<h4 class="objtitle">Why the Really Good System Administrators Create Account Systems</h4>
+
+
+
+
+
+<p>
+<a name="INDEX-212"></a><a name="INDEX-213"></a>System administrators fall into roughly
+two categories: mechanics and architects. Mechanics spend most of
+their time in the trenches dealing with details. They know amazing
+amounts of arcania about the hardware and software they administer.
+If something breaks, they know just the command, file, or spanner
+wrench to wield. Talented mechanics can scare you with their ability
+to diagnose and fix problems even while standing clear across the
+room from the problem machine.</p>
+
+
+
+
+<p>Architects spend their
+time surveying the computing landscape from above. They think more
+abstractly about how individual pieces can be put together to form
+larger and more complex systems. Architects are concerned about
+issues of scalability, extensibility, and reusability.</p>
+
+
+
+
+<p>Both types bring important skills to the system administration
+field. The system administrators I respect the most are those who can
+function as a mechanic but whose preferred mindset is closely aligned
+to that of an architect. They fix a problem and then spend time after
+the repair determining which systemic changes can be made to prevent
+it from occurring again. They think about how even small efforts on
+their part can be leveraged for future benefit.</p>
+
+
+
+
+<p>Well-run computing environments require both architects and
+mechanics working in a symbiotic relationship. A mechanic is most
+useful while working in a solid framework constructed by an
+architect. In the automobile world we need mechanics to fix cars. But
+mechanics rely on the car designers to engineer slow-to-break,
+easy-to-repair vehicles. They need infrastructure like assembly
+lines, service manuals, and spare-part channels to do their job well.
+If an architect performs her or his job well, the mechanic's
+job is made easier.</p>
+
+
+
+
+<p>How do these roles play out in the
+context of our discussion? Well, a mechanic will probably use the
+built-in OS tools for user management. She or he might even go so far
+as to write small scripts to help make individual management tasks
+like adding users easier. An architect looking at the same tasks will
+immediately start to construct an account system. An architect will
+think about issues like:</p>
+
+
+
+
+<ul>
+<li>
+<p>The
+repetitive nature of user management and how to automate as much of
+the process as possible.</p>
+</li>
+<li>
+<p>The sorts of information an account
+system collects, and how a properly built account system can be
+leveraged as a foundation for other functionality. For instance,
+Lightweight Directory Access Protocol (LDAP) directory services and
+automatic web site generation tools could be built on top of an
+account system.</p>
+</li>
+<li>
+<p>Protecting the data in an account system (i.e., security).</p>
+</li>
+<li>
+<p>Creating a system that will scale if the number of users increases.</p>
+</li>
+<li>
+<p>Creating a system that other sites might be able to use.</p>
+</li>
+<li>
+<p>How other system administration architects have dealt with the problems.</p>
+</li>
+</ul>
+</div>
+
+<p>Mentioning the creation of a separate database makes some people
+nervous. They think "Now I have to buy a really expensive
+commercial database, another machine for it to run on, and hire a
+database administrator." If you have thousands or tens of
+thousands of user accounts to manage, yes, you do need all of those
+things (though you may be able to get by with some of the
+noncommercial SQL databases like Postgres and MySQL). If this is the
+case for you, you may want to turn to <a href="ch07_01.htm">Chapter 7, "SQL Database Administration"</a>,
+for more information on dealing with databases like this in Perl.</p>
+
+
+
+
+
+<p>But in this chapter when I say <em class="emphasis">database</em>,
+I'm using the term in the broadest sense. A flat-file, plain
+text database will work fine for smaller installations. Win32 users
+could even use an access database file (e.g.,
+<em class="filename">database.mdb</em>). For portability, we'll use
+plain text databases in this section for the different components
+we're going to build. To make things more interesting, our
+databases will be in XML format. If you have never encountered XML
+before, please take a moment to read <a href="appc_01.htm">Appendix C, "The Eight-Minute XML Tutorial"</a>.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-214"></a><a name="INDEX-215"></a>Why XML? XML has a few
+properties that make it a good choice for files like this and other
+system administration configuration files:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>XML is a plain text format, which means we can use our usual Perl bag
+o' tricks to deal with it easily.</p>
+</li>
+<li>
+<p>XML is self-describing and practically self-documenting. With a
+character-delimited file like <em class="filename">/etc/passwd</em>, it is
+not always easy to determine which part of a line represents which
+field. With XML, this is never a problem because an obvious tag can
+surround each field.</p>
+</li>
+<li>
+<p>With the right parser, XML can also be self-validating. If you use a
+validating parser, mistakes in an entry's format will be caught
+right away, since the file will not parse correctly according to its
+document type definition or schema. The Perl modules we'll be
+using in this chapter are based on a nonvalidating parser, but there
+is considerable work afoot (both within this framework and in other
+modules) to provide XML validation functionality. One step in this
+direction is <tt class="literal">XML::Checker</tt>, part of Enno
+Derksen's <tt class="command">libxml-enno</tt>. Even without a
+validating parser, any XML parser that checks for well-formedness
+will catch many errors.</p>
+</li>
+<li>
+<p>XML is flexible enough to describe virtually any set of text
+information you would ever desire to keep. This flexibility means you
+could use one parser library to get at all of your data, rather than
+having to write a new parser for each different format.</p>
+</li>
+</ul>
+<p>We'll use XML-formatted plain text files for the main user
+account storage file and the add/delete queues.</p>
+
+
+
+
+
+<p>As we actually implement the XML portions of our account system,
+you'll find that the TMTOWTDI police are out in force. For each
+XML operation we require, we'll explore or at least mention
+several ways to perform it. Ordinarily when putting together a system
+like this, it would be better to limit our implementation options,
+but this way you will get a sense of the programming palette
+available when doing XML work in Perl.</p>
+
+
+
+
+
+<a name="ch03-17-fm2xml"></a>
+<h3 class="sect3">3.3.1.1. Writing XML from Perl</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-216"></a>Let's start by returning to the
+cliffhanger we left off with earlier in "NT 2000 User
+Rights." It mentioned we needed to write the account
+information we collected with <tt class="literal">CollectInformation(
+)</tt> to our add queue file, but we didn't actually see
+code to perform this task. Let's look at how that XML-formatted
+file is written.</p>
+
+
+
+
+
+<p>Using ordinary <tt class="literal">print</tt> statements to write an
+XML-compliant text would be the simplest method, but we can do
+better. Perl modules like <tt class="literal">XML::Generator</tt> by
+Benjamin Holzman and
+<tt class="literal">XML::Writer</tt><a name="INDEX-217"></a><a name="INDEX-218"></a> by David Megginson can make the process
+easier and less error-prone. They can handle details like start/end
+tag matching and escaping special characters
+(<tt class="literal">&lt;</tt>, <tt class="literal">&gt;</tt>,
+<tt class="literal">&amp;</tt>, etc.) for us. Here's the XML writing
+code from our account system which makes use of
+<tt class="literal">XML::Writer</tt>:<a name="INDEX-219"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub AppendAccountXML {
+    # receive the full path to the file
+    my $filename = shift;
+    # receive a reference to an anonymous record hash  
+    my $record = shift;    
+
+    # XML::Writer uses IO::File objects for output control
+    use IO::File;
+
+    # append to that file
+    $fh = new IO::File("&gt;&gt;$filename") or 
+       die "Unable to append to file:$!\n";
+
+    # initialize the XML::Writer module and tell it to write to 
+    # filehandle $fh
+    use XML::Writer;
+    my $w = new XML::Writer(OUTPUT =&gt; $fh);
+
+    # write the opening tag for each &lt;account&gt; record
+    $w-&gt;startTag("account");
+
+    # write all of the &lt;account&gt; data start/end sub-tags &amp; contents
+    foreach my $field (keys %{$record}){
+       print $fh "\n\t";
+       $w-&gt;startTag($field);
+       $w-&gt;characters($$record{$field});
+       $w-&gt;endTag;
+    }
+    print $fh "\n";
+
+    # write the closing tag for each &lt;account&gt; record
+    $w-&gt;endTag;
+    $w-&gt;end;
+    $fh-&gt;close(  );
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Now we can use just one line to collect data and write it to our add
+queue file:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">&amp;AppendAccountXML($addqueue,&amp;CollectInformation);</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's some sample output from this routine:<a href="#FOOTNOTE-5">[5]</a>
+</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-5"></a>
+<p>[5]As
+a quick side note: the XML specification recommends that every XML
+file begin with a declaration (e.g., <tt class="literal">&lt;?xml
+version="1.0"?&gt;</tt>). It is not mandatory, but if we want to
+comply, <tt class="literal">XML::Writer</tt> offers the <tt class="literal">xmlDecl(
+)</tt>method to create one for us.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">&lt;account&gt;
+    &lt;login&gt;bobf&lt;/login&gt;
+    &lt;fullname&gt;Bob Fate&lt;/fullname&gt;
+    &lt;id&gt;24-9057&lt;/id&gt;
+    &lt;type&gt;staff&lt;/type&gt;
+    &lt;password&gt;password&lt;/password&gt;
+    &lt;status&gt;to_be_created&lt;/status&gt;
+&lt;/account&gt;</pre>
+</blockquote>
+
+
+
+
+
+<p>Yes, we are storing passwords in clear text. This is an exceptionally
+bad idea for anything but a demonstration system
+and even then you should think twice. A real account system would
+probably pre-encrypt the password before adding it to the add queue
+or not keep this info in a queue at all.</p>
+
+
+
+
+
+<p>
+<tt class="literal">AppendAccountXML( )</tt> will make another appearance
+later when we want to write data to the end of our delete queue and
+our main account database.</p>
+
+
+
+
+
+<p>The use of <tt class="literal">XML::Writer</tt> in our
+<tt class="literal">AppendAccountXML( )</tt> subroutine gives us a few
+perks:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>The code is quite legible; anyone with a little bit of markup
+language experience will instantly understand the names
+<tt class="literal">startTag( )</tt>, <tt class="literal">characters( )</tt>,
+and <tt class="literal">endTag( )</tt>.</p>
+</li>
+<li>
+<p>Though our data didn't need this, <tt class="literal">characters(
+)</tt> is silently performing a bit of protective magic for us
+by properly escaping reserved entities like the greater-than symbol
+(&gt;).</p>
+</li>
+<li>
+<p>Our code doesn't have to remember the last start tag we opened
+for later closing. <tt class="literal">XML::Writer</tt> handles this
+matching for us, allowing us to call <tt class="literal">endTag( )</tt>
+without specifying <em class="emphasis">which</em> end tag we need.
+Keeping track of tag pairs is less of an issue with our account
+system because our data uses shallowly nesting tags, but this
+functionality becomes more important in other situations where our
+elements are more complex. <a name="INDEX-220"></a><a name="INDEX-221"></a>
+</p>
+</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+<a name="ch03-18-fm2xml"></a>
+<h3 class="sect3">3.3.1.2. Reading XML using XML::Parser</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-222"></a><a name="INDEX-223"></a>We'll see one more way of writing
+XML from Perl in a moment, but before we do, let's turn our
+attention to the process of reading all of the great XML we've
+just learned how to write. We need code that will parse the account
+addition and deletion queues and the main database.</p>
+
+
+
+
+
+<p>It would be possible to cobble together an XML parser in Perl for our
+limited data set out of regular expressions, but that gets trickier
+as the XML data gets more complicated.<a href="#FOOTNOTE-6">[6]</a> For general parsing, it is easier to use the
+<tt class="literal">XML::Parser</tt> module initially written by Larry Wall
+and now significantly enhanced and maintained by Clark Cooper.</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-6"></a>
+<p>[6]But it is
+doable; for instance, see Eric Prud'hommeaux's module at
+<a href="http://www.w3.org/1999/02/26-modules/W3C-SAX-XmlParser-*">http://www.w3.org/1999/02/26-modules/W3C-SAX-XmlParser-*</a>.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">XML::Parser</tt><a name="INDEX-224"></a>
+is an event-based module. Event-based modules work like stock market
+brokers. Before trading begins, you leave a set of instructions with
+them for actions they should take should certain triggers occur
+(e.g., sell a thousand shares should the price drop below
+31&frasl;4, buy this stock at the beginning of the trading day, and
+so on). With event-based programs, the triggers are called
+<em class="emphasis">events</em> and the instruction lists for what to do
+when an event happens are called <em class="emphasis">event handlers</em>.
+Handlers are usually just special subroutines designed to deal with a
+particular event. Some people call them <em class="emphasis">callback
+routines</em>, since they are run when the main program
+"calls us back" after a certain condition is established.
+With the <tt class="literal">XML::Parser</tt> module, our events will be
+things like "started parsing the data stream,"
+"found a start tag," and "found an XML
+comment," and our handlers will do things like "print the
+contents of the element you just found."<a href="#FOOTNOTE-7">[7]</a><a name="INDEX-225"></a>
+</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-7"></a>
+<p>[7]Though
+we don't use it here, Chang Liu's
+<tt class="literal">XML::Node</tt> module allows the
+programmer to easily request callbacks for only certain elements,
+further simplifying the process we're about to discuss.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<p>Before we begin to parse our data, we need to create an
+<tt class="literal">XML::Parser</tt> object. When we create this object,
+we'll specify which parsing mode, or
+<em class="emphasis">style</em>, to use. <tt class="literal">XML::Parser</tt>
+provides several styles, each of which behaves a little different
+during the parsing of data. The style of a parse will determine which
+event handlers are called by default and the way data returned by the
+parser (if any) is structured.</p>
+
+
+
+
+
+<p>Certain styles require that we specify an association between each
+event we wish to manually process and its handler. No special actions
+are taken for events we haven't chosen to explicitly handle.
+This association is stored in a simple hash table with keys that are
+the names of the events we want to handle, and values that are
+references to our handler subroutines. For the styles that require
+this association, we pass the hash in using a named parameter called
+<tt class="literal">Handlers</tt> (e.g., <tt class="literal">Handlers</tt><tt class="literal">=&gt;</tt><tt class="literal">{Start</tt><tt class="literal">=&gt;</tt><tt class="literal">\&amp;start_handler}</tt>)
+when we create a parser object.</p>
+
+
+
+
+
+<p>We'll be using the <tt class="literal">stream</tt> style that does
+not require this initialization step. It simply calls a set of
+predefined event handlers if certain subroutines are found in the
+program's namespace. The <tt class="literal">stream</tt> event
+handlers we'll be using are simple:
+<tt class="literal">StartTag</tt>, <tt class="literal">EndTag</tt>, and
+<tt class="literal">Text</tt>. All but <tt class="literal">Text</tt> should
+be self-explanatory. <tt class="literal">Text</tt>, according to the
+<tt class="literal">XML::Parser</tt> documentation, is "called just
+before start or end tags with accumulated non-markup text in the
+<tt class="literal">$_</tt> variable." We'll use it when we
+need to know the contents of a particular element.</p>
+
+
+
+
+
+<p>Here's the initialization code we're going to use for our
+application:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use XML::Parser;
+use Data::Dumper; # used for debugging output, not needed for XML parse
+$p = new XML::Parser(ErrorContext =&gt; 3, 
+                      Style          =&gt; 'Stream',
+                       Pkg            =&gt; 'Account::Parse');</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<a name="INDEX-226"></a>This code returns a parser object after
+passing in three named parameters. The first,
+<tt class="literal">ErrorContext</tt>, tells the parser to return three
+lines of context from the parsed data if an error should occur while
+parsing. The second sets the parse style as we just discussed.
+<tt class="literal">Pkg</tt>, the final parameter, instructs the parser to
+look in a different namespace than the current one for the event
+handler subroutines it expects to see. By setting this parameter,
+we've instructed the parser to look for
+<tt class="literal">&amp;Account::Parse::StartTag()</tt>,
+<tt class="literal">&amp;Account::Parse::EndTag( )</tt>, and so on,
+instead of just <tt class="literal">&amp;StartTag( )</tt>,
+<tt class="literal">&amp;EndTag( )</tt>, etc. This doesn't have any
+operational impact, but it does allow us to sidestep any concerns
+that our parser might inadvertently call someone else's
+function called <tt class="literal">StartTag( )</tt>. Instead of using
+the <tt class="literal">Pkg</tt> parameter, we could have put an explicit
+<tt class="literal">package Account::Parse;</tt> line before the above
+code.</p>
+
+
+
+
+
+<p>Now let's look at the subroutines that perform the event
+handling functions. We'll go over them one at a time:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">package Account::Parse;
+
+sub StartTag {
+    undef %record if ($_[1] eq "account");
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">&amp;StartTag( )</tt> is called each time we hit a
+start tag in our data. It is invoked with two parameters: a reference
+to the parser object and the name of the tag encountered. We'll
+want to construct a new record hash for each new account record we
+encounter, so we can use <tt class="literal">StartTag( )</tt> in order to
+let us know when we've hit the beginning of a new record (e.g.,
+an <tt class="literal">&lt;account&gt;</tt> start tag). In that case, we
+obliterate any existing record hash. In all other cases we return
+without doing anything:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub Text {
+   my $ce = $_[0]-&gt;current_element(  );
+   $record{$ce}=$_ unless ($ce eq "account");
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Here we use <tt class="literal">&amp;Text( )</tt> to populate the
+<tt class="literal">%record</tt> hash. Like the previous function, it too
+receives two parameters upon invocation: a reference to the parser
+object and the "accumulated nonmarkup text" the parser
+has collected between the last start and end tag. We determine which
+element we're in by calling the parser object's
+<tt class="literal">current_element( )</tt> method. According to the
+<tt class="literal">XML::Parser::Expat</tt> documentation, this method
+"returns the name of the innermost currently opened
+element." As long as the current element name is not
+"account," we're sure to be within one of the
+subelements of <tt class="literal">&lt;account&gt;</tt>, so we record the
+element name and its contents:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub EndTag {
+    print Data::Dumper-&gt;Dump([\%record],["account"]) 
+        if ($_[1] eq "account");    
+    # here's where we'd actually do something, instead of just
+    # printing the record
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Our last handler, <tt class="literal">&amp;EndTag( )</tt>, is just like
+our first, <tt class="literal">&amp;StartTag( )</tt>, except it gets
+called when we encounter an end tag. If we reach the end of an
+account record, we do the mundane thing and print that record out.
+Here's some example output:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$account = {
+             'login' =&gt; 'bobf',
+             'type' =&gt; 'staff',
+             'password' =&gt; 'password',
+             'fullname' =&gt; 'Bob Fate',
+             'id' =&gt; '24-9057'
+           };
+$account = {
+             'login' =&gt; 'wendyf',
+             'type' =&gt; 'faculty',
+             'password' =&gt; 'password',
+             'fullname' =&gt; 'Wendy Fate',
+             'id' =&gt; '50-9057'
+           };</pre>
+</blockquote>
+
+
+
+
+
+<p>If we were really going to use this parse code in our account system
+we would probably call some function like
+<tt class="literal">CreateAccount(\%record)</tt> rather than printing the
+record using <tt class="literal">Data::Dumper</tt>.</p>
+
+
+
+
+
+<p>Now that we've seen the <tt class="literal">XML::Parser
+</tt>initialization and handler subroutines, we need to include
+the piece of code that actually initiates the parse:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># handle multiple account records in a single XML queue file
+open(FILE,$addqueue) or die "Unable to open $addqueue:$!\n";
+# this clever idiom courtesy of Jeff Pinyan
+read(FILE, $queuecontents, -s FILE);
+$p-&gt;parse("&lt;queue&gt;".$queuecontents."&lt;/queue&gt;");</pre>
+</blockquote>
+
+
+
+
+
+<p>This code has probably caused you to raise an eyebrow, maybe even
+two. The first two lines open our add queue file and read its
+contents into a single scalar variable called
+<tt class="literal">$queuecontents</tt>. The third line would probably be
+easily comprehensible, except for the funny argument being passed to
+<tt class="literal">parse( )</tt>. Why are we bothering to read in the
+contents of the actual queue file and then bracket it with more XML
+before actually parsing it?</p>
+
+
+
+
+
+<p>Because it is a hack. As hacks go, it's not so bad.
+Here's why these convolutions are necessary to parse the
+multiple <tt class="literal">&lt;account&gt;</tt> elements in our queue
+file.</p>
+
+
+
+
+
+<p>Every XML document, by definition (in the very first production rule
+of the XML specification), must have a <em class="emphasis">root</em> or
+<em class="emphasis">document element</em>. This element is the container
+element for the rest of the document; all other elements are
+subelements of it. An XML parser expects the first start tag it sees
+to be the start tag for the root element of that document and the
+last end tag it sees to be the end tag for that that element. XML
+documents that do not conform to this structure are not considered to
+be well-formed.</p>
+
+
+
+
+
+<p>This puts us in a bit of a bind when we attempt to model a queue in
+XML. If we do nothing, <tt class="literal">&lt;account&gt;</tt> will be
+found as the first tag in the file. Everything will work fine until
+the parser hits the end <tt class="literal">&lt;/account&gt;</tt> tag for
+that record. At that point it will cease to parse any further, even
+if there are more records to be found, because it believes it has
+found the end of the document.</p>
+
+
+
+
+
+<p>We can easily put a start tag (<tt class="literal">&lt;queue&gt;</tt>) at
+the beginning of our queue, but how do we handle end tags
+(<tt class="literal">&lt;/queue&gt;</tt>)? We always need the root
+element's end tag at the bottom of the file (and only there), a
+difficult task given that we're planning to repeatedly append
+records to this file.</p>
+
+
+
+
+
+<p>A plausible but fairly heinous hack would be to <tt class="literal">seek(
+)</tt> to the end of the file, and then <tt class="literal">seek(
+)</tt> backwards until we backed up just before the last end
+tag. We could then write our new record over this tag, leaving an end
+tag at the end of the data we were writing. Just the risk of data
+corruption (what if you back up too far?) should dissuade you from
+this method. Also, this method gets tricky in cases where there is no
+clear end of file, e.g., if you were reading XML data from a network
+connection. In those cases you would probably need to do some extra
+shadow buffering of the data stream so it would be possible to back
+up from the end of transmission.</p>
+
+
+
+
+
+<p>The method we demonstrated in the code above of prepending and
+appending a root element tag pair to the existing data may be a hack,
+but it comes out looking almost elegant compared to other solutions.
+Let's return to more pleasant topics.<a name="INDEX-227"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+<a name="ch03-19-fm2xml"></a>
+<h3 class="sect3">3.3.1.3. Reading XML using XML::Simple </h3>
+
+
+
+
+
+<p>
+<a name="INDEX-228"></a>We've seen one method for bare
+bones XML parsing using the <tt class="literal">XML::Parser</tt> module. To
+be true to our TMTOWTDI warning, let's revisit the task, taking
+an even easier tack. Several authors have written modules built upon
+<tt class="literal">XML::Parser</tt> to parse XML documents and return the
+data in easy-to-manipulate Perl object/data structure form, including
+<tt class="literal">XML::DOM</tt> by Enno Derksen, Ken MacLeod's
+<tt class="literal">XML::Grove</tt> and <tt class="literal">ToObjects</tt> (part
+of the <em class="filename">libxml-perl</em> package),
+<tt class="literal">XML::DT</tt> by Jose Joao Dias de Almeida, and
+<tt class="literal">XML::Simple</tt> by Grant McLean. Of these,
+<tt class="literal">XML::Simple</tt> is perhaps the easiest to use. It was
+designed to handle smallish XML configuration files, perfect for the
+task at hand.</p>
+
+
+
+
+
+<p>
+<tt class="literal">XML::Simple</tt> provides exactly two functions.
+Here's the first (in context):</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use XML::Simple;
+use Data::Dumper;  # just needed to show contents of our data structures
+
+$queuefile = "addqueue.xml";
+open(FILE,$queuefile) or die "Unable to open $queuefile:$!\n";
+read(FILE, $queuecontents, -s FILE);
+$queue = XMLin("&lt;queue&gt;".$queuecontents."&lt;/queue&gt;");</pre>
+</blockquote>
+
+
+
+
+
+<p>We dump the contents of <tt class="literal">$queue</tt>, like so:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">print Data::Dumper-&gt;Dump([$queue],["queue"]);</pre>
+</blockquote>
+
+
+
+
+
+<p>It is now a reference to the data found in our add queue file, stored
+as a hash of a hash keyed on our <tt class="literal">&lt;id&gt;</tt>
+elements. <a href="ch03_03.htm#ch03-15780">Figure 3-3</a> shows this data structure.</p>
+
+
+
+
+
+<a name="ch03-15780"></a>
+<div class="figure">
+<img alt="figure" src="figs/psa_0303.gif"></div>
+<h4 class="objtitle">Figure 3.3. The data structure created by XMLin(  ) with no special arguments</h4>
+
+<p>The data structure is keyed this way because
+<tt class="literal">XML::Simple</tt> has a feature that recognizes certain
+tags in the data, favoring them over the others during the conversion
+process. When we turn this feature off:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$queue = XMLin("&lt;queue&gt;".$queuecontents."&lt;/queue&gt;",keyattr=&gt;[]);</pre>
+</blockquote>
+
+
+
+
+
+<p>we get a reference to a hash with the sole value of a reference to an
+anonymous array. The anonymous array holds our data as seen in <a href="ch03_03.htm#ch03-41533">Figure 3-4</a>.</p>
+
+
+
+
+
+<a name="ch03-41533"></a>
+<div class="figure">
+<img alt="figure" src="figs/psa_0304.gif"></div>
+<h4 class="objtitle">Figure 3.4. The data structure created by XMLin(  ) with keyattr turned off</h4>
+
+<p>That's not a particularly helpful data structure. We can tune
+the same feature in our favor:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$queue = XMLin("&lt;queue&gt;".$queuecontents."&lt;/queue&gt;",keyattr =&gt; ["login"]);</pre>
+</blockquote>
+
+
+
+
+
+<p>Now we have a reference to a data structure (a hash of a hash keyed
+on the login name), perfect for our needs as seen in <a href="ch03_03.htm#ch03-62033">Figure 3-5</a>.</p>
+
+
+
+
+
+<a name="ch03-62033"></a>
+<div class="figure">
+<img alt="figure" src="figs/psa_0305.gif"></div>
+<h4 class="objtitle">Figure 3.5. The same data structure with a user-specified keyattr</h4>
+
+<p>How perfect? We can now remove items from our in-memory add queue
+after we process them with just one line:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># e.g. $login = "bobf";
+delete $queue-&gt;{account}{$login};</pre>
+</blockquote>
+
+
+
+
+
+<p>If we want to change a value before writing it back to disk
+(let's say we were manipulating our main database),
+that's easy too:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># e.g. $login="wendyf" ; $field="status";
+$queue-&gt;{account}{$login}{$field}="created";<a name="INDEX-229"></a>
+</pre>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+<a name="ch03-20-fm2xml"></a>
+<h3 class="sect3">3.3.1.4. Writing XML using XML::Simple</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-230"></a>The mention of "writing it back to
+disk" brings us to back the method of writing XML promised
+earlier. <tt class="literal">XML::Simple</tt>'s second function takes
+a reference to a data structure and generates XML:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># rootname sets the root element's name, we could also use 
+# xmldecl to add an XML declaration
+print XMLout($queue, rootname =&gt;"queue");</pre>
+</blockquote>
+
+
+
+
+
+<p>This yields (indented for readability):</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">&lt;queue&gt;
+  &lt;account name="bobf" type="staff"
+           password="password" status="to_be_created"
+           fullname="Bob Fate" id="24-9057" /&gt;
+  &lt;account name="wendyf" type="faculty"
+           password="password" status="to_be_created" 
+           fullname="Wendy Fate" id="50-9057" /&gt;
+&lt;/queue&gt;</pre>
+</blockquote>
+
+
+
+
+
+<p>This is perfectly good XML, but it's not in the same format as
+our data files. The data for each account is being represented as
+attributes of a single <tt class="literal">&lt;account&gt;
+&lt;/account&gt;</tt> element, not as nested elements.
+<tt class="literal">XML::Simple</tt> has a set of rules for how it
+translates data structures. Two of these rules (the rest can be found
+in the documentation) can be stated as "single values are
+translated into XML attributes" and "references to
+anonymous arrays are translated as nested XML elements."</p>
+
+
+
+
+
+<p>We need a data structure in memory that looks like <a href="ch03_01.htm">Chapter 3, "User Accounts"</a> to produce the "correct" XML
+output (correct means "in the same style and format as our data
+files").</p>
+
+
+
+
+
+<a name="ch03-64408"></a>
+<div class="figure">
+<img alt="figure" src="figs/psa_0306.gif"></div>
+<h4 class="objtitle">Figure 3.6. The data structure needed to output our XML queue file</h4>
+
+<p>Ugly, isn't it? We have a few choices at this point, including:</p>
+
+
+
+
+
+<ol>
+<li>
+<p>Changing the format of our data files. This seems a bit extreme.</p>
+</li>
+<li>
+<p>Changing the way we ask <tt class="literal">XML::Simple</tt> to parse our
+file. To get an in-memory data structure like the one in <a href="ch03_03.htm#ch03-64408">Figure 3-6</a> we could use:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$queue = XMLin("&lt;queue&gt;".$queuecontents."&lt;/queue&gt;",forcearray=&gt;1,
+                                                   keyattr =&gt; [""]);</pre>
+</blockquote>
+
+
+
+
+
+<p>But when we tailor the way we read in the data to make for easy
+writing, we lose our easy hash semantics for data lookup and
+manipulation.</p>
+</li>
+<li>
+<p>Performing some data manipulation after reading but before writing.
+We could read the data into a structure we like (just like we did
+before), manipulate the data to our heart's contents, and then
+transform the data structure into one <tt class="literal">XML::Simple</tt>
+"likes" before writing it out.</p>
+</li>
+</ol>
+<p>Option number three appears to be the most reasonable, so let's
+pursue it. Here's a subroutine that takes the data structure in
+<a href="ch03_01.htm">Chapter 3, "User Accounts"</a> and transforms it into the data
+structure found in <a href="ch03_01.htm">Chapter 3, "User Accounts"</a>. An explanation of
+this code will follow:<a name="INDEX-231"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub TransformForWrite{
+  my $queueref = shift;
+  my $toplevel = scalar each %$queueref;
+
+  foreach my $user (keys %{$queueref-&gt;{$toplevel}}){
+    my %innerhash = 
+       map {$_,[$queueref-&gt;{$toplevel}{$user}{$_}] } 
+             keys %{$queueref-&gt;{$toplevel}{$user}};
+    $innerhash{'login'} = [$user];
+    push @outputarray, \%innerhash;
+  }
+
+  $outputref = { $toplevel =&gt; \@outputarray};
+  return $outputref;
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Let's walk through the <tt class="literal">TransformForWrite(
+)</tt> subroutine one step at a time.</p>
+
+
+
+
+
+<p>If you compare <a href="ch03_03.htm#ch03-62033">Figure 3-5</a> and <a href="ch03_03.htm#ch03-64408">Figure 3-6</a>, you'll notice one common feature
+between these two structures: there is an outermost hash keyed with
+the same key (<tt class="literal">account</tt>). The following retrieves
+that key name by requesting the first key in the hash pointed to by
+<tt class="literal">$queueref</tt>:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">my $toplevel = scalar each %$queueref;</pre>
+</blockquote>
+
+
+
+
+
+<p>Let's see how this data structure is created from the inside
+out:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">my %innerhash = 
+       map {$_,[$queueref-&gt;{$toplevel}{$user}{$_}] } 
+             keys %{$queueref-&gt;{$toplevel}{$user}};</pre>
+</blockquote>
+
+
+
+
+
+<p>This piece of code uses <tt class="literal">map( )</tt> to iterate over
+the keys found in the innermost hash for each entry (i.e., login,
+type, password, status). The keys are returned by:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">keys %{$queueref-&gt;{$toplevel}{$user}};</pre>
+</blockquote>
+
+
+
+
+
+<p>As we iterate over each key, we ask <tt class="literal">map</tt> to
+return two values for each key: the key itself, and the reference to
+an anonymous array that contains the value of this key:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">map {$_,[$queueref-&gt;{$toplevel}{$user}{$_}] }</pre>
+</blockquote>
+
+
+
+
+
+<p> The list returned by <tt class="literal">map(  )</tt> looks like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">(login,[bobf], type,[staff], password,[password]...)</pre>
+</blockquote>
+
+
+
+
+
+<p>It has a key-value format, where the values are stored as elements in
+anonymous arrays. We can simply assign this list to
+<tt class="literal">%innerhash</tt> to populate the inner hash table for
+our resulting data structure (<tt class="literal">my %innerhash =</tt>). We
+also add a <tt class="literal">login</tt> key to that hash based on the
+current user being processed:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$innerhash{'login'} = [$user];</pre>
+</blockquote>
+
+
+
+
+
+<p>The data structure we are trying to create is a list of hashes like
+these, so after we create and populate our inner hash, we add a
+reference to it on to the end of our output structure list:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">push @outputarray, \%innerhash;</pre>
+</blockquote>
+
+
+
+
+
+<p>We repeat this procedure once for every <tt class="literal">login</tt> key
+found in our original data structure (once per account record). When
+we are done, we have a list of references to hashes in the form we
+need. We create an anonymous hash with a key that is the same as the
+outermost key for the original data structure and a value that is our
+list of hashes. We return a reference to this anonymous hash back to
+the caller of our subroutine, and we're done:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$outputref = { $toplevel =&gt; \@outputarray};
+  return $outputref;</pre>
+</blockquote>
+
+
+
+
+
+<p>With <tt class="literal">&amp;TransformForWrite( )</tt>, we can now write
+code to read in, manipulate, and then write out our data:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$queue = XMLin("&lt;queue&gt;".$queuecontents."&lt;/queue&gt;",keyattr =&gt; ["login"]);
+<em class="emphasis">manipulate the data...</em>
+</pre>
+</blockquote>
+
+
+
+<blockquote>
+<pre class="programlisting">print OUTPUTFILE XMLout(TransformForWrite($queue),rootname =&gt; "queue");</pre>
+</blockquote>
+
+
+
+
+
+<p>The data written will be in the same format as the data read.</p>
+
+
+
+
+
+<p>Before we move on from the subject of reading and writing data,
+let's tie up some loose ends:</p>
+
+
+
+
+
+<ol>
+<li>
+<p>Eagle-eyed readers may notice that using
+<tt class="literal">XML::Writer</tt> and <tt class="literal">XML::Simple</tt> in
+the same program to write to our account queue could be problematic.
+If we write with <tt class="literal">XML::Simple</tt>, our data will be
+nested in a root element by default. If we write using
+<tt class="literal">XML::Writer</tt> (or with just print statements),
+that's not necessarily the case, meaning we need to resort to
+the
+<tt class="literal">"&lt;queue&gt;".$queuecontents."&lt;/queue&gt;"</tt>
+hack. We have an undesirable level of reader-writer synchronization
+between our XML parsing and writing code.</p>
+
+
+
+
+
+<p>To get around this, we will have to use an advanced feature of
+<tt class="literal">XML::Simple</tt>: if <tt class="literal">XMLout( ) </tt>is
+passed a <tt class="literal">rootname</tt> parameter with a value that is
+empty or <tt class="literal">undef</tt>, it will produce XML code that does
+not have a root element. In most cases this is a dangerous thing to
+do because it means the XML being produced is not well-formed and
+will not be parseable. Our queue-parsing hack allows us to get away
+with it, but in general this is not a feature you want to invoke
+lightly</p>
+</li>
+<li>
+<p>Though we didn't do this in our sample code, we should be ready
+to deal with parsing errors. If the data file contains
+non-well-formed data, then your parser will sputter and die (as per
+the XML specification), taking your whole program with it unless you
+are careful. The most common way to deal with this in Perl is to wrap
+your parse statement in <tt class="literal">eval( )</tt> and then check
+the contents of <tt class="literal">$@</tt> after the parse
+completes.<a href="#FOOTNOTE-8">[8]</a> For example:</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-8"></a>
+<p>[8]Daniel Burckhardt pointed out on the
+Perl-XML list that this method has its drawbacks. In a multithreaded
+Perl program, checking the global <tt class="literal">$@</tt> may not be
+safe without taking other precautions. Threading issues like this
+were still under discussion among the Perl developers at the time of
+this publishing.</p>
+
+
+
+
+</blockquote>
+</li>
+</ol>
+<blockquote>
+<pre class="programlisting">eval {$p-&gt;parse("&lt;queue&gt;".$queuecontents."&lt;/queue&gt;")};
+if ($@) { <em class="emphasis">do something graceful to handle
+the error before quitting...</em>
+</pre>
+</blockquote>
+
+
+
+<blockquote>
+<pre class="programlisting">};</pre>
+</blockquote>
+
+
+
+
+
+<p>Another solution would be to use something like the
+<tt class="literal">XML::Checker</tt> module mentioned before, since it
+handles parse errors with more grace.<a name="INDEX-232"></a><a name="INDEX-233"></a><a name="INDEX-234"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch03-21-fm2xml"></a>
+<h3 class="sect2">3.3.2. The Low-Level Component Library </h3>
+
+
+
+
+
+<p>Now that we have all of the data under control, including how it is
+acquired, written, read, and stored, let's look at how it is
+actually used deep in the bowels of our account system. We're
+going to explore the code that actually creates and deletes users.
+The key to this section is the notion that we are building a library
+of reusable components. The better you are able to compartmentalize
+your account system routines, the easier it will be to change only
+small pieces when it comes time to migrate your system to some other
+operating system or make changes. This may seem like unnecessary
+caution on our part, but the one constant in system administration
+work is constant change.</p>
+
+
+
+
+
+<a name="ch03-22-fm2xml"></a>
+<h3 class="sect3">3.3.2.1. Unix account creation and deletion routines</h3>
+
+
+
+
+
+<p>Let's begin with the code that handles Unix account creation.
+Most of this code will be pretty trivial because we're going to
+take the easy way out. Our account creation and deletion routines
+will call vendor-supplied "add user," "delete
+user," and "change password" executables with the
+right arguments. <a name="INDEX-235"></a><a name="INDEX-236"></a>
+</p>
+
+
+
+
+
+<p>Why the apparent cop-out? We are using this method because we know
+the OS-specific executable will play nice with the other system
+components. Specifically, this method:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>Handles the locking issues for us (i.e., avoids the data corruption
+problems, that two programs simultaneously trying to write to the
+password file can cause).</p>
+</li>
+<li>
+<p>Handles the variations in password file formats (including password
+encoding) we discussed earlier.</p>
+</li>
+<li>
+<p>Is likely to be able to handle any OS-specific authentication schemes
+or password distribution mechanisms. For instance, under Digital
+Unix, the external "add user" executable can add directly
+add a user to the NIS maps on a master server.</p>
+</li>
+</ul>
+<p>Drawbacks of using an external binary to create and remove accounts
+include:</p>
+
+
+
+
+<dl>
+<dt>
+<b><em class="emphasis">OS variations</em></b>
+</dt>
+<dd>
+<p>Each OS has a different set of binaries, located at a different place
+on the system, which take slightly different arguments. In a rare
+show of compatibility, almost all of the major Unix variants (Linux
+included, BSD variants excluded) have mostly compatible add and
+remove account binaries called <tt class="command">useradd</tt> and
+<tt class="command">userdel</tt>. The BSD variants use
+<tt class="command">adduser</tt> and <tt class="command">rmuser</tt>, two
+programs with similar purpose but very different argument names.
+Variations like this tend to increase the complexity of our code.</p>
+</dd>
+
+
+
+
+
+<dt>
+<b><em class="emphasis">Security concerns are introduced</em> </b>
+</dt>
+<dd>
+<p>The program we call and the arguments passed to it will be exposed to
+users wielding the <em class="emphasis">ps</em> command. If accounts are
+only created on a secure machine (like a master server), this reduces
+the data leakage risk considerably.</p>
+</dd>
+
+
+
+
+
+<dt>
+<b><em class="emphasis">Added dependency</em> </b>
+</dt>
+<dd>
+<p>If the executable changes for some reason or is moved, our account
+system is kaput.</p>
+</dd>
+
+
+
+
+
+<dt>
+<b><em class="emphasis">Loss of control</em> </b>
+</dt>
+<dd>
+<p>We have to treat a portion of the account creation process as being
+<em class="emphasis">atomic</em>; in other words, once we run the
+executable we can't intervene or interleave any of our own
+operations. Error detection and recovery becomes more difficult.</p>
+</dd>
+
+
+
+
+
+<dt>
+<b><em class="emphasis">These programs rarely do it all</em></b>
+</dt>
+<dd>
+<p>It's likely these programs will not perform all of the steps
+necessary to instantiate an account at your site. Perhaps you need to
+add specific user types to specific auxiliary groups, place users on
+a site-wide mailing list, or add users to a license file for a
+commercial package. You'll have to add some more code to handle
+these specifities. This isn't a problem with the approach
+itself, it's more of a heads up that any account system you
+build will probably require more work on your part than just calling
+another executable. This will not surprise most system
+administrators, since system administration is very rarely a walk in
+the park.</p>
+</dd>
+
+</dl>
+
+
+
+
+
+<p>For the purposes of our demonstration account system, the positives
+of this approach outweigh the negatives, so let's see some code
+that uses external executables. To keep things simple, we're
+going to show code that works under Solaris and Linux on a local
+machine only, ignoring complexities like NIS and BSD variations. If
+you'd like to see a more complex example of this method in
+action, you may find the <tt class="literal">CfgTie</tt> family of modules
+by Randy Maas instructive.</p>
+
+
+
+
+
+<p>Here's our basic account creation routine:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># these variables should really be set in a central configuration file
+$useraddex    = "/usr/sbin/useradd";  # location of useradd executable
+$passwdex     = "/bin/passwd";        # location of passwd executable
+$homeUnixdirs = "/home";              # home directory root dir
+$skeldir      = "/home/skel";         # prototypical home directory
+$defshell     = "/bin/zsh";           # default shell
+
+sub CreateUnixAccount{
+    
+    my ($account,$record) = @_;
+
+    ### construct the command line, using:
+    # -c = comment field
+    # -d = home dir
+    # -g = group (assume same as user type)
+    # -m = create home dir
+    # -k = and copy in files from this skeleton dir
+    # (could also use -G group, group, group to add to auxiliary groups)
+    my @cmd = ($useraddex, 
+	       "-c", $record-&gt;{"fullname"},
+	       "-d", "$homeUnixdirs/$account",
+	       "-g", $record-&gt;{"type"},
+	       "-m",
+	       "-k", $skeldir,
+	       "-s", $defshell,
+	       $account);
+    
+    print STDERR "Creating account...";
+    my $result = 0xff &amp; system @cmd;
+    # the return code is 0 for success, non-0 for failure, so we invert
+    if ($result){
+        print STDERR "failed.\n";
+        return "$useraddex failed";        
+    }
+    else {
+        print STDERR "succeeded.\n";        
+    }
+
+    print STDERR "Changing passwd...";
+    unless ($result = &amp;InitUnixPasswd($account,$record-&gt;{"password"})){
+        print STDERR "succeeded.\n";
+        return "";
+    }
+    else {
+        print STDERR "failed.\n";
+        return $result;
+    }
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>This adds the appropriate entry to our password file, creates a home
+directory for the account, and copies over some default environment
+files (<em class="filename">.profile</em>, <em class="filename">.tcshrc</em>,
+<em class="filename">.zshrc</em>, etc.) from a skeleton directory.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-237"></a><a name="INDEX-238"></a>Notice
+we make a separate subroutine call to handle setting a password for
+the account. The <tt class="command">useradd</tt> command on some operating
+systems (like Solaris) will leave an account in a locked state until
+the <tt class="command">passwd</tt> command is run for that account. This
+process requires a little sleight of hand, so we encapsulate that
+step in a separate subroutine to keep the details out of our way.
+We'll see that subroutine in just a moment, but first for
+symmetry's sake here's the simpler account deletion code:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># these variables should really be set in a central configuration file
+$userdelex = "/usr/sbin/userdel";  # location of userdel executable
+
+sub DeleteUnixAccount{
+    
+    my ($account,$record) = @_;
+
+    ### construct the command line, using:
+    # -r = remove the account's home directory for us
+    my @cmd = ($userdelex, "-r", $account);
+    
+    print STDERR "Deleting account...";
+    my $result = 0xffff &amp; system @cmd;
+    # the return code is 0 for success, non-0 for failure, so we invert
+    if (!$result){
+        print STDERR "succeeded.\n";
+        return "";
+    }
+    else {
+        print STDERR "failed.\n";
+	     return "$userdelex failed";
+    }
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Before we move on to NT account operations, let's deal with the
+<tt class="literal">InitUnixPasswd( )</tt> routine we mentioned earlier.
+To finish creating an account (under Solaris, at least), we need to
+change that account's password using the standard
+<tt class="command">passwd</tt> command. <tt class="command">passwd</tt><tt class="command">&lt;accountname&gt;</tt> will change that
+account's password.<a name="INDEX-239"></a>
+</p>
+
+
+
+
+
+<p>Sounds simple, but there's a problem lurking here. The
+<tt class="command">passwd</tt> command expects to prompt the user for the
+password. It takes great pains to make sure it is talking to a real
+user by interacting directly with the user's terminal device.
+As a result, the following will <em class="emphasis">not</em> work:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># this code DOES NOT WORK 
+open(PW,"|passwd $account");
+print PW $oldpasswd,"\n";
+print PW $newpasswd,"\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>We have to be craftier than usual; somehow faking the
+<tt class="command">passwd</tt> program into thinking it is dealing with a
+human rather than our Perl code. We can achieve this level of
+duplicity by using <em class="emphasis">Expect.pm</em>, a Perl module by
+Austin Schutz that sets up a pseudo-terminal (pty) within which
+another program will run. <em class="emphasis">Expect.pm</em> is heavily
+based on the famous Tcl program <tt class="command">Expect</tt> by Don
+Libes. This module is part of the family of bidirectional program
+interaction modules. We'll see its close relative, Jay
+Rogers's <tt class="literal">Net::Telnet</tt>, in <a href="ch06_01.htm">Chapter 6, "Directory Services"</a>.</p>
+
+
+
+
+
+<p>These modules function using the same basic conversational model:
+wait for output from a program, send it some input, wait for a
+response, send some data, and so on. The code below starts up
+<tt class="command">passwd</tt> in a pty and waits for it to prompt for the
+password. The discussion we have with <tt class="command">passwd</tt>
+should be easy to follow:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Expect;
+
+sub InitUnixPasswd {
+    my ($account,$passwd) = @_;
+
+    # return a process object
+    my $pobj = Expect-&gt;spawn($passwdex, $account);
+    die "Unable to spawn $passwdex:$!\n" unless (defined $pobj);
+
+    # do not log to stdout (i.e. be silent)
+    $pobj-&gt;log_stdout(0);
+
+    # wait for password &amp; password re-enter prompts, 
+    # answering appropriately
+    $pobj-&gt;expect(10,"New password: ");
+    # Linux sometimes prompts before it is ready for input, so we pause
+    sleep 1;
+    print $pobj "$passwd\r";
+    $pobj-&gt;expect(10, "Re-enter new password: ");
+    print $pobj "$passwd\r";
+
+    # did it work?
+    $result = (defined ($pobj-&gt;expect(10, "successfully changed")) ? 
+  	                                  "" : "password change failed");
+
+    # close the process object, waiting up to 15 secs for 
+    # the process to exit
+    $pobj-&gt;soft_close(  );
+    
+    return $result;
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>The <em class="emphasis">Expect.pm</em> module meets our meager needs well
+in this routine, but it is worth noting that the module is capable of
+much more complex operations. See the documentation and tutorial
+included with the <em class="emphasis">Expect.pm</em> module for more
+information.<a name="INDEX-240"></a><a name="INDEX-241"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+<a name="ch03-23-fm2xml"></a>
+<h3 class="sect3">3.3.2.2. Windows NT/2000 account creation and deletion routines</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-242"></a><a name="INDEX-243"></a>The process of creating and
+deleting an account under Windows NT/2000 is slightly easier than the
+process under Unix because standard API calls for the operation exist
+under NT. Like Unix, we could call an external executable to handle
+the job (e.g., the ubiquitous <tt class="command">net</tt> command with its
+USERS/ADD switch), but it is easy to use the native API calls from a
+handful of different modules, some we've mentioned earlier.
+Account creation functions exist in
+<tt class="literal">Win32::NetAdmin</tt>,
+<tt class="literal">Win32::UserAdmin</tt>,
+<tt class="literal">Win32API::Net</tt>, and
+<tt class="literal">Win32::Lanman</tt>, just to start. Windows 2000 users
+will find the ADSI material in <a href="ch06_01.htm">Chapter 6, "Directory Services"</a> to be
+their best route.<a name="INDEX-244"></a><a name="INDEX-245"></a>
+</p>
+
+
+
+
+
+<p>Picking among these NT4-centric modules is mostly a matter of
+personal preference. In order to understand the differences between
+them, we'll take a quick look behind the scenes at the native
+user creation API calls. These calls are documented in the Network
+Management SDK documentation on <a href="http://msdn.microsoft.com">http://msdn.microsoft.com</a> (search for
+"NetUserAdd" if you have a hard time finding it).
+<tt class="literal">NetUserAdd( )</tt> and the other calls take a
+parameter that specifies the information level of the data being
+submitted. For instance, with information level 1, the C structure
+that is passed in to the user creation call looks like
+this:<a name="INDEX-246"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">typedef struct _USER_INFO_1 {
+  LPWSTR    usri1_name;
+  LPWSTR    usri1_password;
+  DWORD     usri1_password_age;
+  DWORD     usri1_priv;
+  LPWSTR    usri1_home_dir;
+  LPWSTR    usri1_comment;
+  DWORD     usri1_flags;
+  LPWSTR    usri1_script_path;
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>If information level 2 is used, the structure expected is expanded
+considerably:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">typedef struct _USER_INFO_2 {
+  LPWSTR    usri2_name;
+  LPWSTR    usri2_password;
+  DWORD     usri2_password_age;
+  DWORD     usri2_priv;
+  LPWSTR    usri2_home_dir;
+  LPWSTR    usri2_comment;
+  DWORD     usri2_flags;
+  LPWSTR    usri2_script_path;
+  DWORD     usri2_auth_flags;
+  LPWSTR    usri2_full_name;
+  LPWSTR    usri2_usr_comment;
+  LPWSTR    usri2_parms;
+  LPWSTR    usri2_workstations;
+  DWORD     usri2_last_logon;
+  DWORD     usri2_last_logoff;
+  DWORD     usri2_acct_expires;
+  DWORD     usri2_max_storage;
+  DWORD     usri2_units_per_week;
+  PBYTE     usri2_logon_hours;
+  DWORD     usri2_bad_pw_count;
+  DWORD     usri2_num_logons;
+  LPWSTR    usri2_logon_server;
+  DWORD     usri2_country_code;
+  DWORD     usri2_code_page;
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Without having to know anything about these parameters, or even much
+about C at all, we can still tell that a change in level increases
+the amount of information that can be specified as part of the user
+creation. Also, each subsequent information level is a superset of
+the previous one.</p>
+
+
+
+
+
+<p>What does this have to do with Perl? Each module mentioned makes two
+decisions:</p>
+
+
+
+
+
+<ol>
+<li>
+<p>Should the notion of "information level" be exposed to
+the Perl programmer?</p>
+</li>
+<li>
+<p>Which information level (i.e., how many parameters) can the
+programmer use?</p>
+</li>
+</ol>
+<p>
+<tt class="literal">Win32API::Net</tt><a name="INDEX-247"></a><a name="INDEX-248"></a><a name="INDEX-249"></a><a name="INDEX-250"></a> and <tt class="literal">Win32::UserAdmin</tt>
+both allow the programmer to choose an information level.
+<tt class="literal">Win32::NetAdmin</tt> and
+<tt class="literal">Win32::Lanman</tt> do not. Of the modules,
+<tt class="literal">Win32::NetAdmin</tt> exposes the least number of
+parameters; for example, you cannot set the
+<tt class="literal">full_name</tt> field as part of the user creation call.
+If you choose to use <tt class="literal">Win32::NetAdmin</tt>, you will
+probably have to supplement it with calls from another module to set
+the additional parameters it does not expose. If you do go with a
+combination like <tt class="literal">Win32::NetAdmin</tt> and
+<tt class="literal">Win32::AdminMisc</tt>, you'll want to consult the
+Roth book mentioned earlier, because it is an excellent reference for
+the documentation-impoverished <tt class="literal">Win32::NetAdmin</tt>
+module.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-251"></a>Now
+you have some idea why the module choice really boils down to
+personal preference. A good strategy might be to first decide which
+parameters are important to you, and then find a comfortable module
+that supports them. For our demonstration subroutines below,
+we're going to arbitrarily pick
+<tt class="literal">Win32::Lanman</tt>. Here's the user creation and
+deletion code for our account system:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::Lanman;   # for account creation
+use Win32::Perms;    # to set the permissions on the home directory
+
+$homeNTdirs = "\\\\homeserver\\home";         # home directory root dir
+
+
+sub CreateNTAccount{
+    
+    my ($account,$record) = @_;
+
+    # create this account on the local machine 
+    # (i.e., empty first parameter)
+    $result = Win32::Lanman::NetUserAdd("", 
+                     {'name' =&gt; $account,
+                      'password'  =&gt; $record-&gt;{password},
+                      'home_dir'  =&gt; "$homeNTdirs\\$account",
+                      'full_name' =&gt; $record-&gt;{fullname}});
+    return Win32::Lanman::GetLastError(  ) unless ($result);
+
+    # add to appropriate LOCAL group (first get the SID of the account)
+    # we assume the group name is the same as the account type
+    die "SID lookup error: ".Win32::Lanman::GetLastError(  )."\n" unless
+        (Win32::Lanman::LsaLookupNames("", [$account], \@info));
+    $result = Win32::Lanman::NetLocalGroupAddMember("",$record-&gt;{type}, 
+                                                       ${$info[0]}{sid});
+    return Win32::Lanman::GetLastError(  ) unless ($result);
+
+    # create home directory
+    mkdir "$homeNTdirs\\$account",0777 or
+       return "Unable to make homedir:$!";
+
+    # now set the ACL and owner of the directory
+    $acl = new Win32::Perms("$homeNTdirs\\$account");
+    $acl-&gt;Owner($account);
+
+    # we give the user full control of the directory and all of the
+    # files that will be created within it (hence the two separate calls)
+    $acl-&gt;Allow($account, FULL, DIRECTORY|CONTAINER_INHERIT_ACE);
+    $acl-&gt;Allow($account, FULL, 
+                          FILE|OBJECT_INHERIT_ACE|INHERIT_ONLY_ACE);
+    $result = $acl-&gt;Set(  );
+    $acl-&gt;Close(  );
+
+    return($result ? "" : $result);
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>The user deletion code looks like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::Lanman;   # for account deletion
+use File::Path;      # for recursive directory deletion<a name="INDEX-252"></a>
+
+sub DeleteNTAccount{
+    
+    my($account,$record) = @_;
+
+    # remove user from LOCAL groups only. If we wanted to also 
+    # remove from global groups we could remove the word "Local" from 
+    # the two Win32::Lanman::NetUser* calls (e.g., NetUserGetGroups)
+    die "SID lookup error: ".Win32::Lanman::GetLastError(  )."\n" unless
+        (Win32::Lanman::LsaLookupNames("", [$account], \@info));
+    Win32::Lanman::NetUserGetLocalGroups($server, $account,'', \@groups);
+    foreach $group (@groups){
+        print "Removing user from local group ".$group-&gt;{name}."...";
+        print(Win32::Lanman::NetLocalGroupDelMember("", 
+                              $group-&gt;{name),
+                                                    ${$info[0]}{sid}) ?
+                              "succeeded\n" : "FAILED\n");
+    }
+
+	# delete this account on the local machine 
+    # (i.e., empty first parameter)
+    $result = Win32::Lanman::NetUserDel("", $account);
+
+    return Win32::Lanman::GetLastError(  ) if ($result);
+
+    # delete the home directory and its contents
+    $result = rmtree("$homeNTdirs\\$account",0,1);
+	
+    # rmtree returns the number of items deleted, 
+    # so if we deleted more than 0,it is likely that we succeeded 
+    return $result;</pre>
+</blockquote>
+
+
+
+
+
+<p>As a quick aside, the above code uses the portable
+<tt class="literal">File::Path</tt> module to remove an account's
+home directory. If we wanted to do something Win32-specific, like
+move the home directory to the Recycle Bin instead, we could use a
+module called <tt class="literal">Win32::FileOp</tt> by Jenda Krynicky,
+at <a href="http://jenda.krynicky.cz/">http://jenda.krynicky.cz/</a>. In this case, we'd use
+<tt class="literal">Win32::FileOp</tt> and change the <tt class="literal">rmtree(
+)</tt> line to:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># will move directory to the Recycle Bin, potentially confirming 
+# the action with the user if our account is set to confirm 
+# Recycle Bin actions
+$result = Recycle("$homeNTdirs\\$account");</pre>
+</blockquote>
+
+
+
+
+
+<p>This same module also has a <tt class="literal">Delete( )</tt> function
+that will perform the same operation as the <tt class="literal">rmtree(
+)</tt> call above in a less portable (although quicker)
+fashion.<a name="INDEX-253"></a><a name="INDEX-254"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch03-24-fm2xml"></a>
+<h3 class="sect2">3.3.3. The Process Scripts</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-255"></a><a name="INDEX-256"></a><a name="INDEX-257"></a>Once we have a backend
+database, we'll want to write scripts that encapsulate the
+day-to-day and periodic processes that take place for user
+administration. These scripts are based on a low-level component
+library (<em class="filename">Account.pm</em>) we created by concatenating
+all of the subroutines we just wrote together into one file. To make
+sure all of the modules we need are loaded, we'll add this
+subroutine:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub InitAccount{
+
+    use XML::Writer;
+
+    $record   = { fields =&gt; [login,fullname,id,type,password]};
+    $addqueue   = "addqueue";  # name of add account queue file
+    $delqueue   = "delqueue";  # name of del account queue file
+    $maindata   = "accountdb"; # name of main account database file
+
+    if ($^O eq "MSWin32"){
+        require Win32::Lanman;
+        require Win32::Perms;
+        require File::Path;
+
+        # location of account files
+        $accountdir = "\\\\server\\accountsystem\\";
+        # mail lists, example follows 
+        $maillists  = "$accountdir\\maillists\\";    
+        # home directory root
+        $homeNTdirs = "\\\\homeserver\\home";
+        # name of account add subroutine
+        $accountadd = "CreateNTAccount";
+        # name of account del subroutine             
+        $accountdel = "DeleteNTAccount";             
+    }
+    else {
+        require Expect;
+        # location of account files
+        $accountdir   = "/usr/accountsystem/";
+        # mail lists, example follows   
+        $maillists    = "$accountdir/maillists/";
+        # location of useradd executable
+        $useraddex    = "/usr/sbin/useradd";
+        # location of userdel executable
+        $userdelex    = "/usr/sbin/userdel";     
+        # location of passwd executable
+        $passwdex     = "/bin/passwd";
+        # home directory root dir
+        $homeUnixdirs = "/home";
+        # prototypical home directory
+        $skeldir      = "/home/skel";            
+        # default shell
+        $defshell     = "/bin/zsh";
+        # name of account add subroutine
+        $accountadd   = "CreateUnixAccount";
+        # name of account del subroutine
+        $accountdel   = "DeleteUnixAccount";       
+    }   
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Let's see some sample scripts. Here's the script that
+processes the add queue:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Account;
+use XML::Simple;
+
+&amp;InitAccount;     # read in our low level routines
+&amp;ReadAddQueue;    # read and parse the add account queue
+&amp;ProcessAddQueue; # attempt to create all accounts in the queue
+&amp;DisposeAddQueue; # write account record either to main database or back
+                  # to queue if there is a problem
+
+# read in the add account queue to the $queue data structure
+sub ReadAddQueue{
+    open(ADD,$accountdir.$addqueue) or 
+      die "Unable to open ".$accountdir.$addqueue.":$!\n";
+    read(ADD, $queuecontents, -s ADD);
+    close(ADD);
+    $queue = XMLin("&lt;queue&gt;".$queuecontents."&lt;/queue&gt;",
+                   keyattr =&gt; ["login"]);
+}
+
+# iterate through the queue structure, attempting to create an account
+# for each request (i.e., each key) in the structure
+sub ProcessAddQueue{
+    foreach my $login (keys %{$queue-&gt;{account}}){
+        $result = &amp;$accountadd($login,$queue-&gt;{account}-&gt;{$login});
+        if (!$result){
+            $queue-&gt;{account}-&gt;{$login}{status} = "created";
+        }
+        else {
+            $queue-&gt;{account}-&gt;{$login}{status} = "error:$result";
+        }
+    }
+}
+
+# now iterate through the queue structure again. For each account with 
+# a status of "created," append to main database. All others get written
+# back to the add queue file, overwriting it.
+sub DisposeAddQueue{
+    foreach my $login (keys %{$queue-&gt;{account}}){
+        if ($queue-&gt;{account}-&gt;{$login}{status} eq "created"){
+            $queue-&gt;{account}-&gt;{$login}{login} = $login;
+            $queue-&gt;{account}-&gt;{$login}{creation_date} = time;
+            &amp;AppendAccountXML($accountdir.$maindata,
+                              $queue-&gt;{account}-&gt;{$login});
+            delete $queue-&gt;{account}-&gt;{$login};
+            next;
+        }
+    }
+
+    # all we have left in $queue at this point are the accounts that 
+    # could not be created
+
+    # overwrite the queue file
+    open(ADD,"&gt;".$accountdir.$addqueue) or 
+      die "Unable to open ".$accountdir.$addqueue.":$!\n";
+    # if there are accounts that could not be created write them
+    if (scalar keys %{$queue-&gt;{account}}){ 
+        print ADD XMLout(&amp;TransformForWrite($queue),rootname =&gt; undef);
+    } 
+    close(ADD);
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Our "process the delete user queue file" script is
+similar:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Account;
+use XML::Simple;
+
+&amp;InitAccount;     # read in our low level routines
+&amp;ReadDelQueue;    # read and parse the add account queue
+&amp;ProcessDelQueue; # attempt to delete all accounts in the queue
+&amp;DisposeDelQueue; # write account record either to main database or back
+                  # to queue if there is a problem
+
+# read in the del user queue to the $queue data structure
+sub ReadDelQueue{
+    open(DEL,$accountdir.$delqueue) or 
+      die "Unable to open ${accountdir}${delqueue}:$!\n";
+    read(DEL, $queuecontents, -s DEL);
+    close(DEL);
+    $queue = XMLin("&lt;queue&gt;".$queuecontents."&lt;/queue&gt;",
+                   keyattr =&gt; ["login"]);
+}
+
+# iterate through the queue structure, attempting to delete an account for
+# each request (i.e. each key) in the structure
+sub ProcessDelQueue{
+    foreach my $login (keys %{$queue-&gt;{account}}){
+        $result = &amp;$accountdel($login,$queue-&gt;{account}-&gt;{$login});
+        if (!$result){
+            $queue-&gt;{account}-&gt;{$login}{status} = "deleted";
+        }
+        else {
+            $queue-&gt;{account}-&gt;{$login}{status} = "error:$result";
+        }
+    }
+}
+
+# read in the main database and then iterate through the queue
+# structure again. For each account with a status of "deleted," change
+# the main database information. Then write the main database out again.
+# All that could not be deleted are written back to the del queue
+# file, overwriting it.
+sub DisposeDelQueue{
+    &amp;ReadMainDatabase;
+
+    foreach my $login (keys %{$queue-&gt;{account}}){
+        if ($queue-&gt;{account}-&gt;{$login}{status} eq "deleted"){
+            unless (exists $maindb-&gt;{account}-&gt;{$login}){
+                warn "Could not find $login in $maindata\n";
+                next;
+            }
+            $maindb-&gt;{account}-&gt;{$login}{status} = "deleted";
+            $maindb-&gt;{account}-&gt;{$login}{deletion_date} = time;
+            delete $queue-&gt;{account}-&gt;{$login};
+            next;
+       }
+    }
+
+    &amp;WriteMainDatabase;
+
+    # all we have left in $queue at this point are the accounts that
+    # could not be deleted
+    open(DEL,"&gt;".$accountdir.$delqueue) or 
+      die "Unable to open ".$accountdir.$addqueue.":$!\n";
+    # if there are accounts that could not be created, else truncate
+    if (scalar keys %{$queue-&gt;{account}}){ 
+        print DEL XMLout(&amp;TransformForWrite($queue),rootname =&gt; undef);
+    } 
+    close(DEL);
+}	    
+
+sub ReadMainDatabase{
+    open(MAIN,$accountdir.$maindata) or 
+      die "Unable to open ".$accountdir.$maindata.":$!\n";
+    read (MAIN, $dbcontents, -s MAIN);
+    close(MAIN);
+    $maindb = XMLin("&lt;maindb&gt;".$dbcontents."&lt;/maindb&gt;",
+                    keyattr =&gt; ["login"]);
+}
+
+sub WriteMainDatabase{
+    # note: it would be *much, much safer* to write to a temp file 
+    # first and then swap it in if the data was written successfully
+    open(MAIN,"&gt;".$accountdir.$maindata) or 
+      die "Unable to open ".$accountdir.$maindata.":$!\n";
+    print MAIN XMLout(&amp;TransformForWrite($maindb),rootname =&gt; undef);
+    close(MAIN);
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>There are many other process scripts you could imagine writing. For
+example, we could certainly use scripts that perform data export and
+consistency checking (e.g., does the user's home directory
+match up with the main databases account type? Is that user in the
+appropriate group?). We don't have space to cover this wide
+range of programs, so let's end this section with a single
+example of the data export variety. Earlier we mentioned that a site
+might want a separate mailing list for each type of user on the
+system. The following code reads our main database and creates a set
+of files that contain user names, one file per user type:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Account;         # just to get the file locations
+use XML::Simple;
+
+&amp;InitAccount;
+&amp;ReadMainDatabase;
+&amp;WriteFiles;
+
+# read the main database into a hash of lists of hashes
+sub ReadMainDatabase{
+    open(MAIN,$accountdir.$maindata) or 
+      die "Unable to open ".$accountdir.$maindata.":$!\n";
+    read (MAIN, $dbcontents, -s MAIN);
+    close(MAIN);
+    $maindb = XMLin("&lt;maindb&gt;".$dbcontents."&lt;/maindb&gt;",keyattr =&gt; [""]);
+}
+
+# iterate through the lists, compile the list of accounts of a certain 
+# type and store them in a hash of lists. Then write out the contents of 
+# each key to a different file.
+sub WriteFiles {
+    foreach my $account (@{$maindb-&gt;{account}}){
+        next if $account-&gt;{status} eq "deleted";
+        push(@{$types{$account-&gt;{type}}},$account-&gt;{login});
+    }
+    
+    foreach $type (keys %types){
+        open(OUT,"&gt;".$maillists.$type) or 
+          die "Unable to write to ".$accountdir.$maillists.$type.": $!\n";
+        print OUT join("\n",sort @{$types{$type}})."\n";
+        close(OUT);
+    }
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>If we look at the mailing list directory, we see:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">&gt; <tt class="userinput"><b>dir</b></tt> 
+faculty  staff</pre>
+</blockquote>
+
+
+
+
+
+<p>And each one of those files contains the appropriate list of user
+accounts.<a name="INDEX-258"></a><a name="INDEX-259"></a><a name="INDEX-260"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch03-25-fm2xml"></a>
+<h3 class="sect2">3.3.4. Account System Wrap-Up</h3>
+
+
+
+
+
+<p>Now that we've seen four components of an account system,
+let's wrap up this section by talking about what's
+missing (besides oodles of functionality):</p>
+
+
+
+
+
+<dl>
+<dt>
+<b><em class="emphasis">Error checking</em> </b>
+</dt>
+<dd>
+<p>Our demonstration code has only a modicum of error checking. Any
+self-respecting account system would grow another 40-50% in code size
+because it would check for data and system interaction problems every
+step of the way.</p>
+</dd>
+
+
+
+
+
+<dt>
+<b><em class="emphasis">Scalability</em></b>
+</dt>
+<dd>
+<p>Our code could probably work in a small-to mid-sized environment. But
+any time you see "read the entire file into memory," it
+should set off warning bells. To scale we would need to change our
+data storage and retrieval techniques at the very least. The module
+<tt class="literal">XML::Twig</tt> by Michel Rodriguez may help with this
+problem, since it works with large, well-formed XML documents without
+reading them into memory all at once.</p>
+</dd>
+
+
+
+
+
+<dt>
+<b><em class="emphasis">Security</em></b>
+</dt>
+<dd>
+<p>This is related to the very first item on error checking. Besides
+truck-sized security holes like the storage of plain text passwords,
+we also do not perform any security checks in our code. We do not
+confirm that the data sources we use like the queue files are
+trustworthy. Add another 20-30% to the code size to take care of this
+issue.</p>
+</dd>
+
+
+
+
+
+<dt>
+<b><em class="emphasis">Multiuser</em></b>
+</dt>
+<dd>
+<p>We make no provision for multiple users or even multiple scripts
+running at once, perhaps the largest flaw in our code as written. If
+the "add account" process script is being run at the same
+time as the "add to the queue" script, the potential for
+data loss or corruption is very high. This is such an important issue
+that we should take a few moments to discuss it before concluding
+this section.</p>
+</dd>
+
+</dl>
+
+
+
+
+
+<p>
+<a name="INDEX-261"></a>One
+way to help with the multiuser deficiency is to carefully introduce
+file locking. File locking allows the different scripts to cooperate.
+If a script plans to read or write to a file, it can attempt to lock
+the file first. If it can obtain a lock, then it knows it is safe to
+manipulate the file. If it cannot lock the file (because another
+script is using it), it knows not to proceed with an operation that
+could corrupt data. There's considerably more complexity
+involved with locking and multiuser access in general than just this
+simple description reveals; consult any fundamental Operating or
+Distributed Systems text. It gets especially tricky when dealing with
+files residing on network filesystems, where there may not be a good
+locking mechanism. Here are a few hints that may help you when you
+approach this topic using Perl.</p>
+
+
+
+
+
+<ul>
+<li>
+<p>There are smart ways to cheat. My favorite method is to use the
+<tt class="command">lockfile</tt> program distributed with the popular mail
+filtering program <em class="emphasis">procmail</em> found at <a href="http://www.procmail.org">http://www.procmail.org</a>. The
+<tt class="command">procmail</tt> installation procedure takes great pains
+to determine safe locking strategies for the filesystems you are
+using. <tt class="command">lockfile</tt> does just what its name suggests,
+hiding most of the complexity in the
+process.<a name="INDEX-262"></a><a name="INDEX-263"></a>
+</p>
+</li>
+<li>
+<p>If you don't want to use an external executable, there are a
+plethora of locking modules available. For example,
+<tt class="literal">File::Flock</tt> by David Muir Sharnoff,
+<tt class="literal">File::LockDir</tt> from the <em class="citetitle">Perl
+Cookbook</em> by Tom Christiansen and Nathan Torkington
+(O'Reilly), and a Win95/98 version of it by William Herrera
+called <tt class="literal">File::FlockDir</tt>,
+<tt class="literal">File::Lock</tt> by Kenneth Albanowski,
+<tt class="literal">File::Lockf</tt> by Paul Henson, and
+<tt class="literal">Lockfile::Simple</tt> by Raphael Manfredi. They differ
+mostly in interface, though <tt class="literal">File::FlockDir</tt> and
+<tt class="literal">Lockfile::Simple</tt> attempt to perform locking
+without using Perl's <tt class="literal">flock( )</tt> function.
+This is useful for platforms like MacOS that don't support that
+function. Shop around and pick the best one for your
+needs.<a name="INDEX-264"></a>
+</p>
+</li>
+<li>
+<p>Locking is easier to get right if you remember to lock before
+attempting to change data (or read data that could change) and only
+unlock <em class="emphasis">after</em> making sure that data has been
+written (e.g., after the file has been closed). For more information
+on this, see the previously mentioned <em class="citetitle">Perl
+Cookbook</em>, the Perl Frequently Asked Questions list, and
+the documentation that comes with Perl on the <tt class="literal">flock(
+)</tt> function and the <tt class="literal">DB_File</tt> module.</p>
+</li>
+</ul>
+<p>This ends our look at user account administration and how it can be
+taken to the next level using a bit of an architectural mindset. In
+this chapter we've concentrated on the beginning and the end of
+an account's lifecycle. In the next chapter, we'll
+examine what users do in between these two points.<a name="INDEX-265"></a><a name="INDEX-266"></a>
+</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch03_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">3.2. Windows NT/2000 User Identity</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">3.4. Module Information for This Chapter</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

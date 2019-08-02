@@ -1,0 +1,602 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 22] 22.2 Application-Specific Exception Packages</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T18:32:21Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates-1-56592-238-7E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-238-7E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="PL/SQL SQL Oracle Packages"><META
+NAME="DC.Title"
+CONTENT="Advanced Oracle PL/SQL Programming with Packages"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch22_01.htm"
+TITLE="22. Exception Handling"><LINK
+REL="prev"
+HREF="ch22_01.htm"
+TITLE="22.1 The Challenge of Exception Handling"><LINK
+REL="next"
+HREF="ch22_03.htm"
+TITLE="22.3 Implementing PLVexc"></HEAD>
+<BODY><DIV CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Advanced Oracle PL/SQL Programming with Packages"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Advanced Oracle PL/SQL Programming with Packages"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch22_01.htm"
+TITLE="22.1 The Challenge of Exception Handling"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 22.1 The Challenge of Exception Handling"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch22_01.htm"
+TITLE="22. Exception Handling"
+>Chapter 22<BR>Exception Handling</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch22_03.htm"
+TITLE="22.3 Implementing PLVexc"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 22.3 Implementing PLVexc"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch22-35473"
+>22.2 Application-Specific Exception Packages</A
+></H2
+><P
+CLASS="para"
+>PLVexc is a very generic, low-level package. It can be used in many different applications and under many different circumstances. This flexibility is one of its key strengths. I have found, on the other hand, that for complex application development, I will usually not want to make calls <EM
+CLASS="emphasis"
+>directly</EM
+> to the <KBD
+CLASS="command"
+>PLVexc.handle</KBD
+> procedure. Instead, I will build <EM
+CLASS="emphasis"
+>another</EM
+> exception-handling package for my application which, in turn, references PLVexc elements.</P
+><P
+CLASS="para"
+>This application-specific package offers several advantages, including:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>It is aware of the different kinds of data I need to report on when an error occurs. This awareness helps guarantee a consistent format for error logging; this consistency greatly aids in recovery and analysis efforts.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>It can predefine additional, application-specific exceptions that have no place in PLVexc.</P
+></LI
+></UL
+><P
+CLASS="para"
+>Does this extra layer seem like overkill? Let's explore the motivation for this additional layer of code.</P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch22-SECT-2.1"
+>22.2.1 In the Trenches with PLVexc</A
+></H3
+><P
+CLASS="para"
+>It is the fall of 1995. I have just built my first version of PLVexc and immediately put it to use in an application that manipulates UPC codes for a retail operation. A UPC code is made up of a 14-digit number and a description. Each UPC (product) has many attributes, such as brand, product type, price, and so on. Each attribute has a name and value. </P
+><P
+CLASS="para"
+>I find that as I build my exception handlers with <KBD
+CLASS="command"
+>PLVexc.handle</KBD
+> I need to pass the same information repeatedly to my exception log. If I am working with UPCs I want to record the UPC number and description with which I am having a problem. When manipulating attributes, I need to keep track of the problematic UPC code, attribute name, and value. I also fully intend to write recovery scripts based on my error log data. For example, if the batch-driven insert of a new UPC fails because I ran out of extents on that table, I would like to be able to reorganize the table and then execute INSERTs from the error log.</P
+><P
+CLASS="para"
+>If I am going to generate INSERTs from error log text, I need to make sure that text always has the same format. </P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch22-SECT-2.1.1"
+>22.2.1.1 <A
+CLASS="indexterm"
+NAME="ch22-idx-999350-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch22-idx-999350-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch22-idx-999350-2"
+></A
+>Recording consistent error data</A
+></H4
+><P
+CLASS="para"
+>There are two ways I can achieve the desired consistency:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Decide on a format and then send a memo to all developers working on this application. The memo explains the format (for example, "concatenate UPC code to description with a single hyphen as delimiter" and "concatenate UPC, attribute name, and value together using a single hyphen as the delimiter between these three elements") and asks developers to follow this format when using the <KBD
+CLASS="command"
+>PLVexc.handle</KBD
+> procedure. It is then up to each person to cooperate and write the code correctly.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Provide a prebuilt procedure that encapsulates the standard format inside the program. With this second approach, a developer conforms to the standard simply by using this program.</P
+></LI
+></OL
+><P
+CLASS="para"
+>If I adopt the first approach (which, I can assure you, is the more-traveled route) here are the kind of exception handlers I find myself writing:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>WHEN OTHERS
+THEN
+   PLVexc.handle
+      ('ins_upc', SQLCODE,
+       PLVexc.c_recNstop,
+       TO_CHAR (upc_in) || '-' || desc_in);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>and:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>WHEN OTHERS
+THEN
+   PLVexc.handle
+      ('chg_upcattr', SQLCODE,
+       PLVexc.c_recNstop,
+       TO_CHAR (upc_in) || '-' ||
+          attr_in || '-' || new_val_in);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>and once, because I believe suddenly that the new format is so much clearer, I code my handler this way:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>WHEN OTHERS
+THEN
+   PLVexc.handle
+      ('ins_upc', SQLCODE,
+       PLVexc.c_recNstop,
+       'UPC:' || TO_CHAR (upc_in) || ' DESC:' || desc_in);
+END;</PRE
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch22-SECT-2.1.2"
+>22.2.1.2 Tired fingers, buggy code</A
+></H4
+><P
+CLASS="para"
+>This is a lot of tedious, error-prone typing. I find myself expending more brain cells remembering the format than in surmounting application obstacles. And I say to myself: "Gee, it sure would be much easier to just pass the UPC and description to the handler and let <EM
+CLASS="emphasis"
+>it</EM
+> format the data properly." That seems like such a good idea that I immediately try out the concept by recoding some exception handlers as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+><A
+CLASS="indexterm"
+NAME="ch22-idx-999351-0"
+></A
+>WHEN OTHERS
+THEN
+   upcexc.handle
+      (upcexc.c_upc_update, SQLCODE, PLVexc.c_recNstop,
+       upc_in, desc_in);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>and:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>WHEN OTHERS
+THEN
+   upcexc.handle
+      (upcexc.c_attr_analyze,
+       SQLCODE,
+       PLVexc.c_recNstop,
+       v_curr_upc, new_attr_in, new_val_in);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>where <KBD
+CLASS="command"
+>upcexc</KBD
+> is the projected name of a new package that would know about PLVexc and the UPC application. It bridges the gap between the completely generic and the uniquely specific, using module overloading to automatically understand the types of data passed to the <KBD
+CLASS="command"
+>handle</KBD
+> program. <A
+CLASS="xref"
+HREF="ch22_02.htm#plsql-adv-ex-22-1"
+>Example 22.1</A
+> shows the full specification of the <KBD
+CLASS="command"
+>upcexc</KBD
+> package.</P
+><DIV
+CLASS="example"
+><H4
+CLASS="example"
+><A
+CLASS="title"
+NAME="plsql-adv-ex-22-1"
+>Example 22.1: The upcexc Specification </A
+></H4
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE PACKAGE upcexc
+IS
+   /* Predefined exceptions, error numbers and messages. */
+   upc_update_failure EXCEPTION;
+   c_errno_update_upc CONSTANT INTEGER := -20000;
+   c_errmsg_update_upc CONSTANT VARCHAR2(100) := 
+      'Unable to update upc with new value.';
+
+   no_reg_center EXCEPTION;
+   c_errno_no_reg_center CONSTANT INTEGER := -20003;
+   c_errmsg_no_reg_center CONSTANT VARCHAR2(100) := 
+      'Regional center has not been defined.'; 
+
+   /* Contexts for exception handling. */
+   c_upc_inserts CONSTANT VARCHAR2(3) := 'UI';
+   c_upc_updates CONSTANT VARCHAR2(3) := 'UU';
+   c_attr_analyze CONSTANT VARCHAR2(3) := 'AA';
+
+   PROCEDURE handle
+      (context_in IN VARCHAR2,
+       err_code_in IN INTEGER,
+       handle_action_in IN VARCHAR2,
+       upc_in IN upc.upc%TYPE,
+       desc_in IN upc.description%TYPE);
+
+   PROCEDURE handle
+      (context_in IN VARCHAR2,
+       err_code_in IN INTEGER,
+       handle_action_in IN VARCHAR2,
+       upc_in IN attribute.upc%TYPE,
+       attribute_in IN attribute.attribute%TYPE,
+       value_in IN attribute.value%TYPE);
+END upcexc;</PRE
+></BLOCKQUOTE
+></DIV
+><P
+CLASS="para"
+>The body of the handler for UPC errors is shown below. Notice that it does just a <EM
+CLASS="emphasis"
+>little</EM
+> bit more work than simply calling <KBD
+CLASS="command"
+>PLVexc.handle</KBD
+>; it formats the string passed to <KBD
+CLASS="command"
+>PLVexc.handle</KBD
+> from the individual application-specific arguments.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE handle
+   (context_in IN VARCHAR2,
+    err_code_in IN INTEGER,
+    handle_action_in IN VARCHAR2,
+    upc_in IN upc.upc%TYPE,
+    desc_in IN upc.description%TYPE)
+IS
+BEGIN
+   PLVexc.handle
+      (context_in, err_code_in, handle_action_in,
+       'UPC=' || upc_in || ' DESC=' || desc_in);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Now every time I use the <KBD
+CLASS="command"
+>upcexc.handle</KBD
+> procedure, I am sure that my UPC and description values are formatted properly. At the same time, I use predefined constants from <KBD
+CLASS="command"
+>upcexc</KBD
+> to specify my context or current program. I don't have to make up the name/abbreviation for the program on the fly&nbsp;-- it is already defined for me in the package. This additional consistency makes it easier to analyze and trace errors. <A
+CLASS="xref"
+HREF="ch22_02.htm#plsql-fig-ch-22-1"
+>Figure 22.1</A
+> shows the benefit of this additional layer of coding.</P
+><H4
+CLASS="figure"
+><A
+CLASS="title"
+NAME="plsql-fig-ch-22-1"
+>Figure 22.1: Layers of exception handling packages</A
+></H4
+><IMG
+CLASS="graphic"
+SRC="figs/pladv_2201.gif"
+ALT="Figure 22.1"><P
+CLASS="para"
+>The final added value of a package like <KBD
+CLASS="command"
+>upcexc</KBD
+> is provided by the predefined application errors that fall between -20,000 and -20999. The package contains an exception, error number, and error message for each error in this range. By using these predefined elements, individual developers will not step on each others' error numbers and text. </P
+><P
+CLASS="para"
+>With <KBD
+CLASS="command"
+>upcexc</KBD
+>, I can quickly code my handlers without tripping over syntax and concatenation bars. I am, as a result, much more likely to reuse and fully leverage the underlying PLVexc package.<A
+CLASS="indexterm"
+NAME="ch22-idx-999352-0"
+></A
+></P
+><DIV
+CLASS="sidebar"
+><H4
+CLASS="sidebar"
+><A
+CLASS="title"
+NAME="AUTOID-22851"
+>Special Notes on PLVexc</A
+></H4
+><P
+CLASS="para"
+>Remember that the high-level handlers automatically call <KBD
+CLASS="command"
+>PLVtrc.terminate</KBD
+>. As a result, you should only use the high-level handlers when you really are leaving a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> block in which <KBD
+CLASS="command"
+>PLVtrc.startup</KBD
+> was called. Otherwise the PLVtrc execution call stack becomes inaccurate.</P
+></DIV
+></DIV
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch22_01.htm"
+TITLE="22.1 The Challenge of Exception Handling"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 22.1 The Challenge of Exception Handling"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Advanced Oracle PL/SQL Programming with Packages"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Advanced Oracle PL/SQL Programming with Packages"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch22_03.htm"
+TITLE="22.3 Implementing PLVexc"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 22.3 Implementing PLVexc"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>22.1 The Challenge of Exception Handling</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>22.3 Implementing PLVexc</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG
+SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly & Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

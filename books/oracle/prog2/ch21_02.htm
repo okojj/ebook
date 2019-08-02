@@ -1,0 +1,850 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 21] 21.2 Steps in Creating an External Procedure</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein &amp; Bill Pribyl"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T19:10:16Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates CD-ROM-1-56592-335-9E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-335-9E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle PL/SQL"><META
+NAME="DC.Title"
+CONTENT="Oracle PL/SQL Programming, 2nd Edition"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch21_01.htm"
+TITLE="21. External Procedures"><LINK
+REL="prev"
+HREF="ch21_01.htm"
+TITLE="21.1 Introduction to External Procedures"><LINK
+REL="next"
+HREF="ch21_03.htm"
+TITLE="21.3 Syntax for External Procedures"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd Edition"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch21_01.htm"
+TITLE="21.1 Introduction to External Procedures"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 21.1 Introduction to External Procedures"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch21_01.htm"
+TITLE="21. External Procedures"
+>Chapter 21<BR>External Procedures</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch21_03.htm"
+TITLE="21.3 Syntax for External Procedures"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 21.3 Syntax for External Procedures"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="SQL2-CH-21-SECT-2"
+>21.2 Steps in Creating an External Procedure</A
+></H2
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch21-idx-7567-1"
+></A
+> Before you try external procedures, be sure that the machine where you're running the Oracle server supports shared or dynamically linked libraries. Virtually all UNIX machines qualify, as do Windows NT machines. If your own machine doesn't qualify, you can stop here, or you can investigate the use of distributed external procedures. </P
+><P
+CLASS="para"
+>These are your next tasks:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Ensure that your DBA has enabled a listener for external procedures in your Net8 environment. (This involves changes to <I
+CLASS="filename"
+>tnsnames.ora</I
+> and <I
+CLASS="filename"
+>listener.ora</I
+>.) This is a one-time job for a given server. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Identify or create the <EM
+CLASS="emphasis"
+>.so</EM
+> or <EM
+CLASS="emphasis"
+>.DLL</EM
+> file which contains the shared library. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>In Oracle, issue the SQL statement CREATE LIBRARY..., which defines an alias in the data dictionary for the external shared library file. This registers the program with the database engine so that it knows where to find it when it is called. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Create the PL/SQL function or procedure body, typically within a package, that will register with PL/SQL the desired routine from the external library. The body of the procedure or function will use the EXTERNAL clause in place of a BEGIN...END block. </P
+></LI
+></OL
+><P
+CLASS="para"
+>And that's it! Let's look at each step in more detail, focusing on the implementation of a random number generator for PL/SQL. </P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-21-SECT-2.1"
+>21.2.1 Step 1: Set Up the Listener</A
+></H3
+><P
+CLASS="para"
+>What actually happens when your code needs to use the external procedure? First, your code calls a predefined PL/SQL body. When the PL/SQL runtime engine notices such a call, it looks for the special <A
+CLASS="indexterm"
+NAME="ch21-idx-7590-1"
+></A
+>Net8 listener named <A
+CLASS="indexterm"
+NAME="ch21-idx-7586-1"
+></A
+> <A
+CLASS="indexterm"
+NAME="ch21-idx-7586-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch21-idx-7586-3"
+></A
+>EXTERNAL_PROCEDURE_LISTENER, which in turn spawns a session-specific process called extproc. It is extproc that invokes your routine in the shared library. </P
+><P
+CLASS="para"
+>You need to create a new listener with a specific name, EXTERNAL_PROCEDURE _LISTENER. This listener process will execute alongside other listener(s) that you already have running. </P
+><BLOCKQUOTE
+CLASS="note"
+><P
+CLASS="para"
+><STRONG
+>NOTE:</STRONG
+> You cannot change the names EXTERNAL_PROCEDURE_LISTENER or extproc. In the<EM
+CLASS="emphasis"
+> listener.ora</EM
+> fragment given, everything that's not in lowercase italics must match the listing. </P
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In your <EM
+CLASS="emphasis"
+>listener.ora</EM
+> file, you will need the following entries: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* filename on companion disk: lsnrfrag.ora /*
+EXTERNAL_PROCEDURE_LISTENER =
+    (ADDRESS_LIST =
+        (ADDRESS =
+            (PROTOCOL=IPC)
+            (KEY=<I
+CLASS="replaceable"
+>epsid</I
+>)
+        )
+    )
+
+SID_LIST_EXTERNAL_PROCEDURE_LISTENER =
+    (SID_LIST =
+        (SID_DESC=
+            (SID_NAME=<I
+CLASS="replaceable"
+>epsid</I
+>)
+            (ORACLE_HOME=<I
+CLASS="replaceable"
+>full_directory_path</I
+>)
+            (PROGRAM=extproc)
+        )
+    )</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Where:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+>epsid</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>A short identifier that is used by Net8 to locate the listener. Its actual name is rather arbitrary, since your programs will never see it. <EM
+CLASS="emphasis"
+>epsid</EM
+> has to be the same identifier in the address list and in the SID list. </P
+></DD
+><DT
+CLASS="term"
+>full_directory_path</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The full pathname to your ORACLE_HOME directory, such as <I
+CLASS="filename"
+>/u01/app/oracle/product/8.0.3</I
+> on UNIX or <I
+CLASS="filename"
+>C:\ORANT</I
+> on Windows NT. Notice that there are no quotes around the directory name. </P
+></DD
+></DL
+><BLOCKQUOTE
+CLASS="note"
+><P
+CLASS="para"
+><STRONG
+>NOTE:</STRONG
+> If desired, <EM
+CLASS="emphasis"
+>listener.ora</EM
+> can point the listener's log into your desired directory: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>LOG_DIRECTORY_EXTERNAL_PROCEDURE_LISTENER=/u01/app/
+oracle/admin/SID/logbook</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>And, for debugging, you can control "tracing" for your new listener with entries like this:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>TRACE_DIRECTORY_EXTERNAL_PROCEDURE_LISTENER=/u01/app/
+oracle/admin/SID/logbook
+TRACE_LEVEL_EXTERNAL_PROCEDURE_LISTENER=user</PRE
+></BLOCKQUOTE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The <EM
+CLASS="emphasis"
+>tnsnames.ora</EM
+> file on the machine where the server is running will need an entry like the following: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>EXTPROC_CONNECTION_DATA =
+   (DESCRIPTION =
+      (ADDRESS =
+         (PROTOCOL=IPC)
+         (KEY=<I
+CLASS="replaceable"
+>epsid</I
+>)
+      )
+      (CONNECT_DATA=
+         (SID=<I
+CLASS="replaceable"
+>epsid</I
+>))
+      )
+   )</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Again, <EM
+CLASS="emphasis"
+>epsid</EM
+> must match the key used in the <I
+CLASS="filename"
+>listener.ora</I
+> file. </P
+><BLOCKQUOTE
+CLASS="tip"
+><P
+CLASS="para"
+><STRONG
+>TIP:</STRONG
+> If you intend to use external procedures on your server, remember to modify your database startup and shutdown procedures to incorporate the listener start and stop commands. On UNIX, this typically means editing a startup shell script.</P
+><P
+CLASS="para"
+>On Windows NT, a <A
+CLASS="indexterm"
+NAME="AUTOID-19612"
+></A
+>Net8 listener is automatically installed as a system service the first time you start it from the command line. However, the listener will not launch automatically on boot unless you configure it to do so. You can use the control panel to designate which listeners launch on system startup.</P
+><P
+CLASS="para"
+>To remove the external procedure service on NT, delete the entries from <EM
+CLASS="emphasis"
+>listener.ora</EM
+> and <EM
+CLASS="emphasis"
+>tnsnames.ora</EM
+>, and use the NT command <CODE
+CLASS="literal"
+>instsrv &lt;service name&gt; remove</CODE
+>  as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>instsrv OracleTNSListener80external_procedure_listener remove</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>(The <A
+CLASS="indexterm"
+NAME="AUTOID-19619"
+></A
+> instsrv utility is available in the NT 4.0 Server Resource Kit. Without it, you'll probably have to edit the registry.)</P
+></BLOCKQUOTE
+><P
+CLASS="para"
+>After making these configuration file changes, you'll need to start the new listener process. In UNIX, this is typically performed from the command line: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>lsnrctl start external_procedure_listener</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>If your database server is running on Windows NT, the first time you start the listener, you'll use the LSNRCTL80 command. From the command prompt, for example, the command would be: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>LSNRCTL80 start external_procedure_listener</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Thereafter (on NT) you can start and stop specific listeners from the Services component of the Control Panel.<A
+CLASS="indexterm"
+NAME="AUTOID-19626"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-19627"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-19628"
+></A
+> </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-21-SECT-2.2"
+>21.2.2 Step 2: Identify or Create the Shared Library</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-19632"
+></A
+>Step 1 is completely independent of any external procedure that you may create on your system. The remaining steps, while specific to our random number procedure, include discussion that applies to almost any external procedure. </P
+><P
+CLASS="para"
+>Although later examples will show how to create your own shared libraries, let's start with an example that requires no C language programming: calling a standard C library function, rand, which generates a 16-bit random number. On many platforms, rand already exists in a shared object library; on UNIX, it's often in <EM
+CLASS="emphasis"
+>/lib/libc.so</EM
+>, and on NT, in <EM
+CLASS="emphasis"
+>c:\winnt\system32\CRTDLL.DLL</EM
+>.[<A
+CLASS="footnote"
+HREF="#AUTOID-19638"
+>5</A
+>] </P
+><BLOCKQUOTE
+CLASS="footnote"
+><DIV
+CLASS="footnote"
+><P
+CLASS="para"
+><A
+CLASS="footnote"
+NAME="AUTOID-19638"
+>[5]</A
+> Documentation on available library functions is commonly available in UNIX man pages or in SDK documentation on other platforms.</P
+></DIV
+></BLOCKQUOTE
+><P
+CLASS="para"
+>A bit of background is in order for folks who haven't played with random number generators. Random number algorithms have certain quirks you need to realize. First, such generators can be deterministic; that is, the algorithm may return the same sequence of "random numbers" every time unless first "seeded" with a quasi-random number. Often, the previous random number is stored and used as a seed. But for the very first call, your program provides the seed, perhaps using some function of the current system time. If you call rand later with an identical seed value, you will get an identical pseudo-random sequence. </P
+><P
+CLASS="para"
+>rand has a companion "seeding" function, srand, that allows you to supply your own seed value. Calling srand before calling rand stores the seed value as a global in memory, for use by the next call to rand. Subsequent calls from the same session need not call srand, since rand will re-seed itself. </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-21-SECT-2.3"
+>21.2.3 Step 3: Issue CREATE LIBRARY Statement</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-19645"
+></A
+>Now that we have identified<EM
+CLASS="emphasis"
+> /lib/libc</EM
+>.<EM
+CLASS="emphasis"
+>so</EM
+> as the file containing our needed functions, the next thing we have to do is create a library in the Oracle database. This is the easy part! </P
+><P
+CLASS="para"
+>Creating a library is a way of telling Oracle that we want to refer to a specific shared object file by a programmer-defined name. For many UNIX systems, <EM
+CLASS="emphasis"
+>/lib/libc.so</EM
+> will contain the needed function as shown here: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE LIBRARY libc_l
+AS
+   '/lib/libc.so';</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Executing this command requires the CREATE LIBRARY privilege (see <A
+CLASS="xref"
+HREF="ch21_03.htm"
+>Section 21.3, "Syntax for External Procedures"</A
+> for more details). </P
+><P
+CLASS="para"
+>Note that we have to use a fully qualified pathname; attempting to use an environment variable such as $ORACLE_BASE in the filename will not work. </P
+><P
+CLASS="para"
+>If your database server runs on Windows NT, your library would likely be created as follows: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE LIBRARY libc_l
+AS
+   'c:\winnt\system32\CRTDLL.DLL';</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Regardless of platform, you only need to create a single library in this fashion for each shared object file you use. That is, even though you have only issued a single CREATE LIBRARY command for <EM
+CLASS="emphasis"
+>libc.so</EM
+> (or <EM
+CLASS="emphasis"
+>CRTDLL.DLL</EM
+>), you can define any number of external procedures that use routines from that file. </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-21-SECT-2.4"
+>21.2.4 Step 4: Create the PL/SQL Body</A
+></H3
+><P
+CLASS="para"
+>The final step is to create a function or procedure definition which registers the desired routine from the shared library. This feature lets you write the body of a PL/SQL procedure or function in C instead of PL/SQL. To the caller it looks like any other PL/SQL subprogram. </P
+><P
+CLASS="para"
+>Assuming that your C language skills are ready for any custom programming needed in Step 3, Step 4 is potentially the most complex one. Because of the differences between PL/SQL arguments and C language arguments (in datatype, character set, whether they can be null, etc.), Oracle provides a lot of "instrumentation" to allow you to properly map PL/SQL arguments to C language arguments. The details of this instrumentation are described in <A
+CLASS="xref"
+HREF="ch21_04.htm"
+>Section 21.4, "Mapping Parameters"</A
+> later in this chapter. </P
+><BLOCKQUOTE
+CLASS="tip"
+><P
+CLASS="para"
+><STRONG
+>TIP:</STRONG
+> All of the samples in this chapter put the needed modules in a PL/SQL package. One of many benefits of packages is that they enable us to use the RESTRICT_REFERENCES pragma with our module(s). This pragma allows us to tell Oracle that the user-defined function is "safe" and can therefore be used in SQL statements. (See <A
+CLASS="xref"
+HREF="ch17_01.htm"
+>Chapter 17, <CITE
+CLASS="chapter"
+>Calling PL/SQL Functions in SQL</CITE
+></A
+>, for a full discussion of this pragma.)</P
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Returning once again to our random number example, the specification for an appropriate PL/SQL package might look like this: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: rand_utl.sql */
+CREATE OR REPLACE PACKAGE random_utl
+AS
+    FUNCTION rand RETURN PLS_INTEGER;
+    PRAGMA RESTRICT_REFERENCES (rand, WNDS, RNDS, WNPS, RNPS);
+
+    PROCEDURE srand (seed IN PLS_INTEGER);
+    PRAGMA RESTRICT_REFERENCES (srand, WNDS, RNDS, WNPS, RNPS);
+
+END random_utl;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice that the package specification is completely devoid of clues that we intend to implement the two subprograms as external procedures. We can't yet tell that rand and srand are any different from conventional PL/SQL modules. And that is exactly the point! From a usage perspective, external procedures are interchangeable with conventional procedures. </P
+><P
+CLASS="para"
+>Our package body is blissfully short. By the way, assuming that your library is defined correctly, this package will work as-is on either UNIX or Windows NT. (Even in cases where you can't use the same external code on different operating systems, it may be possible to make the PL/SQL specification the same. You could then make the external code the only thing that differs&nbsp;-- which would be very desirable if you have to support multiple platforms.) </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE PACKAGE BODY random_utl
+AS
+   /* Tested with: (1) Solaris 2.5.1 and Oracle 8.0.3
+   ||              (2) Windows NT 4.0 and Oracle 8.0.3
+   */
+
+   FUNCTION rand RETURN PLS_INTEGER
+   /* Return a random number between 1 and (2**16 - 1), using
+   || the current seed value.
+   */
+   IS
+      EXTERNAL       -- tell PL/SQL that this is an external procedure
+      LIBRARY libc_l -- specify the library that we created above
+      NAME &quot;rand&quot;    -- function's real name is lowercase
+      LANGUAGE C;    -- we are calling a function written in C
+
+   PROCEDURE srand (seed IN PLS_INTEGER)
+   /* Store a seed value used by external rand() function */
+   IS
+      EXTERNAL
+      LIBRARY libc_l
+      NAME &quot;srand&quot;   -- srand (lowercase) is function's real name
+      LANGUAGE C
+      PARAMETERS (seed ub4);  -- map to unsigned four-byte integer
+END random_utl;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In this example, we have chosen to make the names of the PL/SQL modules identical to those in the shared object library. It is not necessary that they match; in fact, you may wish to make them different so that you can talk about (or document) the parameters independently. </P
+><P
+CLASS="para"
+>Notice the PARAMETERS clause in the body of srand. Each of the formal parameters to the PL/SQL module must have at least one corresponding entry in a PARAMETERS clause. Although there is an extensive set of defaults which can eliminate the need for this clause, this explicit PARAMETERS clause makes it perfectly clear how the parameters will be mapped between PL/SQL and C. </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-21-SECT-2.5"
+>21.2.5 Using the rand External Procedure</A
+></H3
+><P
+CLASS="para"
+>Now that we've "registered" the external procedure with a PL/SQL package, we can test it: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SET SERVEROUTPUT ON SIZE 100000
+DECLARE
+   rnd_value   PLS_INTEGER;
+   seed        PLS_INTEGER;
+BEGIN
+   /* Generate a seed value from the current system time. */
+   SELECT TO_CHAR(SYSDATE, 'SSSSS') INTO seed FROM DUAL;
+
+   /* Call the srand external procedure to store our seed in memory. */
+   random_utl.srand (seed);
+
+   /* Now demonstrate some random numbers. */
+   FOR v_cnt IN 1 .. 10 LOOP
+      rnd_value := random_utl.rand;
+      DBMS_OUTPUT.PUT_LINE ('rand() call #' || v_cnt ||
+                            ' returns ' || rnd_value);
+   END LOOP;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This brief test routine simply seeds the library routine with a quasi-random number derived from the current system time, then calls the random number generator ten times in a row. </P
+><P
+CLASS="para"
+>One of our trial runs produced the following results:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>rand() call #1 returns 27610
+rand() call #2 returns 27964
+rand() call #3 returns 27908
+rand() call #4 returns 21610
+rand() call #5 returns 14085
+rand() call #6 returns 14281
+rand() call #7 returns 9569
+rand() call #8 returns 9397
+rand() call #9 returns 24266
+rand() call #10 returns 142</PRE
+></BLOCKQUOTE
+><DIV
+CLASS="sidebar"
+><H4
+CLASS="sidebar"
+><A
+CLASS="title"
+NAME="SQL2-CH-21-TABLE-2"
+>Limitations of rand</A
+></H4
+><P
+CLASS="para"
+>It doesn't take a rocket scientist to see that the numbers from our trial run are not totally random. This isn't Oracle's fault! The problem lies with the algorithm used in <EM
+CLASS="emphasis"
+>rand</EM
+>. Moreover, rand returns numbers only in the range 1 through 65535. Many C libraries include the XPG4 standard function rand48, which overcomes these limitations at the expense of mildly increased complexity. See the companion diskette for the source code of an external procedure that uses rand48 (the <I
+CLASS="filename"
+>rand48ut.c</I
+> and <I
+CLASS="filename"
+>rand48ut.sql</I
+> files).<A
+CLASS="indexterm"
+NAME="AUTOID-19688"
+></A
+> </P
+></DIV
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch21_01.htm"
+TITLE="21.1 Introduction to External Procedures"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 21.1 Introduction to External Procedures"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming, 2nd Edition"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch21_03.htm"
+TITLE="21.3 Syntax for External Procedures"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 21.3 Syntax for External Procedures"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>21.1 Introduction to External Procedures</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>21.3 Syntax for External Procedures</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

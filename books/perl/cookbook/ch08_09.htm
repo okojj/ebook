@@ -1,0 +1,207 @@
+<html><head>
+<title>Recipe 8.8. Reading a Particular Line in a File</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:38:44Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch08_01.htm" title="8. File Contents"><link rel="prev" href="ch08_08.htm" title="8.7. Randomizing All Lines"><link rel="next" href="ch08_10.htm" title="8.9. Processing Variable-Length Text Fields"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch08_08.htm" title="8.7. Randomizing All Lines"><img src="../gifs/txtpreva.gif" alt="Previous: 8.7. Randomizing All Lines" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch08_01.htm" title="8. File Contents">Chapter 8<br>File Contents</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch08_10.htm" title="8.9. Processing Variable-Length Text Fields"><img src="../gifs/txtnexta.gif" alt="Next: 8.9. Processing Variable-Length Text Fields" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch08-22659">8.8. Reading a Particular Line in a File</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch08-pgfId-702">Problem<a class="indexterm" name="ch08-idx-1000004663-0"></A
+></A
+></H3
+><p class="para">You want to extract a single line from a file.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch08-pgfId-708">Solution</A
+></H3
+><p class="para">The simplest solution is to read the lines until you get to the one you want:</P
+><pre class="programlisting"># looking for line number $DESIRED_LINE_NUMBER
+$. = 0;
+do { $LINE = &lt;HANDLE&gt; } until $. == $DESIRED_LINE_NUMBER || eof;</PRE
+><p class="para">If you are going to be doing this a lot and the file fits into memory, read the file into an array:</P
+><pre class="programlisting">@lines = &lt;HANDLE&gt;;
+$LINE = $lines[$DESIRED_LINE_NUMBER];</PRE
+><p class="para">If you will be retrieving lines by number often and the file doesn't fit into memory, build a byte-address index to let you <code class="literal">seek</CODE
+> directly to the start of the line:</P
+><pre class="programlisting"># usage: build_index(*DATA_HANDLE, *INDEX_HANDLE)
+sub build_index {
+    my $data_file  = shift;
+    my $index_file = shift;
+    my $offset     = 0;
+
+    while (&lt;$data_file&gt;) {
+        print $index_file pack(&quot;N&quot;, $offset);
+        $offset = tell($data_file);
+    }
+}
+
+# usage: line_with_index(*DATA_HANDLE, *INDEX_HANDLE, $LINE_NUMBER)
+# returns line or undef if LINE_NUMBER was out of range
+sub line_with_index {
+    my $data_file   = shift;
+    my $index_file  = shift;
+    my $line_number = shift;
+
+    my $size;               # size of an index entry
+    my $i_offset;           # offset into the index of the entry
+    my $entry;              # index entry
+    my $d_offset;           # offset into the data file
+
+    $size = length(pack(&quot;N&quot;, 0));
+    $i_offset = $size * ($line_number-1);
+    seek($index_file, $i_offset, 0) or return;
+    read($index_file, $entry, $size);
+    $d_offset = unpack(&quot;N&quot;, $entry);
+    seek($data_file, $d_offset, 0);
+    return scalar(&lt;$data_file&gt;);
+}
+
+# usage:
+open(FILE, &quot;&lt; $file&quot;)         or die &quot;Can't open $file for reading: $!\n&quot;;
+open(INDEX, &quot;+&gt;$file.idx&quot;)
+        or die &quot;Can't open $file.idx for read/write: $!\n&quot;;
+build_index(*FILE, *INDEX);
+$line = line_with_index(*FILE, *INDEX, $seeking);</PRE
+><p class="para">If you have the DB_File module, its <code class="literal">DB_RECNO</CODE
+><a class="indexterm" name="ch08-idx-1000004664-0"></A
+> access method ties an array to a file, one line per array element:</P
+><pre class="programlisting">use DB_File;
+use Fcntl;
+
+$tie = tie(@lines, $FILE, &quot;DB_File&quot;, O_RDWR, 0666, $DB_RECNO) or die 
+    &quot;Cannot open file $FILE: $!\n&quot;;
+# extract it
+$line = $lines[$sought-1];</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch08-pgfId-818">Discussion</A
+></H3
+><p class="para">Each strategy has different features, useful in different circumstances. The linear access approach is easy to write and best for short files. The index method gives quick two-step lookup, but requires that the index be pre-built, so it is best when the file being indexed doesn't change often compared to the number of lookups. The DB_File mechanism has some initial overhead, but subsequent accesses are much faster than with linear access, so use it for long files that are accessed more than once and are accessed out of order.</P
+><p class="para">It is important to know whether you're counting lines from 0 or 1. The <code class="literal">$.</CODE
+> variable is 1 after the first line is read, so count from 1 when using linear access. The index mechanism uses lots of offsets, so count from 0. DB_File treats the file's records as an array indexed from 0, so count lines from 0.</P
+><p class="para">Here are three different implementations of the same program, <em class="emphasis">print_line</EM
+>. The program takes two arguments, a filename, and a line number to extract.</P
+><p class="para">The version in <a class="xref" href="#ch08-41197" title="print_line-v1">Example 8.1</A
+> simply reads lines until it finds the one it's looking for.</P
+><div class="example"><h4 class="example"><a class="title" name="ch08-41197">Example 8.1: print_line-v1</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch08-idx-1000004824-0"></A
+>print_line-v1 - linear style
+
+@ARGV == 2 or die &quot;usage: print_line FILENAME LINE_NUMBER\n&quot;;
+
+($filename, $line_number) = @ARGV;
+open(INFILE, &quot;&lt; $filename&quot;) or die &quot;Can't open $filename for reading: $!\n&quot;;
+while (&lt;INFILE&gt;) {
+    $line = $_;
+    last if $. == $line_number;
+}
+if ($. != $line_number) {
+    die &quot;Didn't find line $line_number in $filename\n&quot;;
+}
+print;</PRE
+></DIV
+><p class="para">The index version in <a class="xref" href="#ch08-19472" title="print_line-v2">Example 8.2</A
+> must build an index. For many lookups, you could build the index once and then use it for all subsequent lookups:</P
+><div class="example"><h4 class="example"><a class="title" name="ch08-19472">Example 8.2: print_line-v2</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# print_line-v2 - index style
+# build_index and line_with_index from above
+@ARGV == 2 or
+    die &quot;usage: print_line FILENAME LINE_NUMBER&quot;;
+
+($filename, $line_number) = @ARGV;
+open(ORIG, &quot;&lt; $filename&quot;) 
+        or die &quot;Can't open $filename for reading: $!&quot;;
+
+# open the index and build it if necessary
+# there's a race condition here: two copies of this
+# program can notice there's no index for the file and
+# try to build one.  This would be easily solved with
+# locking
+$indexname = &quot;$filename.index&quot;;
+sysopen(IDX, $indexname, O_CREAT|O_RDWR)
+         or die &quot;Can't open $indexname for read/write: $!&quot;;
+build_index(*ORIG, *IDX) if -z $indexname;  # XXX: race unless lock
+
+$line = line_with_index(*ORIG, *IDX, $line_number);
+die &quot;Didn't find line $line_number in $filename&quot; unless defined $line;
+print $line;</PRE
+></DIV
+><p class="para">The DB_File version in <a class="xref" href="#ch08-23822" title="print_line-v3">Example 8.3</A
+> is indistinguishable from magic.</P
+><div class="example"><h4 class="example"><a class="title" name="ch08-23822">Example 8.3: print_line-v3</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# print_line-v3 - DB_File style
+use DB_File;
+use Fcntl;
+
+@ARGV == 2 or
+    die &quot;usage: print_line FILENAME LINE_NUMBER\n&quot;;
+
+($filename, $line_number) = @ARGV;
+$tie = tie(@lines, &quot;DB_File&quot;, $filename, O_RDWR, 0666, $DB_RECNO)
+        or die &quot;Cannot open file $filename: $!\n&quot;;
+
+unless ($line_number &lt; $tie-&gt;length) {
+    die &quot;Didn't find line $line_number in $filename\n&quot;
+}
+
+print $lines[$line_number-1];                        # easy, eh?<a class="indexterm" name="ch08-idx-1000004666-0"></A
+></PRE
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch08-pgfId-944">See Also</A
+></H3
+><p class="para">The documentation for the standard DB_File module (also in <a class="olink" href="../prog/ch07_01.htm">Chapter 7</A
+> of <cite class="citetitle">Programming Perl </CITE
+>); the <code class="literal">tie</CODE
+> function in <i class="filename">perlfunc </I
+>(1) and in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; the entry on <code class="literal">$.</CODE
+> in <i class="filename">perlvar  </I
+>(1) and in the "Special Variables" section of Chatper 2 of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch08_08.htm" title="8.7. Randomizing All Lines"><img src="../gifs/txtpreva.gif" alt="Previous: 8.7. Randomizing All Lines" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch08_10.htm" title="8.9. Processing Variable-Length Text Fields"><img src="../gifs/txtnexta.gif" alt="Next: 8.9. Processing Variable-Length Text Fields" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">8.7. Randomizing All Lines</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">8.9. Processing Variable-Length Text Fields</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

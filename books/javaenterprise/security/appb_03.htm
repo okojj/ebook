@@ -1,0 +1,587 @@
+<html>
+<head>
+<title>Key Management in an Identity Scope (Java Security)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Scott Oaks">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-403-7E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Key Management in an Identity Scope">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm" alt="Java Security"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="appb_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/appb_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="appb_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/appb_01.htm">Appendix B: Identity-Based Key Management</a></td><td align="right" valign="top" width="172"><a href="appb_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/appb_04.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">B.3. Key Management in an Identity Scope</h2>
+
+<p>
+<a name="INDEX-1992"></a><a name="INDEX-1993"></a>We're now going to put
+together the identity scope with the information about the identity
+class to produce another key management system. One of the primary
+limitations of the default identity scope is that it's based
+upon a single file. If you're in a corporation, you may want to
+have an identity scope that encompasses the public keys of every
+employee in the corporation--but you can't afford to put
+the private keys of the employees in that database. Every employee
+needs read access to the database to obtain his or her own key;
+there's no practical way with a single identity scope to
+prevent these users from reading each other's private keys.
+</p>
+
+<p>Hence, in this example, we're going to develop an identity
+scope that provides for the architecture shown in <a href="#SEC-AP-B-FIG-2">Figure B-2</a>.
+</p>
+
+<a name="SEC-AP-B-FIG-2"></a>
+<div class="figure">
+<img alt="figure" src="figs/JSEC_AB02.gif" webstripperlinkwas="figs/JSEC_AB02.gif"></div>
+<h4 class="objtitle">Figure B-2. A key management architecture</h4>
+
+<p>There are two simple goals to this example:</p>
+
+<ul>
+<li>
+<p>There should be a central database (identity scope) managed by the
+system administrators of the XYZ Corporation. This database will hold
+the public keys of all identities that are used in the system, along
+with a security level that is assigned to each identity.
+</p>
+</li>
+<li>
+<p>Each user should have a private database that holds the user's
+private key. The user's private key will be certified by the
+XYZ Corporation itself, so this private database will need to have
+the public key of the XYZ Corporation. We'll make this scope
+the system scope so that it can encapsulate the knowledge that there
+are two scopes in use; to a program, it will appear as only a single
+scope.
+</p>
+</li>
+</ul>
+
+<p>This architecture allows a program to access the user's private
+key, but not anyone else's private key; it also allows the
+corporation to set security policies for classes that are signed by
+particular entities.
+</p>
+
+<p>There's a certain schizophrenic approach that a system
+administrator must take in order to use a system like the one
+we're describing here. Many of the operations that are provided
+by <tt class="literal">javakey</tt> cannot be duplicated by a standard
+Java program. Hence, we must always rely on
+<tt class="literal">javakey</tt> to perform certain operations (like
+importing a 1.1-based certificate), and then we need to convert from
+the javakey database to our own database.
+</p>
+
+<p>We must implement three classes for this example: an identity class,
+a signer class, and a shared identity scope class (which will be
+based upon the <tt class="literal">XYZFileScope</tt> class that we showed
+above).
+</p>
+
+<a name="SEC-AP-B-SECT-3.1"></a>
+<h3 class="sect2">B.3.1. Implementing an Identity Class</h3>
+
+<p>First, let's look at an implementation of the identity class:</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class XYZIdentity extends Identity {
+	private int trustLevel;
+
+	protected XYZIdentity() {
+	}
+
+	public XYZIdentity(String name, IdentityScope scope)
+                                  throws KeyManagementException {
+		super(name, scope);
+		scope.addIdentity(this);
+		trustLevel = 0;
+	}
+
+	public void setPublicKey(PublicKey key)
+                                  throws KeyManagementException {
+		IdentityScope is = getScope();
+		Identity i = is.getIdentity(key);
+		if (i != null &amp;&amp; !equals(i))
+			throw new KeyManagementException("Duplicate public key");
+		super.setPublicKey(key);
+	}
+
+	public void addCertificate(Certificate cert)
+                                      throws KeyManagementException {
+		Identity i = getScope().getIdentity(cert.getPublicKey());
+		if (i != null &amp;&amp; !equals(i))
+			throw new KeyManagementException("Duplicate public key");
+		super.addCertificate(cert);
+	}
+
+	public int getTrust() {
+		return trustLevel;
+	}
+
+	void setTrust(int x) {
+		if (x &lt; 0 || x &gt; 10)
+			throw new IllegalArgumentException("Invalid trust level");
+		trustLevel = x;
+	}
+
+	public String toString() {
+		return super.toString() + " trust level: " + trustLevel;
+	}
+}</pre>
+</blockquote>
+
+<p>We've chosen in this class to ensure that an identity always
+belongs to a scope and so we only provided one constructor.
+There's a somewhat confusing point here, however. Constructing
+an identity as part of a scope does not automatically add that
+identity to the scope. That logic is required either in the
+constructor (as we've done), or the design of the class will
+require that the developer using the class explicitly assigns the
+identity to the scope later. The former case is probably more useful;
+make sure to assign your identities inside their constructors.
+</p>
+
+<p>Other than the constructor, we're not required to implement any
+other methods in our identity class. However, we've chosen to
+override the <tt class="literal">setPublicKey()</tt> and
+<tt class="literal">addCertificate()</tt> methods so that those methods
+throw an exception when an identity is to be assigned a public key
+that already exists in the identity scope. You'll recall that
+when we first introduced the <tt class="literal">Identity</tt> class, we
+mentioned that this logic was not present. Adding that logic is a
+simple matter of checking to see if the public key in question is
+already in the identity scope.
+</p>
+
+<p>Finally, we've introduced a variable in our identity to
+determine the level of trust that we place in this identity. This is
+similar to the binary option that <tt class="literal">javakey</tt> gives
+us as to whether an identity is trusted or not; in our version, we
+allow the identity to have a level of trust. A trust level of 3 might
+indicate that the identity is fully trusted and hence should have
+access to all files; a level of 2 might indicate that the identity
+should be allowed access only to files in the user's temporary
+directory; a level of 1 might indicate that the identity should never
+be allowed to access a local file. The point is, the notion of trust
+associated with an identity is completely up to the programmer to
+decide--you're free to assign whatever semantics you like
+for this (or any other value), or to dispense with such an idea
+altogether. The idea behind this variable is that the security
+manager might use it (or other such information) to determine an
+appropriate security policy.
+</p>
+
+
+<a name="SEC-AP-B-SECT-3.2"></a>
+<h3 class="sect2">B.3.2. Implementing a Signer Class</h3>
+
+<p>Implementing the <a name="INDEX-1994"></a><a name="INDEX-1995"></a><a name="INDEX-1996"></a><a name="INDEX-1997"></a><a name="INDEX-1998"></a><tt class="literal">Signer</tt> class that we require follows virtually
+the same process:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class XYZSigner extends Signer {
+	private int trustLevel;
+
+	public XYZSigner(String name, IdentityScope scope)
+                                      throws KeyManagementException {
+		super(name, scope);
+		scope.addIdentity(this);
+	}
+
+	public void setPublicKey(PublicKey key)
+                                      throws KeyManagementException {
+		IdentityScope scope = getScope();
+		if (scope != null) {
+			Identity i = getScope().getIdentity(key);
+			if (i != null &amp;&amp; !equals(i))
+				throw new KeyManagementException(
+                                                   "Duplicate public key");
+		}
+		super.setPublicKey(key);
+	}
+ 
+	public void addCertificate(Certificate cert)
+                                      throws KeyManagementException {
+		IdentityScope scope = getScope();
+		if (scope != null) {
+			Identity i = getScope().getIdentity(cert.getPublicKey());
+			if (i != null &amp;&amp; !equals(i))
+				throw new KeyManagementException(
+                                                   "Duplicate public key");
+		}
+		super.addCertificate(cert);
+	}	
+
+	public int getTrust() {
+		return trustLevel;
+	}
+
+	void setTrust(int x) {
+		if (x &lt; 0 || x &gt; 10)
+			throw new IllegalArgumentException("Invalid trust level");
+		trustLevel = x;
+	}
+
+	public String toString() {
+		return super.toString() + " trust level: " + trustLevel;
+	}
+}</pre>
+</blockquote>
+
+<p>We do not need to provide an overridden method for the
+<tt class="literal">setKeyPair()</tt> method of the
+<tt class="literal">Signer</tt> class to ensure that a duplicate private
+key is not inserted into the identity scope. Since we can only insert
+a private key with a public key, and since there is a one-to-one
+correspondence between such keys, we know that if the public keys are
+unique, the private keys are unique as well.<a name="INDEX-1999"></a><a name="INDEX-2000"></a><a name="INDEX-2001"></a><a name="INDEX-2002"></a><a name="INDEX-2003"></a>
+</p>
+
+
+<a name="SEC-AP-B-SECT-3.3"></a>
+<h3 class="sect2">B.3.3. A Shared System Identity Scope</h3>
+
+<p>
+<a name="INDEX-2004"></a><a name="INDEX-2005"></a>In the
+architecture we're examining, there are two identity scopes:
+</p>
+
+<ul>
+<li>
+<p>The <a name="INDEX-2006"></a>
+private scope. This scope will hold one and only one instance of
+<tt class="literal">XYZSigner</tt>. This signer will represent the user
+who owns that particular database.
+</p>
+</li>
+<li>
+<p>The <a name="INDEX-2007"></a>
+public scope. This scope will hold several instances of
+<tt class="literal">XYZIdentity</tt>, but no signers--since it is to
+be shared, we don't want it to contain any private keys.
+</p>
+</li>
+</ul>
+
+<p>Each of these scopes will be an instance of the
+<tt class="literal">XYZFileScope</tt> that we showed earlier. To combine
+them, we'll create another identity scope that holds a
+reference to both scopes:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class XYZIdentityScope extends IdentityScope {
+	private transient IdentityScope publicScope;
+	private transient IdentityScope privateScope;
+
+	public XYZIdentityScope() throws KeyManagementException {
+		super("XYZIdentityScope");
+		privateScope = new XYZFileScope("/floppy/floppy0/private");
+		publicScope = new XYZFileScope("/auto/shared/sharedScope");
+		setSystemScope(this);
+	}
+	
+	public int size() {
+		return publicScope.size() + privateScope.size();
+	}
+
+	public Identity getIdentity(String name) {
+		Identity id;
+		id = privateScope.getIdentity(name);
+		if (id == null)
+			id = publicScope.getIdentity(name);
+		return id;
+	}
+
+	public Identity getIdentity(PublicKey key) {
+		Identity id;
+		id = privateScope.getIdentity(key);
+		if (id == null)
+			id = publicScope.getIdentity(key);
+		return id;
+	}
+
+	public void addIdentity(Identity identity)
+                                      throws KeyManagementException {
+		throw new KeyManagementException(
+                           "This scope does not support adding identities");
+	}
+
+	public void removeIdentity(Identity identity)
+                                      throws KeyManagementException {
+		throw new KeyManagementException(
+                           "This scope does not support removing identities");
+	}
+
+	class XYZIdentityScopeEnumerator implements Enumeration {
+		private boolean donePrivate = false;
+		Enumeration pubEnum = null, privEnum = null;
+
+		XYZIdentityScopeEnumerator() {
+			pubEnum = publicScope.identities();
+			privEnum = privateScope.identities();
+			if (!privEnum.hasMoreElements())
+				donePrivate = true;
+		}
+
+		public boolean hasMoreElements() {
+			return pubEnum.hasMoreElements() ||
+				   privEnum.hasMoreElements();
+		}
+
+		public Object nextElement() {
+			Object o = null;
+			if (!donePrivate) {
+				o = privEnum.nextElement();
+				if (!privEnum.hasMoreElements())
+					donePrivate = true;
+			}
+			else o = pubEnum.nextElement();
+			if (o == null)
+				throw new NoSuchElementException(
+                                          "XYZIdentityScopeEnumerator");
+			return o;
+		}
+	}
+
+	public Enumeration identities() {
+		return new XYZIdentityScopeEnumerator();
+	}
+}</pre>
+</blockquote>
+
+<p>The idea behind this class is that it is going to hold identities
+containing private keys, and that those private keys should be held
+somewhere safe. For this example, we're assuming that the
+private identity scope database will be stored on a floppy disk
+somewhere--that way, a user can move the identity scope around
+with her, and the private key won't be left on a disk where
+some malicious person might attempt to retrieve it.
+</p>
+
+<p>This class is completely tailored to a Solaris machine, since
+we've hardwired the name of the private file to a file on the
+default floppy drive of a Solaris machine, and we've hardwired
+the name of the public file to a file that can be automounted on the
+user's machine. On other machines, the name of the floppy drive
+will vary, and a complete implementation of this class would really
+require that filename to be a property. The property can be set to
+the appropriate value for the hardware on which the Java virtual
+machine is running. The public database probably shouldn't even
+be a file; it should be held on a remote machine somewhere and
+accessed via RMI or another technique. We'll leave those
+enhancements as an exercise for the reader.
+</p>
+
+<p>Now that we have the two scopes we're interested in, completing
+the implementation is a simple matter of:
+</p>
+
+<ul>
+<li>
+<p>Setting this identity scope to be the system identity scope. This
+allows the developer to use the standard methods we've already
+seen to extract information from this scope.
+</p>
+</li>
+<li>
+<p>Overriding the <tt class="literal">getIdentity()</tt> and
+<tt class="literal">identities()</tt> methods so that they operate on
+both included identity scopes. Remember that often identity scopes
+are disjoint; in this case, however, it makes sense for there to be a
+single interface to the two identity scopes.
+</p>
+</li>
+<li>
+<p>Overriding the <tt class="literal">addIdentity()</tt> and
+<tt class="literal">removeIdentity()</tt> methods to prevent them from
+changing the underlying identity databases. We'll see how to
+manipulate the individual database in the next section.<a name="INDEX-2008"></a><a name="INDEX-2009"></a>
+</p>
+</li>
+</ul>
+
+
+<a name="SEC-AP-B-SECT-3.4"></a>
+<h3 class="sect2">B.3.4. Creating Identities</h3>
+
+<p>
+<a name="INDEX-2010"></a><a name="INDEX-2011"></a>The XYZ Corporation is concerned
+about two sorts of identities: identities from corporations and
+individuals outside the corporation, and identities of employees. The
+latter must all have private keys in order for the employees to be
+able to sign documents and will be instances of the
+<tt class="literal">XYZSigner</tt> class; the former need only public
+keys and will be instances of the <tt class="literal">XYZIdentity</tt>
+class.
+</p>
+
+<p>In order to create these identities, we're going to rely on the
+facilities provided by <tt class="literal">javakey</tt> to do the bulk of
+the work for us, then we're going to read the generic entity
+out of the javakey database and turn it into an XYZ-based entity.
+This allows us to import or create certificates for these identities,
+which is something that only <tt class="literal">javakey</tt> can do in
+Java 1.1.
+</p>
+
+<p>When a new employee comes to the XYZ Corporation, we must generate a
+private identity database for that employee on a floppy that can be
+given to the employee. As a first step, however, we must create the
+employee in a standard javakey database so that the employee can be
+given a certificate to accompany her identity. Once we've got
+the employee into the javakey database, here's the code we use
+to convert the <tt class="literal">javakey</tt> entry into the
+<tt class="literal">XYZIdentityScope</tt> we just examined:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class NewEmployee {
+	public static void main(String args[]) {
+		try {
+			IdentityScope is = IdentityScope.getSystemScope();
+			Signer origSigner = (Signer) is.getIdentity(args[0]);
+
+			System.out.println(
+						"Please insert the floppy for " + args[0]);
+			System.out.print("Press enter when ready:  ");
+			System.in.read();
+			XYZFileScope privateScope =
+						new XYZFileScope("/floppy/floppy0/private");
+			XYZSigner newSigner = new XYZSigner(args[0], privateScope);
+			KeyPair kp = new KeyPair(origSigner.getPublicKey(),
+									  origSigner.getPrivateKey());
+			newSigner.setKeyPair(kp);
+			newSigner.setInfo(origSigner.getInfo());
+			Certificate certs[] = origSigner.certificates();
+			for (int i = 0; i &lt; certs.length; i++)
+				newSigner.addCertificate(certs[i]);
+			newSigner.setTrust(Integer.parseInt(args[1]));
+			privateScope.save();
+
+			XYZFileScope sharedScope =
+						new XYZFileScope("/auto/shared/sharedScope");
+			XYZIdentity newId = new XYZIdentity(args[0], sharedScope);
+			newId.setPublicKey(origSigner.getPublicKey());
+			newId.setInfo(origSigner.getInfo());
+			certs = origSigner.certificates();
+			for (int i = 0; i &lt; certs.length; i++)
+				newId.addCertificate(certs[i]);
+			newId.setTrust(Integer.parseInt(args[1]));
+			sharedScope.save();
+		} catch (Exception e) {
+			System.out.println(e);
+		}
+	}
+}</pre>
+</blockquote>
+
+<p>This program is then run with the name of the employee as an
+argument. When the program is run, two things happen:
+</p>
+
+<ol>
+<li>
+<p>The correct private key database is created and written to the
+floppy. The private key database has the signing identity of the new
+employee loaded into it.
+</p>
+</li>
+<li>
+<p>The shared public database is opened, and the identity of the new
+employee is added to it.
+</p>
+</li>
+</ol>
+
+<p>In both cases, it was necessary to read the existing data out of the
+entity read from the javakey database and convert that data into an
+XYZ-based class. We could have used the existing object (a subclass
+of the <tt class="literal">Identity</tt> or <tt class="literal">Signer</tt>
+class), but that would not have allowed us to associate a level of
+trust with these entities in our database. After the program has run,
+both databases have the desired entity, with the desired set of keys.
+</p>
+
+<p>When the system administrator for the XYZ Corporation receives a
+public key (and a certificate) for an entity that is not going to be
+a signer within the XYZ Corporation, a similar procedure would need
+to be followed to enter the certificate into the javakey database,
+and then extract out the new identity and update only the shared
+identity scope. Code to do that would be very similar to the code
+shown <a name="INDEX-2012"></a><a name="INDEX-2013"></a>
+above.<a name="INDEX-2014"></a><a name="INDEX-2015"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="appb_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/appb_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="appb_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/appb_04.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">B.2. Identity Scopes</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">B.4. Summary</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

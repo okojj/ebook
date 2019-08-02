@@ -1,0 +1,1333 @@
+<html>
+<head>
+<title>The Twenty-Minute SNMP Tutorial  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="The Twenty-Minute SNMP Tutorial">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="appd_06.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm">Perl for System Administration</a></td><td align="right" valign="top" width="172"></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+
+<h1 class="chapter">Appendix E.  The Twenty-Minute SNMP Tutorial</h1>
+<div class="htmltoc">
+<h4 class="tochead">Contents:</h4>
+<p>
+<a href="appe_01.htm">SNMP in Practice</a>
+<br>
+</p>
+</div>
+
+
+
+
+
+
+
+
+<p>The Simple Network Management Protocol (SNMP) is the ubiquitous
+protocol used to manage devices on a network. Unfortunately, as we
+metioned at the beginning of <a href="ch10_01.htm">Chapter 10, "Security and Network Monitoring"</a>, SNMP is
+not a particularly simple protocol (despite its name). This longish
+tutorial will give you the information you need to get started with
+Version 1 of SNMP.</p>
+
+
+
+
+<p>
+<a name="INDEX-1154"></a><a name="INDEX-1155"></a>SNMP is predicated on the
+notion that you have a management station that polls an SNMP agent
+running on a remote device for information. The agent can also be
+instructed to signal the management station if an important condition
+arises (like a counter exceeding a threshold). When we programmed in
+Perl in <a href="ch10_01.htm">Chapter 10, "Security and Network Monitoring"</a>, we essentially acted as a
+management station, polling the SNMP agents on other network
+devices.<a name="INDEX-1156"></a>
+</p>
+
+
+
+
+<p>We're going to concentrate on Version 1 of SNMP. There have
+been seven versions of the protocol (SNMPv1, SNMPsec, SNMPv2p,
+SNMPv2c, SNMPv2u, SNMPv2* and SNMPv3) proposed. v1 is the only one
+that has been widely implemented and deployed, though v3 is expected
+to eventually ascend thanks to its superior security architecture.</p>
+
+
+
+
+<p>
+<a name="INDEX-1157"></a>Perl
+and SNMP both have simple data types. Perl uses a scalar as its base
+type. Lists and hashes are just collections of scalars in Perl. In
+SNMP, you also work with scalar <em class="emphasis">variables.</em> SNMP
+variables can hold one of four primitive types: integers, strings,
+object identifiers (more on this in a moment), or null values. And
+just like Perl, in SNMP a set of related variables can be grouped
+together to form larger structures (most often
+<em class="emphasis">tables</em>). This is where their similarity ends.</p>
+
+
+
+
+<p>Perl and SNMP diverge radically when we come to the subject of
+variable names. In Perl, you can, given a few restrictions, name your
+variables anything you'd like. <a name="INDEX-1158"></a>SNMP variable names are considerably more
+restrictive. All SNMP variables exist within a virtual hierarchical
+storage structure known as the Management Information Base (MIB). All
+valid variable names are defined within this framework. The MIB, now
+at version MIB-II, defines a tree structure for all of the objects
+(and their names) that can be managed via SNMP.</p>
+
+
+
+
+<p>In some ways the MIB is similar to a filesystem. Instead of
+organizing files, the MIB logically organizes management information
+in a hierarchical tree-like structure. Each node in this tree has a
+short text string, called a <em class="emphasis">label</em>, and an
+accompanying number that represents its position at that level in the
+tree. To give you a sense of how this works, let's go find the
+SNMP variable in the MIB used to hold a system's description of
+itself. Bear with me; we have a bit of a tree walking (eight
+levels' worth) to get there.</p>
+
+
+
+
+<p>
+<a href="appe_01.htm#appe-86322">Figure E-1</a> shows a picture of the top of the MIB
+tree.</p>
+
+
+
+
+<a name="appe-86322"></a>
+<div class="figure">
+<img alt="figure" src="figs/psa_ae01.gif"></div>
+<h4 class="objtitle">Figure E-1. Finding sysDescr(1) in the MIB</h4>
+
+<p>The top of the tree consists of standards organizations:
+<tt class="literal">iso(1),</tt><tt class="literal">ccitt(2),</tt><tt class="literal">joint-iso-ccitt(3)</tt>. Under the
+<tt class="literal">iso(1)</tt> node, there is a node called
+<tt class="literal">org(3)</tt> for other organizations. Under this node is
+<tt class="literal">dod(6)</tt>, for the Department of Defense. Under that
+node is <tt class="literal">internet(1)</tt>, a subtree for the Internet
+community.</p>
+
+
+
+
+<p>Here's where things start to get interesting. The Internet
+Activities Board has assigned the subtrees listed in <a href="appe_01.htm#appe-91812">Table E-1</a> under <tt class="literal">internet(1)</tt>.</p>
+
+
+
+
+<a name="appe-91812"></a>
+<h4 class="objtitle">Table E-1. Subtrees of the internet(1) Node</h4>
+<table border="1">
+
+
+
+<tr>
+<th>
+<p>Subtree</p>
+</th>
+<th>
+<p>Description</p>
+</th>
+</tr>
+
+
+
+
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">directory(1)</tt>
+</p>
+</td>
+<td>
+<p>OSI directory</p>
+</td>
+</tr>
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">mgmt(2)</tt>
+</p>
+</td>
+<td>
+<p>RFC standard objects</p>
+</td>
+</tr>
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">experimental(3)</tt>
+</p>
+</td>
+<td>
+<p>Internet experiments</p>
+</td>
+</tr>
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">private(4)</tt>
+</p>
+</td>
+<td>
+<p>Vendor-specific</p>
+</td>
+</tr>
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">security(5)</tt>
+</p>
+</td>
+<td>
+<p>Security</p>
+</td>
+</tr>
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">snmpV2(6)</tt>
+</p>
+</td>
+<td>
+<p>SNMP internals</p>
+</td>
+</tr>
+
+
+
+
+</table>
+
+
+
+
+<p>Because we're interested in using SNMP for device management,
+we will want to take the <tt class="literal">mgmt(2)</tt> branch, The first
+node under <tt class="literal">mgmt(2)</tt> is the MIB itself (this is
+almost recursive). Since there is only one MIB, the only node under
+<tt class="literal">mgmt(2)</tt> is <tt class="literal">mib-2(1)</tt>.</p>
+
+
+
+
+<p>The real meat (or tofu) of the MIB begins at this level in the tree.
+We find the first set of branches, called object groups, that hold
+the variables we'll want to query:<a name="INDEX-1159"></a>
+</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">system(1)
+interfaces(2)
+at(3)
+ip(4)
+icmp(5)
+tcp(6)
+udp(7)
+egp(8)
+cmot(9)
+transmission(10)
+snmp(11)</pre>
+</blockquote>
+
+
+
+
+<p>Remember, we're hunting for the "system
+description" SNMP variable, so the <tt class="literal">system(1)</tt>
+group is the logical place to look. The first node in that tree is
+<tt class="literal">sysDescr(1)</tt>. We've located the object we
+need.</p>
+
+
+
+
+<p>
+<a name="INDEX-1160"></a><a name="INDEX-1161"></a>Why
+bother with all of this tree-walking stuff? This trip provides us
+with <tt class="literal">sysDescr(1)</tt>'s Object Identifier. The
+Object Identifier, or OID, is just the dotted set of the numbers from
+each label of the tree we encountered on our way to this object.
+<a href="appe_01.htm#appe-55913">Figure E-2</a> shows this graphically.</p>
+
+
+
+
+<a name="appe-55913"></a>
+<div class="figure">
+<img alt="figure" src="figs/psa_ae02.gif"></div>
+<h4 class="objtitle">Figure E-2. Finding the OID for our desired object</h4>
+
+<p>So the OID for the Internet tree is <tt class="literal">1.3.6.1</tt>, the
+OID for the system object group is <tt class="literal">1.3.6.1.2.1.1</tt>,
+and the OID for the <tt class="literal">sysDescr</tt> object is
+<tt class="literal">1.3.6.1.2.1.1.1</tt>.</p>
+
+
+
+
+<p>When we want to actually use this OID in practice, we'll need
+to tack on another number to get the value of this variable. We will
+need to append a <tt class="literal">.0</tt>, representing the first (and
+only, since a device cannot have more than one description)
+<em class="emphasis">instance</em> of this object.</p>
+
+
+
+
+<p>In fact, let's do that; let's use this OID in a sneak
+preview of SNMP in action. In this appendix we'll be using the
+command-line tools from the UCD-SNMP package for demonstration
+purposes. The UCD-SNMP package that can be found at <a href="http://ucd-snmp.ucdavis.edu/">http://ucd-snmp.ucdavis.edu/</a> is an excellent
+free SNMPv1 and v3 implementation. We're using this particular
+SNMP implementation because one of the Perl modules links to its
+library, but any other client that can send an SNMP request will do
+just as nicely. Once you're familiar with command-line SNMP
+utilities, making the jump to the Perl equivalents is easy.</p>
+
+
+
+
+<p>The UCD-SNMP command-line tools require us to prepend a dot if we
+wish to specify an OID/variable name starting at the root of the
+tree. Otherwise the OID/variable name is assumed to begin at the top
+of the <tt class="literal">mib-2</tt> tree. Here are two ways we might
+query the machine <em class="emphasis">solarisbox</em>
+for its systems description:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">$ <tt class="userinput"><b>snmpget solarisbox public .1.3.6.1.2.1.1.1.0</b></tt>
+$ <tt class="userinput"><b>snmpget solarisbox public .iso.org.dod.internet.mgmt.mib-2.system.sysDescr.0</b></tt>
+</pre>
+</blockquote>
+
+
+
+
+<p>These lines both yield:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">system.sysDescr.0 = Sun SNMP Agent, Ultra-1</pre>
+</blockquote>
+
+
+
+
+<p>
+<a name="INDEX-1162"></a><a name="INDEX-1163"></a><a name="INDEX-1164"></a>Back to the theory. It is important
+to remember that the P in SNMP stands for
+<em class="emphasis">Protocol</em>. SNMP itself is just the protocol for
+the communication between entities in a management infrastructure.
+The operations, or "protocol data units" (PDUs), are
+meant to be <em class="emphasis">simple</em>. Here are the PDUs
+you'll see most often, especially when programming in
+Perl:<a href="#FOOTNOTE-1">[1]</a>
+</p>
+<blockquote class="footnote">
+
+
+
+<a name="FOOTNOTE-1"></a>
+<p>[1]The canonical list of PDUs is found in RFC1905
+for SNMPv2 and v3, which builds upon the PDUs in SNMPv1's
+RFC1157. The RFC list isn't much bigger than the PDUs cited
+here, so you're not missing much.</p>
+
+
+
+</blockquote>
+
+
+
+
+<dl>
+<dt>
+<b>get-request</b>
+</dt>
+<dd>
+<p>
+<tt class="literal">get-request</tt> is the workhorse of the PDU family.
+<tt class="literal">get-request</tt> is used to poll an SNMP entity for
+the value of some SNMP variable. Many people live their whole SNMP
+lives using nothing but this operation.</p>
+</dd>
+
+
+
+
+<dt>
+<b>get-next-request</b>
+</dt>
+<dd>
+<p>
+<tt class="literal">get-next-request</tt> is just like
+<tt class="literal">get-request</tt>, except it returns the item in the
+MIB just <em class="emphasis">after</em> the specified item (the
+"first lexicographic successor" in RFC terms). This
+operation comes into play most often when you are attempting to find
+all of the items in a logical table object. For instance, you might
+send a set of repeated <tt class="literal">get-next-request</tt>s to
+query for each line of a workstation's ARP table. We'll
+see an example of this in practice in a moment.</p>
+</dd>
+
+
+
+
+<dt>
+<b>set-request</b>
+</dt>
+<dd>
+<p>
+<tt class="literal">set-request</tt> does just what you would anticipate;
+it attempts to change the value of an SNMP variable. This is the
+operation used to change the configuration of an SNMP-capable device.</p>
+</dd>
+
+
+
+
+<dt>
+<b>trap/snmpV2-trap</b>
+</dt>
+<dd>
+<p>
+<tt class="literal">trap</tt> is the SNMPv1 name, and
+<tt class="literal">snmpV2-trap</tt> is the SNMPv2/3 name. Traps are
+beyond the scope of this book, but in essence they allow you to ask
+an SNMP-capable box to signal its management entity about an event
+(like a reboot, or a counter threshold being reached) without being
+explicitly polled.</p>
+</dd>
+
+
+
+
+<dt>
+<b>response</b>
+</dt>
+<dd>
+<p>
+<tt class="literal">response</tt> is the PDU used to carry the response
+back from any of the other PDUs. It can be used to reply to a
+<tt class="literal">get-request</tt>, signal if a
+<tt class="literal">set-request</tt> succeeded, and so on. You rarely
+reference this PDU explicitly when programming, since most SNMP
+libraries, programs, and Perl modules automatically handle SNMP
+response receipt. Still, it is important to understand not just how
+requests are made, but also how they are answered.</p>
+</dd>
+
+</dl>
+
+
+
+
+<p>If you've never dealt with SNMP before, a natural reaction to
+the above list might be "That's it? Get, set, tell me
+when something happens, that's all it can do?" But
+<em class="emphasis">simple</em>, as SNMP's creators realized early
+on, is not the opposite of <em class="emphasis">powerful</em>. If the
+manufacturer of an SNMP device chooses her or his variables well,
+there's little that cannot be done with the protocol. The
+classic example from the RFCs is the rebooting of an SNMP-capable
+device. There may be no "reboot-request" PDU, but a
+manufacturer could easily implement this operation by using an SNMP
+trigger variable to hold the number of seconds before a reboot. When
+this variable is changed via <tt class="literal">set-request</tt>, a
+reboot of the device could be initiated in the specified amount of
+time.</p>
+
+
+
+
+<p>
+<a name="INDEX-1165"></a><a name="INDEX-1166"></a>Given this power, what sort of security
+is in place to keep anyone with an SNMP client from rebooting your
+machine? In earlier versions of the protocol, the protection
+mechanism was pretty puny. In fact, some people have taken to
+expanding the acronym as "Security Not My Problem"
+because of SNMPv1's poor authentication mechanism. To explain
+the <em class="emphasis">who</em>, <em class="emphasis">what</em>, and
+<em class="emphasis">how</em> of this protection mechanism, we have to
+drag out some nomenclature, so bear with me.</p>
+
+
+
+
+<p>
+<a name="INDEX-1167"></a>SNMPv1
+and SNMPv2C allow you to define administrative relationships between
+SNMP entities called <em class="emphasis">communities</em>. Communities
+are a way of grouping SNMP agents that have similar access
+restrictions with the management entities that meet those
+restrictions. All entities that are in a community share the same
+<em class="emphasis">community name</em>. To prove you are part of a
+community, you just have to know the name of that community. That is
+the <em class="emphasis">who can access?</em> part of the scheme.</p>
+
+
+
+
+<p>For the "what can they access?" part, RFC1157 calls the
+parts of a MIB applicable to a particular network entity an
+<em class="emphasis">SNMP MIB view</em>. For instance, an SNMP-capable
+toaster<a href="#FOOTNOTE-2">[2]</a> would not provide all of the
+same SNMP configuration variables as that of an SNMP-capable router.</p>
+<blockquote class="footnote">
+
+
+
+<a name="FOOTNOTE-2"></a>
+<p>[2]There's an SNMP-capable Coke machine
+(information on it is available at <a href="http://www.nixu.fi/limu">http://www.nixu.fi/limu</a>), so it isn't
+all that farfetched.</p>
+
+
+
+</blockquote>
+
+
+
+
+<p>Each object in a MIB is defined as being accessible
+<tt class="literal">read-only</tt>, <tt class="literal">read-write</tt>, or
+<tt class="literal">none</tt>. This is known as that object's
+<em class="emphasis">SNMP access mode</em>. If we put an SNMP MIB view and
+an SNMP access mode together, we get an <em class="emphasis">SNMP community
+profile</em> that describes the type of access available to the
+applicable variables in the MIB by a particular community.</p>
+
+
+
+
+<p>
+<a name="INDEX-1168"></a>Now we bring the
+<em class="emphasis">who</em> and the <em class="emphasis">what</em> parts
+together and we have an <em class="emphasis">SNMP access policy</em> that
+describes what kind of access members of a particular community offer
+each other.</p>
+
+
+
+
+<p>How does this all work in real life? You configure your router or
+your workstation to be in at least two communities, one controlling
+read, the other controlling read-write access. People often refer to
+these communities as the <tt class="literal">public</tt> and the
+<tt class="literal">private</tt> communities, named after popular default
+names for these communities. For instance, on a Cisco router you
+might include this as part of the configuration:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">! set the read-only community name to MyPublicCommunityName
+snmp-server community MyPublicCommunityName RO 
+
+! set the read-write community name to MyPrivateCommunityName
+snmp-server community MyPrivateCommunityName RW</pre>
+</blockquote>
+
+
+
+
+<p>On a Solaris machine, you might include this in the
+<em class="filename">/etc/snmp/conf/snmpd.conf</em> file:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">read-community  MyPublicCommunityName 
+write-community MyPrivateCommunityName</pre>
+</blockquote>
+
+
+
+
+<p>SNMP queries to either of these devices would have to use the
+<tt class="literal">MyPublicCommunityName</tt> community name to gain
+access to read-only variables or the
+<tt class="literal">MyPrivateCommunityName</tt> community names to change
+read-write variables on those devices. The community name is then
+functioning as a pseudo-password to gain SNMP access to a device.
+This is a poor security scheme. Not only is the community name passed
+in clear text in every SNMP packet, but it is trying to protect
+access using "security by obscurity."</p>
+
+
+
+
+<p>Later versions of SNMP, Version 3 in particular, added significantly
+better security to the protocol. RFC2274 and RFC2275 define a User
+Security Model (USM) and a View-Based Access Control (VACM) Model.
+USM provides crypto-based protection for authentication and
+encryption of messages. VACM offers a comprehensive access control
+mechanism for MIB objects. These mechanisms are still relatively new
+and unimplemented (for instance, only one of the available Perl
+modules supports it, and this support is very new). We won't be
+discussing these mechanisms here, but it is probably worth your while
+to peruse the RFCs since v3 is increasing in
+popularity.<a name="INDEX-1169"></a><a name="INDEX-1170"></a><a name="INDEX-1171"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h2 class="sect1">E.1. SNMP in Practice</h2>
+
+
+
+
+<p>
+<a name="INDEX-1172"></a>Now
+that you've received a healthy dose of SNMP theory, let's
+do something practical with this knowledge. You've already seen
+how to query a machine's system description (remember the sneak
+preview earlier). Now let's look at two more examples: querying
+the system uptime and the IP routing table.</p>
+
+
+
+
+<p>Until now, you just had to take my word for the location and name of
+an SNMP variable in the MIB. We need to change that, since the first
+step in querying information via SNMP is a process I call "MIB
+groveling:"</p>
+
+
+
+
+<dl>
+<dt>
+<b><em class="emphasis">Step 1</em></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1173"></a>Find the right MIB document. If you are
+looking for a device-independent setting that could be found on any
+generic SNMP device, you will probably find it in RFC1213.<a href="#FOOTNOTE-3">[3]</a>
+If you need vendor-specific variable names, e.g., the variable that
+holds "the color of a blinky-light on the front panel of a
+specific ATM switch," you will need to contact the vendor of
+the switch and request a copy of their <em class="emphasis">MIB
+module</em>. I'm being pedantic about the terms here
+because it is not uncommon to hear people incorrectly say, "I
+need the MIB for that device." There is only one MIB in the
+world; everything else fits somewhere in that structure (usually off
+of the <tt class="literal">private(4)</tt> branch).</p>
+<blockquote class="footnote">
+
+
+
+<a name="FOOTNOTE-3"></a>
+<p>[3]RFC1213 is marginally updated by RFC2011, RFC2012, and RFC2013.
+RFC1907 adds additional SNMPv2 items to the MIB.</p>
+
+
+
+</blockquote>
+</dd>
+
+
+
+
+<dt>
+<b><em class="emphasis">Step 2</em></b>
+</dt>
+<dd>
+<p>Search through MIB descriptions until you find the SNMP variable(s)
+you need.</p>
+</dd>
+
+</dl>
+
+
+
+
+<p>To make this second step easier for you, let me help decode the
+format.</p>
+
+
+
+
+<p>MIB descriptions aren't all that scary once you get used to
+them. They look like one long set of variable declarations similar to
+those you would find in source code. This is no coincidence because
+they <em class="emphasis">are</em> variable declarations. If a vendor has
+been responsible in the construction of its module, that module will
+be heavily commented like any good source code file.</p>
+
+
+
+
+<p>MIB information is written in a subset of Abstract Syntax Notation
+One (ASN.1), an Open Systems Interconnection (OSI) standard notation.
+A description of this subset and other details of the data
+descriptions for SNMP are found in RFCs called Structure for
+Management Information (SMI) RFCs. These accompany the RFCs that
+define the SNMP protocol and the current MIB. For instance, the
+latest (as of this writing) SNMP protocol definition can be found in
+RFC1905, the latest base MIB manipulated by this protocol is in
+RFC1907, and the SMI for this MIB is in RFC2578. I bring this to your
+attention because it is not uncommon to have to flip between several
+documents when looking for specifics on an SNMP
+subject.<a name="INDEX-1174"></a><a name="INDEX-1175"></a>
+</p>
+
+
+
+
+<p>Let's use this knowledge to address the first task at hand:
+finding the system uptime of a machine via SNMP. This information is
+fairly generic, so there's a good chance we can find the SNMP
+variable we need in RFC1213. A quick search for "uptime"
+in RFC1213 yields this snippet of ASN.1:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">sysUpTime OBJECT-TYPE
+              SYNTAX  TimeTicks
+              ACCESS  read-only
+              STATUS  mandatory
+              DESCRIPTION
+                      "The time (in hundredths of a second) since the
+                      network management portion of the system was last
+                      re-initialized."
+              ::= { system 3 }</pre>
+</blockquote>
+
+
+
+
+<p>Let's take this definition apart line by line:</p>
+
+
+
+
+<dl>
+<dt>
+<b><tt class="literal">sysUpTime OBJECT-TYPE</tt></b>
+</dt>
+<dd>
+<p>This defines the object called <tt class="literal">sysUpTime</tt>.</p>
+</dd>
+
+
+
+
+<dt>
+<b><tt class="literal">SYNTAX</tt> <tt class="literal">TimeTicks</tt></b>
+</dt>
+<dd>
+<p>This object is of the type <tt class="literal">TimeTicks</tt>. Object types
+are specified in the SMI we mentioned a moment ago.</p>
+</dd>
+
+
+
+
+<dt>
+<b><tt class="literal">ACCESS read-only</tt></b>
+</dt>
+<dd>
+<p>This object can only be read via SNMP (i.e.,
+<tt class="literal">get-request</tt>); it cannot be changed (i.e.,
+<tt class="literal">set-request</tt>).</p>
+</dd>
+
+
+
+
+<dt>
+<b><tt class="literal">STATUS mandatory</tt></b>
+</dt>
+<dd>
+<p>This object must be implemented in any SNMP agent.</p>
+</dd>
+
+
+
+
+<dt>
+<b><tt class="literal">DESCRIPTION...</tt></b>
+</dt>
+<dd>
+<p>This is a textual description of the object. Always read this field
+carefully. In this definition, there's a surprise in store for
+us. <tt class="literal">sysUpTime</tt> only shows the amount of time that
+has elapsed since "the network management portion of the system
+was last re-initialized." This means we're only going to
+be able to tell a system's uptime since its SNMP agent was last
+started. This is almost always the same as when the system itself
+last started, but if you spot an anomaly, this could be the reason.</p>
+</dd>
+
+
+
+
+<dt>
+<b><tt class="literal">::= { system 3 }</tt></b>
+</dt>
+<dd>
+<p>Here's where this object fits in the MIB tree. The
+<tt class="literal">sysUpTime</tt> object is the third branch off of the
+system object group tree. This information also gives you part of the
+Object Identifier should you need it later.</p>
+</dd>
+
+</dl>
+
+
+
+
+<p>If we wanted to query this variable on the machine
+<em class="emphasis">solarisbox</em> in the read-only community, we could
+use the following UCD-SNMP tool command line:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">$ <tt class="userinput"><b>snmpget solarisbox MyPublicCommunityName system.sysUpTime.0</b></tt>
+</pre>
+</blockquote>
+
+
+
+
+<p>This returns:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">system.sysUpTime.0 = Timeticks: (5126167) 14:14:21.67</pre>
+</blockquote>
+
+
+
+
+<p>The agent was last initialized fourteen hours ago.</p>
+
+
+
+
+<a name="appe-2-fm2xml"></a>
+<blockquote class="note">
+<h4 class="objtitle">TIP</h4>
+<p>The examples in this appendix assume our SNMP agents have been
+configured to allow requests from the querying host. In general, if
+you can restrict SNMP access to a certain subset of
+"trusted" hosts, you should.</p>
+
+
+
+
+<p>"Need to know" is an excellent security principle to
+follow. It is good practice to restrict the network services provided
+by each machine and device. If you do not need to provide a network
+service, turn it off. If you do need to provide it, restrict the
+access to only the devices that "need to know."</p>
+
+
+
+</blockquote>
+
+<p>Time for our second and more advanced SNMP example: dumping the
+contents of a device's IP routing table. The complexity in this
+example comes from the need to treat a collection of scalar data as a
+single logical table. We'll have to invoke the
+<tt class="literal">get-next-request</tt> PDU to pull this off. Our first
+step towards this goal is to look for a MIB definition of the IP
+routing table. Searching for "route" in RFC1213, we
+eventually find this definition:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">-- The IP routing table contains an entry for each route
+-- presently known to this entity.
+ipRouteTable OBJECT-TYPE
+    SYNTAX  SEQUENCE OF IpRouteEntry
+    ACCESS  not-accessible
+    STATUS  mandatory
+    DESCRIPTION
+              "This entity's IP Routing table."
+    ::= { ip 21 }</pre>
+</blockquote>
+
+
+
+
+<p>This doesn't look much different from the definition we took
+apart just a moment ago. The differences are in the
+<tt class="literal">ACCESS</tt> and <tt class="literal">SYNTAX</tt> lines. The
+<tt class="literal">ACCESS</tt> line is a tip-off that this object is just
+a structural placeholder representing the whole table, and not a real
+variable that can be queried. The <tt class="literal">SYNTAX</tt> line
+tells us this is a table consisting of a set of
+<tt class="literal">IpRouteEntry</tt> objects. Let's look at the
+beginning of the <tt class="literal">IpRouteEntry</tt> definition:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">ipRouteEntry OBJECT-TYPE
+    SYNTAX  IpRouteEntry
+    ACCESS  not-accessible
+    STATUS  mandatory
+    DESCRIPTION
+            "A route to a particular destination."
+    INDEX   { ipRouteDest }
+    ::= { ipRouteTable 1 }</pre>
+</blockquote>
+
+
+
+
+<p>The <tt class="literal">ACCESS</tt> line says we've found another
+placeholder--the placeholder for each of the rows in our table.
+But this placeholder also has something to tell us. It indicates that
+we'll be able to access each row by using an index object, the
+<tt class="literal">ipRouteDest</tt> object of each row.</p>
+
+
+
+
+<p>If these multiple definition levels throw you, it may help to relate
+this to Perl. Pretend we're dealing with a Perl hash of lists
+structure. The hash key for the row would be the
+<tt class="literal">ipRouteDest</tt> variable. The value for this hash
+would then be a reference to a list containing the other elements in
+that row (i.e., the rest of the route entry).</p>
+
+
+
+
+<p>The <tt class="literal">ipRouteEntry</tt> definition continues as follows:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">ipRouteEntry ::=
+    SEQUENCE {
+        ipRouteDest
+            IpAddress,
+        ipRouteIfIndex
+            INTEGER,
+        ipRouteMetric1
+            INTEGER,
+        ipRouteMetric2
+            INTEGER,
+        ipRouteMetric3
+            INTEGER,
+        ipRouteMetric4
+            INTEGER,
+        ipRouteNextHop
+            IpAddress,
+        ipRouteType
+            INTEGER,
+        ipRouteProto
+            INTEGER,
+        ipRouteAge
+            INTEGER,
+        ipRouteMask
+            IpAddress,
+        ipRouteMetric5
+            INTEGER,
+        ipRouteInfo
+            OBJECT IDENTIFIER
+    }</pre>
+</blockquote>
+
+
+
+
+<p>Now you can see the elements that make up each row of the table. The
+MIB continues by describing those elements. Here are the first two
+definitions for these elements:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">ipRouteDest OBJECT-TYPE
+    SYNTAX  IpAddress
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "The destination IP address of this route. An
+            entry with a value of 0.0.0.0 is considered a
+            default route. Multiple routes to a single
+            destination can appear in the table, but access to
+            such multiple entries is dependent on the table-
+            access mechanisms defined by the network
+            management protocol in use."
+     ::= { ipRouteEntry 1 }
+
+ ipRouteIfIndex OBJECT-TYPE
+     SYNTAX  INTEGER
+     ACCESS  read-write
+     STATUS  mandatory
+     DESCRIPTION
+             "The index value which uniquely identifies the
+             local interface through which the next hop of this
+             route should be reached. The interface identified
+             by a particular value of this index is the same
+             interface as identified by the same value of
+             ifIndex."
+     ::= { ipRouteEntry 2 }</pre>
+</blockquote>
+
+
+
+
+<p>
+<a href="appe_01.htm#appe-77455">Figure E-3</a> shows a picture of the
+<tt class="literal">ipRouteTable</tt> part of the MIB to help summarize all
+of this information.</p>
+
+
+
+
+<a name="appe-77455"></a>
+<div class="figure">
+<img alt="figure" src="figs/psa_ae03.gif"></div>
+<h4 class="objtitle">Figure E-3. The ipRouteTable structure and its index</h4>
+
+<p>
+<a name="INDEX-1176"></a>Once you understand this part of the MIB,
+the next step is querying the information. This is a process known as
+"table traversal." Most SNMP packages have a command-line
+utility called something like <em class="emphasis">snmptable</em> or
+<tt class="command">snmp-tbl</tt> that will perform this process for you,
+but they might not offer the granularity of control you need. For
+instance, you may not want a dump of the whole routing table; you may
+just want a list of all of the <tt class="literal">ipRouteNextHop</tt>s. On
+top of this, some of the Perl SNMP packages do not have tree-walking
+routines. For all of these reasons, it is worth knowing how to
+perform this process by hand.</p>
+
+
+
+
+<p>To make this process easier to understand, I'll show you up
+front the information we're eventually going to be receiving
+from the device. This will let you see how each step of the process
+adds another row to the table data we'll collect. If I log into
+a sample machine (as opposed to using SNMP to query it remotely) and
+type <tt class="command">netstat -nr</tt> to dump the IP routing table, the
+output might look like this:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">default          192.168.1.1       UGS        0    215345  tu0
+127.0.0.1        127.0.0.1         UH         8   5404381  lo0
+192.168.1/24     192.168.1.189     U          15  9222638  tu0</pre>
+</blockquote>
+
+
+
+
+<p>This shows the default internal loopback and local network routes,
+respectively.</p>
+
+
+
+
+<p>Now let's see how we go about obtaining a subset of this
+information via the UCD-SNMP command-line utilities. For this
+example, we're only going to concern ourselves with the first
+two columns of the output above (route destination and next hop
+address). We make an initial request for the first instance of those
+two variables in the table. Everything in bold type is one long
+command line and is only printed here on separate lines for
+legibility:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">$ <tt class="userinput"><b>snmpgetnext computer public ip.ipRouteTable.ipRouteEntry.ipRouteDest </b></tt>
+<tt class="userinput"><b>ip.ipRouteTable.ipRouteEntry.ipRouteNextHop</b></tt>
+ip.ipRouteTable.ipRouteEntry.ipRouteDest.0.0.0.0 = IpAddress: 0.0.0.0
+ip.ipRouteTable.ipRouteEntry.ipRouteNextHop.0.0.0.0 = IpAddress: 192.168.1.1</pre>
+</blockquote>
+
+
+
+
+<p>There are two parts of this response we need to pay attention to. The
+first is the actual data, the information returned after the equals
+sign. <tt class="literal">0.0.0.0</tt> means "default route,"
+so the information returned corresponded to the first line of the
+routing table output above. The second important part of the response
+is the <tt class="literal">.0.0.0.0</tt> tacked on to the variable names
+above. This is the index for the <tt class="literal">ipRouteEntry</tt>
+entry representing the table row.</p>
+
+
+
+
+<p>Now that we have the first row, we can make another
+<tt class="literal">get-next-request</tt> call, this time using the
+index. A <tt class="literal">get-next-request</tt> always returns the
+<em class="emphasis">next</em> item in a MIB, so we feed it the index of
+the row we just received so we can get back the next row after it:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">$ <tt class="userinput"><b>snmpgetnext gold public ip.ipRouteTable.ipRouteEntry.ipRouteDest.0.0.0.0 </b></tt>
+<tt class="userinput"><b>ip.ipRouteTable.ipRouteEntry.ipRouteNextHop.0.0.0.0</b></tt>
+ip.ipRouteTable.ipRouteEntry.ipRouteDest.127.0.0.1 = IpAddress: 127.0.0.1
+ip.ipRouteTable.ipRouteEntry.ipRouteNextHop.127.0.0.1 = IpAddress: 127.0.0.1</pre>
+</blockquote>
+
+
+
+
+<p>You can probably guess the next step. We issue another
+<tt class="literal">get-next-request</tt> using the
+<tt class="literal">127.0.0.1</tt> part (the index) of the
+<tt class="literal">ip.ipRouteTable.ipRouteEntry.ipRouteDest.127.0.0.1</tt>
+response:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">$ <tt class="userinput"><b>snmpgetnext gold public ip.ipRouteTable.ipRouteEntry.ipRouteDest.127.0.0.1 </b></tt>
+<tt class="userinput"><b>ip.ipRouteTable.ipRouteEntry.ipRouteNextHop.127.0.0.1</b></tt>
+ip.ipRouteTable.ipRouteEntry.ipRouteDest.192.168.1 = IpAddress: 192.168.1.0
+ip.ipRouteTable.ipRouteEntry.ipRouteNextHop.192.168.11.0 = IpAddress: 192.168.1.189</pre>
+</blockquote>
+
+
+
+
+<p>Looking at the sample <tt class="command">netstat</tt> output above, you
+can see we've achieved our goal and dumped all of the rows of
+the IP routing table. How would we know this if we had dispensed with
+the dramatic irony and hadn't seen the
+<tt class="command">netstat</tt> output ahead of time? Under normal
+circumstances we would have to proceed as usual and continue
+querying:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">$ <tt class="userinput"><b>snmpgetnext gold public ip.ipRouteTable.ipRouteEntry.ipRouteDest.192.168.1.0 </b></tt>
+<tt class="userinput"><b>ip.ipRouteTable.ipRouteEntry.ipRouteNextHop.192.168.1.0</b></tt>
+ip.ipRouteTable.ipRouteEntry.ipRouteIfIndex.0.0.0.0 = 1
+ip.ipRouteTable.ipRouteEntry.ipRouteType.0.0.0.0 = indirect(4)</pre>
+</blockquote>
+
+
+
+
+<p>Whoops, the response did not match the request! We asked for
+<tt class="literal">ipRouteDest</tt> and <tt class="literal">ipRouteNextHop</tt>
+but got back <tt class="literal">ipRouteIfIndex</tt> and
+<tt class="literal">ipRouteType</tt>. We've fallen off the edge of
+the <tt class="literal">ipRouteTable</tt> table. The SNMP
+<tt class="literal">get-next-request</tt> PDU has done its sworn duty and
+returned the "first lexicographic successor" in the MIB
+for each of the objects in our request. Looking back at the
+definition of <tt class="literal">ipRouteEntry</tt> in the excerpt from
+RFC1213 above, we can see that <tt class="literal">ipRouteIfIndex(2)</tt>
+follows <tt class="literal">ipRouteDest(1)</tt>, and
+<tt class="literal">ipRouteType(8)</tt> does indeed follow
+<tt class="literal">ipRouteNextHop(7)</tt>.</p>
+
+
+
+
+<p>The answer to the question we asked a moment ago, "How do you
+know when you are done querying for the contents of a table?"
+is "When you notice you've fallen off the edge of that
+table." Programmatically, this translates into checking that
+the same string or OID prefix you requested is returned in the answer
+to your query. For instance, you might make sure that all responses
+to a query about <tt class="literal">ipRouteDest</tt> contained either
+<tt class="literal">ip.ipRouteTable.ipRouteEntry.ipRouteDest</tt> or
+<tt class="literal">1.3.6.1.2.1.4.21.1.1</tt>.<a name="INDEX-1177"></a>
+</p>
+
+
+
+
+<p>Now that you have the basics of SNMP under your belt, you may want to
+turn to <a href="ch10_01.htm">Chapter 10, "Security and Network Monitoring"</a> to see how we can use it from
+Perl. You should also check out the references at the end of <a href="ch10_01.htm">Chapter 10, "Security and Network Monitoring"</a> for more information on SNMP.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="appd_06.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">D.6. SQL Stragglers</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172"></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

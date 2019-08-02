@@ -1,0 +1,1202 @@
+<html><head>
+<title>[Chapter 20] 20.3 Perl Value Types</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:41:32Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch20_01.htm" title="20. Perl Internals"><link rel="prev" href="ch20_02.htm" title="20.2 Architecture"><link rel="next" href="ch20_04.htm" title="20.4 Stacks and Messaging Protocol"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch20_02.htm" title="20.2 Architecture"><img src="../gifs/txtpreva.gif" alt="Previous: 20.2 Architecture" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch20_01.htm" title="20. Perl Internals">Chapter 20<br>Perl Internals</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch20_04.htm" title="20.4 Stacks and Messaging Protocol"><img src="../gifs/txtnexta.gif" alt="Next: 20.4 Stacks and Messaging Protocol" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch20-14792">20.3 Perl Value Types</A
+></H2
+><p class="para"><a class="indexterm" name="ch20-idx-972925-0"></A
+><a class="indexterm" name="ch20-idx-972925-1"></A
+><a class="indexterm" name="ch20-idx-972925-2"></A
+>In this section, we'll study the functions and macros for manipulating the internal value types. We will also examine each object's internal makeup in sections entitled "Inside SV," "Inside AV," and so on. Although they will help you in making seasoned judgments about memory overhead and performance, you can skip these sections if the detail weighs you down.</P
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-946839">20.3.1 Scalar Values</A
+></H3
+><p class="para">A <a class="indexterm" name="ch20-idx-972935-0"></A
+><a class="indexterm" name="ch20-idx-972935-1"></A
+>scalar value (SV) contains the value of the scalar, a reference count, and a bitmask to describe the state of the scalar. The scalar may be an <a class="indexterm" name="ch20-idx-972936-0"></A
+><a class="indexterm" name="ch20-idx-972936-1"></A
+><a class="indexterm" name="ch20-idx-972936-2"></A
+><a class="indexterm" name="ch20-idx-972936-3"></A
+><a class="indexterm" name="ch20-idx-972936-4"></A
+><a class="indexterm" name="ch20-idx-972936-5"></A
+>integer value ("IV"), a double ("NV"), a string ("PV" for pointer value), a reference ("RV"), or a special-purpose object ("magical"). We'll discuss magical variables separately. </P
+><p class="para"><a class="xref" href="#ch20-22597" title="API for Scalar Values">Table 20.1</A
+> shows the functions and macros to create, delete, and modify SVs. They are listed in <i class="filename">sv.h</I
+> and implemented in <i class="filename">sv.c</I
+>. Macros, by convention, have their first letter capitalized. All the tables in this chapter make use of two important typedefs, <kbd class="command">I32</KBD
+> and <kbd class="command">U32,</KBD
+> which represent signed and unsigned integral quantities that are <em class="emphasis">at least</EM
+> 32 bits wide and big enough to hold a pointer (it will be 64 bits on a 64-bit machine).</P
+><br><table class="table" border="1" cellpadding="3"><caption class="table"><a class="title" name="ch20-22597">Table 20.1: API for Scalar Values</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Function/Macro</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Description</P
+></TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">SV* newSViv(I32);
+SV* newSVnv(double);
+SV* newSVpv(char* str,
+            int   len);</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Create a new SV from an integer, double, or string respectively. <kbd class="command">newSVpv</KBD
+> calculates the length of the string if <kbd class="command">len</KBD
+> is 0.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">SV* newSVsv(SV *);</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Create a clone of an existing SV. To create an empty SV, use the global scalar <kbd class="command">sv_undef</KBD
+>, instead of NULL, like this:</P
+><pre class="programlisting">   newSVsv(&amp;sv_undef);</PRE
+><p class="para">This is true of all functions that expect an SV as an argument.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">SV* newSVrv
+     (SV*  rv, 
+      char *pkgname);</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Creates a new SV and points <code class="literal">rv</CODE
+> to it. Additionally, if <code class="literal">pkgname</CODE
+> is nonnull, it blesses <code class="literal">rv</CODE
+> into that package.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">SV *newRV (SV* other)
+SV* newRV_inc (SV* other)
+SV* newRV_noinc(SV *)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Create a reference pointing to any type of value, not just SVs. You can cast other values to an SV*, as will be evident when we examine AVs, HVs, and CVs.</P
+><p class="para"><kbd class="command">newRV_inc</KBD
+> increments the reference count of the entity referred to (and is an alias for <kbd class="command">newRV</KBD
+>).</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">SvIOK(SV*), SvNOK(SV*),
+SvPOK(SV*), SvROK(SV*),
+SvOK (SV*), SvTRUE(SV*)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">These macros check whether the SV has a value of the corresponding type and, if so, return 1. They do not trigger a conversion. <kbd class="command">SvOK</KBD
+> returns 1 if the value is not <kbd class="command">undef</KBD
+>. <kbd class="command">SvTRUE</KBD
+> returns 1 if the scalar is true.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">IV     SvIV(SV*)
+double SvNV(SV*)
+char*  SvPV(SV*,int len)
+SV*    SvRV(SV*)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">These macros retrieve the values inside an SV and, except for <kbd class="command">SvRV</KBD
+>, force an implicit conversion to the appropriate values if necessary. <kbd class="command">SvIV</KBD
+> yields 0 if the scalar contains a nonnumeric string. <kbd class="command">SvPV</KBD
+> returns a pointer to a string and updates <kbd class="command">len</KBD
+> with its length. The scalar owns that string, so don't free it. Before invoking <kbd class="command">SvRV</KBD
+>, make sure that it is indeed a reference, using <code class="literal">SvROK</CODE
+>. </P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">sv_setiv (SV*, int)
+sv_setnv (SV*, double)
+sv_setsv (SV* dest,
+          SV* src)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Modifies an SV's values. The SV automatically gets rid of its old value and morphs to the new type. </P
+><p class="para"><kbd class="command">sv_setsv</KBD
+> copies the <code class="literal">src</CODE
+> SV to the <code class="literal">dest</CODE
+> SV after checking that the two pointers are different.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">sv_setpv (SV*, char *)
+sv_setpvn(SV*, char *,
+          int  len
+sv_catpv (SV*, char*);
+sv_catpvn(SV*, char*,
+          int);
+sv_catsv (SV*, SV*);</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">String functions, which force the scalar to be a string if necessary. <kbd class="command">sv_setpv</KBD
+> assumes a null-terminated string, while <kbd class="command">sv_setpvn</KBD
+> takes the length. Both functions make a copy of the given string.</P
+><p class="para">The <kbd class="command">cat</KBD
+> series of functions does string concatenation.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">SVTYPE(SV*)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Returns an enum value, and is equivalent to the <kbd class="command">ref</KBD
+> function. These are the common values listed in <i class="filename">sv.h:</I
+></P
+><p class="para"><code class="literal">SVt_IV</CODE
+>       (Integer)   <code class="literal">SVt_NV</CODE
+>         (Double)</P
+><p class="para"><code class="literal">SVt_PV</CODE
+>       (String) <code class="literal">  SVt_RV</CODE
+>         (Reference)</P
+><p class="para"><code class="literal">SVt_PVAV </CODE
+>(Array)  <code class="literal">  SVt_PVHV</CODE
+>    (Hash)</P
+><p class="para"><code class="literal">SVt_PVCV </CODE
+>(Code)       <code class="literal">SVt_PVGV</CODE
+>    (Glob)</P
+><p class="para"><code class="literal">SVt_PVMG </CODE
+>(Blessed or magical scalar)</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">sv_setref_iv(
+     SV* rv, 
+     char* classname,
+     int i)
+(and similarly for nv and pv)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Creates a new SV, sets it to the value <code class="literal">i</CODE
+>, and makes <code class="literal">rv</CODE
+> refer to this new SV. The other two functions are similar.</P
+><p class="para">Note that <kbd class="command">sv_setref_pv</KBD
+> stores the pointer; it does not make a copy of the string.</P
+><p class="para">If <code class="literal">classname </CODE
+>is nonnull, these functions bless the reference under that package.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">svREFCNT_dec(SV *)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Decrements the reference count and calls <kbd class="command">sv_free</KBD
+> if this count is 0. You should <em class="emphasis">never</EM
+> call <kbd class="command">sv_free</KBD
+> yourself.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">SV* sv_bless (
+   SV *rv, HV* stash);
+int sv_isa(
+   SV *, char *pkgname);
+int sv_isobject(SV*);</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para"><kbd class="command">sv_bless</KBD
+> blesses <code class="literal">rv</CODE
+>  under a package represented by <code class="literal">stash</CODE
+>. Please refer to the section  <a class="xref" href="#ch20-17700" title="Glob Values and Symbol Tables">Section 20.3.4</A
+>" for an explanation of stashes. sv_isa returns 1 if it inherits from a class <code class="literal">pkgname</CODE
+>. </P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">SV* sv_newmortal()
+SV* sv_2mortal(SV*)
+SV* sv_mortalcopy(SV*)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">By default, if you create an SV, you are responsible for deleting it. If you create a <i class="firstterm">mortal</I
+> or temporary variable, Perl automatically deletes it the end of the current scope (unless someone else holds a reference to it). </P
+><p class="para"><kbd class="command">sv_2mortal</KBD
+> tags an existing SV as a mortal, and <kbd class="command">sv_2mortalcopy</KBD
+> creates a mortal clone.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">SV* perl_get_sv(
+      char* varname,
+      int   create)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">To get a scalar variable as you are used to seeing in script space, you have to explicitly bind an SV to a name. <code class="literal">create</CODE
+>, if TRUE, forces it to create a variable if it didn't exist earlier. <code class="literal">varname</CODE
+> must always be qualified by the name of the package. To create <kbd class="command">$Foo::a</KBD
+>, for example:</P
+><pre class="programlisting">   SV *s = perl_get_av(&quot;Foo::a&quot;, 1);</PRE
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">sv_dump(SV*)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">The name is a misnomer, since it is capable of pretty-printing the contents of all Perl value types (casting them to SV* if necessary). This is extremely useful if you have Perl under a debugger: for example, inside <kbd class="command">gdb</KBD
+>, use </P
+><pre class="programlisting">    <kbd class="command">call sv_dump(sv)</KBD
+></PRE
+></TD
+></TR
+></TBODY
+></TABLE
+><p class="para">The <kbd class="command">mortal</KBD
+><a class="indexterm" name="ch20-idx-972937-0"></A
+> series of calls in <a class="xref" href="#ch20-22597" title="API for Scalar Values">Table 20.1</A
+> create a temporary SV or tag an existing value as temporary. These calls essentially tell Perl to shove the SV onto a stack called <kbd class="command">tmps_stack</KBD
+> and call <kbd class="command">svREFCNT_dec</KBD
+> on the SV at the end of the current scope. (More on this in the section <a class="xref" href="ch20_04.htm#ch20-14695" title="Inside Other Stacks">"Inside Other Stacks</A
+>.") Typically, all parameters passed between functions are tagged mortal, because neither the caller nor the called function wants to worry about the appropriate time to delete the SV and its contents; Perl automatically takes care of the memory management.<a class="indexterm" name="ch20-idx-972939-0"></A
+><a class="indexterm" name="ch20-idx-972939-1"></A
+><a class="indexterm" name="ch20-idx-972939-2"></A
+><a class="indexterm" name="ch20-idx-972939-3"></A
+><a class="indexterm" name="ch20-idx-972939-4"></A
+><a class="indexterm" name="ch20-idx-972939-5"></A
+></P
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch20-pgfId-963949">20.3.1.1 Using this API</A
+></H4
+><p class="para">Perhaps your eyes are somewhat glazed and your mind is numbed, so we will relieve the tedium by writing a custom interpreter using the API we have seen so far. (For now, this is our idea of fun!) <a class="xref" href="#ch20-18685" title="Creating Scalars for Environment Variables&nbsp- the Hard Way!">Example 20.2</A
+> shows a function called <kbd class="command">create_envt_vars</KBD
+> that creates a scalar variable for every environment variable.</P
+><div class="example"><h4 class="example"><a class="title" name="ch20-18685">Example 20.2: Creating Scalars for Environment Variables&nbsp;- the Hard Way!</A
+></H4
+><pre class="programlisting">#include &lt;EXTERN.h&gt;
+#include &lt;perl.h&gt;
+void create_envt_vars (char **environ)
+{
+    /* 
+     * Each element in environ is in the form &lt;envt. var name&gt;=&lt;value&gt;&quot;
+     */
+    SV * sv = NULL;
+    char **env = environ; /* for iterating through environ */
+    char buf[1000];       /* will contain a copy of an envt variable */
+    char *envt_var_name;  /* Name of the envt. variable, like PATH */
+    char *envt_var_value; /* Its corresponding value */
+    char var_name[100];   /* Fully qualified name of environment var */
+    while (*env) {
+        strcpy (buf, *env);
+        /* Search for &quot;=&quot;, replace it with '\0', thus splitting it into
+         *  logical parts - envt variable name and the value 
+         */
+        envt_var_name = buf; envt_var_value = buf;
+        while (*envt_var_value != '=') envt_var_value++;
+        *envt_var_value++ = '\0';
+        /* Qualify the environment var with the package name. 
+         * PATH becomes $main::PATH 
+         */
+        strcpy (var_name, &quot;main::&quot;); strcat(var_name, envt_var_name);
+        sv = perl_get_sv (var_name, TRUE); /* TRUE =&gt; Force Create */
+        /* Set the string value for the sv);
+        sv_setpv(sv, envt_var_value);
+        env++;  /* On to the next environ variable */
+    }
+}
+
+static PerlInterpreter *my_perl;  
+main(int argc, char **argv, char **env) {
+    my_perl = perl_alloc();
+    perl_construct(my_perl);
+    perl_parse(my_perl, NULL, argc, argv, env);
+    create_envt_vars();
+    perl_run(my_perl);
+    perl_destruct(my_perl);
+    perl_free(my_perl);
+}</PRE
+></DIV
+><p class="para">On a DEC Alpha box, you might compile and link it as follows:</P
+><pre class="programlisting"><b class="emphasis.bold">% cc -o ex  -I/usr/local/lib/perl5/alpha-dec_osf/5.004/CORE \</B
+>
+<b class="emphasis.bold">            -L/usr/local/lib/perl5/alpha-dec_osf/5.004/CORE \</B
+>
+<b class="emphasis.bold">             ex.c -lperl -lsocket -lm</B
+></PRE
+><p class="para">Now for the big test:</P
+><pre class="programlisting"><b class="emphasis.bold">% ./ex -e 'print $USER'</B
+>
+sriram</PRE
+><p class="para">Amazing, it works&nbsp;- try doing that with your regular Perl! Okay, so it's not a big deal, but you are definitely on your way to dirtying your hands more than you thought you could. Or would!</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch20-pgfId-951083">20.3.1.2 Inside SVs</A
+></H4
+><p class="para">An SV has the potential of being large, to accommodate the worst case of it morphing to any one of its subtypes. To avoid this, Perl keeps track of the information in two parts, as illustrated in <a class="xref" href="#ch20-15791" title="An inside view of scalars. Each shaded box represents one SV.">Figure 20.3</A
+>: a generic structure called "<kbd class="command">sv</KBD
+>", which contains a bitmask flag, a reference count, and a pointer, <kbd class="command">sv_any</KBD
+>, which refers to a "specific part." </P
+><h4 class="figure"><a class="title" name="ch20-15791">Figure 20.3: An inside view of scalars. Each shaded box represents one SV.</A
+></H4
+><img class="graphic" src="figs/wpa_2003.gif" alt="Figure 20.3"><p class="para">The specific part is a structure of the appropriate type and is one of several structures called <kbd class="command">xpv</KBD
+>, <kbd class="command">xpviv</KBD
+>, <kbd class="command">xpvnv</KBD
+>, and so on, depending on what the bitmask flag says is contained by the scalar. A scalar may start life as a number, but the moment it is used in a string context, it morphs to a structure containing both the number and a string. <a class="xref" href="#ch20-15791" title="An inside view of scalars. Each shaded box represents one SV.">Figure 20.3</A
+> shows an example of the SV (the middle one) containing a double and a string at the same time. If you modify its value with, say, <kbd class="command">sv_setnv</KBD
+>, it sets a bit flag in <kbd class="command">sv_flags</KBD
+> to indicate that the string part of it is not valid any more. Perl doesn't morph a structure unless absolutely necessary. </P
+><p class="para">The <a class="indexterm" name="ch20-idx-972941-0"></A
+><a class="indexterm" name="ch20-idx-972941-1"></A
+>Devel::Peek module gives you script-level access to the internal information discussed previously:</P
+><pre class="programlisting">use Devel::Peek 'Dump';  # Import the Dump subroutine
+$a = 15602;
+Dump ($a);</PRE
+><p class="para">This outputs</P
+><pre class="programlisting">SV = IV(0x663f1c)
+  REFCNT = 1
+  FLAGS = (IOK,pIOK)
+  IV = 15602</PRE
+><p class="para">Modify <kbd class="command">$a</KBD
+> to a string and see what happens to it:</P
+><pre class="programlisting">use Devel::Peek 'Dump';
+$a = 10;           # Start off with an integer value
+$a .= &quot; Ten&quot;;      # Convert to a string
+Dump ($a);</PRE
+><p class="para">Its output is as follows: </P
+><pre class="programlisting">SV = PVIV(0x7b2ef0)
+  REFCNT = 1
+  FLAGS = (POK,pPOK)
+  IV = 10
+  PV = 0x7b2f00 &quot;10 Ten&quot;
+  CUR = 6
+  LEN = 11<a class="indexterm" name="ch20-idx-972948-0"></A
+><a class="indexterm" name="ch20-idx-972948-1"></A
+></PRE
+><p class="para">Note that the SV still contains the old integer value (10) but that field will be ignored because the <code class="literal">FLAGS</CODE
+> field indicates that only its string contents are valid.</P
+><p class="para">A basic integer value costs you at least 28 bytes on a typical workstation (<kbd class="command">sizeof(SV)</KBD
+> + <kbd class="command">sizeof(XPVIV)</KBD
+> + <kbd class="command">malloc</KBD
+> overhead). Strings and arrays are more expensive than what you might infer from the length or count alone. The dump above shows that Perl allocated 11 bytes for the string (the <kbd class="command">xpv_len</KBD
+> field) instead of the minimum 6 bytes (the length of the string, as stored in the <kbd class="command">xpv_cur</KBD
+> field); this means that you can append 5 more bytes to the string without triggering a reallocation. Because it is geared for performance and convenience (being able to treat numbers and strings as one entity), it is not frugal with space at all. In fact, Perl applies this strategy of trading off space for performance for practically all data structures.[<a class="footnote" href="#ch20-pgfId-961521">6</A
+>]</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch20-pgfId-961521">[6]</A
+> One notable exception being hashes, which share their key strings in one string table, thus minimizing space requirements but taking a small hit in performance.</P
+></DIV
+></BLOCKQUOTE
+><p class="para">There are no simple <kbd class="command">xiv</KBD
+> or <kbd class="command">xnv</KBD
+> structures that contain just an integer or a floating-point number. I do not know the reason for this, and idly speculate that it's so because a typical script requires numbers to morph into strings (while doing a <kbd class="command">print</KBD
+>, for example) or vice versa (reading from files). </P
+><p class="para"><a class="xref" href="#ch20-15791" title="An inside view of scalars. Each shaded box represents one SV.">Figure 20.3</A
+> also shows the reference counts of the three scalars. The reference count of the middle scalar is 2 because of two arrows pointing to it; the arrows coming from the left imply a symbol table entry (for global and local variables) or a scratchpad for lexical variables, as we saw in <a class="xref" href="ch03_01.htm" title="Typeglobs and Symbol Tables">Chapter 3</A
+>. Note that all pointers to an SV (to any Perl value, actually) refer to the outer structure, never to the "specific" part.</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch20-37480">20.3.1.3 SVs and object pointers</A
+></H4
+><p class="para"><a class="indexterm" name="ch20-idx-972954-0"></A
+><a class="indexterm" name="ch20-idx-972954-1"></A
+><a class="indexterm" name="ch20-idx-972954-2"></A
+>As an extension writer, you are often interested in storing a pointer to a C or C++ object returned from an XSUB. Recall that the integer (IV) slot of a scalar is guaranteed to be big enough to hold a pointer. We use this facility as follows:</P
+><pre class="programlisting">Matrix *m = new_matrix();
+sv_setiv(sv, (IV) m);          # Cast pointer to an IV.  Ugh!</PRE
+><p class="para">Crufty, to say the least, but that's the way it is. </P
+><p class="para">In practice, C/C++ objects are always associated with <a class="indexterm" name="ch20-idx-972955-0"></A
+><a class="indexterm" name="ch20-idx-972955-1"></A
+>blessed references because it allows the Perl programmer to use the arrow notation (<kbd class="command">$matrix-&gt;transpose()</KBD
+>). Consider </P
+><pre class="programlisting">RV *rv = newRV();
+sv_setref_iv(rv, &quot;Matrix&quot;, (IV) m);</PRE
+><p class="para">This creates a new integer SV internally, sets it to the "integer" <kbd class="command">m</KBD
+>, and makes <kbd class="command">rv</KBD
+> point to this freshly allocated SV. It also blesses <kbd class="command">rv</KBD
+> under the module Matrix. This is exactly as if you had said, in Perl space,</P
+><pre class="programlisting">my $m = 0xfffa34a;     # Some pointer value, converted to an int
+bless \$m, &quot;Matrix&quot;;   # Return a blessed reference to $m.</PRE
+><p class="para">We will use this snippet when discussing typemaps for objects, in the section <a class="xref" href="ch20_05.htm#ch20-36248" title="Object Interface Using XS Typemaps">"Object Interface Using XS Typemaps</A
+>."<a class="indexterm" name="ch20-idx-973070-0"></A
+><a class="indexterm" name="ch20-idx-973070-1"></A
+></P
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-947553">20.3.2 Array Values (AV)</A
+></H3
+><p class="para">An <a class="indexterm" name="ch20-idx-972956-0"></A
+><a class="indexterm" name="ch20-idx-972956-1"></A
+>AV is a dynamic, contiguous array of pointers to SVs, and as we are used to seeing in script space, storing a value at an index beyond its current capacity triggers an automatic expansion of the array. <a class="xref" href="#ch20-23948" title="API for Array Values">Table 20.2</A
+> shows the API for manipulating an AV as a whole and for accessing its elements individually. Take note that unless you clear or undef an AV, it does not touch the reference counts of its constituent SVs.</P
+><br><table class="table" border="1" cellpadding="3"><caption class="table"><a class="title" name="ch20-23948">Table 20.2: API for Array Values</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Function/Macro</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Description</P
+></TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">AV * newAV()
+AV * av_make(int num,
+             SV  **ptr)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Creates an empty AV or a clone of another array of SV*.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">I32  av_len(AV*);</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Returns the highest index of the array (such as <kbd class="command">$#array</KBD
+>).</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">SV** av_fetch (AV*, 
+               I32 index,
+               I32 lval)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Retrieves the SV* from the given index. If <code class="literal">lval</CODE
+> is non-zero, it replaces the existing value (at that location) with an <kbd class="command">undef</KBD
+>. Note that <kbd class="command">av_fetch</KBD
+> returns an SV**  (not SV*); this is the pointer to the position in the array where the SV was stored. This way you can not only make changes to the SV, but also modify the array itself (splice the array at that location, for example).</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">SV** av_store(AV*, 
+              I32 index, 
+              SV* val)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Stores an SV* at that index and returns an SV**  just like <kbd class="command">av_fetch</KBD
+>. Neither function updates the reference counts of the indexed element.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">void av_clear (AV*)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Decrements the reference counts of its constituent scalars and replaces those positions with <kbd class="command">undef</KBD
+>. It leaves the array intact. </P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">void av_undef (AV*)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Decrements ref counts of all its scalars as well as of the array itself. In the typical case, this function deallocates the array. This is different from SVs in that they are deleted implicitly by decrementing the ref count (<kbd class="command">SvREFCNT_dec</KBD
+>).</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">void av_extend(AV*,
+               int num) </PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Extends the array to <code class="literal">num</CODE
+> elements. Even though the other functions automatically extend the array, they can only heuristically determine how much to extend it. If you expect to store a lot of entries, you'll save time and many potential reallocations by preextending the array.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">void av_push (AV*, SV*)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Pushes <em class="emphasis">one</EM
+> SV at the end of an AV. You have to write more code if you want to append an entire list. This and the following functions do not touch the SV's reference count.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">SV* av_pop (AV* )</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Pops an SV from the end but doesn't touch its reference count, so you must call <kbd class="command">SvREFCNT_dec</KBD
+> or tag it as a temporary variable with <kbd class="command">sv_2mortal</KBD
+>, in which case Perl deletes it at the end of the scope.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">SV* av_shift(AV*) </PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Like <kbd class="command">av_pop</KBD
+>  but pops an SV from the front of the AV.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">void av_unshift(AV*, 
+                I32 num) </PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Creates <code class="literal">num</CODE
+> empty spaces in front of the list (fills them with <kbd class="command">undef</KBD
+>). You have to call <kbd class="command">av_store()</KBD
+> to set each element's value.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">AV *perl_get_av (
+      char* varname, 
+      int   create)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Gets the AV corresponding to <code class="literal">varname</CODE
+>. Create the variable if <code class="literal">create</CODE
+> is TRUE.</P
+></TD
+></TR
+></TBODY
+></TABLE
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch20-pgfId-947920">20.3.2.1 Inside AVs</A
+></H4
+><p class="para">AVs, like SVs, are split into a generic part and a specific part. As it happens, this is true for the other value types also.</P
+><p class="para">As shown in <a class="xref" href="#ch20-41970" title="AV internal structure. The shaded squares contain real data.">Figure 20.4</A
+>, the <kbd class="command">xav_alloc</KBD
+> field points to a dynamically allocated array of SV*s, the real meat of the AV. <kbd class="command">av_fill</KBD
+> contains the last valid (or filled) index in this array, and <kbd class="command">av_max</KBD
+> contains the total number of SV*s allocated for the array. Perl always strives to make sure it allocates memory in some "reasonable" quantities so that it doesn't have to <kbd class="command">realloc</KBD
+> every time you push an element into this array. <kbd class="command">xav_array</KBD
+> points to the first valid element. It starts off by pointing to <kbd class="command">xav_alloc[0]</KBD
+>, and gets incremented on an <kbd class="command">unshift</KBD
+> to avoid having to move the rest of the elements to the left. In other words, the real contents of the AV are bounded by <kbd class="command">xav_array</KBD
+> and <kbd class="command">av_fill</KBD
+>. </P
+><h4 class="figure"><a class="title" name="ch20-41970">Figure 20.4: AV internal structure. The shaded squares contain real data.</A
+></H4
+><img class="graphic" src="figs/wpa_2004.gif" alt="Figure 20.4"><p class="para">The <kbd class="command">xmg_magic</KBD
+> pointer is typically NULL but refers to a "magic" structure if the array is special (such as <kbd class="command">@ISA)</KBD
+>, represents a blessed object, or is tied to a package.[<a class="footnote" href="#ch20-pgfId-948029">7</A
+>] <kbd class="command">xav_arylen</KBD
+> is an SV* that starts off being <kbd class="command">NULL</KBD
+> but springs into existence as a magical scalar when you use the <kbd class="command">$#</KBD
+> notation on the array (to get or set the array length). </P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch20-pgfId-948029">[7]</A
+> You don't have to understand this paragraph until we have covered magical variables.</P
+></DIV
+></BLOCKQUOTE
+><p class="para"><a class="indexterm" name="ch20-idx-972957-0"></A
+><a class="indexterm" name="ch20-idx-972957-1"></A
+>Devel::Dump gives you script-level access to the internal details of an array and of all its constituent scalars. Dump expects nonscalar values to be passed by reference:</P
+><pre class="programlisting">use Devel::Dump;
+@l = (1,2,3,4);
+Dump(\@l);  # Pass @l by reference<a class="indexterm" name="ch20-idx-972959-0"></A
+><a class="indexterm" name="ch20-idx-972959-1"></A
+></PRE
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-947918">20.3.3 Hash Values (HVs)</A
+></H3
+><p class="para">An <a class="indexterm" name="ch20-idx-972961-0"></A
+><a class="indexterm" name="ch20-idx-972961-1"></A
+><a class="indexterm" name="ch20-idx-972961-2"></A
+>HV is a table of hash entries (HEs), each representing a pair consisting of a string key and an SV*. No two hash entries in a hash table can have the same key. The API listed in <a class="xref" href="#ch20-24447" title="API for Hash Values">Table 20.3</A
+> allows you to act on the HV as a whole, to fetch or store single elements, or to iterate through it one entry at a time.</P
+><br><table class="table" border="1" cellpadding="3"><caption class="table"><a class="title" name="ch20-24447">Table 20.3: API for Hash Values</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Function/Macro</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Description</P
+></TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">HV * newHV()</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Creates a hash value.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">SV**  
+hv_store( 
+    HV *hash,
+    char* key, U32 klen, 
+    SV* val,   U32 hash)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Stores the key-value pair. It doesn't assume the key is a <em class="emphasis">text</EM
+> string, so you <em class="emphasis">have</EM
+> to supply the key length, <code class="literal">klen</CODE
+>. If <code class="literal">hash</CODE
+> is 0, Perl computes the hash automatically, which works very well for normal ASCII keys.</P
+><p class="para">Like AVs, these functions do not touch the reference count of the value <code class="literal">val</CODE
+>.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">SV**
+hv_fetch(
+   HV *hash,     
+   char* key, U32 klen,
+   I32 lval)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">As with AVs, an SV** is returned for efficiency, not for your convenience. When storing an entry, the interpreter has to call<kbd class="command"> hv_fetch</KBD
+> to see whether an entry corresponding to that key already exists. If so, it can simply replace the value part of the entry without having to traverse the structure all over again.</P
+><p class="para">Typically, you should dereference the result and dispose of the returned SV* (call <kbd class="command">SvREFCNT_dec</KBD
+>) or arrange to have it disposed of (<kbd class="command">sv_2mortal</KBD
+>).</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">SV*   
+hv_delete(
+   HV *hash, 
+   char* key, U32 klen,
+   I32 flags)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Deletes an entry and decrements the ref count of the value. If you don't want the deleted value, pass <kbd class="command">G_DISCARD</KBD
+> for the flags; otherwise, it returns a mortal copy of that value. </P
+><p class="para">Since the entry is removed from the hash's data structures, it needs to return only an SV*, instead of SV**.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">void hv_clear(HV *hash)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Equal to <kbd class="command">%h=()</KBD
+>. Like <kbd class="command">av_clear()</KBD
+>, it retains the outer array but gets rid of the hash entries, keys, and values. It also decrements the reference count of each value (not the hash itself).</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">void hv_undef(HV *hash)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Clears the HV and decrements its reference count.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">I32 hv_iterinit(HV *hash)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Prepares to iterate through its list of entries and returns the number of elements in the HV. <kbd class="command">hv_iterinit</KBD
+> and <kbd class="command">hv_iternextsv</KBD
+> are used by the operators <kbd class="command">each</KBD
+>, <kbd class="command">keys</KBD
+>, and <kbd class="command">values</KBD
+>.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">SV* 
+hv_iternextsv(
+     HV *hash,
+     char** key, 
+     I32* pkeylen)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Get the next key and value. The key is returned by reference (along with its length). Unlike <kbd class="command">hv_fetch()</KBD
+>, this function returns only an SV*. This is similar to calling <kbd class="command">each()</KBD
+>.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">HV *
+perl_get_hv (
+    char * varname, 
+    int create)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Gets the HV corresponding to varname. Creates the variable if <code class="literal">create</CODE
+> is TRUE. <code class="literal">varname</CODE
+> must be qualified with the name of a package.</P
+></TD
+></TR
+></TBODY
+></TABLE
+><p class="para">The iterating functions (<code class="literal">hv_iter*</CODE
+> ) are safe for deletion but not for insertion. That is, you can invoke <kbd class="command">hv_delete</KBD
+> on the current entry while iterating on a hash value using <kbd class="command">hv_iternextsv</KBD
+>, but you should not call <kbd class="command">hv_store</KBD
+>, because that might trigger a complete reorganization of the hash table.</P
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch20-pgfId-948426">20.3.3.1 Inside HVs</A
+></H4
+><p class="para">The HV is a straightforward implementation of a hashing technique called <em class="emphasis">collision chaining</EM
+><a class="indexterm" name="ch20-idx-972965-0"></A
+>. The basic idea is to reduce a string key to an integer and use this number as an index into an ordinary dynamic array. Clearly, we cannot expect to reduce all possible string keys to unique array indices, so each element of this dynamic array points instead to a linked list of all hash entries that reduced to that index. <a class="xref" href="#ch20-19195" title="Hash value, containing hash entries">Figure 20.5</A
+> shows this arrangement.</P
+><h4 class="figure"><a class="title" name="ch20-19195">Figure 20.5: Hash value, containing hash entries</A
+></H4
+><img class="graphic" src="figs/wpa_2005.gif" alt="Figure 20.5"><p class="para"><kbd class="command">xhv_array</KBD
+> is the dynamic array we mentioned above, <kbd class="command">xhv_fill</KBD
+> indicates the number of elements that have linked lists hanging off them, and <kbd class="command">xhv_keys</KBD
+> contains the total number of hash entries. Given a string, <kbd class="command">hv_fetch()</KBD
+> computes the appropriate index and traverses the corresponding linked list, comparing the key to each hash entry's key value.</P
+><p class="para">The translation of a string to an array index is a two-step process (for reasons to be discussed soon). First the string is run through an algorithm called a <em class="emphasis">hash function</EM
+><a class="indexterm" name="ch20-idx-972966-0"></A
+>, which computes an integer from a string without worrying about whether or not that number is practical to use as an array index. Perl's hash function is implemented as follows:</P
+><pre class="programlisting">int i = klen;
+unsigned int hash = 0;
+char *s = key;
+while (i--)
+    hash = hash * 33 + *s++;</PRE
+><p class="para">The resulting number is known as a <em class="emphasis">hash</EM
+>. There is no guarantee that different strings hash to different hash values. Note that if you have a different hash algorithm, you can compute the hash yourself and supply it to <kbd class="command">hv_store</KBD
+> (refer to <a class="xref" href="#ch20-24447" title="API for Hash Values">Table 20.3</A
+>).</P
+><p class="para">To convert the hash to a practical array index, Perl folds it into the array's maximum size:</P
+><pre class="programlisting">index = hash &amp; xhv_max;</PRE
+><p class="para">Ideally, we want the entries to spread out evenly around the array to keep the linked lists short. Perl's hashing algorithm does this surprisingly well for typical ASCII strings, but as we mentioned earlier, there's no guarantee that a given set of strings disperses well. So if <kbd class="command">xhv_keys</KBD
+> exceeds <kbd class="command">xhv_fill</KBD
+>, Perl takes it as an indication that one or more linked lists are unnecessarily long and that <kbd class="command">hv_fetch</KBD
+> is likely to spend a considerable amount of time traversing these lists. Therefore, when such a condition occurs, Perl immediately reorganizes the hash table: the dynamic array <kbd class="command">xhv_array</KBD
+> is doubled in size, and the entries are reindexed. Each hash entry stores its hash value, so it doesn't have to be hashed again when the table is reorganized.</P
+><p class="para">You can get an idea of the hash efficiency by printing an associative array in a scalar context, as follows:</P
+><pre class="programlisting"># Create a hash
+for (1 .. 1000) {$h{'foo' . $_} = 1;} # Create 1000 entries
+print scalar(%h);</PRE
+><p class="para">This prints "406/1024" on my machine, which is simply a ratio of <kbd class="command">xhv_fill</KBD
+> and <kbd class="command">xhv_max</KBD
+>. The lower the ratio, the faster the hash access, because, on average, the linked lists are short. </P
+><p class="para">If you know you are going to be performing a large number of insert operations on a hash, you can improve its efficiency in script space by telling it to preallocate a certain-sized dynamic array, like this:</P
+><pre class="programlisting">keys %h = 400; # set xhv_max</PRE
+><p class="para">Perl rounds it up to the next higher power of two: 512.</P
+><p class="para">The <kbd class="command">xhv_riter</KBD
+> and <kbd class="command">xhv_eiter</KBD
+> fields are used by the iterator functions, <kbd class="command">hv_iterinit</KBD
+> and <kbd class="command">hv_iternextsv</KBD
+>, and constitute a cursor over the hash entries. <kbd class="command">xhv_riter</KBD
+> contains the current row index, and <kbd class="command">xhv_eiter</KBD
+> contains the pointer to the current entry.</P
+><p class="para">Most object-oriented Perl implementations use hash tables for storing object attributes, which means that all instances of a given class would typically have the same set of key strings. To prevent unnecessary duplication, the actual key strings are maintained in a systemwide <a class="indexterm" name="ch20-idx-972967-0"></A
+><a class="indexterm" name="ch20-idx-972967-1"></A
+>shared string table (<kbd class="command">strtab</KBD
+> in <i class="filename">strtab.h</I
+>). <kbd class="command">strtab</KBD
+> is a simplified HV: each value here keeps a reference count of the number of uses of that string. When you say "<kbd class="command">$h{'foo'}</KBD
+>", the string <kbd class="command">foo</KBD
+> is first entered into <kbd class="command">strtab</KBD
+> if it is not already present. Then the hash entry for <kbd class="command">$h{foo}</KBD
+> is created in the HV for <kbd class="command">%h</KBD
+>. It turns out that performance suffers very little; if there are lots of duplicates, shared storage saves time because the key is <kbd class="command">malloc</KBD
+>'ed only once. Also, since the hash algorithm needs to be executed only once, the performance is pretty good even when there aren't too many duplicates.</P
+><p class="para">The shared string table is used only for immutable strings (remember that hash key strings cannot be changed). User-defined SVs containing strings do not get to use this table.<a class="indexterm" name="ch20-idx-972963-0"></A
+><a class="indexterm" name="ch20-idx-972963-1"></A
+><a class="indexterm" name="ch20-idx-972963-2"></A
+></P
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-17700">20.3.4 Glob Values and Symbol Tables</A
+></H3
+><p class="para"><a class="indexterm" name="ch20-idx-972968-0"></A
+><a class="indexterm" name="ch20-idx-972968-1"></A
+><a class="indexterm" name="ch20-idx-972968-2"></A
+><a class="indexterm" name="ch20-idx-972968-3"></A
+>We saw in <a class="xref" href="ch03_01.htm" title="Typeglobs and Symbol Tables">Chapter 3</A
+> that typeglobs, also known as glob values, or GVs, connect other value types with a symbol table entry. An identifier name, such as "foo", is linked by the GV to <kbd class="command">$foo</KBD
+>, <kbd class="command">@foo</KBD
+>, <kbd class="command">%foo</KBD
+>, <kbd class="command">&amp;foo</KBD
+>, a filehandle called <kbd class="command">foo</KBD
+>, and a format called <kbd class="command">foo</KBD
+>. </P
+><p class="para">GVs and symbol tables work so much in cahoots that all symbol table manipulation code is also lumped into <i class="filename">gv.c</I
+>. Symbol tables are internally implemented as hash tables (HVs) and hence are referred to as <em class="emphasis">stashes</EM
+><a class="indexterm" name="ch20-idx-972969-1"></A
+> (short for symbol table hash). Each package has its own stash and contains pointers to nested packages' stashes. The main stash, available from a global variable[<a class="footnote" href="#ch20-pgfId-970099">8</A
+>] called <kbd class="command">defstash</KBD
+>, contains pointers to other "top-level" packages' stashes. <a class="xref" href="#ch20-40443" title="API for Glob Values and Stashes">Table 20.4</A
+> shows the important functions for accessing GVs and the symbol table.</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch20-pgfId-970099">[8]</A
+> Or per-interpreter variable if MULTIPLICITY is defined.</P
+></DIV
+></BLOCKQUOTE
+><br><table class="table" border="1" cellpadding="3"><caption class="table"><a class="title" name="ch20-40443">Table 20.4: API for Glob Values and Stashes</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Function/Macro</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Description</P
+></TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">GvSV, GvAV, GvHV, 
+GvIO, GvFORM</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Return the appropriate value pointers hanging off the GV. </P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">HV *gv_stashpv(
+         char *name, 
+         int create)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Given a package name, get the corresponding HV.</P
+><p class="para">The names don't need the trailing "::", unlike in script space.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">HV *gv_stashsv(
+    SV *, int create)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Same as above. SV* contains the name of the package.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">HV *SvSTASH (SV* sv)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Get the stash from a blessed object. If <code class="literal">sv</CODE
+> is a reference, dereference it first: <kbd class="command">SvSTASH (SvRV(sv)).</KBD
+></P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">char* HvNAME(HV* stash)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Given a stash, return the package name.</P
+></TD
+></TR
+></TBODY
+></TABLE
+><p class="para">Standard variables in script space such as <kbd class="command">$_</KBD
+>, <kbd class="command">$@</KBD
+>, <kbd class="command">$&amp;</KBD
+>, <kbd class="command">$`</KBD
+>, and <kbd class="command">$'</KBD
+> are available as global variables in C space: <kbd class="command">defgv</KBD
+>, <kbd class="command">errgv</KBD
+>, <kbd class="command">ampergv</KBD
+>, <kbd class="command">leftgv</KBD
+>, and <kbd class="command">rightgv</KBD
+>, respectively. For example, if you know that <kbd class="command">$_</KBD
+> contains a number, you can extract it in C as follows:</P
+><pre class="programlisting">int i = SvIV(GvSV(defgv)); /* $_ and @_ are represented by defgv */</PRE
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch20-pgfId-955982">20.3.4.1 Inside glob values and symbol tables</A
+></H4
+><p class="para"><a class="xref" href="#ch20-38386" title="Glob value structure">Figure 20.6</A
+> shows most of the interesting components of a GV. </P
+><h4 class="figure"><a class="title" name="ch20-38386">Figure 20.6: Glob value structure</A
+></H4
+><img class="graphic" src="figs/wpa_2006.gif" alt="Figure 20.6"><p class="para">The <kbd class="command">xgv_name</KBD
+> field stores the name of the variable (without the prefix). The pointers to the contained values (<kbd class="command">$foo</KBD
+>, <kbd class="command">@foo</KBD
+>, and so on) are encapsulated in a separate structure called <kbd class="command">gp</KBD
+> to enable fast aliasing. In the typical case in which you don't reuse the same name for different types of variables, all but one of the value pointers are <kbd class="command">NULL</KBD
+>.</P
+><p class="para">Symbol tables are HVs that map variable names to GVs. But aren't HVs supposed to store SVs only? Well, you may have noticed that all value types have identical- looking wrapper structures that maintain the reference count, flags, and the pointer to an internal structure. Because they are identical, you can cast an <kbd class="command">AV*</KBD
+>, <kbd class="command">HV*</KBD
+>, <kbd class="command">CV*</KBD
+> to an <kbd class="command">SV*</KBD
+> and thus fool the HV into storing anything you want. If you were to do this yourself, be careful of the HV calls that decrement the reference count of a contained "SV" (<kbd class="command">hv_delete</KBD
+>, for example). This is because they will trigger an <kbd class="command">sv_free()</KBD
+> if the reference count becomes 0, and if it is not an SV, you are in trouble. <a class="indexterm" name="ch20-idx-972971-0"></A
+><a class="indexterm" name="ch20-idx-972971-1"></A
+></P
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-948980">20.3.5 Code Values</A
+></H3
+><p class="para"><a class="indexterm" name="ch20-idx-972973-0"></A
+><a class="indexterm" name="ch20-idx-972973-1"></A
+>We have now finished studying all the fundamental data types used in Perl. Next we study code values, which represent subroutines, eval blocks, and format declarations. This explanation will enable you to call Perl subroutines efficiently from C and also give you a visceral understanding of how lexical variables and closures are implemented. </P
+><p class="para"><a class="xref" href="#ch20-27761" title="API for Code Value">Table 20.5</A
+> shows the API for CVs; there's not much you can do with CVs except call them. Except for <kbd class="command">perl_call_sv</KBD
+>, all the other API functions accept the name of a procedure rather than the CV itself. </P
+><br><table class="table" border="1" cellpadding="3"><caption class="table"><a class="title" name="ch20-27761">Table 20.5: API for Code Value</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Function/Macro</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Description</P
+></TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">CV*
+perl_get_cv(char *name,
+            int create)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Get the CV for a given name. You should always set <kbd class="command">create</KBD
+> to FALSE, because a TRUE value automatically creates a blank CV, which is useless to an application writer.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">int 
+perl_call_sv(SV* cv,
+            int flags)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Call a subroutine indicated by the <code class="literal">cv</CODE
+> parameter. (Yes, you'll need to cast the CV to an SV.) It returns the number of return parameters pushed onto the stack. <code class="literal">flags</CODE
+> is explained below.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">perl_call_argv(
+    char *sub,
+    I32  flags,
+    char **argv);</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Discussed in <a class="xref" href="ch19_02.htm#ch19-38103" title="Perl API Calls for Easy Embedding">Table 19.1</A
+>.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">perl_call_va (
+    char *sub,
+    [char *type, arg],*
+    [&quot;OUT&quot;,]
+    [char *type, arg,]*
+);</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Discussed in <a class="xref" href="ch19_02.htm#ch19-38103" title="Perl API Calls for Easy Embedding">Table 19.1</A
+>. We will implement this convenience function later in the section <a class="xref" href="ch20_06.htm" title="Easy Embedding API">"Easy Embedding API</A
+>."</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">int perl_call_pv (
+        char* sub_name,
+        int flags)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Call a subroutine by name. A thin wrapper over <kbd class="command">perl_call_sv</KBD
+>.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">int perl_call_method(
+       char *method_name,
+      int flags)</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Call a method of a class by name. The first parameter on the stack must be either an SV containing the name of the class or a blessed reference of the class.</P
+></TD
+></TR
+></TBODY
+></TABLE
+><p class="para">There are other ways of calling Perl subroutines, such as <kbd class="command">perl_call_argv</KBD
+> and <kbd class="command">perl_call_va</KBD
+>, which we saw in the last chapter. All these functions are wrappers around <kbd class="command">perl_call_sv</KBD
+> and attempt to hide the messaging protocol details to some extent. The <em class="emphasis">flags</EM
+> parameter is a combination of any of the following bitmasks defined in <i class="filename">perl.h</I
+>:</P
+><dl class="variablelist"><dt class="term"><kbd class="command">G_DISCARD</KBD
+></DT
+><dd class="listitem"><p class="para">Discards all return parameters from the function.</P
+></DD
+><dt class="term"><kbd class="command">G_SCALAR</KBD
+>, <kbd class="command">G_ARRAY</KBD
+></DT
+><dd class="listitem"><p class="para">Specifies a scalar or array context, scalar being the default. The called subroutine can use <kbd class="command">wantarray</KBD
+> to find out the caller's intention. These flags can also be used in conjunction with <kbd class="command">G_DISCARD</KBD
+>. This is useful when you want to affect the way a function invoking <kbd class="command">wantarray</KBD
+> works, even if you are not interested in the results.</P
+></DD
+><dt class="term"><kbd class="command">G_EVAL</KBD
+>, <kbd class="command">G_KEEPERR</KBD
+></DT
+><dd class="listitem"><p class="para">Wraps an <kbd class="command">eval</KBD
+> block around the call. <kbd class="command">perl_eval_sv()</KBD
+> assumes this flag automatically. When an <kbd class="command">eval</KBD
+>'d block dies, Perl assigns <kbd class="command">die</KBD
+>'s string argument to <kbd class="command">errgv</KBD
+> (<kbd class="command">$@</KBD
+>) and clears all temporary variables created in that block. Perl checks to see whether any of these variables is a blessed object and, if so, calls its <kbd class="command">DESTROY</KBD
+> routine. There's a chance that this routine might invoke <kbd class="command">die</KBD
+> (after all, it is user-defined code). Here we have a situation in which <kbd class="command">errgv</KBD
+> is already computed and an additional exception is thrown. Using <kbd class="command">G_KEEPERR</KBD
+>, you instruct Perl to concatenate this new exception string to <kbd class="command">errgv</KBD
+> instead of overwriting it.</P
+></DD
+></DL
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch20-pgfId-949140">20.3.5.1 Inside CV</A
+></H4
+><p class="para">A CV has the same overall structure as the other value types: a generic part and a specific part. Consider the following piece of code, which defines a function in another package (by fully qualifying the name) and examines the function using Devel::Peek:</P
+><pre class="programlisting">package Foo;
+sub main::bar {   #Introduce a function in a different package
+   my $a = 10;
+}
+use Devel::Peek;
+Dump(\&amp;main::bar);</PRE
+><p class="para">The dump looks like this:</P
+><pre class="programlisting">SV = PVCV(0x774300)
+  REFCNT = 2
+  FLAGS = ()
+  IV = 0
+  NV = 0
+  COMP_STASH = 0x6635f0 &quot;Foo&quot;
+  START = 0x7744d0
+  ROOT = 0x774650
+  XSUB = 0x0
+  XSUBANY = 0
+  GVGV::GV = 0x66365c   &quot;main&quot; :: &quot;bar&quot;
+  FILEGV = 0x660418     &quot;_&lt;foo.pl&quot;
+  DEPTH = 0
+  PADLIST = 0x66362c</PRE
+><p class="para">The <kbd class="command">COMP_STASH</KBD
+> field indicates that the "Foo" stash would be active when <kbd class="command">bar()</KBD
+> executes, although this subroutine is defined in package <kbd class="command">main</KBD
+>. The <kbd class="command">ROOT</KBD
+> field indicates the root opcode of the syntax subtree for the CV, and <kbd class="command">START</KBD
+> is the address of the opcode to get control when the function starts. The <kbd class="command">XSUB</KBD
+> field either is NULL or contains a pointer to a C subroutine. The <kbd class="command">DEPTH</KBD
+> field indicates the depth of recursion, and <kbd class="command">PADLIST</KBD
+> refers to a list of <em class="emphasis">scratchpads</EM
+> for storing lexical variables defined inside that subroutine. More on this next.</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch20-pgfId-963171">20.3.5.2 How local and my work</A
+></H4
+><p class="para"><a class="indexterm" name="ch20-idx-972974-0"></A
+><a class="indexterm" name="ch20-idx-972974-1"></A
+><a class="indexterm" name="ch20-idx-972974-2"></A
+><a class="indexterm" name="ch20-idx-972974-3"></A
+>Perl variables, as we are well aware, can be global, dynamic (tagged with <kbd class="command">local</KBD
+>), or lexical (<kbd class="command">my</KBD
+>). Global variables are accessible via the stash and the corresponding typeglob. When Perl encounters the global variable <kbd class="command">$a</KBD
+>, it produces the opcode <kbd class="command">gvsv</KBD
+>, which places the corresponding GV's scalar value on the stack, at run-time.</P
+><p class="para">When Perl parses "<kbd class="command">local</KBD
+> <kbd class="command">$a</KBD
+>," it still outputs the same <kbd class="command">gvsv</KBD
+> opcode, but this time it sets a special flag in that opcode to "localize" the scalar. At run-time, the corresponding opcode function <kbd class="command">pp_gvsv</KBD
+> checks this flag and, if it is set, replaces the GV's scalar value with a new scalar value and pushes this new value onto the argument stack. Meanwhile, the old SV sits safely in something called a savestack (discussed later, in the section <a class="xref" href="ch20_04.htm#ch20-14695" title="Inside Other Stacks">"Inside Other Stacks</A
+>"). Subsequent accesses of <kbd class="command">$a</KBD
+> within that scope (or a nested scope) lead you, via <kbd class="command">a</KBD
+>'s GV, to the newly allocated scalar value.</P
+><p class="para"><kbd class="command">my</KBD
+> variables are stored and treated very differently. We mentioned earlier that each CV contains a <i class="firstterm">padlist</I
+><a class="indexterm" name="ch20-idx-972986-0"></A
+>, a list of scratchpads, as illustrated in <a class="xref" href="#ch20-29820" title="Inside look at my variables">Figure 20.7</A
+>.</P
+><h4 class="figure"><a class="title" name="ch20-29820">Figure 20.7: Inside look at my variables</A
+></H4
+><img class="graphic" src="figs/wpa_2007.gif" alt="Figure 20.7"><p class="para">The padlist is an ordinary AV. Its 0th element points to an AV containing all lexical variable names <em class="emphasis">used</EM
+> within that subroutine (not just <em class="emphasis">declared</EM
+> within that subroutine). The names contain their prefix symbols, so <kbd class="command">$a</KBD
+> and <kbd class="command">%a</KBD
+> have their own unique entries. The padlist's first element points to a <i class="firstterm">scratchpad</I
+> array (also an AV), whose elements contain the values corresponding to the lexical variables named in the 0th row. As you can see, the padlist is an alternative symbol table because it contains a logical pairing of variable names and values.</P
+><p class="para">When the subroutine recurses, a new scratchpad is allocated for that recursion level. You'll notice that a CV requires at least three AVs (one for <kbd class="command">xcv_padlist</KBD
+>, one for storing the names, and one or more for storing values).</P
+><p class="para">When <a class="indexterm" name="ch20-idx-972987-0"></A
+>multithreading is introduced into Perl (Version 5.005 onward), each thread will get its own scratchpad,[<a class="footnote" href="#ch20-pgfId-963310">9</A
+>] which means that lexical variables will continue to be completely private to a recursion level and thread. (Package global variables will continue to be global, of course.)</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch20-pgfId-963310">[9]</A
+> This is according to Malcolm Beattie's current prototype patches for supporting POSIX threads.</P
+></DIV
+></BLOCKQUOTE
+><p class="para"><kbd class="command">my</KBD
+> variables are a shade faster than <kbd class="command">local</KBD
+> variables. The reason is that <kbd class="command">local</KBD
+> allocates a new value at run-time to temporarily occlude the global value. In contrast, <kbd class="command">my</KBD
+> variables are already unique to a CV, so they are typically allocated once, at parse time. The only reason to create a fresh <kbd class="command">my</KBD
+> value is in case of recursion, which is not a typical occurrence. In future releases of Perl, multiple threads executing the same CV will also require run-time allocation of lexical variables.</P
+><p class="para">When you access a lexical variable, Perl's code generator outputs an opcode called <kbd class="command">padsv</KBD
+>, equivalent to <kbd class="command">gvsv</KBD
+> (which is used for global or local variables). <kbd class="command">padsv</KBD
+> remembers the offset of the variable inside the scratchpad (1 for <kbd class="command">%a</KBD
+> in <a class="xref" href="#ch20-29820" title="Inside look at my variables">Figure 20.7</A
+>). At run-time, Perl wastes no time at all fetching the corresponding value and pushing it on the stack.<a class="indexterm" name="ch20-idx-972989-0"></A
+><a class="indexterm" name="ch20-idx-972989-1"></A
+><a class="indexterm" name="ch20-idx-972989-2"></A
+><a class="indexterm" name="ch20-idx-972989-3"></A
+></P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch20-pgfId-957759">20.3.5.3 Closures</A
+></H4
+><p class="para">This brief introduction to CVs and lexical variables leads us to the subject of <a class="indexterm" name="ch20-idx-972991-0"></A
+>closures. When a closure is created, Perl allocates a CV, points it to the starting opcode for the subroutine, and supplies it with its own private padlist. The padlist contains pointers to all lexical variables <em class="emphasis">used</EM
+> by that closure, whether or not they were created within that block, as illustrated by <a class="xref" href="#ch20-26153" title="Scratchpad picking up lexicals from containing CVs' scratchpads">Figure 20.8</A
+>.</P
+><h4 class="figure"><a class="title" name="ch20-26153">Figure 20.8: Scratchpad picking up lexicals from containing CVs' scratchpads</A
+></H4
+><img class="graphic" src="figs/wpa_2008.gif" alt="Figure 20.8"><p class="para">For those lexicals picked up from the CV containing the closure (<kbd class="command">$a</KBD
+> in <a class="xref" href="#ch20-26153" title="Scratchpad picking up lexicals from containing CVs' scratchpads">Figure 20.8</A
+>), the scratchpad contains direct pointers to the appropriate values, and the reference count of those values is incremented. Lexicals such as <kbd class="command">$b</KBD
+>, created within the closure, are freshly allocated. Either way, the space allocated for a lexical variable is not deallocated as long as any subroutine using it can be called.</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch20-pgfId-957760">20.3.5.4 Objects versus closures</A
+></H4
+><p class="para"><a class="indexterm" name="ch20-idx-972992-0"></A
+>In <a class="xref" href="ch04_01.htm" title="Subroutine References and Closures">Chapter 4, <cite class="chapter">Subroutine References and Closures</CITE
+></A
+>, we noted the similarity between objects and closures: both represent a binding between code and data. In other words, an object with three member functions can instead be represented as three closures acting on private variables borrowed from their containing environment. </P
+><p class="para">Clearly, the closure approach is a lot more expensive in space; to represent 100 objects' worth of information, you require 300 unique closures, which works out to 900 AVs. In contrast, if you use a hash representation for storing object attributes, you need 100 hash tables and 9 AVs (three per subroutine). </P
+><p class="para">On the other hand, calling a closure is faster than invoking an object's method. This is because a closure's variables are ready to be used as soon as the procedure is called, whereas an object's method has to dereference the object reference and then make a hash access for each attribute. The following benchmark compares the speed of an object accessor method to an equivalent closure&nbsp;- the latter approach is two to three times faster on my PC:</P
+><pre class="programlisting">#--------------------------------------------------------------
+package OBJECT;                    # Pkg for timing object accessors
+sub new {
+   bless {'abc' =&gt; 10};
+}
+sub abc {                          # Fetch the abc attribute
+    $_[0]-&gt;{'abc'};
+    }
+sub increment {                    # Increment the abc attribute
+    $_[0]-&gt;{'abc'}++;
+}
+#--------------------------------------------------------------
+package CLOSURE;                   # Pkg for timing closures
+sub new {
+  my $abc = 10;                    # member data.
+  $rs_increment = sub {$abc++};    # equivalent of OBJECT::increment
+  $rs_abc       = sub {$abc}  ;    # equivalent of OBJECT::abc
+  ($rs_increment, $rs_abc);
+}
+#--------------------------------------------------------------
+package main;
+use Benchmark;
+$a = OBJECT-&gt;new();                # Create a new object
+($inc, $fetch) = CLOSURE-&gt;new();   # Create two closures
+timethese(1000000, {
+   Object  =&gt;  '$a-&gt;increment',    # call an object method
+   Closure =&gt;  '&amp;$inc'             # call a closure
+});</PRE
+><p class="para">On my PC, this prints</P
+><pre class="programlisting">Benchmark: timing 1000000 iterations of Closure, Object...
+   Closure: 13 secs (14.39 usr  0.00 sys = 14.39 cpu)
+    Object: 45 secs (45.14 usr  0.00 sys = 45.14 cpu)<a class="indexterm" name="ch20-idx-972981-0"></A
+><a class="indexterm" name="ch20-idx-972981-1"></A
+><a class="indexterm" name="ch20-idx-972981-2"></A
+><a class="indexterm" name="ch20-idx-972981-3"></A
+></PRE
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-956415">20.3.6 Magic Variables[<a class="footnote" href="#ch20-pgfId-964958">10</A
+>]</A
+></H3
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch20-pgfId-964958">[10]</A
+> This section can be skipped on a first reading.</P
+></DIV
+></BLOCKQUOTE
+><p class="para"><a class="indexterm" name="ch20-idx-972993-0"></A
+><a class="indexterm" name="ch20-idx-972993-1"></A
+><a class="indexterm" name="ch20-idx-972993-2"></A
+>There are ordinary user-defined variables containing strings, numbers, and references; then there are <em class="emphasis">magical</EM
+> variables, those that have one or more special properties. A tied variable, for example, is magical because it contains pointers to a tied object and invokes that object's <kbd class="command">FETCH</KBD
+> and <kbd class="command">STORE</KBD
+> methods when read from and written to, as we saw in <a class="xref" href="ch09_01.htm" title="Tie">Chapter 9, <cite class="chapter">Tie</CITE
+></A
+>. Built-in variables such as <kbd class="command">$!</KBD
+> and <kbd class="command">%SIG</KBD
+> are also special: when <kbd class="command">$!</KBD
+> is read from, Perl implicitly reads the C variable <kbd class="command">errno</KBD
+>; when <kbd class="command">%SIG</KBD
+> is written to, Perl resets the signal handler. </P
+><p class="para">A magical scalar variable is shown in <a class="xref" href="#ch20-16201" title="Magical scalar">Figure 20.9</A
+>. It contains the normal scalar fields that you saw earlier and, in addition, points to a linked list of properties. A structure called <kbd class="command">MAGIC</KBD
+> represents each property and provides a semblance of uniformity over the different types of properties, as we shall soon see. Let us look at this structure in some detail before we use this facility to our advantage.</P
+><h4 class="figure"><a class="title" name="ch20-16201">Figure 20.9: Magical scalar</A
+></H4
+><img class="graphic" src="figs/wpa_2009.gif" alt="Figure 20.9"><p class="para">A property, as seen in <a class="xref" href="#ch20-30593" title="MAGIC: Uniform interface for representing special properties">Figure 20.10</A
+>, is an object containing a property type, a pointer to some data private to that property, and a pointer to a <i class="firstterm">virtual table</I
+><a class="indexterm" name="ch20-idx-972994-0"></A
+> (or <em class="emphasis">vtbl</EM
+>, a table of pointers to functions, in C++ parlance). When a variable is read from, written to, cleared, or destroyed, or if its length is accessed, Perl first updates the variable's value (the string, integer, or double fields) and then calls the accessor function responsible for the appropriate action (reading, writing, clearing, and so on; refer to <a class="xref" href="#ch20-30593" title="MAGIC: Uniform interface for representing special properties">Figure 20.10</A
+>). If the variable has more than one property, the corresponding accessor function from each property is called, to give all of them a chance to affect the value of that variable as they please. An accessor can have side-effects too. For example, when you modify <kbd class="command">%SIG</KBD
+>, each of its properties' <kbd class="command">svt_set</KBD
+> function is invoked. One of these functions updates the signal handler. </P
+><h4 class="figure"><a class="title" name="ch20-30593">Figure 20.10: MAGIC: Uniform interface for representing special properties</A
+></H4
+><img class="graphic" src="figs/wpa_2010.gif" alt="Figure 20.10"><p class="para">Perl comes with a set of prebuilt virtual tables associated with unique <i class="firstterm">property types</I
+><a class="indexterm" name="ch20-idx-972995-0"></A
+>, which are simply unique characters. For example, the virtual table to handle tied arrays is indicated by the character "P." Please take a look at the <i class="filename">perlguts</I
+> document if you are interested in the other built-in types. A value can have at most one property of a given type in its list. There's one property type, identified by the character <kbd class="command">~</KBD
+>, which is a hook for an extension writer to supply a custom virtual table. Let us see how to use this particular type.</P
+><p class="para">To attach special properties to a scalar, use the <kbd class="command">sv_magic</KBD
+> function, like this:</P
+><pre class="programlisting">sv_magic(sv, obj, '~', &quot;foo&quot;, 3);</PRE
+><p class="para">This function upgrades the scalar value to an XPVMG structure internally and tells Perl not to attach any of its predefined virtual tables (because of <kbd class="command">~</KBD
+>). In addition, it creates one MAGIC structure and hangs it off the scalar. <kbd class="command">obj</KBD
+> is an SV of your choice, containing user-defined data and meant for the accessor functions to distinguish between one magical variable and another. The last two parameters simply give a name to the property: an identifier string and length. Typically, you use the variable's name. </P
+><p class="para">To access a certain property structure from a scalar, use the <kbd class="command">mg_find</KBD
+> function:</P
+><pre class="programlisting">MAGIC *m = mg_find(sv(,'~'));</PRE
+><p class="para">Let us use these two functions to create a low-level tie mechanism: call a custom function when something happens to the variable. The procedure <kbd class="command">foo_tie</KBD
+> in the following example shows how to associate a variable <kbd class="command">$foo</KBD
+> in Perl space to a C variable <kbd class="command">my_foo</KBD
+>:</P
+><pre class="programlisting">int my_foo;  /* to be tied to $foo at script level */
+int foo_get (SV *sv, MAGIC *mg)
+{
+    sv_setiv(sv, my_foo);   /* return my_foo's value */
+    printf (&quot;GET foo =&gt; %d\n&quot;, my_foo);
+    return 1; /* return value not used */
+}
+int foo_set (SV *sv, MAGIC *mg)
+{
+    my_foo = SvIV(sv);     /* set my_foo's value     */
+    printf (&quot;SET foo =&gt; %d\n&quot;, my_foo);
+    return 1; /* return value not used */
+}
+MGVTBL foo_accessors = {   /* Custom virtual table */
+    foo_get, foo_set, NULL,  NULL,  NULL
+};
+void foo_tie () 
+{
+    MAGIC *m;
+    /* Create a variable*/
+    char *var = &quot;main::foo&quot;;
+    SV *sv = perl_get_sv(var,TRUE);
+    /* Upgrade the sv to a magical variable*/
+    sv_magic(sv, NULL, '~', var, strlen(var));
+    /* sv_magic adds a MAGIC structure (of type '~') to the SV. 
+       Get it and set the virtual table pointer */
+    m = mg_find(sv, '~');
+    m-&gt;mg_virtual = &amp;foo_accessors;
+    SvMAGICAL_on(sv);
+}</PRE
+><p class="para">Since <kbd class="command">foo_tie</KBD
+> uses the `<kbd class="command">~</KBD
+>' property type, Perl does not supply a prebuilt virtual table. <kbd class="command">foo_tie</KBD
+> makes up for the omission by supplying its own custom virtual table, <kbd class="command">foo_accessors</KBD
+>, which contains pointers to <kbd class="command">foo_get</KBD
+> and <kbd class="command">foo_set</KBD
+>. Note that these two functions access the integer slot of the scalar given to them. </P
+><p class="para">The <kbd class="command">tie</KBD
+> mechanism that is available at the scripting level is slightly more involved. It first asks the module to return an object (using TIESCALAR, TIEHASH, etc.) and uses that object as a parameter to <kbd class="command">sv_magic</KBD
+>. Later, when the tied variable is read from, the <kbd class="command">sv_get</KBD
+> accessor is called, which relays the call to the private object's <kbd class="command">FETCH</KBD
+><a class="indexterm" name="ch20-idx-972997-0"></A
+><a class="indexterm" name="ch20-idx-972997-1"></A
+><a class="indexterm" name="ch20-idx-972997-2"></A
+> method.<a class="indexterm" name="ch20-idx-972932-0"></A
+><a class="indexterm" name="ch20-idx-972932-1"></A
+><a class="indexterm" name="ch20-idx-972932-2"></A
+><a class="indexterm" name="ch20-idx-972932-3"></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch20_02.htm" title="20.2 Architecture"><img src="../gifs/txtpreva.gif" alt="Previous: 20.2 Architecture" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch20_04.htm" title="20.4 Stacks and Messaging Protocol"><img src="../gifs/txtnexta.gif" alt="Next: 20.4 Stacks and Messaging Protocol" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">20.2 Architecture</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">20.4 Stacks and Messaging Protocol</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

@@ -1,0 +1,2234 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 15] 15.4 Implementing PLVvu</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T18:28:44Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates-1-56592-238-7E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-238-7E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="PL/SQL SQL Oracle Packages"><META
+NAME="DC.Title"
+CONTENT="Advanced Oracle PL/SQL Programming with Packages"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch15_01.htm"
+TITLE="15. PLVvu: Viewing Source Code and Compile Errors"><LINK
+REL="prev"
+HREF="ch15_03.htm"
+TITLE="15.3 Displaying Source Code"><LINK
+REL="next"
+HREF="ch16_01.htm"
+TITLE="16. PLVgen: Generating PL/SQL Programs"></HEAD>
+<BODY><DIV CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Advanced Oracle PL/SQL Programming with Packages"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Advanced Oracle PL/SQL Programming with Packages"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch15_03.htm"
+TITLE="15.3 Displaying Source Code"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 15.3 Displaying Source Code"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch15_01.htm"
+TITLE="15. PLVvu: Viewing Source Code and Compile Errors"
+>Chapter 15<BR>PLVvu: Viewing Source Code and Compile Errors</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch16_01.htm"
+TITLE="16. PLVgen: Generating PL/SQL Programs"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 16. PLVgen: Generating PL/SQL Programs"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch15-28635"
+>15.4 Implementing PLVvu</A
+></H2
+><P
+CLASS="para"
+>PLVvu is a very handy utility; it is also an excellent example of the kind of software you can build yourself to get more out of the Oracle data dictionary. This section goes behind the scenes of PLVvu to help you understand how I built the package&nbsp;-- and, perhaps as importantly, how the package evolved over time into its final PL/Vision format.</P
+><P
+CLASS="para"
+>First we'll look at the general task of finding and displaying source code stored in the data dictionary. Then we'll examine the steps required to build an alternative to SHOW ERRORS.</P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch15-SECT-4.1"
+>15.4.1 How to Find Source Code</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998799-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998799-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998799-2"
+></A
+>When you "create or replace" a program (procedure, function, or package) into the Oracle database, the source code is saved to the SYS.SOURCE$ table. You can view the contents of this table for all of your stored programs by accessing USER_SOURCE view. The structure of this view is:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; desc user_source
+ Name           Null?    Type
+ -------------- -------- -------------
+ NAME           NOT NULL VARCHAR2(30)
+ TYPE                    VARCHAR2(12)
+ LINE           NOT NULL NUMBER
+ TEXT                    VARCHAR2(2000)</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998800-0"
+></A
+>The <EM
+CLASS="emphasis"
+>Name</EM
+> column contains the name of the object. The name is always stored in uppercase unless you enclose the name of your program in double quotation marks at creation time. I will assume in my help implementation that you don't do this and that your program name is always uppercased. <EM
+CLASS="emphasis"
+>Type</EM
+> is a string describing the type of source code, either PROCEDURE, FUNCTION, PACKAGE, or PACKAGE BODY (always uppercase). The <EM
+CLASS="emphasis"
+>line</EM
+> is the line number and the <EM
+CLASS="emphasis"
+>text</EM
+> is the line of text. Notice that a line of text may be up to 2000 bytes in length.</P
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998801-0"
+></A
+>You can also access another data dictionary view, ALL_SOURCE, to see the source of all programs you can access, even if you do not own those program units. It isn't hard to write a <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statement to view the contents of this table. The following <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> script (found in <KBD
+CLASS="command"
+>showsrc.sql</KBD
+>) gets the basic idea across:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT TO_CHAR (line) || text Line_of_code
+  FROM user_source
+ WHERE name=UPPER ('&amp;1')
+   AND line BETWEEN &amp;2 AND &amp;3
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>However, if you want to make it easy for developers to run such scripts in a flexible manner, you will probably want to move to a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+>-based solution, as I did. </P
+><P
+CLASS="para"
+>The implementation of the <KBD
+CLASS="command"
+>PLVvu.code</KBD
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998802-0"
+></A
+> procedure is shown below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE code
+   (name_in IN VARCHAR2 := NULL, 
+    start_in IN INTEGER := 1, 
+    end_in IN INTEGER := NULL,
+    header_in IN VARCHAR2 := 'Code for')
+IS
+   line_rec PLVio.line_type;
+   line_num INTEGER;
+BEGIN
+   set_object (name_in);
+
+   PLVio.asrc (start_in, end_in);
+   disp_header (header_in);
+   LOOP
+      PLVio.get_line (line_rec, line_num);
+      EXIT WHEN line_rec.eof;
+      disp_text 
+         (line_rec.line# + start_in - 1, line_rec.text);
+   END LOOP;
+
+   PLVio.closesrc;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>As you can see, PLVvu relies heavily on other PL/Vision packages. It calls a private procedure, <KBD
+CLASS="command"
+>set_object</KBD
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998803-0"
+></A
+>, to set the current object for PLVio. The <KBD
+CLASS="command"
+>set_object</KBD
+> procedure in turn calls the <KBD
+CLASS="command"
+>PLVobj.setcurr</KBD
+> program for either the name specified or the last object. The code procedure then calls <KBD
+CLASS="command"
+>PLVio.asrc</KBD
+> to set the source repository to the ALL_SOURCE view and specifies that only lines between <KBD
+CLASS="command"
+>start_in</KBD
+> and <KBD
+CLASS="command"
+>end_in</KBD
+> be queried. It displays a header and then loops through each record retrieved with a call to the <KBD
+CLASS="command"
+>PLVio.get_line</KBD
+> procedure. It calls a local procedure, <KBD
+CLASS="command"
+>disp_text</KBD
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998804-0"
+></A
+>, to format and display the code. When done, it closes the source repository with a call to the <KBD
+CLASS="command"
+>PLVio.closesrc</KBD
+> procedure. </P
+><P
+CLASS="para"
+>This code is certainly more complex than the single query of the <KBD
+CLASS="command"
+>showsrc.sql </KBD
+>script. It is, on the other hand, much more powerful and flexible. For example, this approach makes it quite feasible to enhance the <KBD
+CLASS="command"
+>PLVvu.code</KBD
+> procedure to read the source code from an operating system file (remove the call to <KBD
+CLASS="command"
+>PLVio.asrc</KBD
+> and let the user establish her own source repository outside of <KBD
+CLASS="command"
+>PLVvu.code</KBD
+>). Now how would you do that with a straight <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> solution?</P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch15-SECT-4.2"
+>15.4.2 Implementing the SHOW ERRORS Alternative</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998805-0"
+></A
+>I could start off by showing you the source code for <KBD
+CLASS="command"
+>PLVvu.err</KBD
+> and simply step you through this final, polished version of the program. That approach would, however, be both misleading and intimidating. The programs that you see in these pages have been massaged quite thoroughly over a period of months. If I simply explain my final version without giving you a sense of the process by which I arrived at this pristine result, you will be much less likely to develop the skills needed to come up with solutions to your own, very specific problems.[<A
+CLASS="footnote"
+HREF="#ch15-pgfId-998487"
+>2</A
+>] As a result, I will make every effort to show you the techniques of problem-solving and iterative coding I have employed en route to producing this package.</P
+><BLOCKQUOTE
+CLASS="footnote"
+><DIV
+CLASS="footnote"
+><P
+CLASS="para"
+><A
+CLASS="footnote"
+NAME="ch15-pgfId-998487"
+>[2]</A
+> In the process of writing this chapter, I performed an unplanned code review of my PLVvu package and performed major surgery on it, improving performance and code reuse. When I wrote "final, polished version" two paragraphs back, I had no idea how much room for improvement was left in PLVvu!</P
+></DIV
+></BLOCKQUOTE
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch15-SECT-4.2.1"
+>15.4.2.1 Merging source and error information</A
+></H4
+><P
+CLASS="para"
+>One of the critical early steps in designing a new package or new kind of utility is to validate the feasibility of the idea. In the case of <KBD
+CLASS="command"
+>PLVvu.err</KBD
+>, my core idea is:</P
+><BLOCKQUOTE
+CLASS="blockquote"
+><P
+CLASS="para"
+>The USER_SOURCE view contains the source code, including line number. The USER_ERRORS view contains the compile error information, which includes line numbers as well. So it seems as if I should be able to combine these two sources of information into a single useful presentation like the one you saw earlier.</P
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Let's see if I can actually do this. First, I need the <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statement that will retrieve the source code from the USER_SOURCE view. The following SQL*Plus script displays all the code associated with the specified program unit (<KBD
+CLASS="command"
+>&amp;1</KBD
+> and <KBD
+CLASS="command"
+>&amp;2</KBD
+> are parameters, allowing values to be passed into the script).</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>COLUMN line FORMAT 99999
+COLUMN text FORMAT A80
+SELECT line, text
+  FROM user_source
+ WHERE name = UPPER ('&amp;2')
+   AND type = UPPER ('&amp;1')
+ ORDER BY line;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I can call this script (I'll name it <KBD
+CLASS="command"
+>showcode.sql</KBD
+>) in SQL*Plus as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; start showcode procedure greetings
+  LINE TEXT
+------ ----------------------------------------------------------------
+     1 procedure greetings
+     2 is
+     3 begin
+     4    dbms_output.put_line ('hello world!')
+     5 end;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Do you notice anything amiss in the above procedure? There is no semicolon at the end of line 4! In fact when I tried to "create or replace" this procedure, I was informed that:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>Warning: Procedure created with compilation errors.</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>and my good friend SHOW ERRORS revealed the following:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>LINE/COL ERROR
+-------- --------------------------------------------------------------
+5/1      PLS-00103: Encountered the symbol &quot;END&quot; when expecting one of 
+         the following:
+         := . ( % ;
+         Resuming parse at line 5, column 5.</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>If SHOW ERRORS can show the information, that means that there is a row in the USER_ERRORS view. Let's use <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> similar to the code in <KBD
+CLASS="command"
+>showcode.sql</KBD
+> to show the error information stored in the view. The following script (<KBD
+CLASS="command"
+>showerr.sql</KBD
+>) succeeds in producing output which matches SHOW ERRORS:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>COLUMN linedesc FORMAT A8 HEADING 'LINE/COL'
+COLUMN text FORMAT A62 HEADING 'ERROR'
+SELECT TO_CHAR (line) || '/' || TO_CHAR(position) linedesc, 
+       text
+  FROM user_errors
+ WHERE name = UPPER ('&amp;2')
+   AND type = UPPER ('&amp;1')
+ ORDER BY line;</PRE
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch15-SECT-4.2.2"
+>15.4.2.2 Showing the line in error</A
+></H4
+><P
+CLASS="para"
+>So these two <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statements separately give me what I need&nbsp;-- but I need to combine them. The big question is now: can I merge these two <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statements successfully? To merge data in <SPAN
+CLASS="acronym"
+>SQL</SPAN
+>, I perform a join. The following SELECT will, therefore, return a line of text from USER_SOURCE for every row in the USER_ERRORS view.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT TO_CHAR (S.line) || '/' || TO_CHAR(E.position) linedesc, 
+       S.text
+  FROM user_errors E, user_source S
+ WHERE E.name = UPPER ('&amp;2')
+   AND E.type = UPPER ('&amp;1')
+   AND E.name = S.name
+   AND E.type = S.type
+   AND E.line = S.line
+ ORDER BY S.line;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>When I run this script as <KBD
+CLASS="command"
+>showmerg.sql</KBD
+> in SQL*Plus, I see the following:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt;  start showmerg procedure greetings
+LINE/COL CODE
+-------- --------------------------------------------------------------
+5/1      end;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>So now I can display just those lines of code for which there are errors&nbsp;-- but what is the error? I seem to have lost that part of the equation. I haven't really merged my information yet; I have only used the USER_ERRORS view to "filter" out all those lines for which there are no errors. Furthermore, it is worth pointing out right now that even if I displayed the error along with the line displayed above, I wouldn't be giving myself a whole lot with which to work. Line 5, after all, is not really in error. That's just where the compiler got lost. So if I actually want to get something out of my substitute for SHOW ERRORS, I need to display at least a couple of lines around where the error occurred.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch15-SECT-4.2.3"
+>15.4.2.3 Going beyond SHOW ERRORS</A
+></H4
+><P
+CLASS="para"
+>There are two different approaches I can use to accomplish this goal: enhance the <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> or switch to a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+>-based implementation. My most natural inclination is to move on to <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> when the <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> going gets the least bit tough. Others, of course, may stick it out longer in the <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> layer. For example, it would be a relatively simple matter to replace the following WHERE clause of the <KBD
+CLASS="command"
+>showmerg.sql</KBD
+> script:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>AND E.line = S.line</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>with this <SPAN
+CLASS="acronym"
+>BETWEEN</SPAN
+> operator:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>AND S.line BETWEEN E.line-2 AND E.line+2</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Then the <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statement would display up to two lines on either side of the error-infested line of code, as shown below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>LINE/COL CODE
+-------- --------------------------------------------------------------
+4/1      begin
+5/1         dbms_output.put_line ('hello world!')
+6/1      end;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I could even get really fancy (for me, anyway) and use DECODE to slip the error text in along with the source listing:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT TO_CHAR (S.line) || '/' || TO_CHAR(E.position) linedesc, 
+       DECODE (S.line, 
+               E.line, 
+               S.text|| LPAD ('*', E.position) || CHR(10) || E.text, 
+               S.text) text
+  FROM user_errors E, user_source S
+ WHERE E.name = UPPER ('&amp;2')
+   AND E.type = UPPER ('&amp;1')
+   AND E.name = S.name
+   AND E.type = S.type
+   AND S.line BETWEEN E.line-2 AND E.line+2
+ ORDER BY E.line;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Obligatory DECODE translation: If the source line number equals the error line number, then display the source followed immediately by a line with an asterisk under the position identified by the compiler as containing the error, followed by the error text. Otherwise just display the source text. With the above script (named <KBD
+CLASS="command"
+>merge2.sql</KBD
+>), I generate this output for the greetings compile error:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; start merge2 procedure greetings
+LINE/COL CODE
+-------- --------------------------------------------------------------
+4/1      begin
+5/1         dbms_output.put_line ('hello world!')
+6/1      end;
+         *
+         PLS-00103: Encountered the symbol &quot;END&quot; when expecting one of
+         the following:
+          := . ( % ;
+         ; was inserted before &quot;END&quot; to continue.</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Pretty neat, huh? <SPAN
+CLASS="acronym"
+>SQL</SPAN
+>, especially the version provided by Oracle Corporation can be very entertaining and effective. So why, you must be asking, should we bother with a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+>-based implementation? Looks like this does everything we want...or does it?</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch15-SECT-4.2.4"
+>15.4.2.4 Pushing the limits of an SQL solution</A
+></H4
+><P
+CLASS="para"
+>So far we have only tested our script with a very basic procedure and error scenario. Let's throw a couple of monkey wrenches at the <KBD
+CLASS="command"
+>merge2</KBD
+> script and see what we get. For starters, let's simply change the mistake in the greetings procedure. Rather than leaving off the semicolon, I will remove the underscore from the builtin name <KBD
+CLASS="command"
+>put_line</KBD
+>:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>create or replace procedure greetings
+is
+begin
+   dbms_output.putline ('hello world!');
+end;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The output from <KBD
+CLASS="command"
+>merge2</KBD
+> then becomes:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>LINE/COL CODE
+-------- --------------------------------------------------------------
+2/16     is
+2/4      is
+3/16     begin
+3/4      begin
+4/16        dbms_output.putline ('hello world!');
+                        *
+         PLS-00302: component 'PUTLINE' must be declared
+4/4         dbms_output.putline ('hello world!');
+            *
+         PL/SQL: Statement ignored
+5/16     end;
+5/4      end;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Lots of redundant lines of code! The reason for this extra output is that the compiler has actually generated two compile errors for the same line (one at position 4 and one at position 16). </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>4/4      PL/SQL: Statement ignored
+4/16     PLS-00302: component 'PUTLINE' must be declared</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>And it just gets worse and worse from there. For example, if I add an OPEN statement to my greetings procedure and reference an undefined cursor, I will get four error messages from SHOW ERRORS:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>4/4      PL/SQL: Statement ignored
+4/16     PLS-00302: component 'PUTLINE' must be declared
+5/2      PL/SQL: SQL Statement ignored
+5/7      PLS-00201: identifier 'BLOB' must be declared</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The output from a call to <KBD
+CLASS="command"
+>merge2</KBD
+>, however, totals 18 lines (!) featuring both redundant, consecutive lines and extra "overlap" lines (the two lines preceding the second error include both the earlier error and its preceding line, so we get to see way too much and in the wrong order).</P
+><P
+CLASS="para"
+>At moments like these, I thank my lucky stars for <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+>. There are clearly way too many exception conditions and special cases to stay within the non-procedural <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> environment. I need some old-fashioned explicit cursors with loops and IF statements. I need a procedural language.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch15-SECT-4.2.5"
+>15.4.2.5 Moving to a PL/SQL-based solution</A
+></H4
+><P
+CLASS="para"
+>With <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+>, I can relax. I am no longer constrained to come up with a creative/ingenious/obscure way to pack all my logic into a single, set-at-a-time <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statement. I can employ traditional top-down design techniques to think through each layer of complexity. I will approach a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> solution in two stages: a direct evolutionary process from the <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> to a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> procedure (called <KBD
+CLASS="command"
+>showerr</KBD
+>) and then a full-blown, PL/Vision-based implementation (<KBD
+CLASS="command"
+>PLVvu.err</KBD
+>).</P
+><P
+CLASS="para"
+>Here is the basic algorithm of my <KBD
+CLASS="command"
+>showerr</KBD
+> procedure:</P
+><BLOCKQUOTE
+CLASS="blockquote"
+><P
+CLASS="para"
+>A cursor FOR loop retrieves each of the rows from USER_ERRORS for a given program unit. For each error line retrieved, another cursor fetches lines of source code from USER_SOURCE which surround the line in error. DBMS_OUTPUT.PUT_LINE is then used to send all of these lines to the screen (or DBMS_OUTPUT buffer).</P
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In top-down <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> code we have:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FOR err_rec IN err_cur
+LOOP
+   FOR line_ind IN 
+       err_rec.line-2 .. err_rec.line+2
+   LOOP
+      disp_line(line_ind);
+      IF line_ind = err_rec.line
+      THEN
+         /* Point to error, show message. */
+         DBMS_OUTPUT.PUT_LINE
+           (LPAD ('*', err_rec.position+8));
+         DBMS_OUTPUT.PUT_LINE
+           (RPAD ('ERR', 8) || err_rec.text);
+      END IF;
+   END LOOP;
+END LOOP;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>where the error cursor looks like this:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>   CURSOR err_cur 
+   IS
+      SELECT line, position, text
+        FROM user_errors 
+       WHERE name = UPPER (name_in)
+         AND type = UPPER (type_in)
+       ORDER BY line;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>disp_line</KBD
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998816-0"
+></A
+> procedure displays the source for the specified line number. It simply fetches the row from USER_SOURCE and displays it with indentation using PUT_LINE.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE disp_line (line_in IN INTEGER)
+IS
+   CURSOR src_cur
+   IS
+     SELECT S.line, S.text
+       FROM user_source S
+      WHERE S.name = name_in
+        AND S.type = type_in
+        AND S.line = line_in;
+   src_rec src_cur%ROWTYPE;
+BEGIN
+  OPEN src_cur;
+  FETCH src_cur INTO src_rec;
+  DBMS_OUTPUT.PUT_LINE
+     (RPAD (TO_CHAR (line_in), 4) || src_rec.text);
+  CLOSE src_cur;
+END;</PRE
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch15-SECT-4.2.6"
+>15.4.2.6 The devil in the details</A
+></H4
+><P
+CLASS="para"
+>This rapid, top-down driven design process yields a working program in short order. When I run this initial version, however, I find a number of complications (try it yourself; the code is stored in <KBD
+CLASS="command"
+>showerr1.sp</KBD
+>):</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>When code is stored in the database, a newline character is placed on the end of each line. So when I use DBMS_OUTPUT.PUT_LINE to display the line, I end up with "double-spacing". SQL*Plus automatically strips off those newlines and <KBD
+CLASS="command"
+>showerr</KBD
+> would have to do the same thing.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>This program still shows multiple instances of the same lines of code, because I apply my "surround the error" algorithm for each error, even when these errors apply to the same line or consecutive lines.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The program automatically indents the source and error text to the eighth column. This works for the first line of a long error message, but all other lines (broken up by embedded newline characters) are justified flush with the left margin. It just doesn't look very professional.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>showerr</KBD
+> procedure uses LPAD to put just the right number of spaces (based on the position column value) in front of an asterisk so as to point to the location in the line where the error was found. Yet when the program runs, the <KBD
+CLASS="command"
+>*</KBD
+> always ends up on the first column. It turns out that when you display output with PUT_LINE in SQL*Plus, all leading spaces are trimmed. The LPAD is rendered useless.</P
+></LI
+></OL
+><P
+CLASS="para"
+>The reason I detail all of these issues for you is to emphasize a truth that I learn over and over again (unfortunately) as I develop my software: </P
+><TABLE
+CLASS="simplelist"
+BORDER="0"
+><TR
+><TD
+CLASS="member"
+><EM
+CLASS="emphasis"
+>Everything is always more complicated than it seems at first glance.</EM
+></TD
+></TR
+></TABLE
+><P
+CLASS="para"
+>The conclusions you should draw from this process are:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Design your software to be as flexible and extensible as possible. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Use top-down design to ensure that you call modules rather than execute an endless, complex series of statements. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Use packages from the get-go, because you are going to find that your standalone module really does belong with other programs in a package. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>When you build functions, think about different ways that they might be used, and design that wider scope into the initial implementation (taking care to avoid gratuitous scope-creep).</P
+></LI
+></UL
+><P
+CLASS="para"
+>In the meantime, though, I have a <KBD
+CLASS="command"
+>showerr</KBD
+> procedure that simply doesn't make the grade. Let's see what can be done to this standalone procedure to at least make it more useful than the original <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> solution.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch15-SECT-4.2.7"
+>15.4.2.7 Showing code just once</A
+></H4
+><P
+CLASS="para"
+>We will now enhance the <KBD
+CLASS="command"
+>showerr</KBD
+> procedure found in <KBD
+CLASS="command"
+>showerr1.sp</KBD
+>. The result is stored in the <KBD
+CLASS="command"
+>showerr2.sp</KBD
+> file in the <I
+CLASS="filename"
+>use</I
+> subdirectory. To my mind, a sensible requirement for <KBD
+CLASS="command"
+>showerr</KBD
+> would be that it never display a line of code more than once. If more than one error occurs on a line, the line is displayed once and multiple error messages are placed below it. If errors occur on consecutive lines, then the overlap of code around those lines should include those lines. </P
+><P
+CLASS="para"
+>The easiest way to detect whether a line has already been displayed is to keep track of the last line number displayed. In the following version of the procedure's loops, the <KBD
+CLASS="command"
+>last_line</KBD
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998817-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998817-1"
+></A
+> variable is initialized to 0 and then set to the current line number after it is displayed. A line is now only displayed if it is greater than the last line number.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FOR err_rec IN err_cur
+LOOP
+   FOR line_ind IN 
+       err_rec.line-2 .. err_rec.line+2
+   LOOP
+      IF last_line &lt; line_ind
+      THEN
+         /* 
+         || Display the source &amp; error...
+         || This must be changed too!
+         */
+      END IF;
+      last_line := GREATEST (last_line, line_ind);
+   END LOOP;
+END LOOP;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>As noted in the comment above, the logic required to display the source and error must now also be adjusted. If I am going to display a line of source code only once, then I have to take special care to make sure that all error messages are displayed. In the first version of <KBD
+CLASS="command"
+>showerr</KBD
+>, I displayed the error when the inner FOR loop's line index equaled the outer cursor FOR loop error record's line number:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>IF line_ind = err_rec.line
+THEN
+   ...
+END IF;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This same test will no longer work. Suppose I have an error on lines 4 and 6. While the outer loop is still working with the error on line 4, the inner loop will have displayed line 6 and set the <KBD
+CLASS="command"
+>last_line</KBD
+> to 6. When the outer loop moves on to line 6, the inner loop will not display this line a second time. So when and how will I display the error information for line 6?</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch15-SECT-4.2.8"
+>15.4.2.8 Fine-tuning code display</A
+></H4
+><P
+CLASS="para"
+>I will need to discard the simplistic check for a match on error line number and current source line number. Instead, whenever I have not yet displayed a line, I will call the <KBD
+CLASS="command"
+>display_line</KBD
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998818-0"
+></A
+> procedure to show it and then also call a new local module, <KBD
+CLASS="command"
+>display_err</KBD
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998819-0"
+></A
+>, to display the error information if that line does indeed have an associated row in the USER_ERRORS view:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FOR err_rec IN err_cur
+LOOP
+   FOR line_ind IN 
+       err_rec.line-2 .. err_rec.line+2
+   LOOP
+      IF last_line &lt; line_ind
+      THEN
+         display_line (line_ind);
+         display_err (line_ind);
+      END IF;
+      last_line := GREATEST (last_line, line_ind);
+   END LOOP;
+END LOOP;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>display_err</KBD
+> program is virtually identical to <KBD
+CLASS="command"
+>display_line</KBD
+>, except that it fetches from USER_ERRORS, not USER_SOURCE, and shows the error position as well as the error information. This procedure is shown below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE display_err (line_in IN INTEGER)
+IS
+   CURSOR err_cur
+   IS
+     SELECT line, position, text
+       FROM user_errors
+      WHERE name = UPPER (name_in)
+        AND type = UPPER (type_in)
+        AND line = line_in;
+   err_rec err_cur%ROWTYPE;
+BEGIN
+  OPEN err_cur;
+  FETCH err_cur INTO err_rec;
+  IF err_cur%FOUND
+  THEN
+     DBMS_OUTPUT.PUT_LINE
+        (LPAD ('*', err_rec.position+8));
+     DBMS_OUTPUT.PUT_LINE
+        (RTRIM (RPAD ('ERR', 8) || err_rec.text, CHR(10)));
+  END IF;
+  CLOSE err_cur;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>If the supplied line does not have an error, then the <KBD
+CLASS="command"
+>err_cur%FOUND</KBD
+> attribute returns FALSE and nothing is displayed. </P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch15-SECT-4.2.9"
+>15.4.2.9 Tracing showerr execution</A
+></H4
+><P
+CLASS="para"
+>To understand more clearly the way that output is controlled in <KBD
+CLASS="command"
+>showerr2.sp</KBD
+>, consider this scenario: my ten-line program has compile errors on line 4 and then again on line 6. <A
+CLASS="xref"
+HREF="ch15_04.htm#ch15-30869"
+>Table 15.1</A
+> shows the progression of the counters and their impact on the display of information.</P
+><BR><TABLE
+CLASS="table"
+BORDER="1"
+CELLPADDING="3"
+><CAPTION
+CLASS="table"
+><A
+CLASS="title"
+NAME="ch15-30869"
+>Table 15.1: Progression of Counters and Display Actions </A
+></CAPTION
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Error Line (outer loop)</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Line Ind (inner loop)</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Last Line</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Source Displayed?</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Error Displayed?</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>4</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>2</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>0</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Yes</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>4</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>3</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>2</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Yes</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>4</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>4</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>3</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Yes</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Yes</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>4</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>5</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>4</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Yes</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>4</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>6</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>5</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Yes</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Yes</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>6</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>4</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>6</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>6</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>5</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>6</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>6</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>6</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>6</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>6</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>7</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>6</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Yes</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>6</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>8</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>7</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Yes</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+>No line is ever displayed twice but there still is a problem with the <KBD
+CLASS="command"
+>showerr</KBD
+> loop: it will sometimes display one or more blank lines with "phony" line numbers. Suppose that a program has five lines of code and there is an error on line 4. The inner FOR loop will execute for line numbers 2 through 6. There isn't any line 7, so the <KBD
+CLASS="command"
+>display_line</KBD
+> program will not fetch any records. It will, however, still go ahead and call DBMS_OUTPUT.PUT_LINE (see source above for the <KBD
+CLASS="command"
+>display_line</KBD
+> procedure). This hole can be plugged as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>  OPEN src_cur;
+  FETCH src_cur INTO src_rec;
+  IF src_cur%FOUND
+  THEN
+     /* display the line */
+  END IF;
+  CLOSE src_cur;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Now <KBD
+CLASS="command"
+>showerr</KBD
+> only displays a line once and then only if it is actually in the USER_SOURCE view. In addition, it displays the USER_ERRORS information for each line with an error, even if it is first displayed as the surrounding code for an earlier error.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch15-SECT-4.2.10"
+>15.4.2.10 Cleaning up the output</A
+></H4
+><P
+CLASS="para"
+>I identified earlier a number of ways in which the output from <KBD
+CLASS="command"
+>showerr</KBD
+> was deficient. We've handled some of the most critical deficiencies. Let's take up some of the more cosmetic adjustments:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Properly position the asterisk for error position.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Get rid of blank lines.<A
+CLASS="indexterm"
+NAME="ch15-idx-998820-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998820-1"
+></A
+></P
+></LI
+></OL
+><P
+CLASS="para"
+>You just can't get away with padding a string with spaces on the left and displaying that indentation. The spaces will be stripped out by the time the user sees the output. How do you get around this problem? Prefix your string with some non-blank characters, then stick in the requisite number of spaces to move your string to the right position. </P
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>p</KBD
+> package of PL/Vision has, in fact, a builtin prefix feature. But for <KBD
+CLASS="command"
+>showerr</KBD
+> and our currently non-PL/Vision based implementation, we will use a prefix which makes the error stand out from the lines of source code and has a meaning specific to this program. </P
+><P
+CLASS="para"
+>My approach is to use ERR as a prefix, as shown below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>4          dbms_output.putline ('hello world!');
+ERR                    *
+ERR     PLS-00302: component 'PUTLINE' must be declared</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>It's not hard to accomplish this. I simply change these calls to PUT_LINE:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DBMS_OUTPUT.PUT_LINE (LPAD ('*', err_rec.position+8));
+DBMS_OUTPUT.PUT_LINE (LPAD (err_rec.text, 8));</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>to the following calls:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DBMS_OUTPUT.PUT_LINE ('ERR' || LPAD ('*', err_rec.position+5));
+DBMS_OUTPUT.PUT_LINE (LPAD ('ERR', 8) || err_rec.text);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Now let's get rid of those blank lines. By default, when you display a line of code from USER_SOURCE, you will end up with a blank line after the code. This occurs because there actually is a newline character (CHR(10)) at the end of each line. So if you want to end up with a display of error which is actually readable, you will need to get rid of those trailing newlines. The best way to do this is with RTRIM, as shown below for the two different calls to PUT_LINE for code:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DBMS_OUTPUT.PUT_LINE
+   (RTRIM (RPAD (TO_CHAR (line_in), 8) || src_rec.text, CHR (10)));
+DBMS_OUTPUT.PUT_LINE
+   (RTRIM (RPAD ('ERR', 8) || err_rec.text, CHR(10)));</PRE
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch15-SECT-4.2.11"
+>15.4.2.11 <A
+CLASS="indexterm"
+NAME="ch15-idx-998821-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998821-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998821-2"
+></A
+>Consolidating redundant code</A
+></H4
+><P
+CLASS="para"
+>Notice all the redundancies between these two calls? They cry out to be modularized into a single procedure:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE err_put_line 
+   (prefix_in IN VARCHAR2, text_in IN VARCHAR2)
+IS
+BEGIN
+   DBMS_OUTPUT.PUT_LINE
+      (RTRIM (RPAD (prefix_in, 8) || text_in, CHR(10)));
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>With this procedure, the two calls to DBMS_OUTPUT.PUT_LINE become:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>err_put_line (TO_CHAR (line_in), src_rec.txt);
+err_put_line ('ERR', err_rec.text);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>By taking this approach, I hide the specific implementation required to get my output correct (right-padding to length of eight, right-trimming the newline characters). This guarantees that the format of both these lines will be consistent with each other. And if I need to add extra lines as I enhance the procedure, I can simply call <KBD
+CLASS="command"
+>err_put_line</KBD
+> and not have to worry about remembering all the details.</P
+><P
+CLASS="para"
+>The only problem I identified in <KBD
+CLASS="command"
+>showerr1.sp</KBD
+> which is not now corrected in <KBD
+CLASS="command"
+>showerr2.sp</KBD
+> has to do with the way that long error messages are wrapped and then pushed to the left margin. The ideal solution would take the long error message, strip out newline characters and then rewrap the text at the specified line length. The techniques and code required to do this are described in <CITE
+CLASS="citetitle"
+>Chapter 11</CITE
+> of <CITE
+CLASS="citetitle"
+>Oracle PL/SQL Programming</CITE
+>, in <CITE
+CLASS="citetitle"
+>Character Function Examples</CITE
+>. I have also incorporated string-wrapping into the PLVprs package (PL/Vision PaRSe), as you will see in my presentation below of the PL/Vision version of <KBD
+CLASS="command"
+>showerr</KBD
+>, namely <KBD
+CLASS="command"
+>Plvvu.err</KBD
+>.</P
+><P
+CLASS="para"
+>Even without word wrap, the <KBD
+CLASS="command"
+>showerr</KBD
+> procedure now does a pretty fair job of enhancing SHOW ERRORS, as shown below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec showerr ('procedure','greetings');
+2       is
+3       begin
+4          dbms_output.putline ('hello world!');
+ERR                    *
+ERR     PLS-00302: component 'PUTLINE' must be declared
+5          open blob;
+ERR             *
+ERR     PLS-00201: identifier 'BLOB' must be declared
+6       end;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+><A
+CLASS="xref"
+HREF="ch15_04.htm#ch15-14361"
+>Example 15.1</A
+> shows the full implementation of <KBD
+CLASS="command"
+>showerr2.sp</KBD
+>'s version of the <KBD
+CLASS="command"
+>showerr</KBD
+> procedure. Notice that <KBD
+CLASS="command"
+>showerr</KBD
+> does not in any way depend on or make use of PL/Vision packages.</P
+><DIV
+CLASS="example"
+><H4
+CLASS="example"
+><A
+CLASS="title"
+NAME="ch15-14361"
+>Example 15.1: The Final Version of showerr </A
+></H4
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE PROCEDURE showerr 
+   (type_in IN VARCHAR2, name_in IN VARCHAR2)
+IS
+   last_line INTEGER := 0;
+   
+   CURSOR err_cur 
+   IS
+      SELECT line, text
+        FROM user_errors 
+       WHERE name = UPPER (name_in)
+         AND type = UPPER (type_in)
+       ORDER BY line;
+
+   /* Local Modules */   
+
+   PROCEDURE err_put_line 
+      (prefix_in IN VARCHAR2, text_in IN VARCHAR2)
+   IS
+   BEGIN
+      DBMS_OUTPUT.PUT_LINE
+         (RTRIM (RPAD (prefix_in, 8) || text_in, CHR(10)));
+   END;
+
+   PROCEDURE display_line (line_in IN INTEGER)
+   IS
+      CURSOR src_cur
+      IS
+        SELECT S.line, S.text
+          FROM user_source S
+         WHERE S.name = UPPER (name_in)
+           AND S.type = UPPER (type_in)
+           AND S.line = line_in;
+      src_rec src_cur%ROWTYPE;
+   BEGIN
+     OPEN src_cur;
+     FETCH src_cur INTO src_rec;
+     IF src_cur%FOUND
+     THEN
+        err_put_line (TO_CHAR (line_in), src_rec.text);
+     END IF;
+     CLOSE src_cur;
+   END;
+
+   PROCEDURE display_err (line_in IN INTEGER)
+   IS
+      CURSOR err_cur
+      IS
+        SELECT line, position, text
+          FROM user_errors
+         WHERE name = UPPER (name_in)
+           AND type = UPPER (type_in)
+           AND line = line_in;
+      err_rec err_cur%ROWTYPE;
+   BEGIN
+     OPEN err_cur;
+     FETCH err_cur INTO err_rec;
+     IF err_cur%FOUND
+     THEN
+        DBMS_OUTPUT.PUT_LINE ('ERR' || LPAD ('*', err_rec.position+5));
+        err_put_line ('ERR', err_rec.text);
+     END IF;
+     CLOSE err_cur;
+   END;
+
+BEGIN
+   /* Main body of procedure. Loop through all error lines. */
+   FOR err_rec IN err_cur
+   LOOP
+      /* Show the surrounding code. */
+      FOR line_ind IN err_rec.line-2 .. err_rec.line+2
+      LOOP
+         IF last_line &lt; line_ind
+         THEN
+            display_line (line_ind);
+            display_err (line_ind);
+         END IF;
+         last_line := GREATEST (last_line, line_ind);
+      END LOOP;
+   END LOOP;
+END;
+/</PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch15-SECT-4.2.12"
+>15.4.2.12 From prototype to finished product</A
+></H4
+><P
+CLASS="para"
+>We now have in hand a working prototype of a program to display more useful compile error information. It is a relatively sophisticated piece of code; it has three local modules, manipulates the contents of the data dictionary, and compensates for several idiosyncrasies of DBMS_OUTPUT in SQL*Plus. There is still a big difference, though, between a program which validates "proof of concept" and a polished utility that handles all circumstances gracefully.</P
+><P
+CLASS="para"
+>I will list a few of the ideas I have uncovered to improve upon <KBD
+CLASS="command"
+>showerr</KBD
+>. Then I will show you how I implemented some of these improvements with the PLVvu package (PL/Vision VU), which builds upon many other PL/Vision packages.</P
+><P
+CLASS="para"
+>Here are ways I could improve the functionality and usability of <KBD
+CLASS="command"
+>showerr</KBD
+>:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Reduce to an absolute minimum the typing required in order to get error information. So far it has been necessary to type all of this:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec showerr('procedure','greetings');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>to obtain the needed feedback. This is lots more typing than SHO ERR (the minimum required by SQL*Plus). If developers are really going to use my alternative, I know that it has to be as easy and painless to use as possible. </P
+><P
+CLASS="para"
+>With the PLVvu package, I can replace the above verbose request to "show errors of last compile" with the following:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec PLVvu.err</PRE
+></BLOCKQUOTE
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Improve the flexibility of <KBD
+CLASS="command"
+>showerr</KBD
+>. For example, I have hard-coded at 2 the number of lines of code by which the error is surrounded. Why not let the developer specify the number of lines desired (setting the default at 2)? The PLVvu package provides this flexibility as the following example shows (the request results in five lines of code before and after the line with the error):</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec PLVvu.set_overlap (5);</PRE
+></BLOCKQUOTE
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Spruce up the error display. Two examples implemented by PLVvu are: (a) include a header explaining what is being shown and (b) place a border in the error listing when lines of code have been skipped. Both of these techniques are illustrated below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>-----------------------------------------------------------------------
+PL/Vision Error Listing for PROCEDURE TEMPPROC
+-----------------------------------------------------------------------
+Line#  Source
+-----------------------------------------------------------------------
+   11    PROCEDURE display_line (line_in IN INTEGER)
+   12    IS
+   13       CURSOR src_cur
+ERR                 *
+    PLS-00341: declaration of cursor 'SRC_CUR' is incomplete or
+    malformed
+   14       IS
+   15         SELECT S.line, S.text
+-----------------------------------------------------------------------
+   32  end;
+   33 BEGIN
+   34    FOR err_rec IN err_cur1
+ERR                      *
+    PLS-00201: identifier 'ERR_CUR1' must be declared
+   35    LOOP
+   36       FOR line_ind IN err_rec.line-fff .. err_rec.line+2
+-----------------------------------------------------------------------</PRE
+></BLOCKQUOTE
+></LI
+></OL
+><P
+CLASS="para"
+><KBD
+CLASS="command"
+>PLVvu.err</KBD
+> achieves improvements in ease of use and output appearance through two means:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Tweaking the logic used in <KBD
+CLASS="command"
+>showerr</KBD
+> to handle certain conditions more gracefully. Compare the source code in <KBD
+CLASS="command"
+>plvvu.spb</KBD
+> (in the <I
+CLASS="filename"
+>install </I
+>directory) with that of <KBD
+CLASS="command"
+>showerr2.sp</KBD
+> (in the <I
+CLASS="filename"
+>use</I
+> directory) for examples of these differences.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Leveraging existing PL/Vision packages to both consolidate code and improve functionality. PLVobj is used to obtain the name of the last object compiled. PLVio and PLVobj are used to read the text from USER_SOURCE. PLVprs adds paragraph-wrapping capability to the display of long error messages. </P
+></LI
+></OL
+><P
+CLASS="para"
+>There isn't anything really complicated in the body of <KBD
+CLASS="command"
+>PLVvu.err</KBD
+>, because so much of it has been modularized&nbsp;-- either elsewhere within the PLVvu package or into other, prebuilt packages like PLVobj and PLVio. </P
+><P
+CLASS="para"
+>As you build increasing numbers of generalized, reusable packages, you will find that the development and debugging time required for new programs decreases dramatically. Even though I do not explain in this chapter the complete implementations of my various PL/Vision packages, you should be able to see how they "plug-and-play". You can do the same thing in your own environment, to meet your own application-specific requirements.<A
+CLASS="indexterm"
+NAME="ch15-idx-998822-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch15-idx-998822-1"
+></A
+></P
+></DIV
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch15_03.htm"
+TITLE="15.3 Displaying Source Code"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 15.3 Displaying Source Code"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Advanced Oracle PL/SQL Programming with Packages"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Advanced Oracle PL/SQL Programming with Packages"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch16_01.htm"
+TITLE="16. PLVgen: Generating PL/SQL Programs"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 16. PLVgen: Generating PL/SQL Programs"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>15.3 Displaying Source Code</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>16. PLVgen: Generating PL/SQL Programs</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG
+SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly & Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

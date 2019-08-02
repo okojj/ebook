@@ -1,0 +1,137 @@
+<html><head>
+<title>Recipe 17.14. Writing a Multi-Homed Server</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:43Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch17_01.htm" title="17. Sockets"><link rel="prev" href="ch17_14.htm" title="17.13. Non-Forking Servers"><link rel="next" href="ch17_16.htm" title="17.15. Making a Daemon Server"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_14.htm" title="17.13. Non-Forking Servers"><img src="../gifs/txtpreva.gif" alt="Previous: 17.13. Non-Forking Servers" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch17_01.htm" title="17. Sockets">Chapter 17<br>Sockets</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_16.htm" title="17.15. Making a Daemon Server"><img src="../gifs/txtnexta.gif" alt="Next: 17.15. Making a Daemon Server" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch17-17381">17.14. Writing a Multi-Homed Server</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1838">Problem<a class="indexterm" name="ch17-idx-1000004864-0"></A
+><a class="indexterm" name="ch17-idx-1000004864-1"></A
+><a class="indexterm" name="ch17-idx-1000004864-2"></A
+><a class="indexterm" name="ch17-idx-1000004864-3"></A
+><a class="indexterm" name="ch17-idx-1000004864-4"></A
+></A
+></H3
+><p class="para">You want to write a server that knows that the machine it runs on has multiple IP addresses, and that it should possibly do different things for each address.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1844">Solution</A
+></H3
+><p class="para">Don't bind your server to a particular address. Instead, bind to <code class="literal">INADDR_ANY</CODE
+>. Then, once you've <code class="literal">accept</CODE
+>ed a connection, use <code class="literal">getsockname</CODE
+> on the client socket to find out which address they connected to:</P
+><pre class="programlisting">use Socket;
+
+socket(SERVER, PF_INET, SOCK_STREAM, getprotobyname('tcp'));
+setsockopt(SERVER, SOL_SOCKET, SO_REUSEADDR, 1);
+bind(SERVER, sockaddr_in($server_port, INADDR_ANY))
+    or die &quot;Binding: $!\n&quot;;
+
+# accept loop
+while (accept(CLIENT, SERVER)) {
+    $my_socket_address = getsockname(CLIENT);
+    ($port, $myaddr)   = sockaddr_in($my_socket_address);
+}</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1874">Discussion</A
+></H3
+><p class="para">Whereas <code class="literal">getpeername</CODE
+><a class="indexterm" name="ch17-idx-1000004870-0"></A
+> (as discussed in <a class="xref" href="ch17_08.htm" title="Identifying the Other End of a Socket">Recipe 17.7</A
+>) returns the address of the remote end of the socket, <code class="literal">getsockname</CODE
+> returns the address of the local end. When we've bound to <code class="literal">INADDR_ANY</CODE
+>, thus accepting connections on any address the machine has, we need to use <code class="literal">getsockname</CODE
+> to identify which address the client connected to.</P
+><p class="para">If you're using IO::Socket::INET, your code will look like this:</P
+><pre class="programlisting">$server = IO::Socket::INET-&gt;new(LocalPort =&gt; $server_port,
+                                Type      =&gt; SOCK_STREAM,
+                                Proto     =&gt; 'tcp',
+                                Listen    =&gt; 10)
+    or die &quot;Can't create server socket: $@\n&quot;;
+
+while ($client = $server-&gt;accept()) {
+    $my_socket_address = $client-&gt;sockname();
+    ($port, $myaddr)   = sockaddr_in($my_socket_address);
+    # ...
+}</PRE
+><p class="para">If you don't specify a local port to <code class="literal">IO::Socket::INET-&gt;new</CODE
+>, your socket will be bound to <code class="literal">INADDR_ANY</CODE
+>.</P
+><p class="para">If you want your server to listen only for a <em class="emphasis">particular</EM
+> virtual host, don't use <code class="literal">INADDR_ANY</CODE
+>. Instead, bind to a specific host address:</P
+><pre class="programlisting">use Socket;
+
+$port = 4269;                       # port to bind to
+$host = &quot;specific.host.com&quot;;        # virtual host to listen on
+
+socket(Server, PF_INET, SOCK_STREAM, getprotobyname(&quot;tcp&quot;))
+    or die &quot;socket: $!&quot;;
+bind(Server, sockaddr_in($port, inet_aton($host)))
+    or die &quot;bind: $!&quot;;
+while ($client_address = accept(Client, Server)) {
+    # ...
+}<a class="indexterm" name="ch17-idx-1000004866-0"></A
+><a class="indexterm" name="ch17-idx-1000004866-1"></A
+><a class="indexterm" name="ch17-idx-1000004866-2"></A
+><a class="indexterm" name="ch17-idx-1000004866-3"></A
+><a class="indexterm" name="ch17-idx-1000004866-4"></A
+></PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1932">See Also</A
+></H3
+><p class="para">The 
+<a class="olink" href="../prog/ch03_067.htm">&#13;
+<code class="literal">getsockname</CODE
+></A
+> function in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlfunc </I
+>(1); the documentation for the standard Socket and IO::Socket modules; the section on 
+<a class="olink" href="../prog/ch06_02.htm#PERL2-CH-6-SECT-2.4"> "Sockets"</A
+> in <a class="olink" href="../prog/ch06_01.htm">Chapter 6</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> or <i class="filename">perlipc </I
+>(1)</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_14.htm" title="17.13. Non-Forking Servers"><img src="../gifs/txtpreva.gif" alt="Previous: 17.13. Non-Forking Servers" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_16.htm" title="17.15. Making a Daemon Server"><img src="../gifs/txtnexta.gif" alt="Next: 17.15. Making a Daemon Server" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">17.13. Non-Forking Servers</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">17.15. Making a Daemon Server</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

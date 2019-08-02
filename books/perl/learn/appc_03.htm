@@ -1,0 +1,92 @@
+<html><head>
+<title>[Appendix C] C.3 An Interactive Client</TITLE>
+<meta name="DC.title" content="Learning Perl"><meta name="DC.creator" content="Randal Schwartz, Tom Christiansen &amp; Larry Wall"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:37:32Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-284-0" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="appc_01.htm" title="C. Networking Clients"><link rel="prev" href="appc_02.htm" title="C.2 A Webget Client"><link rel="next" href="appc_04.htm" title="C.4 Further Reading on Networking"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Learning Perl" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Learning Perl"><area shape="RECT" coords="467,0,514,18" href="../search/lsrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="appc_02.htm" title="C.2 A Webget Client"><img src="../gifs/txtpreva.gif" alt="Previous: C.2 A Webget Client" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="appendix" rel="up" href="appc_01.htm" title="C. Networking Clients">Appendix C<br>Networking Clients</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="appc_04.htm" title="C.4 Further Reading on Networking"><img src="../gifs/txtnexta.gif" alt="Next: C.4 Further Reading on Networking" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="appc-pgfId-100">C.3 An Interactive Client</A
+></H2
+><p class="para">It's pretty easy to make a client that just reads everything from a server, or that sends one command, gets one answer, and quits. But what about setting up something fully interactive, like <em class="emphasis">telnet </EM
+>? That way you can type a line, get the answer, type a line, get the answer, and so on. (OK, usually <em class="emphasis">telnet</EM
+> operates in character mode, not line mode, but you get the idea.) </P
+><p class="para">This client is more complicated than the two we've done so far, but if you're on a system that supports the powerful <code class="literal">fork</CODE
+> call, the solution isn't that rough. Once you've made the connection to whatever service you'd like to chat with, call <code class="literal">fork</CODE
+> to clone your process. Each of these two identical processes has a very simple job to do: the parent copies everything from the socket to standard output, while the child simultaneously copies everything from standard input to the socket. To accomplish the same thing using just one process would be much harder, because it's easier to code two processes to do one thing than it is to code one process to do two things.[<a class="footnote" href="#appc-pgfId-1000000768">5</A
+>]</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="appc-pgfId-1000000768">[5]</A
+> This keep-it-simple principle is one of the cornerstones of the UNIX philosophy, and good software engineering as well, which is probably why it's spread to other systems as well. </P
+></DIV
+></BLOCKQUOTE
+><p class="para">Here's the code: </P
+><pre class="programlisting">#!/usr/bin/perl -w
+use strict;
+use IO::Socket;
+my ($host, $port, $kidpid, $handle, $line);
+unless (@ARGV == 2) { die &quot;usage: $0 host port&quot; }
+($host, $port) = @ARGV;
+# create a tcp connection to the specified host and port
+$handle = IO::Socket::INET-&gt;new(Proto =&gt; &quot;tcp&quot;,
+    PeerAddr =&gt; $host,
+    PeerPort =&gt; $port)
+    or die &quot;can't connect to port $port on $host: $!&quot;;
+$handle-&gt;autoflush(1); # so output gets there right away
+print STDERR &quot;[Connected to $host:$port]\n&quot;;
+# split the program into two processes, identical twins
+die &quot;can't fork: $!&quot; unless defined($kidpid = fork());
+# the if{} block runs only in the parent process
+if ($kidpid) { 
+    # copy the socket to standard output
+    while (defined ($line = &lt;$handle&gt;)) {
+    print STDOUT $line;
+    }
+    kill(&quot;TERM&quot;, $kidpid); # send SIGTERM to child
+}
+# the else{} block runs only in the child process
+else { 
+    # copy standard input to the socket
+    while (defined ($line = &lt;STDIN&gt;)) {
+    print $handle $line;
+    }
+}</PRE
+><p class="para">The <code class="literal">kill</CODE
+> function in the parent's <code class="literal">if</CODE
+> block is there to send a signal to our child process (current running in the <code class="literal">else</CODE
+> block) as soon as the remote server has closed its end of the connection. </P
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="appc_02.htm" title="C.2 A Webget Client"><img src="../gifs/txtpreva.gif" alt="Previous: C.2 A Webget Client" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Learning Perl"><img src="../gifs/txthome.gif" alt="Learning Perl" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="appc_04.htm" title="C.4 Further Reading on Networking"><img src="../gifs/txtnexta.gif" alt="Next: C.4 Further Reading on Networking" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">C.2 A Webget Client</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">C.4 Further Reading on Networking</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

@@ -1,0 +1,306 @@
+<html><head>
+<title>Recipe 16.10. Communicating Between Related Processes</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:43:53Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch16_01.htm" title="16. Process Management and Communication"><link rel="prev" href="ch16_10.htm" title="16.9. Controlling the Input, Output, and Error of Another Program"><link rel="next" href="ch16_12.htm" title="16.11. Making a Process Look Like a File with Named Pipes"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_10.htm" title="16.9. Controlling the Input, Output, and Error of Another Program"><img src="../gifs/txtpreva.gif" alt="Previous: 16.9. Controlling the Input, Output, and Error of Another Program" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch16_01.htm" title="16. Process Management and Communication">Chapter 16<br>Process Management and Communication</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch16_12.htm" title="16.11. Making a Process Look Like a File with Named Pipes"><img src="../gifs/txtnexta.gif" alt="Next: 16.11. Making a Process Look Like a File with Named Pipes" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch16-14419">16.10. Communicating Between Related Processes</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1604">Problem<a class="indexterm" name="ch16-idx-1000006345-0"></A
+><a class="indexterm" name="ch16-idx-1000006345-1"></A
+><a class="indexterm" name="ch16-idx-1000006345-2"></A
+></A
+></H3
+><p class="para">You have two related processes that need to communicate, and you need better control than you can get from <code class="literal">open</CODE
+>, <code class="literal">system</CODE
+>, and backticks.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1610">Solution</A
+></H3
+><p class="para">Use <code class="literal">pipe</CODE
+> and then <code class="literal">fork</CODE
+>:</P
+><pre class="programlisting">pipe(READER, WRITER);
+if (fork) {
+    # run parent code, either reading or writing, not both
+} else {
+    # run child code, either reading or writing, not both
+}</PRE
+><p class="para">Or use a special forking form of <code class="literal">open</CODE
+>:</P
+><pre class="programlisting">if ($pid = open(CHILD, &quot;|-&quot;)) {
+        # run parent code, writing to child
+} else {
+    die &quot;cannot fork: $!&quot; unless defined $pid;
+    # otherwise run child code here, reading from parent
+}</PRE
+><p class="para">Or, going the other way:</P
+><pre class="programlisting">if ($pid = open(CHILD, &quot;-|&quot;)) {
+    # run parent code, reading from child
+} else {
+    die &quot;cannot fork: $!&quot; unless defined $pid;
+    # otherwise run child code here, writing to parent
+}</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1656">Discussion</A
+></H3
+><p class="para">Pipes are simply two connected filehandles, where data written to one filehandle can be read by the other. The <code class="literal">pipe</CODE
+> function creates two filehandles linked in this way, one writable and one readable. Even though you can't take two already existing filehandles and link them, <code class="literal">pipe</CODE
+> can be used for communication between processes. One process creates a pair of filehandles with the <code class="literal">pipe</CODE
+> functions, then forks off a child, resulting in two distinct processes both running in the same program, each with a copy of the connected filehandles.</P
+><p class="para">It doesn't matter which process is the reader and which is the writer, so long as one of them takes one role and its peer process takes the other. You can only have one-way communication. (But read on.)</P
+><p class="para">We'll pull in the IO::Handle module so we can call its <em class="emphasis"></EM
+><a class="indexterm" name="ch16-idx-1000006357-0"></A
+><code class="literal">autoflush()</CODE
+> method. (You could instead play the <code class="literal">select</CODE
+> games described in <a class="xref" href="ch07_01.htm" title="File Access">Chapter 7, <cite class="chapter">File Access</CITE
+></A
+>, if you prefer a lightweight solution.) If we didn't, our single line of output would get lodged in the pipe and not make it through to the other side until we closed that handle.</P
+><p class="para">The version of the parent writing to the child is shown in <a class="xref" href="#ch16-16018" title="pipe1">Example 16.3</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch16-16018">Example 16.3: pipe1</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch16-idx-1000006351-0"></A
+>pipe1 - use pipe and fork so parent can send to child
+
+use IO::Handle;
+pipe(READER, WRITER);
+WRITER-&gt;autoflush(1);
+
+if ($pid = fork) {
+    close READER;
+    print WRITER &quot;Parent Pid $$ is sending this\n&quot;;
+    close WRITER;
+    waitpid($pid,0);
+} else {
+    die &quot;cannot fork: $!&quot; unless defined $pid;
+    close WRITER;
+    chomp($line = &lt;READER&gt;);
+    print &quot;Child Pid $$ just read this: `$line'\n&quot;;
+    close READER;  # this will happen anyway
+    exit;
+}</PRE
+></DIV
+><p class="para">In the examples in this recipe, most error checking has been left as an exercise for the reader. This is so you can more clearly see how the functions interact. In real life, test the return values of all system calls.</P
+><p class="para">The version of the child writing to the parent is shown in <a class="xref" href="#ch16-26121" title="pipe2">Example 16.4</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch16-26121">Example 16.4: pipe2</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch16-idx-1000006352-0"></A
+>pipe2 - use pipe and fork so child can send to parent
+
+use IO::Handle;
+pipe(READER, WRITER);
+WRITER-&gt;autoflush(1);
+
+if ($pid = fork) {
+    close WRITER;
+    chomp($line = &lt;READER&gt;);
+    print &quot;Parent Pid $$ just read this: `$line'\n&quot;;
+    close READER;
+    waitpid($pid,0);
+} else {
+    die &quot;cannot fork: $!&quot; unless defined $pid;
+    close READER;
+    print WRITER &quot;Child Pid $$ is sending this\n&quot;;
+    close WRITER;  # this will happen anyway
+    exit;
+}</PRE
+></DIV
+><p class="para">In most code, both halves would go into loops, with the reader continuing to read until end of file. This happens when the writer closes or exits.</P
+><p class="para">Because piped filehandles are not bidirectional, each process uses just one of the pair and closes the filehandle it doesn't use. The reason is subtle; picture the situation where the reader does not close the writable filehandle. If the writer then exits while the reader is trying to read something, the reader will hang forever. This is because the system won't tell the reader that there's no more data to be read until all copies of the writable filehandle are closed.</P
+><p class="para">The <code class="literal">open</CODE
+><a class="indexterm" name="ch16-idx-1000006358-0"></A
+><a class="indexterm" name="ch16-idx-1000006358-1"></A
+> function, when passed as its second argument either <code class="literal">&quot;-|&quot;</CODE
+> or <code class="literal">&quot;|-&quot;</CODE
+> will implicitly pipe and fork. This makes the piping code above slightly easier. The child talks to the parent over STDIN or STDOUT, depending on whether <code class="literal">&quot;-|&quot;</CODE
+> or <code class="literal">&quot;|-&quot;</CODE
+> was used.</P
+><p class="para">Using <code class="literal">open</CODE
+> this way, if the parent wants to write to the child, it does something like what's shown in <a class="xref" href="#ch16-36681" title="pipe3">Example 16.5</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch16-36681">Example 16.5: pipe3</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch16-idx-1000006353-0"></A
+>pipe3 - use forking open so parent can send to child
+
+use IO::Handle;
+if ($pid = open(CHILD, &quot;|-&quot;)) {
+    CHILD-&gt;autoflush(1);
+    print CHILD &quot;Parent Pid $$ is sending this\n&quot;;
+    close(CHILD);
+} else {
+    die &quot;cannot fork: $!&quot; unless defined $pid;
+    chomp($line = &lt;STDIN&gt;);
+    print &quot;Child Pid $$ just read this: `$line'\n&quot;;
+    exit;
+}</PRE
+></DIV
+><p class="para">Since the child already has STDIN set to the parent, the child could <code class="literal">exec</CODE
+> some other program that expects to read from standard input, such as <em class="emphasis">lpr</EM
+>. In fact, this is useful and commonly done.</P
+><p class="para">If the child wants to write to the parent, it does something like what's shown in <a class="xref" href="#ch16-42618" title="pipe4">Example 16.6</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch16-42618">Example 16.6: pipe4</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch16-idx-1000006354-0"></A
+>pipe4 - use forking open so child can send to parent
+
+use IO::Handle;
+if ($pid = open(CHILD, &quot;-|&quot;)) {
+    chomp($line = &lt;CHILD&gt;);
+    print &quot;Parent Pid $$ just read this: `$line'\n&quot;;
+    close(CHILD);
+} else {
+    die &quot;cannot fork: $!&quot; unless defined $pid;
+    STDOUT-&gt;autoflush(1);
+    print STDOUT &quot;Child Pid $$ is sending this\n&quot;;
+    exit;
+}</PRE
+></DIV
+><p class="para">Again, since the child already has its STDOUT connected to the parent, this child could <code class="literal">exec</CODE
+> some other program to produce something interesting on its standard output. That output would be available to the parent as input from &lt;<code class="literal">CHILD&gt;</CODE
+>.</P
+><p class="para">When using <code class="literal">open</CODE
+> this way, we don't have to manually call <code class="literal">waitpid</CODE
+> since we didn't do a manual fork. We do have to call <code class="literal">close</CODE
+>, though. In both cases, the <code class="literal">$?</CODE
+> variable will have the child's wait status in it (see <a class="xref" href="ch16_20.htm" title="Avoiding Zombie Processes">Recipe 16.19</A
+> to see how to interpret this status value).</P
+><p class="para">The preceding examples were unidirectional. What if you want both processes talking to each other? Just make two calls to <code class="literal">pipe</CODE
+> before forking. You must be careful about who tells whom what and when, though, or you're apt to deadlock. (See <a class="xref" href="#ch16-42071" title="pipe5">Example 16.7</A
+>.)</P
+><div class="example"><h4 class="example"><a class="title" name="ch16-42071">Example 16.7: pipe5</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch16-idx-1000006355-0"></A
+>pipe5 - bidirectional communication using two pipe pairs
+#         designed for the socketpair-challenged
+use IO::Handle;
+pipe(PARENT_RDR, CHILD_WTR);
+pipe(CHILD_RDR,  PARENT_WTR);
+CHILD_WTR-&gt;autoflush(1);
+PARENT_WTR-&gt;autoflush(1);
+
+if ($pid = fork) {
+    close PARENT_RDR; close PARENT_WTR;
+    print CHILD_WTR &quot;Parent Pid $$ is sending this\n&quot;;
+    chomp($line = &lt;CHILD_RDR&gt;);
+    print &quot;Parent Pid $$ just read this: `$line'\n&quot;;
+    close CHILD_RDR; close CHILD_WTR;
+    waitpid($pid,0);
+} else {
+    die &quot;cannot fork: $!&quot; unless defined $pid;
+    close CHILD_RDR; close CHILD_WTR;
+    chomp($line = &lt;PARENT_RDR&gt;);
+    print &quot;Child Pid $$ just read this: `$line'\n&quot;;
+    print PARENT_WTR &quot;Child Pid $$ is sending this\n&quot;;
+    close PARENT_RDR; close PARENT_WTR;
+    exit;
+}</PRE
+></DIV
+><p class="para">That's getting complicated. It just so happens that there's a special system call, shown in <a class="xref" href="#ch16-38392" title="pipe6">Example 16.8</A
+>, that makes the last example simpler. It's called <code class="literal">socketpair</CODE
+>, and it works like <code class="literal">pipe</CODE
+>, except that both handles can be used for reading and for writing.</P
+><div class="example"><h4 class="example"><a class="title" name="ch16-38392">Example 16.8: pipe6</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch16-idx-1000006356-0"></A
+>pipe6 - bidirectional communication using socketpair
+#   &quot;the best ones always go both ways&quot;
+
+use Socket;
+use IO::Handle;
+# We say AF_UNIX because although *_LOCAL is the
+# POSIX 1003.1g form of the constant, many machines
+# still don't have it.
+socketpair(CHILD, PARENT, AF_UNIX, SOCK_STREAM, PF_UNSPEC)
+    or  die &quot;socketpair: $!&quot;;
+
+CHILD-&gt;autoflush(1);
+PARENT-&gt;autoflush(1);
+
+if ($pid = fork) {
+    close PARENT;
+    print CHILD &quot;Parent Pid $$ is sending this\n&quot;;
+    chomp($line = &lt;CHILD&gt;);
+    print &quot;Parent Pid $$ just read this: `$line'\n&quot;;
+    close CHILD;
+    waitpid($pid,0);
+} else {
+    die &quot;cannot fork: $!&quot; unless defined $pid;
+    close CHILD;
+    chomp($line = &lt;PARENT&gt;);
+    print &quot;Child Pid $$ just read this: `$line'\n&quot;;
+    print PARENT &quot;Child Pid $$ is sending this\n&quot;;
+    close PARENT;
+    exit;
+}</PRE
+></DIV
+><p class="para">In fact, some systems have historically implemented pipes as two half-closed ends of a socketpair. They essentially define <code class="literal">pipe(READER,</CODE
+> <code class="literal">WRITER)</CODE
+> this way:</P
+><pre class="programlisting">socketpair(READER, WRITER, AF_UNIX, SOCK_STREAM, PF_UNSPEC);
+shutdown(READER, 1);        # no more writing for reader
+shutdown(WRITER, 0);        # no more reading for writer</PRE
+><p class="para">On Linux kernels before 2.0.34, the <i class="filename">shutdown (2)</I
+> system call was broken. Instead of telling the reader not to write and the writer not to read, you had to tell the reader not to read and the writer not to write.<a class="indexterm" name="ch16-idx-1000006347-0"></A
+><a class="indexterm" name="ch16-idx-1000006347-1"></A
+><a class="indexterm" name="ch16-idx-1000006347-2"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1950">See Also</A
+></H3
+><p class="para"><a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> or <i class="filename">perlfunc </I
+>(1) for all functions used here; the documentation for the standard IPC::Open2 module; <em class="emphasis">Advanced Programming in the Unix Environment</EM
+>; <a class="xref" href="ch16_09.htm" title="Controlling Input and Output of Another Program">Recipe 16.8</A
+>; <a class="xref" href="ch19_07.htm" title="Executing Commands Without Shell Escapes">Recipe 19.6</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_10.htm" title="16.9. Controlling the Input, Output, and Error of Another Program"><img src="../gifs/txtpreva.gif" alt="Previous: 16.9. Controlling the Input, Output, and Error of Another Program" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch16_12.htm" title="16.11. Making a Process Look Like a File with Named Pipes"><img src="../gifs/txtnexta.gif" alt="Next: 16.11. Making a Process Look Like a File with Named Pipes" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">16.9. Controlling the Input, Output, and Error of Another Program</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">16.11. Making a Process Look Like a File with Named Pipes</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

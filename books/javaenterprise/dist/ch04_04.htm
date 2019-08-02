@@ -1,0 +1,550 @@
+<html>
+<head>
+<title>Networked Threads (Java Distributed Computing)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jim Farley">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-206-9E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Networked Threads">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm" alt="Java Distributed Computing"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch04_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch04_03.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch04_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch04_01.htm">Chapter 4: Threads</a></td><td align="right" valign="top" width="172"><a href="ch05_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch05_01.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">4.4. Networked Threads</h2>
+
+<p>
+<a name="INDEX-541"></a><a name="INDEX-542"></a>
+We've seen how to make separate threads of control in a Java
+applet or application, and we've discussed the various ways
+that the Java API allows you to manage threads at runtime. Now
+we'll go over some of the issues that arise with multithreaded
+distributed applications, and how the Java environment helps you deal
+with them.
+</p>
+
+<a name="JDP-CH-4-SECT-4.1"></a>
+<h3 class="sect2">4.4.1. Asynchronous Agents</h3>
+
+<p>
+<a name="INDEX-543"></a><a name="INDEX-544"></a>The threaded implementation of our
+<tt class="literal">Solver</tt> interface in <a href="ch04_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch04_02.htm">Example 4-1</a>
+shows how multithreaded servers can be implemented in Java. This
+allows our server to respond to clients asynchronously and to service
+their requests in parallel, which can reduce the amount of time a
+client has to wait for a response. The alternative is to have a
+server with only one thread servicing clients on a first-come,
+first-serve basis. So if client A is the first client to make a
+request, the server begins processing it right away. If client B
+makes a request while the server is processing client A's job,
+then B will have to wait for the server to finish A's job
+before its job can be started. In fact, client B won't even get
+an acknowledgment from the server until client A's job is done.
+With the multithreaded server, an independent thread can listen for
+client requests and acknowledge them almost immediately (or as soon
+as the thread scheduler gives it a CPU time slice). And with the jobs
+being allocated to separate threads for processing, the CPU resources
+will be spread out between the two jobs, and B's job will
+potentially finish sooner (though client A's job might finish
+later, since it is now getting less than 100% of the CPU).
+</p>
+
+<p>Threads are useful in any distributed system where we want an agent
+to respond to asynchronous messages. By isolating communications in a
+separate thread, the other threads in the process can continue to do
+useful work while the communications thread blocks on a socket
+waiting for messages. The client process shown in <a href="ch04_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch04_02.htm">Example 4-3</a> only has a single thread, since it
+doesn't really have anything else to do but wait for the server
+to send a response. But we could easily reuse these classes in a
+multithreaded client as a single communications thread, or as
+multiple threads talking to multiple servers.<a name="INDEX-545"></a><a name="INDEX-546"></a>
+</p>
+
+
+<a name="JDP-CH-4-SECT-4.2"></a>
+<h3 class="sect2">4.4.2. Distributed ThreadGroups</h3>
+
+<p>
+<a name="INDEX-547"></a><a name="INDEX-548"></a><a name="INDEX-549"></a><a name="INDEX-550"></a>You can probably imagine
+situations where it would be useful to define a
+<tt class="literal">ThreadGroup</tt> that includes
+<tt class="literal">Thread</tt>s from several agent processes in a
+distributed application. A distributed database application, for
+example, might be designed such that each agent contains a thread
+responsible for routing SQL calls to one of the databases in the
+system. If the database suddenly becomes temporarily unavailable,
+perhaps for some administrative task, then you might like to be able
+to perform a batch <tt class="literal">suspend()</tt> on all of the
+threads in the distributed system responsible for that database, to
+guarantee that the blocked threads don't attempt database
+connections until the database is fully online. When the database
+administration is complete and we get confirmation that the database
+is online, we can send a batch <tt class="literal">resume()</tt> to the
+distributed thread group to activate the threads again.
+</p>
+
+<p>Unfortunately, since the <tt class="literal">ThreadGroup</tt> class in
+the <tt class="literal">java.lang</tt> package is implemented with nearly
+all of the critical methods defined as <tt class="literal">final</tt>, we
+can't just extend this class to implement a distributed thread
+group. However, we can implement a distributed thread group by
+defining a class that can handle the network communications and use
+the existing <tt class="literal">ThreadGroup</tt> interface.
+</p>
+
+<p>
+<a href="#JDP-CH-4-EX-5">Example 4-4</a> shows the
+<tt class="literal">DistThreadGroup</tt><a name="INDEX-551"></a> class, which represents a group of
+threads distributed across the network. It basically acts as a local
+agent for a set of <tt class="literal">ThreadGroup</tt>s across the
+network, which might also include a <tt class="literal">ThreadGroup</tt>
+on the local host. The <tt class="literal">DistThreadGroup</tt> has two
+major tasks:
+</p>
+
+<ul>
+<li>
+<p>When a state change is requested locally (e.g., to suspend the thread
+group), it broadcasts the request to all other threads in the
+distributed group so that the entire distributed thread group changes
+state.
+</p>
+</li>
+<li>
+<p>It listens to a port on the local host for messages from other agents
+to change its state.
+</p>
+</li>
+</ul>
+
+<a name="JDP-CH-4-EX-5"></a>
+<div class="example">
+<h4 class="objtitle">Example 4-4. A Distributed Thread Group</h4>
+<blockquote>
+<pre class="programlisting">package dcj.utils.Thread;
+
+import java.lang.*;
+
+/*
+ * DistThreadGroup
+ *
+ *     Local representation of a group of threads distributed across 
+ * processes on the network. Allows for the definition and control of 
+ * distributed threads.  
+ *
+ */
+ 
+public class DistThreadGroup extends Thread {
+  // Protected instance variables
+  protected ThreadGroup  localGroup;
+  protected HashTable    remoteGroups;
+  protected ServerSocket incoming;
+  protected int          localPort;
+  
+  // Class variables
+  static final int       hostIdx = 0;
+  static final int       portIdx = 1;
+
+  // Public constructors
+  public DistThreadGroup(ThreadGroup g, int port) {
+    localGroup = g;
+    localPort = port;
+  }
+
+  public DistThreadGroup(int port) {
+    localGroup = new ThreadGroup();
+    localPort = port;
+  }
+
+  public DistThreadGroup(String rHost, int rPort, String gname, int port) {
+    localGroup = new ThreadGroup();
+    localPort = port
+    Add(gname, rHost, rPort);
+  }
+
+  // Add a remote thread group to this group
+  public void Add(String gname, String host, int port) {
+    RmtThreadGroup rg = new RmtThreadGroup(host, port);
+    remoteGroups.put(gname, rg);
+  }
+  
+  // Remove a thread group from this group
+  public void Remove(String gname) {
+    remoteGroups.remove(gname);
+  }  
+
+  // Get the local thread group belonging to this distributed group
+  public ThreadGroup GetLocalGroup() {
+    return localGroup;
+  }
+  
+  // Implementation of Thread::run - checks its port on the current machine
+  // waiting for messages from remote members of this group.
+  public void run() {
+    incoming = new ServerSocket(localPort);
+    while (true) {
+      Socket peer = incoming.accept();
+      DataInputStream is = new DataInputStream(peer.getInputStream());
+      String input = is.readUTF();
+      if (input.compareTo("suspend") == 0)
+        suspend();
+      else if (input.compareTo("resume") == 0)
+        resume();
+      //
+      // Check for other messages here ("stop", "start", etc.)
+      // ...                           
+      else {
+        System.out.println("DistThreadGroup: Received unknown command \""
+                           + input + "\"");
+      }
+    }
+  }
+
+  // Suspend the group of threads. If requested, the suspend
+  // command is sent to the remote threads first, then the local group
+  // is suspended.
+  public synchronized void suspend(boolean bcast) {
+    if (bcast) 
+      broadcastCmd("suspend");
+      
+    if (localGroup)
+      localGroup.suspend();
+  }
+  
+  // Resume the group of threads. If requested, the resume 
+  // command is sent to the remote threads first, then the 
+  // local group is resumed.
+  public synchronized void resume(boolean bcast) {
+    if (bcast)
+      broadcastCmd("resume");
+      
+    if (localGroup)
+      localGroup.resume();
+  }
+  
+  //
+  //  Implement other methods corresponding to ThreadGroup methods here
+  //  (e.g. resume(), stop())
+  //  ...
+  
+  // Broadcast the given message to the remote thread groups.
+  protected void broadcastCmd(String cmd) {
+    Enumeration e = remoteGroups.elements();
+    while (e.hasMoreElements()) {
+      RmtThreadGroup rg = (RmtThreadGroup)e.nextElement();
+      try {
+        Socket s = new Socket(rg.getHost(), rg.getPort());
+        DataOutputStream os = new DataOutputStream(s.getOutputStream());
+        os.writeUTF(cmd);
+      }
+      catch (Exception e) {
+        System.out.println("DistThreadGroup: Failed to " + cmd
+                           " group at \"" + rg.getHost() + ":"
+                           + rg.getPort());
+      }
+    }
+  }
+}</pre>
+</blockquote>
+</div>
+
+
+<p>The <tt class="literal">DistThreadGroup</tt> represents the distributed
+thread group using a local <tt class="literal">ThreadGroup</tt> and a
+hashtable of remote thread groups. The remote thread groups are
+represented by a <tt class="literal">RmtThreadGroup</tt><a name="INDEX-552"></a> class, which for this example
+is simply a host/port pair, as shown in <a href="#JDP-CH-4-EX-6">Example 4-5</a>.
+The host and port number pairs indicate how to contact the
+<tt class="literal">DistThreadGroup</tt>s running on the remote host, and
+they are keyed in the hashtable using a name, which is just a way to
+refer to the remote group locally.
+</p>
+
+<a name="JDP-CH-4-EX-6"></a>
+<div class="example">
+<h4 class="objtitle">Example 4-5. A Utility Class for Tracking Remote Thread Groups</h4>
+<blockquote>
+<pre class="programlisting">package dcj.utils.Thread;
+
+import java.lang.String;
+
+public class RmtThreadGroup {
+  protected String host = "";
+  protected int port = 0;
+ 
+  public RmtThreadGroup() {}
+  
+  public RmtThreadGroup(String h, int p) {
+    host = h;
+    port = p;
+  }
+
+  public String getHost() { return host; }
+  public int getPort() { return port; }
+  public void setHost(String h) { host = h; }
+  public void setPort(int p) { port = p; }
+}</pre>
+</blockquote>
+</div>
+
+<a name="INDEX-553"></a>
+
+<p>When a state change is made to the
+<tt class="literal">DistThreadGroup</tt> by calling one of its methods,
+the change is broadcast to the remote thread groups, then the change
+is made to the local thread group. To broadcast the change, we
+sequentially open a socket to each remote thread group's host
+and port number, then send a message to the remote group indicating
+the change to make. The only methods shown in the example are the
+<tt class="literal">suspend()</tt><a name="INDEX-554"></a><a name="INDEX-555"></a> and
+<tt class="literal">resume()</tt> methods, but you can imagine how the
+other <tt class="literal">ThreadGroup</tt> methods would be implemented.
+If its <tt class="literal">bcast</tt> argument is
+<tt class="literal">true</tt>, then the <tt class="literal">suspend()</tt> and
+<tt class="literal">resume()</tt> methods use the
+<tt class="literal">broadcastCmd()</tt><a name="INDEX-556"></a>
+method to send the same command to each remote thread group. The
+<tt class="literal">broadcastCmd()</tt> method iterates through the
+contents of the hashtable, and for each host/port pair, it opens up a
+socket to the host, attaches a <tt class="literal">DataOutputStream</tt>
+to the output stream of the socket, and sends the command string to
+the remote process. After the command has been broadcast to the
+remote groups, then the <tt class="literal">suspend()</tt> and
+<tt class="literal">resume()</tt> methods call the corresponding method
+on the local <tt class="literal">ThreadGroup</tt>, either suspending or
+resuming all of its threads.
+</p>
+
+<p>Each <tt class="literal">DistThreadGroup</tt> is also a
+<tt class="literal">Thread</tt>, whose <tt class="literal">run()</tt> method
+listens on a port for messages coming in from remote thread groups,
+telling it to change its state. When a connection is made on its
+port, the <tt class="literal">DistThreadGroup</tt> checks for a message
+on the socket's input stream. It then calls the appropriate
+method as indicated by the message. Note that when receiving
+state-change messages over the socket, the
+<tt class="literal">DistThreadGroup</tt> calls the local version of the
+state-change method with the <tt class="literal">bcast</tt> argument set
+to <tt class="literal">false</tt>. We assume that the agent originating the
+message will broadcast it to the other agents in the distributed
+group, so the receiving agent doesn't need to repeat the
+broadcast.
+</p>
+
+<p>One flaw in this design is that the
+<tt class="literal">DistThreadGroup</tt> could be added locally to the
+<tt class="literal">ThreadGroup</tt> that it's managing. If a
+request to suspend the distributed group is received, then the
+<tt class="literal">DistThreadGroup</tt> will suspend the remote groups,
+and then suspend the local group--and in the process suspend
+itself. If we try to call <tt class="literal">resume()</tt> on the same
+<tt class="literal">DistThreadGroup</tt> object, the method won't
+run, because the <tt class="literal">DistThreadGroup</tt>'s local
+thread is still suspended. We won't be able to resume the
+distributed thread group until the <tt class="literal">resume()</tt>
+method is called directly on either the
+<tt class="literal">DistThreadGroup</tt>, or on its local
+<tt class="literal">ThreadGroup</tt><a name="INDEX-557"></a> .<a name="INDEX-558"></a><a name="INDEX-559"></a><a name="INDEX-560"></a><a name="INDEX-561"></a>
+</p>
+
+
+<a name="JDP-CH-4-SECT-4.3"></a>
+<h3 class="sect2">4.4.3. Improving Efficiency with Thread Priorities</h3>
+
+<p>
+<a name="INDEX-562"></a><a name="INDEX-563"></a><a name="INDEX-564"></a>As we mentioned previously, thread
+priorities don't guarantee a particular processing order. They
+only influence the thread scheduling algorithm. But this influence
+can be a powerful way to control the <em class="emphasis">perceived</em>
+performance of your application, especially in situations where you
+have a good idea of how quickly you want the threads to run relative
+to each other.
+</p>
+
+<p>As always, things are more complicated in a distributed system, where
+there are processes located across the network, each containing its
+own threads and thread priorities. Presumably, these processes are
+working together to complete some job, so ideally we'd like to
+have the thread priorities coordinated to match the relationships
+between the processes and threads in the system. What this means
+exactly depends on the job you're trying to do and the
+environment in which you're trying to do it.
+</p>
+
+<p>Let's assume that you're running your distributed system
+in an ideal environment: each host has the same operating system, CPU
+resources, memory, current load, etc. Now suppose that you're
+running a group of identical agent processes on this cluster of
+hosts, with the same number of agents on each host. Maybe each agent
+is solving a piece of a large problem, like a finite-element
+analysis; or perhaps each agent represents a node in a replicated
+database system. Under these assumptions, we should be able to come
+up with optimal thread priorities for the threads in each agent in
+the system. Since the hosts and the agents are completely homogenous,
+we can use a single host and agent, figure out the best thread
+priorities for that agent, and then use those priorities on all of
+the other agents in the distributed system.
+</p>
+
+<p>In the distributed solver, for example, each agent is made up of two
+threads: one responsible for solving its piece of the problem, and
+another responsible for communicating with other agents in the system
+(broadcasting status or results, for example). The
+<tt class="literal">RunnableSolverServer</tt> classes are threads that
+listen for client requests and the
+<tt class="literal">RunnableSolver</tt> classes are threads that are
+"spun off " by the server to handle each request coming
+from remote clients. In general, we want to give the communication
+thread a higher priority than the CPU threads, so that it has a
+chance of getting some CPU time to check for requests, or to send off
+a few messages before the computation continues. Unless the computing
+job we give the <tt class="literal">RunnableSolver</tt>s is really
+trivial, the <tt class="literal">RunnableSolver</tt> threads are going to
+be running full-speed almost continuously, demanding as much CPU time
+as they can get. If we give them a higher priority than the I/O
+thread, the I/O thread will probably be blocked for long periods of
+time waiting for the computing threads either to finish or to
+<tt class="literal">yield()</tt> to other threads running on the same
+CPU.
+</p>
+
+<p>If we can't rely on homogeneous agents and hosts, finding the
+best set of priorities for the threads in each agent isn't so
+simple. If we have several different kinds of agents composed of
+various types of threads, and these threads are interacting with each
+other in various ways, then we need to understand the major trends in
+these interactions in order to come up with optimal thread priorities
+for each agent. If we also have different types of hosts in our
+distributed system, we can't make assumptions about the
+underlying system that the Java runtime is using (single- or
+multiple-CPU, time-slicing or not, other applications sharing CPU
+load, etc.), so we can't foresee exactly how threads will be
+allocated CPU time and program it into our application.
+</p>
+
+<p>
+<a name="INDEX-565"></a><a name="INDEX-566"></a><a name="INDEX-567"></a><a name="INDEX-568"></a>
+In some cases the only way to make effective use of thread priorities
+is to have some way of monitoring the performance of your distributed
+system, and set thread priorities dynamically at runtime. Monitoring
+system performance is an issue of its own, and we won't go into
+detail about it here. Setting thread priorities dynamically is
+supported by the Java API within a single process on a single Java
+virtual machine, but we have to come up with a way to set priorities
+on threads across a distributed system. One way to do this is to
+extend our <tt class="literal">DistThreadGroup</tt> class in <a href="#JDP-CH-4-EX-5">Example 4-4</a> to allow us to both get and set priorities on
+threads in the entire distributed group. We could add
+<tt class="literal">getPriority()</tt> and
+<tt class="literal">setPriority()</tt> methods, for example, that take
+the remote group name as an argument, as well as the name of a thread
+in the remote thread group. This message could be passed on to the
+remote group the same way we pass state-change messages. Another
+approach would be to make a version of
+<tt class="literal">DistThreadGroup</tt> that is also an RMI remote
+object. Then remote agents could get a stub for the
+<tt class="literal">DistThreadGroup</tt> and call the
+<tt class="literal">getPriority()</tt> and
+<tt class="literal">setPriority()</tt> methods directly.
+</p>
+
+<p>Now that I've shown how distributed thread priority
+manipulation is possible in the Java environment, I have to admit
+that it's probably not something that will be commonly used.
+The overhead that you'll need to monitor and reason about the
+running state of the distributed system in order to calculate optimal
+thread priorities will usually outweigh the performance improvements
+that you'll be able to get by trying to influence thread
+scheduling.<a name="INDEX-569"></a><a name="INDEX-570"></a><a name="INDEX-571"></a>
+</p>
+
+
+<a name="JDP-CH-4-SECT-4.4"></a>
+<h3 class="sect2">4.4.4. Synchronizing Distributed Threads</h3>
+
+<p>
+<a name="INDEX-572"></a><a name="INDEX-573"></a><a name="INDEX-574"></a>
+The ability to synchronize threads is a necessity in situations where
+data is accessible and modifiable by multiple threads. This
+synchronization is easily extendible to distributed situations, where
+data is accessible to multiple agents on the network. The simplest
+example is one where some runtime data in a Java process is
+accessible by multiple agents in a distributed application. If we
+wanted to allow clients to query our multithreaded solvers for their
+current problem sets, we could easily synchronize this access by
+making the <tt class="literal">Problem()</tt> methods on the
+<tt class="literal">Solver</tt>s synchronized. Since this method is the
+only means for accessing a problem set, doing a local synchronization
+on it ensures that every accessor, whether it's a local thread
+or an external agent making a request over a socket, will have
+synchronous access to the <a name="INDEX-575"></a><a name="INDEX-576"></a><a name="INDEX-577"></a> data.<a name="INDEX-578"></a><a name="INDEX-579"></a><a name="INDEX-580"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch04_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch04_03.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch05_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch05_01.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">4.3. Managing Threads at Runtime</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">5. Security</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

@@ -1,0 +1,389 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 8] 8.8 NO_DATA_FOUND: Multipurpose Exception</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein &amp; Bill Pribyl"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T18:58:20Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates CD-ROM-1-56592-335-9E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-335-9E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle PL/SQL"><META
+NAME="DC.Title"
+CONTENT="Oracle PL/SQL Programming, 2nd Edition"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch08_01.htm"
+TITLE="8. Exception Handlers"><LINK
+REL="prev"
+HREF="ch08_07.htm"
+TITLE="8.7 Client-Server Error Communication"><LINK
+REL="next"
+HREF="ch08_09.htm"
+TITLE="8.9 Exception Handler as IF Statement"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd Edition"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch08_07.htm"
+TITLE="8.7 Client-Server Error Communication"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 8.7 Client-Server Error Communication"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch08_01.htm"
+TITLE="8. Exception Handlers"
+>Chapter 8<BR>Exception Handlers</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch08_09.htm"
+TITLE="8.9 Exception Handler as IF Statement"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 8.9 Exception Handler as IF Statement"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="SQL2-CH-8-SECT-8"
+>8.8 NO_DATA_FOUND: Multipurpose Exception</A
+></H2
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch08-idx-963075-1"
+></A
+> <A
+CLASS="indexterm"
+NAME="ch08-idx-963075-2"
+></A
+>The NO_DATA_FOUND exception is raised under three different circumstances: </P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>An implicit query returns no data.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>You attempt to reference a row in a PL/SQL table which has not been defined. (PL/SQL tables are covered in <A
+CLASS="xref"
+HREF="ch10_01.htm"
+>Chapter 10, <CITE
+CLASS="chapter"
+>PL/SQL Tables</CITE
+></A
+>.) </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>You attempt to read past the end of an operating system file (using TEXT_IO in the Oracle Developer 2000 environment or UTL_FILE in PL/SQL Release 2.3). </P
+></LI
+></UL
+><P
+CLASS="para"
+>This overlapping use of the same exception could cause some confusion and difficulty in your program. Suppose that in a single PL/SQL block I query from an implicit cursor and also make references to a PL/SQL table's rows. The NO_DATA_FOUND exception could be raised from either source, but the actual problem that caused the exception would be very different: bad data in the database (raised by the implicit cursor) versus an illegal memory reference (raised by the table access). </P
+><P
+CLASS="para"
+>I want to be able to distinguish between the two situations. I can accomplish this by nesting the SELECT statement (the implicit cursor) inside its own PL/SQL block and thus trapping the NO_DATA_FOUND exception distinct from the PL/SQL table exception. </P
+><P
+CLASS="para"
+>In the version of company_name shown in the following example, I have added a parameter to specify two types of access: from database (access type = DBMS) or from a PL/SQL table (access type = MEMORY). I want to check for NO_DATA_FOUND for each particular instance: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION company_name
+   (id_in IN NUMBER, access_type_in IN VARCHAR2)
+RETURN VARCHAR2
+IS
+   /* Return value of the function */
+   return_value VARCHAR2 (60);
+
+   /* My own exception - used to represent bad data NO_DATA_FOUND. */
+   bad_data_in_select EXCEPTION;
+
+BEGIN
+   /* Retrieve company name from the database */
+   IF access_type_in = 'DBMS'
+   THEN
+      /* Place the SELECT inside its own BEGIN-END. */
+      BEGIN
+         SELECT name INTO return_value
+           FROM company
+          WHERE company_id = id_in;
+         RETURN return_value;
+
+      /* Now it can have its OWN exception section too ! */
+      EXCEPTION
+         /* This NO_DATA_FOUND is only from the SELECT. */
+         WHEN NO_DATA_FOUND
+         THEN
+            /*
+            || Raise my exception to propagate to
+            || the main body of the function.
+            */
+            RAISE bad_data_in_select;
+      END;
+
+   /* Retrieve company name from an in-memory PL/SQL table */
+   ELSIF access_type_in = 'MEMORY'
+   THEN
+      /*
+      || Direct access from table. If this ID is not defined
+      || then the NO_DATA_FOUND exception is raised.
+      */
+      RETURN company_name_table (id_in);
+   END IF;
+EXCEPTION
+   /*
+   || This exception occurs only when NO_DATA_FOUND was raised by
+   || the implicit cursor inside its own BEGIN-END.
+   */
+   WHEN bad_data_in_select
+   THEN
+      DBMS_OUTPUT.PUT_LINE
+         (' Unable to locate company in database!');
+   /*
+   || This exception occurs only when I have not previously placed
+   || the company name for company id id_in in the table.
+   */
+   WHEN NO_DATA_FOUND
+   THEN
+      DBMS_OUTPUT.PUT_LINE
+         (' Unable to locate company in memorized table!');
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>You can see how the scoping rules for exceptions provide a great deal of flexibility in managing the impact of exceptions. Whenever you want to isolate the effect of a raised exception, just nest the statements inside their own BEGIN-END, give them their own exception section, and then decide what you want to do when the problem occurs. You are guaranteed to trap it there first.<A
+CLASS="indexterm"
+NAME="AUTOID-7873"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-7874"
+></A
+> </P
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch08_07.htm"
+TITLE="8.7 Client-Server Error Communication"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 8.7 Client-Server Error Communication"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming, 2nd Edition"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch08_09.htm"
+TITLE="8.9 Exception Handler as IF Statement"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 8.9 Exception Handler as IF Statement"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>8.7 Client-Server Error Communication</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>8.9 Exception Handler as IF Statement</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

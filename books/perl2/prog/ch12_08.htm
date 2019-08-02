@@ -1,0 +1,279 @@
+<html>
+<head>
+<title>Managing Class Data (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Managing Class Data">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch12_07.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch12_01.htm">Chapter 12: Objects</a></td><td align="right" valign="top" width="172"><a href="ch12_09.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">12.8. Managing Class Data</h2>
+
+<p>
+<a name="INDEX-2584"></a><a name="INDEX-2585"></a><a name="INDEX-2586"></a><a name="INDEX-2587"></a>
+We've looked at several approaches to accessing per-object data
+values.  Sometimes, though, you want some common state shared by all
+objects of a class.  Instead of being an attribute of just one instance
+of the class, these variables are global to the entire class, no matter
+which class instance (object) you use to access them through.  (C++
+programmers would think of these as static member data.)  Here are
+some situations where class variables might come in handy:</p>
+
+<ul>
+<li>
+<p>To keep a count of all objects ever created, or how many are
+still kicking around.</p>
+</li>
+<li>
+<p>To keep a list of all objects over which you can iterate.</p>
+</li>
+<li>
+<p>To store the name or file descriptor of a log file used by
+a class-wide debugging method.</p>
+</li>
+<li>
+<p>To keep collective data, like the total amount of cash dispensed by
+all ATMs in a network in a given day.</p>
+</li>
+<li>
+<p>To track the last object created by a class, or the most accessed object.</p>
+</li>
+<li>
+<p>To keep a cache of in-memory objects that have already been reconstituted
+from persistent memory.</p>
+</li>
+<li>
+<p>To provide an inverted lookup table so you can find an object based on
+the value one of its attributes.</p>
+</li>
+</ul>
+<p>
+<a name="INDEX-2588"></a>
+The question comes down to deciding where to store the state for
+those shared attributes.  Perl has no particular syntactic mechanism
+to declare class attributes, any more than it has for instance
+attributes.  Perl provides the developer with a broad set of powerful
+but flexible features that can be uniquely crafted to the particular
+demands of the situation.  You can then select the mechanism
+that makes the most sense for the given situation instead of having
+to live with someone else's design decisions.  Alternatively, you
+can live with the design decisions someone else has packaged up
+and put onto CPAN.  Again, TMTOWTDI.</p>
+
+<p>Like anything else pertaining to a class, class data shouldn't be
+accessed directly, especially from outside the implementation of the
+class itself.  It doesn't say much for encapsulation to set up
+carefully controlled accessor methods for instance variables but then
+invite the public in to diddle your class variables directly, such as
+by setting <tt class="literal">$SomeClass::Debug = 1</tt>.  To establish a
+clear firewall between interface and implementation, you can create
+accessor methods to manipulate class data similar to those you use for
+instance data.</p>
+
+<p>
+<a name="INDEX-2589"></a>
+Imagine we want to keep track of the total world population of
+<tt class="literal">Critter</tt> objects.  We'll store that number in a
+package variable, but provide a method called
+<tt class="literal">population</tt> so that users of the class don't have to
+know about the implementation.</p>
+
+<blockquote>
+<pre class="programlisting">Critter-&gt;population()       # Access via class name
+$gollum-&gt;population()       # Access via instance</pre>
+</blockquote>
+
+<p>Since a class in Perl is just a package, the most natural place to
+store class data is in a package variable.  Here's a simple
+implementation of such a class.  The <tt class="literal">population</tt>
+method ignores its invocant and just returns the current value of the
+package variable, <tt class="literal">$Population</tt>.  (Some programmers
+like to capitalize their globals.)
+<blockquote>
+<pre class="programlisting">package Critter;
+our $Population = 0;
+sub population { return $Population; }
+sub DESTROY { $Population-- }
+sub spawn {
+    my $invocant = shift;
+    my $class = ref($invocant) || $invocant;
+    $Population++;
+    return bless { name =&gt; shift || "anon" }, $class;
+}
+sub name {
+    my $self = shift;
+    $self-&gt;{name} = shift if @_;
+    return $self-&gt;{name};
+}</pre>
+</blockquote>
+<a name="INDEX-2590"></a><a name="INDEX-2591"></a>
+If you want to make class data methods that work like accessors
+for instance data, do this:
+<blockquote>
+<pre class="programlisting">our $Debugging = 0;     # class datum
+sub debug {
+    shift;              # intentionally ignore invocant
+    $Debugging = shift if @_;
+    return $Debugging;
+}</pre>
+</blockquote>
+<a name="INDEX-2592"></a>
+Now you can set the overall debug level through the class or through
+any of its instances.</p>
+
+<p>
+<a name="INDEX-2593"></a>
+Because it's a package variable, <tt class="literal">$Debugging</tt> is
+globally accessible.  But if you change the <tt class="literal">our</tt>
+variable to <tt class="literal">my</tt>, then only code later in that same
+file can see it.  You can go still further--you can restrict
+unfettered access to class attributes even from the rest of class
+itself.  Wrap the variable declaration in a block scope:
+<blockquote>
+<pre class="programlisting">{
+    my $Debugging = 0;          # lexically scoped class datum
+    sub debug {
+        shift;                  # intentionally ignore invocant
+        $Debugging = shift if @_;
+
+        return $Debugging;
+    }
+}</pre>
+</blockquote>
+
+Now no one is allowed to read or write the class attributes without
+using the accessor method, since only that subroutine is in the
+same scope as the variable and has access to it.</p>
+
+<p>
+<a name="INDEX-2594"></a>
+If a derived class inherits these class accessors, then these still
+access the original data, no matter whether the variables were
+declared with <tt class="literal">our</tt> or <tt class="literal">my</tt>.  The data isn't package-relative.
+You might look at it as methods executing in the class in which
+they were originally defined, not in the class that invoked them.</p>
+
+<p>For some kinds of class data, this approach works fine, but for
+others, it doesn't.  Suppose we create a <tt class="literal">Warg</tt> subclass of
+<tt class="literal">Critter</tt>.  If we want to keep our populations separate, <tt class="literal">Warg</tt>
+can't inherit <tt class="literal">Critter</tt>'s population method, because that method
+as written always returns the value of <tt class="literal">$Critter::Population</tt>.</p>
+
+<p>You'll have to decide on a case-by-case basis whether it makes any
+sense for class attributes to be package relative.  If you want
+package-relative attributes, use the invocant's class to locate the package holding the class data:
+<blockquote>
+<pre class="programlisting">sub debug {
+    my $invocant = shift;
+    my $class   = ref($invocant) || $invocant;
+    my $varname = $class . "::Debugging";
+    no strict "refs";       # to access package data symbolically
+    $$varname = shift if @_;
+    return $$varname;
+}</pre>
+</blockquote>
+
+We temporarily rescind strict references because otherwise
+we couldn't use the fully qualified symbolic name for the package
+global.  This is perfectly reasonable: since all package variables
+by definition live in a package, there's nothing wrong with accessing
+them via that package's symbol table.</p>
+
+<p>
+<a name="INDEX-2595"></a>
+Another approach is to make everything an object needs--even its
+global class data--available via that object (or passed in as
+parameters).  To do this, you'll often have to make a dedicated
+constructor for each class, or at least have a dedicated initialization
+routine to be called by the constructor.  In the constructor or
+initializer, you store references to any class data directly in the
+object itself, so nothing ever has to go looking for it.  The
+accessor methods use the object to find a reference to the data.</p>
+
+<p>Rather than put the complexity of locating the class data in each
+method, just let the object tell the method where the data is located.
+This approach works well only when the class data accessor methods are invoked as
+instance methods, because the class data could be in unreachable
+lexicals you couldn't get at using a package name.</p>
+
+<p>
+<a name="INDEX-2596"></a>
+No matter how you roll it, package-relative class data is always a
+bit awkward.  It's really a lot cleaner if, when you inherit a class
+data accessor method, you effectively inherit the state data that
+it's accessing as well.  See the <em class="emphasis">perltootc</em> manpage for numerous, more
+elaborate approaches to management of class data.</p>
+
+<a name="INDEX-2597"></a><a name="INDEX-2598"></a>
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch12_07.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch12_09.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">12.7. Managing Instance Data</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">12.9. Summary</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

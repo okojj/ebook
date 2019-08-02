@@ -1,0 +1,397 @@
+<html>
+<head>
+<title>The Perl Debugger (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="The Perl Debugger">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch19_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="part3.htm">Part 3: Perl as Technology</a></td><td align="right" valign="top" width="172"><a href="ch20_02.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h1 class="chapter">Chapter 20.  The Perl Debugger</h1>
+<div class="htmltoc">
+<h4 class="tochead">Contents:</h4>
+<p>
+<a href="ch20_01.htm">Using the Debugger</a>
+<br>
+<a href="ch20_02.htm">Debugger Commands</a>
+<br>
+<a href="ch20_03.htm">Debugger Customization</a>
+<br>
+<a href="ch20_04.htm">Unattended Execution</a>
+<br>
+<a href="ch20_05.htm">Debugger Support</a>
+<br>
+<a href="ch20_06.htm">The Perl Profiler</a>
+<br>
+</p>
+</div>
+
+<p>
+<a name="INDEX-3498"></a><a name="INDEX-3499"></a><a name="INDEX-3500"></a><a name="INDEX-3501"></a><a name="INDEX-3502"></a><a name="INDEX-3503"></a>
+</p>
+
+<p>First of all, have you tried the <tt class="literal">use warnings</tt> pragma?
+<a name="INDEX-3504"></a>
+</p>
+
+<p>
+<a name="INDEX-3505"></a>
+If you invoke Perl with the <span class="option">-d</span> switch, your program
+will be run inside the Perl debugger.  This works like an interactive
+Perl environment, prompting for debugger commands that let you examine
+source code, set breakpoints, dump out your function-call stack,
+change the values of variables, and so on.  Any command not recognized
+by the debugger is directly executed (using <tt class="literal">eval</tt>)
+as Perl code in the package of the code currently being debugged. (The
+debugger uses the <tt class="literal">DB</tt> package for its own state
+information, to avoid trampling yours.)  This is so wonderfully
+convenient that people often fire up the debugger just to test out
+Perl constructs interactively.  In that case, it doesn't matter what
+program you tell Perl to debug, so we'll choose one without much
+meaning:
+<blockquote>
+<pre class="programlisting">
+<tt class="computeroutput">%</tt><tt class="userinput"><b> perl -de 42</b></tt>
+</pre>
+</blockquote>
+
+In Perl, the debugger is not a program completely separate from the
+one being debugged, the way it usually is in a typical programming
+environment.  Instead, the <span class="option">-d</span> flag tells the compiler
+to insert source information into the parse trees it's about to hand
+off to the interpreter.  That means your code must first compile
+correctly for the debugger to work on it.  If that is successful, the
+intrepreter preloads a special Perl library file containing the
+debugger itself.
+<blockquote>
+<pre class="programlisting">
+<tt class="computeroutput">%</tt><tt class="userinput"><b> perl -d /path/to/program</b></tt>
+</pre>
+</blockquote>
+
+The program will halt immediately before the first run-time executable
+statement (but see the section <a href="ch20_01.htm#ch20-sect-ud">Section 20.1, "Using the Debugger"</a> regarding
+compile-time statements) and ask you to enter a debugger command.
+Whenever the debugger halts and shows you a line of code, it displays
+the line that it's <em class="emphasis">about</em> to execute, not the one just executed.</p>
+
+<p>As the debugger encounters a line, it first checks for a breakpoint,
+prints it (if the debugger is in trace mode), performs any actions
+(created with the <tt class="literal">a</tt> command described later in "Debugger
+Commands"), and finally prompts the user if a breakpoint is present
+or if the debugger is in single-step mode.  If not, it evaluates the
+line normally and continues to the next line.</p>
+
+
+<h2 class="sect1">20.1. Using the Debugger</h2>
+
+<p>The debugger prompt is something like:
+<blockquote>
+<pre class="programlisting">DB&lt;8&gt;</pre>
+</blockquote>
+
+or even:
+<blockquote>
+<pre class="programlisting">DB&lt;&lt;17&gt;&gt;</pre>
+</blockquote>
+<a name="INDEX-3506"></a><a name="INDEX-3507"></a><a name="INDEX-3508"></a>
+</p>
+
+<p>where the number shows how many commands you've executed.  A
+<em class="emphasis">csh</em>-like history mechanism allows you to
+access previous commands by number.  For example,
+<tt class="literal">!17</tt> would repeat command number 17.  The number of
+angle brackets indicates the depth of the debugger.  For example, you
+get more than one set of brackets if you're already at a breakpoint
+and then print out the result of a function call that itself also has
+a breakpoint.</p>
+
+<p>
+<a name="INDEX-3509"></a>
+If you want to enter a multiline command, such as a subroutine
+definition with several statements, you may escape the newline that
+would normally end the debugger command with a backslash.  Here's an
+example:
+<blockquote>
+<pre class="programlisting">DB&lt;1&gt; <b class="emphasis-bold">for (1..3) {         \</b>
+  cont:     <b class="emphasis-bold">print "ok\n";    \</b>
+  cont: <b class="emphasis-bold">}</b>
+  ok
+  ok
+  ok</pre>
+</blockquote>
+
+Let's say you want to fire up the debugger on a little program of
+yours (let's call it <em class="emphasis">camel_flea</em>)
+and stop it as soon as it gets down to a function named
+<tt class="literal">infested</tt>.  Here's how you'd do that:
+<blockquote>
+<pre class="programlisting">
+<tt class="computeroutput">%</tt><tt class="userinput"><b> perl -d camel_flea</b></tt>
+
+Loading DB routines from perl5db.pl version 1.07
+Editor support available.
+
+Enter h or `h h' for help, or `man perldebug' for more help.
+
+main::(camel_flea:2):     pests('bactrian', 4);
+  DB&lt;1&gt;</pre>
+</blockquote>
+
+The debugger halts your program right before the first run-time
+executable statement (but see below about compile-time statements) and
+asks you to enter a command.  Again, whenever the debugger stops to
+show you a line of code, it displays the line it's
+<em class="emphasis">about</em> to execute, not the one it just executed.
+The line displayed may not look exactly like it did in your source
+file, particularly if you've run it through any kind of preprocessor.</p>
+
+<p>Now, you'd like to stop as soon as your program gets to the <tt class="literal">infested</tt>
+function, so you establish a breakpoint there like so:
+<blockquote>
+<pre class="programlisting">DB&lt;1&gt; <b class="emphasis-bold">b infested</b>
+DB&lt;2&gt; <b class="emphasis-bold">c</b>
+</pre>
+</blockquote>
+
+The debugger now continues until it hits that function, at which point
+it says this:
+<blockquote>
+<pre class="programlisting">main::infested(camel_flea:8):       my $bugs = int rand(3);</pre>
+</blockquote>
+</p>
+
+<p>
+<a name="INDEX-3510"></a>
+To look at a "window" of source code around the breakpoint, use
+the <tt class="literal">w</tt> command:
+<blockquote>
+<pre class="programlisting">DB&lt;2&gt; <b class="emphasis-bold">w</b>
+5     }
+6
+7       sub infested {
+8==&gt;b       my $bugs = int rand(3);
+9:          our $Master;
+10:         contaminate($Master);
+11:         warn "needs wash"
+12              if $Master &amp;&amp; $Master-&gt;isa("Human");
+13
+14:         print "got $bugs\n";
+
+DB&lt;2&gt;</pre>
+</blockquote>
+<a name="INDEX-3511"></a>
+As you see by the <tt class="literal">==&gt;</tt> marker, your current line
+is line 8, and by the <tt class="literal">b</tt> there, you know it has a
+breakpoint on it.  If you'` had set an action, there also would also
+have been an <tt class="literal">a</tt> there.  The line numbers with colons
+are breakable; the rest are not.</p>
+
+<p>
+<a name="INDEX-3512"></a><a name="INDEX-3513"></a>
+To see who called whom, ask for a stack backtrace using the <tt class="userinput"><b>T</b></tt> command:
+<blockquote>
+<pre class="programlisting">DB&lt;2&gt; <b class="emphasis-bold">T</b>
+$ = main::infested called from file `Ambulation.pm' line 4
+@ = Ambulation::legs(1, 2, 3, 4) called from file `camel_flea' line 5
+. = main::pests('bactrian', 4) called from file `camel_flea' line 2</pre>
+</blockquote>
+<a name="INDEX-3514"></a><a name="INDEX-3515"></a><a name="INDEX-3516"></a><a name="INDEX-3517"></a><a name="INDEX-3518"></a><a name="INDEX-3519"></a>
+</p>
+
+<p>The initial character (<tt class="literal">$</tt>, <tt class="literal">@</tt>, or
+<tt class="literal">.</tt>) tells whether the function was called in a
+scalar, list, or void context, respectively.  There are three lines
+because you were three functions deep when you ran the stack
+backtrace.  Here's what each line means:</p>
+
+<ul>
+<li>
+<p>The first line says you were in the function
+<tt class="literal">main::infested</tt> when you ran the stack trace.  It
+tells you the function was called in a scalar context from line 4 of
+the file <em class="emphasis">Ambulation.pm</em>.  It also shows that it
+was called without any arguments whatsoever, meaning it was called as
+<tt class="literal">&amp;infested</tt> instead of the normal way, as
+<tt class="literal">infested()</tt>.</p>
+</li>
+<li>
+<p>The second line shows that the function
+<tt class="literal">Ambulation::legs</tt> was called in list context from
+line number 5 of the <em class="emphasis">camel_flea</em>
+file, with those four arguments.</p>
+</li>
+<li>
+<p>The third line shows that <tt class="literal">main::pests</tt> was called in
+void context from line 2 of
+<em class="emphasis">camel_flea</em>.</p>
+</li>
+</ul>
+<a name="INDEX-3520"></a><a name="INDEX-3521"></a><a name="INDEX-3522"></a>
+<p>If you have compile-phase executable statements such as code from
+<tt class="literal">BEGIN</tt> and <tt class="literal">CHECK</tt> blocks or
+<tt class="literal">use</tt> statements, these will <em class="emphasis">not</em>
+ordinarily be stopped by the debugger, although
+<tt class="literal">require</tt>s and <tt class="literal">INIT</tt> blocks will,
+since they happen after the transition to run phase (see <a href="ch18_01.htm">Chapter 18, "Compiling"</a>).  Compile-phase statements can be
+traced with the <tt class="literal">AutoTrace</tt> option set in
+<tt class="literal">PERLDB_OPTS</tt>.
+<a name="INDEX-3523"></a>
+</p>
+
+<p>You can exert a little control over the Perl debugger from
+within your Perl program itself.  You might do this, for example,
+to set an automatic breakpoint at a certain subroutine whenever a
+particular program is run under the debugger.  From your own Perl
+code, however, you can transfer control back to the debugger using
+the following statement, which is harmless if the debugger is not
+running:
+<blockquote>
+<pre class="programlisting">$DB::single = 1;</pre>
+</blockquote>
+
+If you set <tt class="literal">$DB::single</tt> to 2, it's equivalent to the
+<tt class="literal">n</tt> command, whereas a value of 1 emulates the
+<tt class="literal">s</tt> command.  The <tt class="literal">$DB::trace</tt>
+variable should be set to 1 to simulate the <tt class="literal">t</tt>
+command.</p>
+
+<p>
+<a name="INDEX-3524"></a>
+Another way to debug a module is to set breakpoint on <em class="emphasis">load</em>ing:
+<blockquote>
+<pre class="programlisting">DB&lt;7&gt; <b class="emphasis-bold">b load c:/perl/lib/Carp.pm</b>
+Will stop on load of `c:/perl/lib/Carp.pm'.</pre>
+</blockquote>
+
+and then restart the debugger using the <tt class="literal">R</tt> command.
+For finer control, you can use the <tt class="literal">b compile
+subname</tt> to stop as soon as possible after a particular
+subroutine is compiled.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="INDEX-3663"></a>
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch19_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch20_02.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">19.2. Environment Variables</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">20.2. Debugger Commands</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

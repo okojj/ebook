@@ -1,0 +1,386 @@
+<html><head>
+<title>[Chapter 20] 20.2 Architecture</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:41:09Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch20_01.htm" title="20. Perl Internals"><link rel="prev" href="ch20_01.htm" title="20.1 Reading the Source"><link rel="next" href="ch20_03.htm" title="20.3 Perl Value Types"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch20_01.htm" title="20.1 Reading the Source"><img src="../gifs/txtpreva.gif" alt="Previous: 20.1 Reading the Source" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch20_01.htm" title="20. Perl Internals">Chapter 20<br>Perl Internals</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch20_03.htm" title="20.3 Perl Value Types"><img src="../gifs/txtnexta.gif" alt="Next: 20.3 Perl Value Types" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch20-22741">20.2 Architecture</A
+></H2
+><p class="para"><a class="xref" href="#ch20-14895" title="Snapshot of a running system">Figure 20.1</A
+> <a class="indexterm" name="ch20-idx-972890-0"></A
+><a class="indexterm" name="ch20-idx-972890-1"></A
+>shows the various components of a running Perl system. Shaded rectangles represent data structures, some of which can have multiple instances in a program. The source code can also be partitioned roughly along these lines.</P
+><h4 class="figure"><a class="title" name="ch20-14895">Figure 20.1: Snapshot of a running system</A
+></H4
+><img class="graphic" src="figs/wpa_2001.gif" alt="Figure 20.1"><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-972182">20.2.1 Perl Objects</A
+></H3
+><p class="para"><a class="indexterm" name="ch20-idx-972892-0"></A
+>The box "Perl object API" in <a class="xref" href="#ch20-14895" title="Snapshot of a running system">Figure 20.1</A
+> represents the API to manipulate all internal data structures, such as variables, symbol tables, stacks, and resources such as files and sockets. </P
+><dl class="variablelist"><dt class="term">Variables</DT
+><dd class="listitem"><p class="para"><a class="indexterm" name="ch20-idx-972893-0"></A
+>We saw in <a class="xref" href="ch03_01.htm" title="Typeglobs and Symbol Tables">Chapter 3, <cite class="chapter">Typeglobs and Symbol Tables</CITE
+></A
+>, that the term "variable" refers to a name-value pair. In this chapter, we will look at the API to manipulate the different types of <em class="emphasis">values</EM
+> and to optionally bind them to names. A value can be one of the following:</P
+><table class="simplelist" border="0"><tr><td class="member"><em class="emphasis">     SV</EM
+>:   Scalar value</TD
+></TR
+><tr><td class="member"><em class="emphasis">     AV</EM
+>:  Array value</TD
+></TR
+><tr><td class="member"><em class="emphasis">     HV</EM
+>:  Hash value</TD
+></TR
+><tr><td class="member"><em class="emphasis">     CV</EM
+>:  Code value</TD
+></TR
+><tr><td class="member"><em class="emphasis">     GV</EM
+>:  Glob value (or typeglob)</TD
+></TR
+><tr><td class="member"><em class="emphasis">     RV</EM
+>:   Reference value</TD
+></TR
+></TABLE
+><p class="para">An SV can further be classified as an IV (integer value), PV (string value), or NV (double). The abbreviations are part of a uniform naming convention, so you can easily guess the intent of a function named <kbd class="command">newSViv</KBD
+>, for example.</P
+><p class="para">These value types provide a simple API, resize themselves automatically, and follow simple memory management protocols. For this reason, most Perl internal data structures such as stacks and symbol tables are also implemented in terms of these values.</P
+></DD
+><dt class="term">Symbol tables</DT
+><dd class="listitem"><p class="para"><a class="indexterm" name="ch20-idx-972894-0"></A
+>Symbol tables are plain old HVs, whose keys are identifier names (strings) and whose values are pointers to GVs. But aren't values in a hash table supposed to be scalars? The answer coming up, in the section <a class="xref" href="ch20_03.htm#ch20-17700" title="Glob Values and Symbol Tables">"Glob Values and Symbol Tables</A
+>." </P
+></DD
+><dt class="term">Stacks</DT
+><dd class="listitem"><p class="para"><a class="indexterm" name="ch20-idx-972895-0"></A
+>As Perl executes a script, it keeps run-time information in several stacks, the most important one being the "argument stack," or <kbd class="command">stack</KBD
+> as it is simply known in the Perl source. The idea is simple: if <kbd class="command">foo</KBD
+> wants to call <kbd class="command">bar</KBD
+> with two arguments, it pushes these two scalars on the top of <kbd class="command">stack</KBD
+> and calls <kbd class="command">bar</KBD
+>. <kbd class="command">bar</KBD
+> picks up these scalars, does its stuff, and dumps the results back on the stack. The stack is a simple AV, and every nested call occupies a stretch of the stack with its own parameters.</P
+><p class="para">C programmers think of a stack as containing subroutine parameters, temporaries, and auto variables (those local to that scope). The Perl interpreter implements a different model. The <kbd class="command">stack</KBD
+> described above holds only subroutine parameters; there are other stacks to track temporary variables generated during computations, local variables, and other miscellaneous tidbits of information such as loop iterators, the next opcode to execute on encountering last, redo, or return, and so on. The section <a class="xref" href="ch20_04.htm" title="Stacks and Messaging Protocol">"Stacks and Messaging Protocol</A
+>" has more details. </P
+></DD
+><dt class="term">I/O abstraction</DT
+><dd class="listitem"><p class="para">Perl internally uses an object called <kbd class="command">PerlIO</KBD
+><a class="indexterm" name="ch20-idx-972896-0"></A
+><a class="indexterm" name="ch20-idx-972896-1"></A
+> for all its I/O needs. This abstraction is essentially a thin porting layer for two libraries: <em class="emphasis">stdio</EM
+>, and the much faster alternative, <em class="emphasis">sfio</EM
+> [<a class="xref" href="ch20_08.htm#ch20-13466" title="">6</A
+>]. We will not cover the I/O abstraction in this chapter, primarily because it is simple and offers no great insights. Please read the <em class="emphasis">perlapio</EM
+> document for details.</P
+></DD
+></DL
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch20-pgfId-958301">20.2.1.1 Multiple interpreters</A
+></H4
+><p class="para">The data structures described above are normally kept in global C variables. If Perl is compiled with <em class="emphasis">-DMULTIPLICITY</EM
+>, it lumps all these global variables into a structure called <kbd class="command">PerlInterpreter</KBD
+><a class="indexterm" name="ch20-idx-972897-0"></A
+><a class="indexterm" name="ch20-idx-972897-1"></A
+><a class="indexterm" name="ch20-idx-972897-2"></A
+>. This allows you to have multiple instances of the interpreter, each with its own "global" space. (Recall from <a class="xref" href="ch19_01.htm" title="Embedding Perl:The Easy Way">Chapter 19, <cite class="chapter">Embedding Perl:The Easy Way</CITE
+></A
+> the API to allocate and construct an object of type <kbd class="command">PerlInterpreter</KBD
+>.) In the absence of this compile-time option, the <kbd class="command">PerlInterpreter</KBD
+> object is a dummy structure, and the internal data structures are truly global, for maximum performance. The API remains the same in either case. </P
+><p class="para">You can use multiple interpreters to enforce completely isolated namespaces. Each interpreter has its own "main" package and its own tree of loaded packages. I have not seen this feature used in production Perl applications, but Tcl provides a framework called SafeTcl for security purposes, which uses a similar feature of multiple interpreter objects. These interpreters can be unrestricted or restricted. The equivalent module in Perl, Safe, uses a different mechanism, though the result (of isolated name spaces) is similar. More on this in the next section.<a class="indexterm" name="ch20-idx-972900-0"></A
+></P
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-958284">20.2.2 Translator</A
+></H3
+><p class="para">The <a class="indexterm" name="ch20-idx-972898-0"></A
+><a class="indexterm" name="ch20-idx-972898-1"></A
+>translator converts a Perl script into a tree of <em class="emphasis">opcodes</EM
+><a class="indexterm" name="ch20-idx-972902-0"></A
+> (explained below). It comprises a hand-coded lexer (<i class="filename">toke.c</I
+>), the <em class="emphasis">yacc</EM
+>-based parser (<i class="filename">perly.y</I
+>), and the code generator (<i class="filename">op.c</I
+>). Regular expressions&nbsp;- which form a distinct sublanguage&nbsp;- are recognized in <i class="filename">toke.c</I
+> and compiled to an internal format in <em class="emphasis">regcomp.c</EM
+>.</P
+><p class="para">Opcodes are similar in concept to machine code; while machine code is executed by hardware, opcodes (sometimes called byte-codes or p-code) are executed by a "virtual machine." The similarity ends there. Modern interpreters never emulate the workings of a hardware CPU, for performance reasons. Instead, they create complex structures primed for execution, such that each opcode directly contains a pointer to the next one to execute and a pointer to the data it is expected to work on at run-time. In other words, these opcodes are not mere instruction types; they actually embody the exact unit of work expected at that point in that program.</P
+><p class="para">Java and Perl are both examples of such interpreters. While many of Java's bytecodes resemble a RISC machine's instruction set, Perl's opcodes represent a much higher level of abstraction. A large number of these opcodes directly correspond to the facilities available at the scripting level, such as regular expression matching and substitution, <kbd class="command">chop</KBD
+>, <kbd class="command">push</KBD
+>, <kbd class="command">index</KBD
+>, <kbd class="command">rindex</KBD
+>, <kbd class="command">grep</KBD
+>,[<a class="footnote" href="#ch20-pgfId-966957">3</A
+>] and so on, which explains why there are 343 opcodes as of this writing! It also explains why Perl is so fast: instead of spending time in the interpreter, most of the work is done in lovingly hand-optimized C code. You can also see why it is hard to create a Perl-to-Java byte-code translator: there is no correspondence between the two sets. </P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch20-pgfId-966957">[3]</A
+> Perl's <code class="literal">grep</CODE
+> operator, not the Unix utility. It hasn't come to a point at which entire utilities are represented by opcodes!</P
+></DIV
+></BLOCKQUOTE
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch20-pgfId-958051">20.2.2.1 Inside opcodes[<a class="footnote" href="#ch20-pgfId-959725">4</A
+>]</A
+></H4
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch20-pgfId-959725">[4]</A
+> Unless you want a gut feeling for what goes on deep inside, you don't have to digest&nbsp;- or even read&nbsp;- this section on a first pass over this chapter. Sections entitled "Inside..." are meant to be reasonably standalone pieces.</P
+></DIV
+></BLOCKQUOTE
+><p class="para"><i class="filename">op.h</I
+><a class="indexterm" name="ch20-idx-972914-0"></A
+> defines a basic structure called <kbd class="command">op</KBD
+>, shared by all opcodes. The important fields, discussed in this section, are:</P
+><pre class="programlisting">OP*         op_next;
+OP*         op_sibling; 
+OP*         (*op_ppaddr)();
+OPCODE      op_type;</PRE
+><p class="para">The <kbd class="command">op_type</KBD
+> field contains the actual type of the opcode. A listing of all opcode types is present in <i class="filename">opcode.h</I
+>, produced automatically by the script <i class="filename">opcode.pl</I
+> while building the interpreter. The script contains a nicely tabulated description of all opcodes and hence is a much better source of information than <i class="filename">opcode.h</I
+>. </P
+><p class="para">The <kbd class="command">op_ppaddr</KBD
+> pointer represents the essence of the opcode: it is a pointer to a built-in function&nbsp;- call it an <em class="emphasis">opcode function</EM
+>&nbsp;- that implements the functionality of the opcode. All opcode functions are prefixed with <kbd class="command">pp</KBD
+> (<kbd class="command">pp_push</KBD
+>, <kbd class="command">pp_grep</KBD
+>, and so on) and are distributed over <i class="filename">pp.c</I
+>, <i class="filename">pp_ctl.c</I
+>, <i class="filename">pp_sys.c</I
+>, and <i class="filename">pp_hot.c</I
+>. The last one contains the opcode functions that are "hot," or frequently executed, so it is likely to remain within the cache of most RISC systems. Tom Christiansen once mentioned that this feature is also true of the regular expression-matching code, which is why regex matchers written in Java won't come anywhere close in performance. (I'll reevaluate this claim once Sun's Java processors are freely available.) As you will see later on, the opcode functions look strikingly similar to the glue code output by <em class="emphasis">xsubpp/SWIG </EM
+>; this is because they interoperate using the argument stack and obey the same parameter passing protocols. </P
+><p class="para">Opcodes have additional structure members depending on their type. For example, the <kbd class="command">add</KBD
+> opcode is a binary operator, and hence contains two pointers to its <i class="firstterm">children</I
+>, which it evaluates before adding up the results. The <kbd class="command">print</KBD
+> opcode is a list operator, and hence contains a pointer to the first opcode in its list of children, which are then linked to their <i class="firstterm">siblings</I
+> using the <kbd class="command">op_sibling</KBD
+> pointer (possessed by all opcodes), and so on.</P
+><p class="para">This complex interlinked mesh of opcodes is referred to as a <em class="emphasis">syntax tree</EM
+>. <a class="xref" href="#ch20-11569" title='Syntax tree and thread of execution for "print $a + 2"'>Figure 20.2</A
+> shows such a tree, a result of parsing the expression <kbd class="command">print</KBD
+> <kbd class="command">$a</KBD
+> <kbd class="command">+</KBD
+> <kbd class="command">2</KBD
+>. </P
+><h4 class="figure"><a class="title" name="ch20-11569">Figure 20.2: Syntax tree and thread of execution for "print $a + 2"</A
+></H4
+><img class="graphic" src="figs/wpa_2002.gif" alt="Figure 20.2"><p class="para">The syntax tree's top-down hierarchy indicates the precedence of expressions; the subexpression <kbd class="command">$a</KBD
+> <kbd class="command">+</KBD
+> <kbd class="command">2</KBD
+> must be computed before printing can commence. By the same token (pun unintended), <kbd class="command">$a</KBD
+>'s value and the constant 2 must be retrieved and placed on the stack before addition can happen. The <kbd class="command">gvsv</KBD
+> opcode (which fetches <kbd class="command">$a</KBD
+>'s value) and the <kbd class="command">const</KBD
+> opcode are thus children of the <kbd class="command">add</KBD
+> opcode, and have a sibling relationship to each other. The <kbd class="command">add</KBD
+> opcode is in turn a child of the <kbd class="command">print</KBD
+> opcode. As you can see, the network of child and sibling pointers reflect the syntactic structure of the program.</P
+><p class="para">The <kbd class="command">op_next</KBD
+> pointer points to the next opcode to be <em class="emphasis">executed</EM
+> and hence reflects the flow of control. Executing the code is thus a simple matter of moving to the next opcode and calling its opcode function. The dashed lines in <a class="xref" href="#ch20-11569" title='Syntax tree and thread of execution for "print $a + 2"'>Figure 20.2</A
+> indicate this thread of execution. </P
+><p class="para">If you compile Perl with <em class="emphasis">-DDEBUGGING</EM
+>, you can use the <kbd class="command">-Dx</KBD
+> command-line option to tell it to dump its syntax tree after it finishes parsing a script. The output of an example invocation, <kbd class="command">perl</KBD
+> <kbd class="command">-Dx</KBD
+> <kbd class="command">-e</KBD
+> <kbd class="command">'print</KBD
+> <kbd class="command">$a</KBD
+> <kbd class="command">+</KBD
+> <kbd class="command">2'</KBD
+>, is shown in <a class="xref" href="#ch20-34067" title='Opcode Sequence and Hierarchy for "print $a + 2"; Using -Dx'>Example 20.1</A
+>. The nesting level reflects the hierarchy&nbsp;- <a class="xref" href="#ch20-11569" title='Syntax tree and thread of execution for "print $a + 2"'>Figure 20.2</A
+> turned on its side&nbsp;- and the numbering scheme shows the order of execution. (I've added the comments on the right; the rest of the output is Perl's.)</P
+><div class="example"><h4 class="example"><a class="title" name="ch20-34067">Example 20.1: Opcode Sequence and Hierarchy for "print $a + 2"; Using -Dx</A
+></H4
+><pre class="programlisting">{
+8   TYPE = <b class="emphasis.bold">leave</B
+>  ===&gt; DONE             # Clean up. The last instruction
+    FLAGS = (SCALAR,KIDS,PARENS)
+    {
+1       TYPE = <b class="emphasis.bold">enter</B
+>  ===&gt; 2            # Enter here 
+    }
+    {
+2       TYPE = <b class="emphasis.bold">nextstate</B
+>  ===&gt; 3        # nextstate inserted after every
+                                        # statement to clean up temporaries 
+        FLAGS = (SCALAR)
+        LINE = 1
+    }
+    {
+7       TYPE = <b class="emphasis.bold">print</B
+>  ===&gt; 8            # call print. Contains child 
+                                        # expressions to be evaluated first
+        FLAGS = (SCALAR,KIDS)
+        {
+3           TYPE = <b class="emphasis.bold">pushmark</B
+>  ===&gt; 4
+            FLAGS = (SCALAR)
+        }
+        {
+6           TYPE = <b class="emphasis.bold">add</B
+>  ===&gt; 7          # add requires two arguments 
+            TARG = 1                    # to be available on top of the 
+            FLAGS = (SCALAR,KIDS)       # argument stack (discussed below)
+            {
+                TYPE = <b class="emphasis.bold">null</B
+>  ===&gt; (5)
+                  (was rv2sv)
+                FLAGS = (SCALAR,KIDS)
+                {
+4                   TYPE = <b class="emphasis.bold">gvsv</B
+>  ===&gt; 5 # Get the scalar value associated
+                    FLAGS = (SCALAR)    # with the name &quot;main::a&quot;
+                    GV = main::a
+                }
+            }
+            {
+5               TYPE = <b class="emphasis.bold">const</B
+>  ===&gt; 6    # Put the constant &quot;2&quot; on the stack
+                FLAGS = (SCALAR)
+                SV = IV(2)
+            }
+        }
+    }
+}</PRE
+></DIV
+><p class="para">Each pair of braces represents information about a specific opcode. The first opcode to execute is <kbd class="command">enter</KBD
+>. It then hands control over to <kbd class="command">nextstate</KBD
+>, which in turn leaves it to <kbd class="command">pushmark</KBD
+>, and so on. The <kbd class="command">nextstate</KBD
+> opcode cleans up all temporaries introduced in a statement and prepares for the next statement in that scope. The intent of the <kbd class="command">pushmark</KBD
+> opcode will be clear when we study the parameter-passing protocol later in this chapter.</P
+><p class="para">At compile time, the <kbd class="command">gvsv</KBD
+> opcode (which fetches global or local variables) is primed with the address of the value it intends to fetch and place on the stack when it is executed. This means that at run-time, it does not have to refer to the symbol table at all&nbsp;- it already possesses the value. The symbol table is consulted only when you use features such as symbolic references, dynamic binding of functions, and <kbd class="command">eval</KBD
+>, which do not have all the information at compile-time.<a class="indexterm" name="ch20-idx-972903-0"></A
+><a class="indexterm" name="ch20-idx-972903-1"></A
+></P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch20-pgfId-958084">20.2.2.2 Compilation and code generation stages</A
+></H4
+><p class="para"><em class="emphasis">yacc</EM
+><a class="indexterm" name="ch20-idx-972915-0"></A
+><a class="indexterm" name="ch20-idx-972915-1"></A
+><a class="indexterm" name="ch20-idx-972915-2"></A
+> works in a bottom-up fashion, so the opcodes at the leaf-level of the syntax tree are produced first. As parsing proceeds, opcodes at a higher level in the syntax tree thread together the nodes below. Each unary and binary opcode (an arithmetic operator, for example) is checked to see whether it can be immediately executed; this is called <em class="emphasis">constant folding</EM
+><a class="indexterm" name="ch20-idx-972917-0"></A
+>. If it can, that opcode and its children are removed, and a new <kbd class="command">const</KBD
+> opcode is substituted in place. Next, opcodes corresponding to built-in functions are verified to see that they have the right number and type of parameters. </P
+><p class="para">Then comes <i class="firstterm">context propagation</I
+><a class="indexterm" name="ch20-idx-972916-0"></A
+>. On creation, each opcode gets to specify a context (void, Boolean, list, scalar, or lvalue) for itself and its child opcodes. Consider the expression <kbd class="command">substr(foo(),</KBD
+> <kbd class="command">0,</KBD
+> <kbd class="command">1)</KBD
+>. The opcodes representing a call to <kbd class="command">foo</KBD
+> and the constants 0 and 1 are created first. When the opcode for <kbd class="command">substr</KBD
+> is subsequently created, it tells the opcode representing the call to <kbd class="command">foo</KBD
+> that it wants a scalar as its result. Context propagation hence works top-down.</P
+><p class="para">When parsing is complete, a <em class="emphasis">peephole optimizer</EM
+><a class="indexterm" name="ch20-idx-972918-0"></A
+><a class="indexterm" name="ch20-idx-972918-1"></A
+> goes to work (function <kbd class="command">peep</KBD
+> in <i class="filename">op.c</I
+>). It traces all branches of execution, following the <kbd class="command">op_next</KBD
+> pointers just as it would during run-time, and scouts for local optimizations. (That is, it does a dry run of the execution path.) The procedure typically examines the next few opcodes in sequence (currently, at most two) and checks to see whether they can be reduced to simpler or lesser opcodes; it looks through a peephole, in other words. Let us investigate this a little with a small example.</P
+><p class="para">A `<kbd class="command">$</KBD
+>' can be followed by an identifier name (<kbd class="command">$a</KBD
+>), an array element (<kbd class="command">$l[0]</KBD
+>), or, in the most general case, an expression resulting in a scalar reference (<kbd class="command">$$ra</KBD
+> or <kbd class="command">${foo()}</KBD
+>. In the first pass, the parser assumes the most general approach, so even something as simple as <kbd class="command">$a</KBD
+> boils down to two opcodes: <kbd class="command">gv</KBD
+> and <kbd class="command">rv2sv</KBD
+>. The first one retrieves a GV (a typeglob, which, if you think about it, is a reference to a scalar value) and places it on the stack, and the second opcode converts this to an <kbd class="command">SV</KBD
+>. Along comes the peephole optimizer and replaces this sequence to one opcode, <kbd class="command">gvsv</KBD
+>, which can do the same thing in one shot. The problem is that deleting unwanted opcodes is time-consuming and tedious, since these opcodes contain links to other opcodes. For this reason, useless opcodes are simply marked as null, and the <kbd class="command">op_next</KBD
+> pointer of the previous opcodes simply bypasses them (the nullified opcodes). <a class="xref" href="#ch20-34067" title='Opcode Sequence and Hierarchy for "print $a + 2"; Using -Dx'>Example 20.1</A
+> shows an example of a nullified opcode; look for the line <kbd class="command">TYPE</KBD
+> <kbd class="command">=</KBD
+> <kbd class="command">NULL</KBD
+> <kbd class="command">(was</KBD
+> <kbd class="command">rv2sv)</KBD
+>.<em class="emphasis"></EM
+><a class="indexterm" name="ch20-idx-972920-0"></A
+><a class="indexterm" name="ch20-idx-972920-1"></A
+><a class="indexterm" name="ch20-idx-972920-2"></A
+></P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch20-pgfId-958079">20.2.2.3 Security features</A
+></H4
+><p class="para">Perl provides the <em class="emphasis">-T</EM
+> switch to enable <i class="firstterm">taint checking</I
+><a class="indexterm" name="ch20-idx-972922-0"></A
+><a class="indexterm" name="ch20-idx-972922-1"></A
+><a class="indexterm" name="ch20-idx-972922-2"></A
+>, which marks all variables containing data derived from outside the program as tainted. It implements a data flow mechanism, whereby all variables derived from these variables are also considered tainted. (Pushing a tainted scalar into an array marks the array as suspicious.) Essentially, this means you trust the code to do the right thing and to discriminate between tainted and untainted data. But if the code itself is suspicious, you can use the standard module Safe and its companion package Opcode.[<a class="footnote" href="#ch20-pgfId-967070">5</A
+>] These modules allow you to create a <em class="emphasis">safe</EM
+><a class="indexterm" name="ch20-idx-972923-0"></A
+> <i class="filename">compartment</I
+> and specify an operator mask (a list of allowed opcodes) for that compartment. You can <kbd class="command">eval</KBD
+> a piece of untrusted code inside this compartment, and if the compilation process produces an opcode that is not present in the opcode mask, it returns an error. In the next few versions, Perl is expected to account for other kinds of malicious attacks, such as unlimited allocation of memory (<kbd class="command">@l = (1..1000000)</KBD
+>) or CPU starvation (<kbd class="command">1 while (1)</KBD
+>). These are also known as <i class="firstterm">denial of resource</I
+><a class="indexterm" name="ch20-idx-972924-0"></A
+><a class="indexterm" name="ch20-idx-972924-1"></A
+> attacks.<a class="indexterm" name="ch20-idx-972905-0"></A
+><a class="indexterm" name="ch20-idx-972905-1"></A
+></P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch20-pgfId-967070">[5]</A
+> Both designed by Malcolm Beattie (check the <i class="filename">ext/Opcode</I
+> subdirectory in the standard Perl library).</P
+></DIV
+></BLOCKQUOTE
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-958073">20.2.3 Executor</A
+></H3
+><p class="para">The <a class="indexterm" name="ch20-idx-972907-0"></A
+><a class="indexterm" name="ch20-idx-972907-1"></A
+>executor (function <kbd class="command">runops</KBD
+> in <i class="filename">run.c</I
+>) is a simple driver that traverses the execution chain in the syntax tree and calls each corresponding opcode function in sequence. But because Perl is such a dynamic language, the path of execution cannot always be determined at the outset, so every opcode function is expected to return the next opcode to execute. For the most part, it is the next opcode in sequence (the <kbd class="command">op_next</KBD
+> pointer set during compile time). But some, such as conditional operators like <kbd class="command">if</KBD
+> or indirect expressions like <kbd class="command">$foo-&gt;func()</KBD
+>, can determine the next opcode to execute only at run-time.</P
+><p class="para">This concludes our brief tour of Perl's architecture.<a class="indexterm" name="ch20-idx-972884-0"></A
+><a class="indexterm" name="ch20-idx-972884-1"></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch20_01.htm" title="20.1 Reading the Source"><img src="../gifs/txtpreva.gif" alt="Previous: 20.1 Reading the Source" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch20_03.htm" title="20.3 Perl Value Types"><img src="../gifs/txtnexta.gif" alt="Next: 20.3 Perl Value Types" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">20.1 Reading the Source</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">20.3 Perl Value Types</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

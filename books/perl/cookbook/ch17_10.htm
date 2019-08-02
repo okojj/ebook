@@ -1,0 +1,112 @@
+<html><head>
+<title>Recipe 17.9. Closing a Socket After Forking</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:34Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch17_01.htm" title="17. Sockets"><link rel="prev" href="ch17_09.htm" title="17.8. Finding Your Own Name and Address"><link rel="next" href="ch17_11.htm" title="17.10. Writing Bidirectional Clients"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_09.htm" title="17.8. Finding Your Own Name and Address"><img src="../gifs/txtpreva.gif" alt="Previous: 17.8. Finding Your Own Name and Address" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch17_01.htm" title="17. Sockets">Chapter 17<br>Sockets</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_11.htm" title="17.10. Writing Bidirectional Clients"><img src="../gifs/txtnexta.gif" alt="Next: 17.10. Writing Bidirectional Clients" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch17-16980">17.9. Closing a Socket After Forking</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1054">Problem<a class="indexterm" name="ch17-idx-1000004787-0"></A
+><a class="indexterm" name="ch17-idx-1000004787-1"></A
+><a class="indexterm" name="ch17-idx-1000004787-2"></A
+><a class="indexterm" name="ch17-idx-1000004787-3"></A
+></A
+></H3
+><p class="para">Your program has forked and you want to tell the other end that you're done sending data. You've tried <code class="literal">close</CODE
+> on the socket, but the remote end never gets an EOF or SIGPIPE.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1060">Solution</A
+></H3
+><p class="para">Use <code class="literal">shutdown</CODE
+>:</P
+><pre class="programlisting">shutdown(SOCKET, 0);                # I/we have stopped reading data
+shutdown(SOCKET, 1);                # I/we have stopped writing data
+shutdown(SOCKET, 2);                # I/we have stopped using this socket</PRE
+><p class="para">On an IO::Socket object, you could also write:</P
+><pre class="programlisting">$socket-&gt;shutdown(0);               # I/we have stopped reading data</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1076">Discussion</A
+></H3
+><p class="para">When a process forks, the child has copies of all the parent's open filehandles, including sockets. When you <code class="literal">close</CODE
+> a file or socket, you close only the current process' copy. If another process (parent or child) still has the socket open, the operating system doesn't consider their file or socket closed.</P
+><p class="para">Take the case of a socket that data is being sent to. If two processes have this socket open, one can close it but the socket isn't considered closed by the operating system because the other still has it open. Until the <em class="emphasis">other</EM
+> process closes the socket, the process reading from the socket won't get an end-of-file. This can lead to confusion and deadlock.</P
+><p class="para">To avoid this, either <code class="literal">close</CODE
+> unused filehandles after a <code class="literal">fork</CODE
+>, or use <code class="literal">shutdown</CODE
+>. The <code class="literal">shutdown</CODE
+> function is a more insistent form of <code class="literal">close </CODE
+>&nbsp;- it tells the operating system that even though other processes have copies of this filehandle, it should be marked as closed and the other end should get an end-of-file if they read from it, or a SIGPIPE if they write to it.</P
+><p class="para">The numeric argument to <code class="literal">shutdown</CODE
+> lets you specify which sides of the connection are closed. An argument of <code class="literal">0</CODE
+> says that we're done reading data, so the other end of the socket will get a <code class="literal">SIGPIPE</CODE
+> if they try writing. <code class="literal">1</CODE
+> says that we're done writing data, so the other end of the socket will get an end-of-file if they try reading. <code class="literal">2</CODE
+> says we're done reading and writing.</P
+><p class="para">Imagine a server that wants to read its client's request until end of file, and send an answer. If the client calls <code class="literal">close</CODE
+>, that socket is now invalid for I/O, so no answer would ever come back. Instead, the client should use <code class="literal">shutdown</CODE
+> to half-close the connection.</P
+><pre class="programlisting">print SERVER &quot;my request\n&quot;;        # send some data
+shutdown(SERVER, 1);                # send eof; no more writing
+$answer = &lt;SERVER&gt;;                 # but you can still read<a class="indexterm" name="ch17-idx-1000004789-0"></A
+><a class="indexterm" name="ch17-idx-1000004789-1"></A
+><a class="indexterm" name="ch17-idx-1000004789-2"></A
+><a class="indexterm" name="ch17-idx-1000004789-3"></A
+></PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1096">See Also</A
+></H3
+><p class="para">The 
+<a class="olink" href="../prog/ch03_018.htm">&#13;<code class="literal">close</CODE
+></A
+> and 
+<a class="olink" href="../prog/ch03_148.htm">&#13;<code class="literal">shutdown</CODE
+></A
+> 
+
+
+functions in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlfunc </I
+>(1); your system's <i class="filename">shutdown </I
+>(2) manpage (if you have it)</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_09.htm" title="17.8. Finding Your Own Name and Address"><img src="../gifs/txtpreva.gif" alt="Previous: 17.8. Finding Your Own Name and Address" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_11.htm" title="17.10. Writing Bidirectional Clients"><img src="../gifs/txtnexta.gif" alt="Next: 17.10. Writing Bidirectional Clients" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">17.8. Finding Your Own Name and Address</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">17.10. Writing Bidirectional Clients</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

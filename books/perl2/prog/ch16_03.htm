@@ -1,0 +1,605 @@
+<html>
+<head>
+<title>Pipes (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Pipes">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch16_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch16_01.htm">Chapter 16: Interprocess Communication</a></td><td align="right" valign="top" width="172"><a href="ch16_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">16.3. Pipes</h2>
+
+<p>
+<a name="INDEX-2986"></a><a name="INDEX-2987"></a><a name="INDEX-2988"></a><a name="INDEX-2989"></a><a name="INDEX-2990"></a><a name="INDEX-2991"></a>
+A <em class="emphasis">pipe</em> is a unidirectional I/O channel that can transfer a stream of
+bytes from one process to another.  Pipes come in both named and nameless
+varieties.  You may be more familiar with nameless pipes, so we'll talk
+about those first.</p>
+
+
+<h3 class="sect2">16.3.1. Anonymous Pipes</h3>
+
+<p>
+<a name="INDEX-2992"></a><a name="INDEX-2993"></a><a name="INDEX-2994"></a>
+Perl's <tt class="literal">open</tt> function opens a pipe instead of a file when you append
+or prepend a pipe symbol to the second argument to <tt class="literal">open</tt>. This turns
+the rest of the arguments into a command, which will be interpreted as a
+process (or set of processes) that you want to pipe a stream of data
+either into or out of.  Here's how to start up a child process that you
+intend to write to:
+<blockquote>
+<pre class="programlisting">open SPOOLER, "| cat -v | lpr -h 2&gt;/dev/null"
+    or die "can't fork: $!";
+local $SIG{PIPE} = sub { die "spooler pipe broke" };
+print SPOOLER "stuff\n";
+close SPOOLER or die "bad spool: $! $?";</pre>
+</blockquote>
+<a name="INDEX-2995"></a><a name="INDEX-2996"></a>
+This example actually starts up two processes, the first of which
+(running <em class="emphasis">cat</em>) we print to directly.  The second process (running
+<em class="emphasis">lpr</em>) then receives the output of the first process.  In shell
+programming, this is often called a <em class="emphasis">pipeline</em>. A pipeline can have as
+many processes in a row as you like, as long as the ones in the middle
+know how to behave like <em class="emphasis">filters</em>; that is, they read standard input
+and write standard output.</p>
+
+<p>
+<a name="INDEX-2997"></a>
+Perl uses your default system shell (<tt class="command">/bin/sh</tt> on Unix) whenever a
+pipe command contains special characters that the shell cares about.
+If you're only starting one command, and you don't need--or don't
+want--to use the shell, you can use the multi-argument form of a
+piped open instead:
+<blockquote>
+<pre class="programlisting">open SPOOLER, "|-", "lpr", "-h"    # requires 5.6.1
+    or die "can't run lpr: $!";</pre>
+</blockquote>
+<a name="INDEX-2998"></a>
+If you reopen your program's standard output as a pipe to another
+program, anything you subsequently <tt class="literal">print</tt> to <tt class="literal">STDOUT</tt> will be standard
+input for the new program.  So to page your program's output,<a href="#FOOTNOTE-8">[8]</a> you'd use:
+<blockquote>
+<pre class="programlisting">if (-t STDOUT) {             # only if stdout is a terminal
+    my $pager = $ENV{PAGER} || 'more';  
+    open(STDOUT, "| $pager")    or die "can't fork a pager: $!";
+}
+END { 
+    close(STDOUT)               or die "can't close STDOUT: $!" 
+}</pre>
+</blockquote>
+
+When you're writing to a filehandle connected to a pipe, always
+explicitly <tt class="literal">close</tt> that handle when you're done with it.  That way
+your main program doesn't exit before its offspring.</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-8"></a>
+<p>[8]That is, let them
+view it one screenful at a time, not set off random bird calls.</p>
+
+</blockquote>
+
+<p>
+<a name="INDEX-2999"></a>
+Here's how to start up a child process that you intend to read from:
+<blockquote>
+<pre class="programlisting">open STATUS, "netstat -an 2&gt;/dev/null |"
+    or die "can't fork: $!";
+while (&lt;STATUS&gt;) {
+    next if /^(tcp|udp)/;
+    print;
+} 
+close STATUS or die "bad netstat: $! $?";</pre>
+</blockquote>
+<a name="INDEX-3000"></a><a name="INDEX-3001"></a>
+You can open a multistage pipeline for input just as you can for
+output.  And as before, you can avoid the shell by using an alternate
+form of <tt class="literal">open</tt>:
+<blockquote>
+<pre class="programlisting">open STATUS, "-|", "netstat", "-an"      # requires 5.6.1
+    or die "can't run netstat: $!";</pre>
+</blockquote>
+
+But then you don't get I/O redirection, wildcard expansion, or
+multistage pipes, since Perl relies on your shell to do those.</p>
+
+<p>
+<a name="INDEX-3002"></a>
+You might have noticed that you can use backticks to accomplish the same
+effect as opening a pipe for reading:
+<blockquote>
+<pre class="programlisting">print grep { !/^(tcp|udp)/ } `netstat -an 2&gt;&amp;1`;
+die "bad netstat" if $?;</pre>
+</blockquote>
+While backticks are extremely handy, they have to read the whole thing
+into memory at once, so it's often more efficient to open your own
+piped filehandle and process the file one line or record at a time.
+This gives you finer control over the whole operation, letting you
+kill off the child process early if you like.  You can also be more
+efficient by processing the input as it's coming in, since computers
+can interleave various operations when two or more processes are running at the
+same time.  (Even on a single-CPU machine, input and output operations can
+happen while the CPU is doing something else.)
+<a name="INDEX-3003"></a><a name="INDEX-3004"></a><a name="INDEX-3005"></a>
+</p>
+
+<p>Because you're running two or more processes concurrently, disaster
+can strike the child process any time between the
+<tt class="literal">open</tt> and the <tt class="literal">close</tt>.  This means
+that the parent must check the return values of both
+<tt class="literal">open</tt> and <tt class="literal">close</tt>.  Checking the
+<tt class="literal">open</tt> isn't good enough, since that will only tell
+you whether the fork was successful, and possibly whether the
+subsequent command was successfully launched.  (It can tell you this
+only in recent versions of Perl, and only if the command is executed
+directly by the forked child, not via the shell.)  Any disaster that
+happens after that is reported from the child to the parent as a
+nonzero exit status.  When the <tt class="literal">close</tt> function sees
+that, it knows to return a false value, indicating that the actual
+status value should be read from the <tt class="literal">$?</tt>
+(<tt class="literal">$CHILD_ERROR</tt>) variable.  So checking the return
+value of <tt class="literal">close</tt> is just as important as checking
+<tt class="literal">open</tt>.  If you're writing to a pipe, you should also
+be prepared to handle the <tt class="literal">PIPE</tt> signal, which is
+sent to you if the process on the other end dies before you're done
+sending to it.</p>
+
+<a name="INDEX-3006"></a>
+
+
+
+
+
+
+<h3 class="sect2">16.3.2. Talking to Yourself</h3>
+
+<p>
+<a name="INDEX-3007"></a><a name="INDEX-3008"></a><a name="INDEX-3009"></a>
+Another approach to IPC is to make your program talk to itself, in
+a manner of speaking.  Actually, your process talks over pipes to
+a forked copy of itself.  It works much like the piped open we
+talked about in the last section, except that the child process
+continues executing your script instead of some other command.</p>
+
+<p>
+<a name="INDEX-3010"></a><a name="INDEX-3011"></a>
+To represent this to the <tt class="literal">open</tt> function, you use a
+pseudocommand consisting of a minus.  So the second argument to
+<tt class="literal">open</tt> looks like either "<tt class="literal">-|</tt>" or
+"<tt class="literal">|-</tt>", depending on whether you want to pipe from
+yourself or to yourself.  As with an ordinary <tt class="literal">fork</tt>
+command, the <tt class="literal">open</tt> function returns the child's
+process ID in the parent process but <tt class="literal">0</tt> in the child
+process.  Another asymmetry is that the filehandle named by the
+<tt class="literal">open</tt> is used only in the parent process.  The
+child's end of the pipe is hooked to either <tt class="literal">STDIN</tt>
+or <tt class="literal">STDOUT</tt> as appropriate.  That is, if you open a
+pipe <em class="emphasis">to</em> minus with <tt class="literal">|-</tt>, you can
+write to the filehandle you opened, and your kid will find this in
+<tt class="literal">STDIN</tt>:
+<blockquote>
+<pre class="programlisting">if (open(TO, "|-")) {
+    print TO $fromparent;
+}
+else {
+    $tochild = &lt;STDIN&gt;;
+    exit;
+}</pre>
+</blockquote>
+<a name="INDEX-3012"></a><a name="INDEX-3013"></a>
+If you open a pipe <em class="emphasis">from</em> minus with <tt class="literal">-|</tt>, you can read from the
+filehandle you opened, which will return whatever your kid writes to <tt class="literal">STDOUT</tt>:
+<blockquote>
+<pre class="programlisting">if (open(FROM, "-|")) {
+    $toparent = &lt;FROM&gt;;
+}
+else {
+    print STDOUT $fromchild;
+    exit;
+}</pre>
+</blockquote>
+</p>
+
+<p>
+<a name="INDEX-3014"></a><a name="INDEX-3015"></a><a name="INDEX-3016"></a><a name="INDEX-3017"></a>
+One common application of this construct is to bypass the shell
+when you want to open a pipe from a command.  You might want to do
+this because you don't want the shell to interpret any possible
+metacharacters in the filenames you're trying to pass to the command.
+If you're running release 5.6.1 or greater of Perl, you can use
+the multi-argument form of <tt class="literal">open</tt> to get the same result.</p>
+
+<p>Another use of a forking open is to safely open a file or command even
+while you're running under an assumed UID or GID.  The child you
+<tt class="literal">fork</tt> drops any special access rights, then safely
+opens the file or command and acts as an intermediary, passing data
+between its more powerful parent and the file or command it opened.
+Examples can be found in the section <a href="ch23_01.htm#ch23-sect-access">Section 16.1.3, "Accessing Commands and Files Under
+Reduced Privileges"</a> in <a href="ch23_01.htm">Chapter 23, "Security"</a>.</p>
+
+<p>
+<a name="INDEX-3018"></a><a name="INDEX-3019"></a>
+One creative use of a forking open is to filter your own output.
+Some algorithms are much easier to implement in two separate passes
+than they are in just one pass.  Here's a simple example
+in which we emulate the Unix <em class="emphasis">tee</em>(1) program by sending our normal
+output down a pipe. The agent on the other end of the pipe (one
+of our own subroutines) distributes our output to all the files specified:
+<blockquote>
+<pre class="programlisting">tee("/tmp/foo", "/tmp/bar", "/tmp/glarch");
+
+while (&lt;&gt;) {
+    print "$ARGV at line $. =&gt; $_";
+}
+close(STDOUT)  or die "can't close STDOUT: $!";
+    
+sub tee {
+    my @output = @_;
+    my @handles = ();
+    for my $path (@output) {
+        my $fh;  # open will fill this in
+        unless (open ($fh, "&gt;", $path)) {
+            warn "cannot write to $path: $!";
+            next;
+        }
+        push @handles, $fh;
+    }
+    
+    # reopen STDOUT in parent and return
+    return if my $pid = open(STDOUT, "|-");
+    die "cannot fork: $!" unless defined $pid;
+    
+    # process STDIN in child
+    while (&lt;STDIN&gt;) {
+        for my $fh (@handles) {
+            print $fh $_ or die "tee output failed: $!";
+        }
+    }
+    for my $fh (@handles) {
+        close($fh) or die "tee closing failed: $!";
+    }
+    exit;  # don't let the child return to main!
+}</pre>
+</blockquote>
+
+This technique can be applied repeatedly to push as many filters
+on your output stream as you wish.  Just keep calling functions
+that fork-open <tt class="literal">STDOUT</tt>, and have the child read from its parent
+(which it sees as <tt class="literal">STDIN</tt>) and pass the massaged output along to
+the next function in the stream.</p>
+
+<p>Another interesting application of talking to yourself with fork-open
+is to capture the output from an ill-mannered function that always
+splats its results to <tt class="literal">STDOUT</tt>.  Imagine if Perl only had <tt class="literal">printf</tt>
+and no <tt class="literal">sprintf</tt>.  What you'd need would be something that worked
+like backticks, but with Perl functions instead of external commands:
+<blockquote>
+<pre class="programlisting">badfunc("arg");                       # drat, escaped!
+$string = forksub(\&amp;badfunc, "arg");  # caught it as string
+@lines  = forksub(\&amp;badfunc, "arg");  # as separate lines
+
+sub forksub {
+    my $kidpid = open my $self, "-|";
+    defined $kidpid         or die "cannot fork: $!";
+    shift-&gt;(@_), exit       unless $kidpid;
+    local $/                unless wantarray;
+    return &lt;$self&gt;;         # closes on scope exit
+}</pre>
+</blockquote>
+
+We're not claiming this is efficient; a tied filehandle would probably
+be a good bit faster.  But it's a lot easier to code up if you're
+in more of a hurry than your computer is.</p>
+
+
+
+
+
+
+<h3 class="sect2">16.3.3. Bidirectional Communication </h3>
+
+<a name="INDEX-3020"></a><a name="INDEX-3021"></a><a name="INDEX-3022"></a><a name="INDEX-3023"></a>
+<p>Although using <tt class="literal">open</tt> to connect to another command over a pipe
+works reasonably well for unidirectional communication, what about
+bidirectional communication?  The obvious approach
+doesn't actually work:
+<blockquote>
+<pre class="programlisting">open(PROG_TO_READ_AND_WRITE, "| some program |")  # WRONG!</pre>
+</blockquote>
+
+and if you forget to enable warnings, then you'll miss out
+entirely on the diagnostic message:
+<blockquote>
+<pre class="programlisting">Can't do bidirectional pipe at myprog line 3.</pre>
+</blockquote>
+</p>
+
+<p>
+<a name="INDEX-3024"></a><a name="INDEX-3025"></a><a name="INDEX-3026"></a>
+The <tt class="literal">open</tt> function doesn't allow this because it's rather prone
+to deadlock unless you're quite careful.  But if you're determined,
+you can use the standard <tt class="literal">IPC::Open2</tt> library module to attach two
+pipes to a subprocess's <tt class="literal">STDIN</tt> and <tt class="literal">STDOUT</tt>.  There's also an
+<tt class="literal">IPC::Open3</tt> module for tridirectional I/O (allowing you to also catch
+your child's <tt class="literal">STDERR</tt>), but this requires either an awkward <tt class="literal">select</tt>
+loop or the somewhat more convenient <tt class="literal">IO::Select</tt> module.   But
+then you'll have to avoid Perl's buffered input operations like
+<tt class="literal">&lt;&gt;</tt> (<tt class="literal">readline</tt>).</p>
+
+<p>Here's an example using <tt class="literal">open2</tt>:
+<blockquote>
+<pre class="programlisting">use IPC::Open2;
+local (*Reader, *Writer);
+$pid = open2(\*Reader, \*Writer, "bc -l");
+$sum = 2;
+for (1 .. 5) {
+    print Writer "$sum * $sum\n";
+    chomp($sum = &lt;Reader&gt;);
+}
+close Writer;
+close Reader;
+waitpid($pid, 0);
+print "sum is $sum\n";</pre>
+</blockquote>
+
+You can also autovivify lexical filehandles:
+<blockquote>
+<pre class="programlisting">my ($fhread, $fhwrite);
+$pid = open2($fhread, $fhwrite, "cat -u -n");</pre>
+</blockquote>
+<a name="INDEX-3027"></a>
+The problem with this in general is that standard I/O buffering is
+really going to ruin your day.  Even though your output filehandle
+is autoflushed (the library does this for you) so that the process
+on the other end will get your data in a timely manner, you can't
+usually do anything to force it to return the favor.  In this
+particular case, we were lucky: <tt class="literal">bc</tt> expects to operate over a
+pipe and knows to flush each output line.  But few commands are
+so designed, so this seldom works out unless you yourself wrote the
+program on the other end of the double-ended pipe.  Even simple,
+apparently interactive programs like <em class="emphasis">ftp</em> fail here because they won't do line buffering on a pipe.  They'll only do it on a tty device.</p>
+
+<p>
+<a name="INDEX-3028"></a><a name="INDEX-3029"></a><a name="INDEX-3030"></a>
+The <tt class="literal">IO::Pty</tt> and <tt class="literal">Expect</tt> modules from CPAN can help with this
+because they provide a real tty (actually, a real pseudo-tty, but it acts
+like a real one).  This gets you line buffering in the other process
+without modifying its program.</p>
+
+<p>
+<a name="INDEX-3031"></a>
+If you split your program into several processes and
+want these to all have a conversation that goes both ways, you can't
+use Perl's high-level pipe interfaces, because these are all
+unidirectional.  You'll need to use two low-level
+<tt class="literal">pipe</tt> function calls, each handling one direction of
+the conversation:
+<blockquote>
+<pre class="programlisting">pipe(FROM_PARENT, TO_CHILD)     or die "pipe: $!";
+pipe(FROM_CHILD,  TO_PARENT)    or die "pipe: $!";
+select((select(TO_CHILD), $| = 1))[0]);   # autoflush
+select((select(TO_PARENT), $| = 1))[0]);  # autoflush
+
+if ($pid = fork) {
+    close FROM_PARENT; close TO_PARENT;
+    print TO_CHILD "Parent Pid $$ is sending this\n";
+    chomp($line = &lt;FROM_CHILD&gt;);
+    print "Parent Pid $$ just read this: `$line'\n";
+    close FROM_CHILD; close TO_CHILD;
+    waitpid($pid,0);
+} else {
+    die "cannot fork: $!" unless defined $pid;
+    close FROM_CHILD; close TO_CHILD;
+    chomp($line = &lt;FROM_PARENT&gt;);
+    print "Child Pid $$ just read this: `$line'\n";
+    print TO_PARENT "Child Pid $$ is sending this\n";
+    close FROM_PARENT; close TO_PARENT;
+    exit;
+}</pre>
+</blockquote>
+<a name="INDEX-3032"></a>
+On many Unix systems, you don't actually have to make two separate
+<tt class="literal">pipe</tt> calls to achieve full duplex communication between parent and
+child.  The <tt class="literal">socketpair</tt> syscall provides bidirectional connections
+between related processes on the same machine.  So instead of two
+<tt class="literal">pipe</tt>s, you only need one <tt class="literal">socketpair</tt>.
+<blockquote>
+<pre class="programlisting">use Socket;     
+socketpair(Child, Parent, AF_UNIX, SOCK_STREAM, PF_UNSPEC)
+    or die "socketpair: $!";
+
+# or letting perl pick filehandles for you
+my ($kidfh, $dadfh);
+socketpair($kidfh, $dadfh, AF_UNIX, SOCK_STREAM, PF_UNSPEC)
+    or die "socketpair: $!";</pre>
+</blockquote>
+
+After the <tt class="literal">fork</tt>, the parent closes the <tt class="literal">Parent</tt> handle, then reads and writes via the <tt class="literal">Child</tt> handle.  Meanwhile, the
+child closes the <tt class="literal">Child</tt> handle, then reads and writes via
+the <tt class="literal">Parent</tt> handle.</p>
+
+<p>If you're looking into bidirectional communications because the
+process you'd like to talk to implements a standard Internet service,
+you should usually just skip the middleman and use a CPAN module
+designed for that exact purpose.  (See the section <a href="ch16_05.htm#ch16-sect-sockets">Section 16.5, "Sockets"</a> later for a
+list of a some of these.)</p>
+
+<a name="INDEX-3033"></a><a name="INDEX-3034"></a>
+
+
+
+
+
+
+<h3 class="sect2">16.3.4. Named Pipes</h3>
+
+<a name="INDEX-3035"></a><a name="INDEX-3036"></a><a name="INDEX-3037"></a>
+<p>A named pipe (often called a FIFO) is a mechanism for setting up a
+conversation between unrelated processes on the same machine.  The
+names in a "named" pipe exist in the filesystem, which is just a
+funny way to say that you can put a special file in the filesystem
+namespace that has another process behind it instead of a disk.<a href="#FOOTNOTE-9">[9]</a>
+</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-9"></a>
+<p>[9]You can do the same thing with Unix-domain sockets, but you
+can't use <tt class="literal">open</tt> on those.</p>
+
+</blockquote>
+
+<p>A FIFO is convenient when you want to connect a process to an unrelated
+one.  When you open a FIFO, your process will block until there's
+a process on the other end.  So if a reader opens the FIFO
+first, it blocks until the writer shows up--and vice versa.</p>
+
+<p>
+<a name="INDEX-3038"></a><a name="INDEX-3039"></a><a name="INDEX-3040"></a>
+To create a named pipe, use the POSIX <tt class="literal">mkfifo</tt> function--if you're
+on a POSIX system, that is.  On Microsoft systems, you'll instead
+want to look into the <tt class="literal">Win32::Pipe</tt> module, which, despite its
+possible appearance to the contrary, creates named pipes.  (Win32
+users create anonymous pipes using <tt class="literal">pipe</tt> just like the rest of
+us.)</p>
+
+<p>For example, let's say you'd like to have your <em class="emphasis">.signature</em> file produce
+a different answer each time it's read.  Just make it a named pipe
+with a Perl program on the other end that spits out random quips.
+Now every time any program (like a mailer, newsreader, finger
+program, and so on) tries to read from that file, that program will
+connect to your program and read in a dynamic signature.</p>
+
+<p>
+<a name="INDEX-3041"></a><a name="INDEX-3042"></a>
+In the following example, we use the rarely seen <tt class="literal">-p</tt> file
+test operator
+to determine whether anyone (or anything) has accidentally removed
+our FIFO.<a href="#FOOTNOTE-10">[10]</a>If they
+have, there's no reason to try to open it, so we treat this as a
+request to exit.  If we'd used a simple <tt class="literal">open</tt> function
+with a mode of "<tt class="literal">&gt; $fpath</tt>", there would have been a tiny race
+condition that would have risked accidentally creating the signature as a plain
+file if it disappeared between the <tt class="literal">-p</tt> test and the open.  We
+couldn't use a "<tt class="literal">+&lt; $fpath</tt>" mode, either, because opening a
+FIFO for read-write is a nonblocking open (this is only true of
+FIFOs).  By using <tt class="literal">sysopen</tt> and omitting the <tt class="literal">O_CREAT</tt> flag, we
+avoid this problem by never creating a file by accident.
+<a name="INDEX-3043"></a>
+<blockquote>
+<pre class="programlisting">use Fcntl;             # for sysopen
+chdir;                 # go home
+$fpath = '.signature';
+$ENV{PATH} .= ":/usr/games";
+
+unless (-p $fpath) {   # not a pipe
+    if (-e _) {        # but a something else
+        die "$0: won't overwrite .signature\n";
+    } else {
+        require POSIX;
+        POSIX::mkfifo($fpath, 0666) or die "can't mknod $fpath: $!";
+        warn "$0: created $fpath as a named pipe\n";
+    }
+}
+
+while (1) {
+    # exit if signature file manually removed
+    die "Pipe file disappeared" unless -p $fpath;
+    # next line blocks until there's a reader
+    sysopen(FIFO, $fpath, O_WRONLY)
+        or die "can't write $fpath: $!";
+    print FIFO "John Smith (smith\@host.org)\n", `fortune -s`;
+    close FIFO;
+    select(undef, undef, undef, 0.2);  # sleep 1/5th second
+}</pre>
+</blockquote>
+
+The short sleep after the close is needed to give the reader a
+chance to read what was written.  If we just immediately loop back
+up around and open the FIFO again before our reader has finished
+reading the data we just sent, then no end-of-file is seen because
+there's once again a writer.  We'll both go round and round until
+during one iteration, the writer falls a little behind and the
+reader finally sees that elusive end-of-file.  (And we were worried about
+race conditions?)</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-10"></a>
+<p>[10]Another use is to see if a filehandle is connected
+to a pipe, named or anonymous, as in <tt class="literal">-p STDIN</tt>.</p>
+
+</blockquote>
+
+<a name="INDEX-3044"></a><a name="INDEX-3045"></a><a name="INDEX-3046"></a><a name="INDEX-3047"></a>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch16_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch16_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">16.2. Files</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">16.4. System V IPC</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

@@ -1,0 +1,332 @@
+<html>
+<head>
+<title>Advanced JDBC Techniques (Java Servlet Programming)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jason Hunter and William Crawford">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-391-XE" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Advanced JDBC Techniques">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm" alt="Java Servlet Programming"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch09_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch09_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch09_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch09_01.htm">Chapter 9: Database Connectivity</a></td><td align="right" valign="top" width="172"><a href="ch10_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch10_01.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">9.5. Advanced JDBC Techniques</h2>
+
+<p>Now that we've covered the basics, let's talk about a few
+<a name="INDEX-1727"></a>advanced techniques that use
+servlets and JDBC. First, we'll examine how servlets can access
+stored database procedures. Then we'll look at how servlets can
+fetch complicated data types, such as binary data (images,
+applications, etc.), large quantities of text, or even executable
+database-manipulation code, from a database.
+</p>
+
+<a name="ch09-17-fm2xml"></a>
+<h3 class="sect2">9.5.1. Stored Procedures</h3>
+
+<p>Most RDBMS <a name="INDEX-1728"></a><a name="INDEX-1729"></a><a name="INDEX-1730"></a>
+systems include some sort of
+<a name="INDEX-1731"></a>internal programming language. One
+example is <a name="INDEX-1732"></a><a name="INDEX-1733"></a><a name="INDEX-1734"></a>Oracle's PL/SQL. These
+languages allow database developers to embed procedural application
+code directly within a database and then call that code from other
+applications. RDMBS programming languages are often well suited to
+performing certain database actions; many existing database
+installations have a number of useful stored procedures already
+written and ready to go. Most introductions to JDBC tend to skip over
+this topic, so we'll cover it here briefly.
+</p>
+
+<p>The following code is an Oracle PL/SQL stored procedure. If it looks
+familiar, that's because it's from George Reese's
+<em class="emphasis">Database Programming with JDBC
+</em><a name="INDEX-1735"></a><a name="INDEX-1736"></a>(O'Reilly):
+</p>
+
+<blockquote>
+<pre class="programlisting">CREATE OR REPLACE PROCEDURE sp_interest
+(id IN INTEGER
+bal IN OUT FLOAT) IS
+BEGIN
+SELECT balance
+INTO bal
+FROM accounts
+WHERE account_id = id;
+
+bal := bal + bal * 0.03;
+
+UPDATE accounts
+SET balance = bal
+WHERE account_id = id;
+
+END;</pre>
+</blockquote>
+
+<p>This procedure executes a SQL statement, performs a calculation, and
+executes another SQL statement. It would be fairly simple to write
+the SQL to handle this (in fact, the transaction example earlier in
+this chapter does something similar), so why bother with this at all?
+There are several reasons:
+</p>
+
+<ul>
+<li>
+<p>
+<a name="INDEX-1737"></a><a name="INDEX-1738"></a>Stored procedures are precompiled in
+the RDBMS, so they run faster than dynamic SQL.
+</p>
+</li>
+<li>
+<p>Stored procedures execute entirely within the RDBMS, so they can
+perform multiple queries and updates without network traffic.
+</p>
+</li>
+<li>
+<p>Stored procedures allow you to write database manipulation code once
+and use it across multiple applications in multiple languages.
+</p>
+</li>
+<li>
+<p>Changes in the underlying table structures require changes only in
+the stored procedures that access them; applications using the
+database are unaffected.
+</p>
+</li>
+<li>
+<p>Many older databases already have a lot of code written as stored
+procedures, and it would be nice to be able to leverage that effort.
+</p>
+</li>
+</ul>
+
+<p>The Oracle PL/SQL procedure in our example takes an input value, in
+this case an account ID, and returns an updated balance. While each
+database has its own syntax for accessing stored procedures, JDBC
+creates a standardized escape sequence for accessing stored
+procedures using the <tt class="literal">java.sql.CallableStatement
+</tt><a name="INDEX-1739"></a><a name="INDEX-1740"></a>
+class. The syntax for a procedure that doesn't return a result
+is<tt class="literal"> "{call procedure_name(?,?)}"</tt>. The syntax for a
+stored procedure that returns a result value is<tt class="literal"> "{? = call
+procedure_name(?,?)}". </tt>The parameters inside the
+parentheses are optional.
+</p>
+
+<p>Using the<tt class="literal"> CallableStatement</tt> class is similar to
+using the <tt class="literal">PreparedStatement</tt> class:
+</p>
+
+<blockquote>
+<pre class="programlisting">CallableStatment cstmt = con.prepareCall("{call sp_interest(?,?)}");
+cstmt.registerOutParameter(2, java.sql.Types.FLOAT);
+cstmt.setInt(1, accountID);
+cstmt.execute();
+out.println("New Balance: " + cstmt.getFloat(2));</pre>
+</blockquote>
+
+<p>This code first creates a <tt class="literal">CallableStatement</tt> using
+the <tt class="literal">prepareCall()</tt> method of
+<tt class="literal">Connection</tt>. Because this stored procedure has an
+output parameter, it uses the
+<tt class="literal">registerOutParameter()</tt> method of
+<tt class="literal">CallableStatement</tt> to identify that parameter as an
+output parameter of type <tt class="literal">FLOAT</tt>. Finally, the code
+executes the stored procedure and uses the
+<tt class="literal">getFloat()</tt> method of
+<tt class="literal">CallableStatement</tt> to display the new balance. The
+<tt class="literal">get</tt><em class="replaceable">XXX</em><tt class="literal">()</tt>
+methods in <tt class="literal">CallableStatement</tt> interface are similar
+to those in the <tt class="literal">ResultSet</tt> interface.
+</p>
+
+
+<a name="ch09-18-fm2xml"></a>
+<h3 class="sect2">9.5.2. Binaries and Books </h3>
+
+<p>Most databases support data types to handle text strings up to
+several gigabytes in size, as well as binary information like
+multimedia files. Different databases handle this kind of data in
+different ways, but the JDBC methods for retrieving it are standard.
+The <tt class="literal">getAsciiStream()</tt><a name="INDEX-1741"></a><a name="INDEX-1742"></a><a name="INDEX-1743"></a><a name="INDEX-1744"></a><a name="INDEX-1745"></a> method
+of <tt class="literal">ResultSet</tt> handles large text strings;
+<tt class="literal">getBinaryStream()</tt><a name="INDEX-1746"></a><a name="INDEX-1747"></a><a name="INDEX-1748"></a><a name="INDEX-1749"></a><a name="INDEX-1750"></a> works
+for large binary objects. Each of these methods returns an
+<tt class="literal">InputStream</tt>.
+</p>
+
+<p>Support for large data types is one of the most common sources of
+JDBC problems. Make sure you test your drivers thoroughly, using the
+largest pieces of data your application will encounter.
+Oracle's JDBC driver is particularly prone to errors in this
+area.
+</p>
+
+<p>Here's some code from a message board servlet that demonstrates
+reading a long ASCII string. We can assume that connections,
+statements, and so on have already been created:
+</p>
+
+<blockquote>
+<pre class="programlisting">try {
+  ResultSet rs = stmt.executeQuery(
+    "SELECT TITLE, SENDER, MESSAGE FROM MESSAGES WHERE MESSAGE_ID = 9");
+  if (rs.next()) {
+    out.println("&lt;H1&gt;" + rs.getString("title") + "&lt;/H1&gt;");
+    out.println("&lt;B&gt;From:&lt;/B&gt; " + rs.getString("sender") + "&lt;BR&gt;");
+    BufferedReader msgText = new BufferedReader(
+      new InputStreamReader(rs.getAsciiStream("message")));
+    while (msgText.ready()) {
+      out.println(msgText.readLine());
+    }
+  }
+}
+catch (SQLException e) {
+  // Report it
+}</pre>
+</blockquote>
+
+<p>While it is reading from the <tt class="literal">InputStream</tt>, this
+servlet doesn't get the value of any other columns in the
+result set. This is important because calling any other
+<tt class="literal">get</tt><em class="replaceable">XXX</em><tt class="literal">()</tt>
+method of <tt class="literal">ResultSet</tt> closes the
+<tt class="literal">InputStream </tt>.
+</p>
+
+<p>Binary data can be retrieved in the same manner using the
+<tt class="literal">ResultSet.getBinaryStream()</tt><a name="INDEX-1751"></a><a name="INDEX-1752"></a>
+. In this case, we need to set the content type as appropriate and
+write the output as bytes. <a href="#ch09-18202">Example 9-9</a> shows a
+servlet that returns a GIF file loaded from a database.
+</p>
+
+<a name="ch09-18202"></a>
+<div class="example">
+<h4 class="objtitle">Example 9-9. Reading a binary GIF image from a database </h4>
+<blockquote>
+<pre class="programlisting">import java.io.*;
+import java.sql.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class DBGifReader extends HttpServlet {
+
+  Connection con;
+
+  public void init(ServletConfig config) throws ServletException {
+    super.init(config);
+    try {
+      Class.forName("sun.jdbc.odbc.JdbcOdbcDriver");
+      con = DriverManager.getConnection("jdbc:odbc:imagedb", "user", "passwd");
+    }
+    catch (ClassNotFoundException e) { 
+      throw new UnavailableException(this, "Couldn't load JdbcOdbcDriver");
+    }    
+    catch (SQLException e) { 
+      throw new UnavailableException(this, "Couldn't get db connection");
+    }    
+  }
+
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+                               throws ServletException, IOException {
+    try {
+      res.setContentType("image/gif");
+      ServletOutputStream out = res.getOutputStream();
+     
+      Statement stmt = con.createStatement();
+      ResultSet rs = stmt.executeQuery(
+        "SELECT IMAGE FROM PICTURES WHERE PID = " + req.getParameter("PID"));
+
+      if (rs.next()) {
+        BufferedInputStream gifData =
+          new BufferedInputStream(rs.getBinaryStream("image"));
+        byte[] buf = new byte[4 * 1024];  // 4K buffer
+        int len;
+        while ((len = gifData.read(buf, 0, buf.length)) != -1) {
+          out.write(buf, 0, len);
+        }
+      }
+      else {
+        res.sendError(res.SC_NOT_FOUND);
+      }
+    }
+    catch(SQLException e) {
+      // Report it
+    }
+  }
+} </pre>
+</blockquote>
+</div>
+
+<a name="INDEX-1753"></a>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch09_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch09_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch10_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch10_01.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">9.4. Transactions</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">10. Applet-Servlet Communication</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

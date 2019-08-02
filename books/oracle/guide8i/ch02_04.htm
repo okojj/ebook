@@ -1,0 +1,744 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 2] 2.4 Rules and Restrictions</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T19:24:54Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates CDROM-1-56592-675-7E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-675-7E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle 8i Features"><META
+NAME="DC.Title"
+CONTENT="Oracle PL/SQL Programming Guide to Oracle 8i Features"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch02_01.htm"
+TITLE="2. Choose Your Transaction!"><LINK
+REL="prev"
+HREF="ch02_03.htm"
+TITLE="2.3 When to Use Autonomous Transactions"><LINK
+REL="next"
+HREF="ch02_05.htm"
+TITLE="2.5 Examples"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch02_03.htm"
+TITLE="2.3 When to Use Autonomous Transactions"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 2.3 When to Use Autonomous Transactions"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch02_01.htm"
+TITLE="2. Choose Your Transaction!"
+>Chapter 2<BR>Choose Your Transaction!</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch02_05.htm"
+TITLE="2.5 Examples"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 2.5 Examples"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch02-99999"
+>2.4 Rules and Restrictions</A
+></H2
+><P
+CLASS="para"
+> <A
+CLASS="indexterm"
+NAME="ch-02-rules"
+></A
+> <A
+CLASS="indexterm"
+NAME="ch-02-pragdec"
+></A
+><A
+CLASS="indexterm"
+NAME="ch-02-pragtwo"
+></A
+>While it is certainly very easy to add the autonomous transaction pragma to your code, there are some rules and restrictions on the use of this feature. You can only make a top-level anonymous block an autonomous transaction. This will work:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DECLARE
+   PRAGMA AUTONOMOUS_TRANSACTION;
+   myempno NUMBER;
+BEGIN
+   INSERT INTO emp VALUES (myempno, ...);
+   COMMIT;
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>whereas this construction:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DECLARE
+   myempno NUMBER;
+BEGIN
+   DECLARE
+      PRAGMA AUTONOMOUS_TRANSACTION;
+   BEGIN  
+      INSERT INTO emp VALUES (myempno, ...);
+      COMMIT;
+   END;
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>results in this error:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PLS-00710: PRAGMA AUTONOMOUS_TRANSACTION cannot be declared here</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Just to expand your vision of what is possible, you can now use COMMIT and ROLLBACK inside your database triggers. These actions will <EM
+CLASS="emphasis"
+>not</EM
+> affect the transaction that caused the database trigger to fire, of course. See <A
+CLASS="xref"
+HREF="ch02_05.htm#ch02-60041"
+>Section 2.5.2, "Using Autonomous Transactions in a Database Trigger</A
+>, later in this chapter, for more details on what you can accomplish.</P
+><P
+CLASS="para"
+> <A
+CLASS="indexterm"
+NAME="ch-02-dlex"
+></A
+>If an autonomous transaction attempts to access a resource held by the main transaction (which has been suspended until the autonomous routine exits), you can cause a deadlock to occur in your program. Here is a simple example to demonstrate the problem. I create a procedure to perform an update, and then call it after having already updated all rows: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: autondlock.sql*/
+CREATE OR REPLACE PROCEDURE 
+   update_salary (dept_in IN NUMBER)
+IS
+   PRAGMA AUTONOMOUS_TRANSACTION;
+   
+   CURSOR myemps IS
+      SELECT empno FROM emp
+       WHERE deptno = dept_in
+         FOR UPDATE NOWAIT;
+BEGIN
+   FOR rec IN myemps
+   LOOP
+      UPDATE emp SET sal = sal * 2 
+       WHERE empno = rec.empno;
+   END LOOP;
+   COMMIT;
+END;
+/
+   
+BEGIN
+   UPDATE emp SET sal = sal * 2;
+   update_salary (10);
+END;
+/   </PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The results are not pretty:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>ERROR at line 1:
+ORA-00054: resource busy and acquire with NOWAIT specified</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>You cannot mark all subprograms in a package (or all methods in an object type) as autonomous with a single PRAGMA declaration. You must indicate autonomous transactions explicitly in each program. For example, the following package specification is invalid:<A
+CLASS="indexterm"
+NAME="AUTOID-956"
+></A
+></P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE PACKAGE warcrimes_pkg 
+AS
+   PRAGMA AUTONOMOUS_TRANSACTION;
+   
+   PROCEDURE register (
+      culprit IN VARCHAR2, event IN VARCHAR2);
+END warcrimes_pkg;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>One consequence of this rule is that you cannot tell by looking at the package specification which, if any, programs will run as autonomous transactions.<A
+CLASS="indexterm"
+NAME="AUTOID-959"
+></A
+></P
+><P
+CLASS="para"
+>To exit without errors from an autonomous transaction program, you must perform an explicit commit or rollback. If the program (or any program called by it) has transactions pending, the runtime engine will raise an exception&nbsp;-- and then it will roll back those uncommitted transactions. </P
+><P
+CLASS="para"
+>Suppose, for example, that my job in life is to take over failing companies and make them profitable by firing lots of employees. I would then want to carry around this handy procedure in my software toolbox: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE PROCEDURE fire_em_all
+IS
+   PRAGMA AUTONOMOUS_TRANSACTION;
+BEGIN
+   DELETE FROM emp;
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I want to make the program an autonomous transaction because I don't want anyone to back out the changes when I am not looking. Unfortunately, I forget to explicitly commit. As a result, when I run this procedure, I get the following error:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec fire_em_all
+*
+ERROR at line 1
+ORA-06519: active autonomous transaction detected and rolled back</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The COMMIT and ROLLBACK statements end the active autonomous transaction; they do not, however, force the termination of the autonomous routine. You can, in fact, have multiple COMMIT and/or ROLLBACK statements inside your autonomous block.</P
+><BLOCKQUOTE
+CLASS="tip"
+><P
+CLASS="para"
+><STRONG
+>TIP:</STRONG
+> <A
+CLASS="indexterm"
+NAME="AUTOID-968"
+></A
+>An autonomous block is one in which autonomous transactions are expected. Zero, one, or more autonomous transactions can be executed within an autonomous block.</P
+></BLOCKQUOTE
+><P
+CLASS="para"
+> <A
+CLASS="indexterm"
+NAME="AUTOID-971"
+></A
+> You can roll back only to savepoints marked in the current transaction. When you are in an autonomous transaction, therefore, you cannot roll back to a savepoint set in the main transaction. If you try to do so, the runtime engine will raise this exception:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>ORA-01086: savepoint '<I
+CLASS="replaceable"
+>your savepoint</I
+>' never established</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+> <A
+CLASS="indexterm"
+NAME="AUTOID-976"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-978"
+></A
+>The TRANSACTIONS parameter in the Oracle initialization file (<I
+CLASS="filename"
+>INIT.ORA</I
+>) specifies the maximum number of transactions allowed concurrently in a session. If you use autonomous transactions (which run concurrently with the main transaction), you might exceed this number&nbsp;-- and raise an exception&nbsp;-- unless you raise the TRANSACTIONS value. This is the error you will get if you encounter this problem:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>ORA-01574: maximum number of concurrent transactions exceeded</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The default value for TRANSACTIONS in Oracle8<EM
+CLASS="emphasis"
+>i</EM
+> is 75.<A
+CLASS="indexterm"
+NAME="AUTOID-984"
+></A
+></P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch02-SECT-4.1"
+>2.4.1 Using Autonomous Transactions from Within SQL</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch-02-uws"
+></A
+>Ever since Oracle 7.3, you have been able to call your own functions from within SQL&nbsp;-- provided that you follow a variety of rules. The main one is this: you are not allowed to update the database. And you certainly can't save or cancel changes from within the function.</P
+><P
+CLASS="para"
+> <A
+CLASS="indexterm"
+NAME="AUTOID-992"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-994"
+></A
+><A
+CLASS="indexterm"
+NAME="AUTOID-996"
+></A
+>With the autonomous transaction feature, however, the picture changes a good deal. An autonomous transaction program <EM
+CLASS="emphasis"
+>never</EM
+> violates the two database-related purity levels, RNDS (reads no database state) and WNDS (writes no database state), even if that program actually does read from or write to the database. How can this be? Because those purity levels or constraints apply to the SQL statement (which, in this case, is the main transaction), yet an autonomous transaction's DML actions never affect the main transaction. </P
+><P
+CLASS="para"
+> <A
+CLASS="indexterm"
+NAME="AUTOID-1000"
+></A
+> So as long as you define a program to be an autonomous transaction, you can also call it directly or indirectly in a SQL statement. Of course, if your program cannot assert another purity level, such as WNPS (writes no package state), you may be restricted from calling that program in certain parts of the SQL statement, such as the WHERE clause.</P
+><P
+CLASS="para"
+>As an example, suppose that I want to keep a trace of all the rows that have been touched by a query. I create this table:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: trcfunc.sf */
+CREATE TABLE query_trace (
+   table_name VARCHAR2(30),
+   rowid_info ROWID,
+   queried_by VARCHAR2(30),
+   queried_at DATE
+   );</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I then create this simple function to perform the audit:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE FUNCTION traceit (
+   tab IN VARCHAR2,
+   rowid_in IN ROWID)
+   RETURN INTEGER
+IS
+BEGIN
+   INSERT INTO query_trace VALUES (tab, rowid_in, USER, SYSDATE);
+   RETURN 0;
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>When I try to use this function inside a query, I get the expected error:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; select ename, traceit ('emp', rowid) from emp;
+                   *
+ERROR at line 1:
+ORA-14551: cannot perform a DML operation inside a query</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>However, if I now transform traceit into an autonomous transaction by adding the pragma (and committing my results <EM
+CLASS="emphasis"
+>before</EM
+> the RETURN statement!), the results are very different. My query works, and the query_trace table is filled:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; SELECT ename, traceit ('emp', ROWID)
+  2    FROM emp;
+ENAME      TRACEIT('EMP',ROWID)
+---------- --------------------
+KING                          0
+...
+MILLER                        0
+14 rows selected.
+SQL&gt; 
+SQL&gt; SELECT table_name, rowid_info, queried_by, 
+  2         TO_CHAR (queried_at, 'HH:MI:SS') queried_at
+  3    FROM query_trace;
+TABLE_NAME ROWID_INFO         QUERIED_BY QUERIED_AT
+---------- ------------------ ---------- ----------
+emp        AAADEPAACAAAAg0AAA SCOTT      05:32:54
+...
+emp        AAADEPAACAAAAg0AAN SCOTT      05:36:50</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-1012"
+></A
+><A
+CLASS="indexterm"
+NAME="AUTOID-1014"
+></A
+>You have other options when it comes to tracing queries: you can write to the screen with the DBMS_OUTPUT built-in package or send information to a pipe with DBMS_PIPE. Now that autonomous transactions are available, if you do want to send information to a database table (or delete rows or update data, etc.), you can take that route instead, but be sure to analyze carefully the overhead of this approach.<A
+CLASS="indexterm"
+NAME="AUTOID-1016"
+></A
+></P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch02-SECT-4.2"
+>2.4.2 Transaction Visibility</A
+></H3
+><P
+CLASS="para"
+> <A
+CLASS="indexterm"
+NAME="ch-02-tv"
+></A
+> <A
+CLASS="indexterm"
+NAME="ch-02-isolev"
+></A
+>The default behavior of autonomous transactions is that once a COMMIT or ROLLBACK occurs in the autonomous transaction, those changes are visible immediately in the main transaction. But what if you want to <EM
+CLASS="emphasis"
+>hide</EM
+> those changes from the main transaction? You want them saved or erased&nbsp;-- no question about that&nbsp;-- but that information should not be available to the main transaction.</P
+><P
+CLASS="para"
+> <A
+CLASS="indexterm"
+NAME="AUTOID-1027"
+></A
+> Oracle offers a SET TRANSACTION statement option to achieve this effect.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-1031"
+></A
+>The default isolation level is READ COMMITTED, which means that as soon as changes are committed, they are visible to the main transaction. </P
+><P
+CLASS="para"
+> <A
+CLASS="indexterm"
+NAME="AUTOID-1034"
+></A
+> As is usually the case with the SET TRANSACTION statement, you must call it before you initiate your transactions (i.e., issue any SQL statements); in addition, the setting affects your entire session, not just the current program. The following script demonstrates the SERIALIZABLE isolation level at work (the <I
+CLASS="filename"
+>autonserial.sql</I
+> file will let you run these steps yourself).</P
+><P
+CLASS="para"
+> First, I create my autonomous transaction procedure:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: autonserial.sql */
+CREATE OR REPLACE PROCEDURE fire_em_all
+IS
+   PRAGMA AUTONOMOUS_TRANSACTION;
+BEGIN
+   DELETE FROM emp2;
+   COMMIT;
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I run a script that sets the isolation level to SERIALIZABLE, then display the number of rows that appear in the emp2 table at the following times: </P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Before I call fire_em_all</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>After I call fire_em_all but before the main transaction is committed or rolled back</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>After I commit in the main transaction, here is the script I run:</P
+></LI
+></UL
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DECLARE
+   PROCEDURE showcount (str VARCHAR2) IS
+      num INTEGER;
+   BEGIN
+      SELECT COUNT(*) INTO num FROM emp2;
+      DBMS_OUTPUT.PUT_LINE (str || ' ' || num);
+   END;
+BEGIN
+   SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+   showcount ('Before isolated AT delete');
+   fire_em_all;
+   showcount ('After isolated AT delete');
+   COMMIT;
+   showcount ('After MT commit');
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Here is the output from running the script:<A
+CLASS="indexterm"
+NAME="AUTOID-1049"
+></A
+><A
+CLASS="indexterm"
+NAME="AUTOID-1050"
+></A
+></P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>Before isolated AT delete 14
+After isolated AT delete 14
+After MT commit 0</PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch02_03.htm"
+TITLE="2.3 When to Use Autonomous Transactions"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 2.3 When to Use Autonomous Transactions"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch02_05.htm"
+TITLE="2.5 Examples"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 2.5 Examples"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>2.3 When to Use Autonomous Transactions</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>2.5 Examples</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

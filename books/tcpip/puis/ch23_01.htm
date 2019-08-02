@@ -1,0 +1,399 @@
+<html><head>
+<title>[Chapter 23] Writing Secure SUID and Network Programs</TITLE>
+<meta name="DC.title" content="Practical UNIX &amp; Internet Security"><meta name="DC.creator" content="Simson Garfinkel &amp; Gene Spafford"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-02-04T00:17:28Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-148-8" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="part05.htm" title="V. Advanced Topics"><link rel="prev" href="ch22_06.htm" title="22.6 Writing Your Own Wrappers"><link rel="next" href="ch23_02.htm" title="23.2 Tips on Avoiding Security-related Bugs"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Practical UNIX &amp; Internet Security" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Practical UNIX &amp; Internet Security"><area shape="RECT" coords="467,0,514,18" href="../search/psrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch22_06.htm" title="22.6 Writing Your Own Wrappers"><img src="../gifs/txtpreva.gif" alt="Previous: 22.6 Writing Your Own Wrappers" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 23</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch23_02.htm" title="23.2 Tips on Avoiding Security-related Bugs"><img src="../gifs/txtnexta.gif" alt="Next: 23.2 Tips on Avoiding Security-related Bugs" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="CHAPTER"><h1 class="chapter"><a class="title" name="PUIS-CHP-23">23. Writing Secure SUID and Network Programs</A
+></H1
+><div class="htmltoc"><p><b>Contents:</B
+><br><a class="SECT1" href="#PUIS-CHP-23-SECT-1" title="23.1 One Bug Can Ruin Your Whole Day...">One Bug Can Ruin Your Whole Day...</A
+><br><a class="SECT1" href="ch23_02.htm" title="23.2 Tips on Avoiding Security-related Bugs">Tips on Avoiding Security-related Bugs</A
+><br><a class="SECT1" href="ch23_03.htm" title="23.3 Tips on Writing Network Programs">Tips on Writing Network Programs</A
+><br><a class="SECT1" href="ch23_04.htm" title="23.4 Tips on Writing SUID/SGID Programs">Tips on Writing SUID/SGID Programs</A
+><br><a class="SECT1" href="ch23_05.htm" title="23.5 Tips on Using Passwords">Tips on Using Passwords</A
+><br><a class="SECT1" href="ch23_06.htm" title="23.6 Tips on Generating Random Numbers">Tips on Generating Random Numbers</A
+><br><a class="SECT1" href="ch23_07.htm" title="23.7 UNIX Pseudo-Random Functions">UNIX Pseudo-Random
+Functions</A
+><br><a class="SECT1" href="ch23_08.htm" title="23.8 Picking a Random Seed">Picking a Random Seed</A
+><br><a class="SECT1" href="ch23_09.htm" title="23.9 A Good Random Seed Generator">A Good Random Seed
+Generator</A
+></P
+><p></P
+></DIV
+><p class="para"><a class="indexterm" name="AUTOID-31956"></A
+><a class="indexterm" name="AUTOID-31959"></A
+><a class="indexterm" name="AUTOID-31961"></A
+>
+
+With a few minor exceptions, the underlying security model of the <span class="acronym">UNIX</SPAN
+>
+operating system&nbsp;- a privileged kernel, user processes, and
+the superuser who can perform any system management function&nbsp;- is
+fundamentally workable. But if that is the case, then why has <span class="acronym">UNIX</SPAN
+>
+had so many security problems in recent years? The answer is simple:
+although the <span class="acronym">UNIX</SPAN
+> security model is basically
+sound, programmers are careless. Most security flaws in <span class="acronym">UNIX</SPAN
+>
+arise from bugs and design errors in programs that run as <i class="filename">root</I
+> or
+with other privileges, as a result of configuration errors, or through
+the unanticipated interactions between such programs.</P
+><div class="sect1"><h2 class="sect1"><a class="title" name="PUIS-CHP-23-SECT-1">23.1 One Bug Can Ruin Your Whole Day...</A
+></H2
+><p class="para">The disadvantage of the <span class="acronym">UNIX</SPAN
+> security model is that
+it makes a tremendous investment in the infallibility of the superuser
+and in the software that runs with the privileges of the superuser.
+If the superuser account is compromised, then the system is left
+wide open. Hence our many admonitions in this book to protect the
+superuser account, and to restrict the number of people who must
+know the password.</P
+><p class="para">Unfortunately, even if you prevent users from logging into the
+superuser account, many <span class="acronym">UNIX</SPAN
+> programs need to run
+with superuser privileges. These programs are run as
+<span class="acronym">SUID</SPAN
+> <i class="filename">root</I
+> programs, when the system boots, or as
+network servers. A single bug in any of these complicated programs can
+compromise the safety of your entire system. This characteristic is
+probably a design flaw, but it is basic to the design of
+<span class="acronym">UNIX</SPAN
+>, and is not likely to change.</P
+><div class="sect2"><h3 class="sect2"><a class="title" name="PUIS-CHP-23-SECT-1.1">23.1.1 The Lesson of the Internet Worm</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-31980"></A
+><a class="indexterm" name="AUTOID-31983"></A
+>One of the best-known examples
+of such a flaw was a single line of code in the program
+<i class="filename">/etc/fingerd</I
+>, the <kbd class="command">finger</KBD
+> server, exploited in 1988 by Robert
+T. Morris's Internet Worm. <kbd class="command">fingerd</KBD
+> provides <kbd class="command">finger</KBD
+> service over
+the network. One of the very first lines of the program reads a single
+line of text from standard input containing the name of the user that
+is to be &quot;fingered.&quot;</P
+><p class="para">The original <kbd class="command">fingerd</KBD
+> program contained these lines of code:</P
+><blockquote class="screen"><pre class="screen">char line[512];
+
+line[0]
+= &quot;\0&quot;;
+gets(line);</PRE
+></BLOCKQUOTE
+><p class="para">Because the <a class="indexterm" name="AUTOID-31994"></A
+>
+<kbd class="command">gets()</KBD
+>
+function does not check the length of the line read, a rogue program
+could supply more than 512 bytes of valid data, enabling the stack
+frame of the <kbd class="command">fingerd</KBD
+> server to be overrun. Morris[1] wrote code that caused <kbd class="command">fingerd</KBD
+> to execute a shell; because
+<kbd class="command">fingerd </KBD
+> was usually installed to run as the
+superuser, the rogue program inherited virtually unrestricted access
+to the server computer. (<kbd class="command">fingerd</KBD
+> didn't really need to run as
+superuser&nbsp;- that was simply the default configuration.)</P
+><blockquote class="footnote"><p class="para">[1] Or
+someone else. As noted in Spafford's original analysis of the
+code (see <a class="xref" href="appd_01.htm" title="Paper Sources">Appendix D, <cite class="appendix">Paper Sources</CITE
+></A
+>), there is some indication that
+Morris did not write this portion of the Worm program.</P
+></BLOCKQUOTE
+><p class="para">The fix for the <kbd class="command">finger</KBD
+> program was simple:
+replace the <kbd class="command">gets()</KBD
+> function
+with the <a class="indexterm" name="AUTOID-32007"></A
+>
+<kbd class="command">fgets()</KBD
+>
+function, which does not allow its input buffer length to be exceeded:</P
+><blockquote class="screen"><pre class="screen">fgets(line,sizeof(line),stdin);</PRE
+></BLOCKQUOTE
+><p class="para">Fortunately, the
+Morris version did not explicitly damage programs or data on computers
+that it penetrated.[2] Nevertheless, it
+illustrated the fact that any network service program can potentially
+compromise the system. Furthermore, the flaw was unnoticed in the
+<kbd class="command">finger</KBD
+> code for more than six years, from the time of the first
+Berkeley <span class="acronym">UNIX</SPAN
+> network software release until the
+day that the Worm ran loose. Remember this lesson: because a hole has
+never been discovered in a program does not mean that no hole
+exists. </P
+><blockquote class="footnote"><p class="para">[2] However, as the worm did run with
+privileges of the superuser, it could have altered the compromised
+system in any number of ways.</P
+></BLOCKQUOTE
+><p class="para">Interestingly enough, the fallible human
+component is illustrated by the same example. Shortly after the
+problem with the
+<kbd class="command">gets</KBD
+>() subroutine
+was exposed, the Berkeley group went through all of its code and
+eliminated every similar use of the
+<kbd class="command">gets</KBD
+>() call in a
+network server. Most vendors did the same with their code.  Several
+people, including one of us, publicly warned that uses of other library
+calls that wrote to buffers without bounds checks also needed to be
+examined. These included calls to the<a class="indexterm" name="AUTOID-32019"></A
+>
+<kbd class="command">sprintf</KBD
+>()
+ routine, and byte-copy routines such as<a class="indexterm" name="AUTOID-32022"></A
+>
+<kbd class="command">strcpy()</KBD
+>.</P
+><p class="para">In late 1995, as we were finishing the second edition of this
+book, a new security vulnerability in several versions of
+<span class="acronym">UNIX</SPAN
+> was widely publicized. It was based on buffer
+overruns in the <kbd class="command"><a class="indexterm" name="AUTOID-32028"></A
+>syslog</KBD
+> library routine. An
+attacker could carefully craft an argument to a network daemon such
+that, when an attempt was made to log it using
+<kbd class="command">syslog</KBD
+>, the message overran the buffer and
+compromised the system in a manner hauntingly similar to the <kbd class="command">fingerd</KBD
+>
+problem. After seven years, a cousin to the <kbd class="command">fingerd</KBD
+>
+bug was discovered. What underlying library calls contribute to the
+problem? The
+<kbd class="command">sprintf</KBD
+>()
+library call does, and so do byte-copy routines such as
+<em class="emphasis">strcpy</EM
+>().</P
+><p class="para">While programming tools and methods are regrettable and
+lead to many <span class="acronym">UNIX</SPAN
+> security bugs, the failure to
+learn from old mistakes is even more regrettable.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="PUIS-CHP-23-SECT-1.2">23.1.2 An Empirical Study of the Reliability of UNIX Utilities</A
+></H3
+><p class="para">In December 1990, the <em class="emphasis">Communications
+of the ACM </EM
+>published an article by<a class="indexterm" name="IDX-MILLER-BARTON"></A
+>
+Miller, Fredrickson, and So, entitled
+&quot;An Empirical Study of the Reliability of
+<span class="acronym">UNIX</SPAN
+> Utilities&quot; (Volume 33, issue 12,
+pp. 32-44). The paper started almost as a joke: a researcher was
+logged into a <span class="acronym">UNIX</SPAN
+> computer from home, and the
+programs he was running kept crashing because of line noise from a
+poor modem connection. Eventually Barton Miller, a professor at the
+University of Wisconsin, decided to subject the
+<span class="acronym">UNIX</SPAN
+> utility programs from a variety of different
+vendors to a selection of random inputs and monitor the
+results.</P
+><div class="sect3"><h4 class="sect3"><a class="title" name="PUIS-CHP-23-SECT-1.2.1">23.1.2.1 What they found</A
+></H4
+><p class="para">The results
+were discouraging.  Between 25% and 33% of the
+<span class="acronym">UNIX</SPAN
+> utilities could be crashed or hung by
+supplying them with unexpected inputs&nbsp;- sometimes input that was
+as simple as an end-of-file on the middle of an input line. On at
+least one occasion, crashing a program tickled an operating system bug
+and caused the entire
+
+computer to crash. Many times, programs would freeze for no apparent
+reason.</P
+><p class="para">In 1995 a new team headed by Miller repeated
+the experiment, this time running a program called <i class="filename">Fuzz</I
+> on nine different <span class="acronym">UNIX</SPAN
+> platforms.
+The team also tested <span class="acronym">UNIX</SPAN
+> network servers, and
+a variety of X Windows applications (both clients and servers).[3]
+Here are some of the highlights:</P
+><blockquote class="footnote"><p class="para">[3] You can download a complete copy of the papers from <a class="systemitem.url" href="../../../WebStripper/protected.html#link=ftp://grilled.cs.wisc.edu/technical_papers/fuzz-revisited.ps.Z.">ftp://grilled.cs.wisc.edu/technical_papers/fuzz-revisited.ps.Z.</A
+></P
+></BLOCKQUOTE
+><ul class="itemizedlist"><li class="listitem"><p class="para"><a class="indexterm" name="AUTOID-32060"></A
+>According
+to the 1995 paper, vendors were still shipping a distressingly buggy
+set of programs: &quot;...the failure rate of utilities
+on the commercial versions of <span class="acronym">UNIX</SPAN
+> that we tested
+(from Sun, <span class="acronym">IBM</SPAN
+>, <span class="acronym">SGI</SPAN
+>, <span class="acronym">DEC</SPAN
+>,
+and NeXT) ranged from 15-43%.&quot;</P
+></LI
+><li class="listitem"><p class="para"><span class="acronym">UNIX</SPAN
+> vendors don't seem
+to be overly concerned about bugs in their programs: &quot;Many
+of the bugs discovered (approximately 40%) and reported
+in 1990 are still present in their exact form in 1995. The 1990
+study was widely published in at least two languages. The code was
+made freely available via anonymous <span class="acronym">FTP</SPAN
+>. The
+exact random data streams used in our testing were made freely available
+via <span class="acronym">FTP</SPAN
+>. The identification of failures that
+we found were also made freely available via <span class="acronym">FTP</SPAN
+>;
+these include code fragments with file and line numbers for the
+errant code. According to our records, over 2000 copies of the...tools
+and bug identifications were fetched from our <span class="acronym">FTP</SPAN
+>
+sites...It is difficult to understand why a vendor would not partake
+of a free and easy source of reliability improvements.&quot;</P
+></LI
+><li class="listitem"><p class="para">The two lowest failure rates in the study were the
+Free Software Foundation's <a class="indexterm" name="AUTOID-32075"></A
+><a class="indexterm" name="AUTOID-32077"></A
+>
+<span class="acronym">GNU</SPAN
+> utilities (failure rate
+of 7%) and the utilities included with the freely distributed
+Linux version of the <span class="acronym">UNIX</SPAN
+> operating system (failure
+rate 9%).[4]
+Interestingly enough, the Free Software Foundation has strict coding
+rules that forbid the use of fixed-length buffers. (Miller <em class="emphasis">et
+al</EM
+> failed to note that many of the Linux utilities were
+repackaged <span class="acronym">GNU</SPAN
+> utilities.)</P
+><blockquote class="footnote"><p class="para">[4] We don't believe that
+7% is an acceptable failure rate, either.</P
+></BLOCKQUOTE
+></LI
+></UL
+><p class="para">There were a few bright points in the 1995 paper. Most notable
+was the fact that Miller <em class="emphasis">et al.</EM
+> were unable
+to crash any <span class="acronym">UNIX</SPAN
+> network server. The group was
+also unable to crash any X Windows server. </P
+><p class="para">On
+the other hand, the group discovered that many X clients will readily
+crash when fed random streams of data. Others will lock up&nbsp;- and
+in the process, freeze the X server until the programs are terminated.</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="PUIS-CHP-23-SECT-1.2.2">23.1.2.2 Where's the beef?</A
+></H4
+><p class="para">Many of the
+errors that Miller's group discovered result from common
+programming mistakes with the C programming language&nbsp;- programmers
+who wrote clumsy or confusing code that did the wrong things; programers
+who neglected to check for array boundary conditions; and programmers
+who assumed that their <em class="emphasis">char</EM
+> variables were
+unsigned, when in fact they are signed. </P
+><p class="para">While these
+errors can certainly cause programs to crash when they are fed random
+streams of data, these errors are exactly the kinds of problems
+that can be exploited by carefully crafted streams of data to achieve
+malicious results. Think back to the Internet Worm: if attacked
+by the Miller Fuzz program, the original <kbd class="command">fingerd</KBD
+> program
+would have crashed. But when presented with the carefully crafted
+stream that was present in the Morris Worm, the program gave its
+attacker a <em class="emphasis">root shell! </EM
+></P
+><p class="para">What is
+somewhat frightening about the study is that the tests employed
+by Miller's group are among the least comprehensive known
+to testers&nbsp;- random, black-box testing. Different patterns
+of input could possibly cause more programs to fail. Inputs made
+under different environmental circumstances could also lead to abnormal
+behavior. Other testing methods could expose these problems where
+random testing, by its very nature, would not.</P
+><p class="para">Miller's
+group also found that use of several commercially available tools
+enabled them to discover errors and perform other tests, including
+discovery of buffer overruns and related memory errors. These tools
+are readily available; however, vendors are apparently not using
+them.</P
+><p class="para">Why don't vendors care more about quality?
+Well, according to many of them, they do care, but quality does
+not sell. Writing good code and testing it carefully is not a quick
+or simple task. It requires extra effort, and extra time. The extra
+
+time spent on ensuring quality will result in increased cost. To
+
+date, few customers (possibly including you, gentle reader) have
+
+indicated a willingness to pay extra for better-quality software.
+
+Vendors have thus put their efforts into what customers are willing
+
+to buy, such as new features. Although we believe that most vendors
+
+could do a better job in this respect (and some could do a <em class="emphasis">much</EM
+>
+
+better job), we must be fair and point the finger at the user population,
+
+too.</P
+><p class="para">In some sense, any program you write might fare
+
+as well as vendor-supplied software. However, that isn't
+
+good enough if the program is running in a sensitive role and might
+
+be abused. Therefore, you must practice good coding habits, and
+
+pay special attention to common trouble spots.<a class="indexterm" name="AUTOID-32101"></A
+></P
+></DIV
+></DIV
+></DIV
+><a class="indexterm" name="AUTOID-33115"></A
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch22_06.htm" title="22.6 Writing Your Own Wrappers"><img src="../gifs/txtpreva.gif" alt="Previous: 22.6 Writing Your Own Wrappers" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Practical UNIX &amp; Internet Security"><img src="../gifs/txthome.gif" alt="Practical UNIX &amp; Internet Security" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch23_02.htm" title="23.2 Tips on Avoiding Security-related Bugs"><img src="../gifs/txtnexta.gif" alt="Next: 23.2 Tips on Avoiding Security-related Bugs" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">22.6 Writing Your Own Wrappers</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">23.2 Tips on Avoiding Security-related Bugs</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.htm" title="The Networking CD Bookshelf">Library Home</A
+> | <a href="../dnsbind/index.htm" title="DNS &amp; BIND">DNS &amp; BIND</A
+> | <a href="../tcpip/index.htm" title="TCP/IP Network Administration">TCP/IP</A
+> | <a href="../sendmail/index.htm" title="sendmail">sendmail</A
+> | <a href="../smdref/index.htm" title="sendmail Desktop Reference">sendmail Reference</A
+> | <a href="../firewall/index.htm" title="Building Internet Firewalls">Firewalls</A
+> | <a href="index.htm" title="Practical UNIX &amp; Internet Security">Practical Security</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

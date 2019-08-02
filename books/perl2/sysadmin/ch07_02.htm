@@ -1,0 +1,764 @@
+<html>
+<head>
+<title>Using the DBI Framework  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Using the DBI Framework">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch07_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch07_01.htm">Chapter 7: SQL Database Administration</a></td><td align="right" valign="top" width="172"><a href="ch07_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">7.2. Using the DBI Framework</h2>
+
+
+
+
+
+<p>
+<a name="INDEX-696"></a><a name="INDEX-697"></a>Here are the basic steps for using DBI. For
+more information on DBI, see <em class="citetitle">Programming the Perl
+DBI</em> by Alligator Descartes and Tim Bunce
+(O'Reilly).</p>
+
+
+
+
+
+<dl>
+<dt>
+<b>Step 1: Load the necessary Perl module</b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-698"></a><a name="INDEX-699"></a><a name="INDEX-700"></a>Nothing special here, you need to just:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use DBI;</pre>
+</blockquote>
+</dd>
+
+
+
+
+
+<dt>
+<b>Step 2: Connect to the database and receive a connection handle</b>
+</dt>
+<dd>
+<p>The Perl code to establish a DBI connection to a MySQL database and
+return a database handle looks like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># connect using to the database named $database using given 
+# username and password, return a database handle
+$database = "sysadm";
+$dbh = DBI-&gt;connect("DBI:mysql:$database",$username,$pw);
+die "Unable to connect: $DBI::errstr\n" unless (defined $dbh);</pre>
+</blockquote>
+
+
+
+
+
+<p>DBI will load the low-level DBD driver for us
+(<tt class="literal">DBD::mysql</tt>) prior to actually connecting to the
+server. We then test if the <tt class="literal">connect( )</tt> succeeded
+before continuing. DBI provides <tt class="literal">RaiseError</tt> and
+<tt class="literal">PrintError</tt> options for <tt class="literal">connect(
+)</tt>, should we want DBI to perform this test or
+automatically complain about errors when they happen. For example, if
+we used:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$dbh = DBI-&gt;connect("DBI:mysql:$database",
+                    $username,$pw,{RaiseError =&gt; 1});</pre>
+</blockquote>
+
+
+
+
+
+<p>then DBI would call <tt class="literal">die</tt> for us if the
+<tt class="literal">connect( )</tt> failed.</p>
+</dd>
+
+
+
+
+
+<dt>
+<b>Step 3: Send SQL commands to the server</b>
+</dt>
+<dd>
+<p>With our Perl module loaded and a connection to the database server
+in place, it's showtime! Let's send some SQL commands to
+the server. We'll use some of the SQL tutorial queries from
+<a href="appd_01.htm">Appendix D, "The Fifteen-Minute SQL Tutorial"</a> for examples. These queries will use the
+Perl <tt class="literal">q</tt> convention for quoting (i.e.,
+<tt class="literal">something</tt> is written as
+<tt class="literal">q{something}</tt>), just so we don't have to
+worry about single or double quotes in the actual queries themselves.
+Here's the first of the two DBI methods for sending commands:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$results=$dbh-&gt;do(q{UPDATE hosts 
+                    SET bldg = 'Main' 
+                    WHERE name = 'bendir'});
+die "Unable to perform update:$DBI::errstr\n" unless (defined $results);</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">$results</tt> will receive either the number of rows
+updated or <tt class="literal">undef</tt> if an error occurs. Though it
+is useful to know how many rows were affected, that's not going
+to cut it for statements like <tt class="literal">SELECT</tt> where we
+need to see the actual data. This is where the second method comes
+in.</p>
+
+
+
+
+
+<p>To use the second method you first <tt class="literal">prepare</tt> a SQL
+statement for use and then you ask the server to
+<tt class="literal">execute</tt> it. Here's an example:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$sth = $dbh-&gt;prepare(q{SELECT * from hosts}) or 
+  die "Unable to prep our query:".$dbh-&gt;errstr."\n";
+$rc = $sth-&gt;execute or 
+  die "Unable to execute our query:".$dbh-&gt;errstr."\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">p</tt><tt class="literal">repare( )</tt> returns a new
+creature we haven't seen before: the statement handle. Just
+like a database handle refers to an open database connection, a
+statement handle refers to a particular SQL statement we've
+<tt class="literal">prepare( )</tt>d. Once we have this statement handle,
+we use <tt class="literal">execute</tt> to actually send the query to our
+server. Later on, we'll be using the same statement handle to
+retrieve the results of our query. <a name="INDEX-701"></a><a name="INDEX-702"></a>
+</p>
+
+
+
+
+
+<p>You might wonder why we bother to <tt class="literal">prepare( )</tt> a
+statement instead of just executing it directly. <tt class="literal">prepare(
+)</tt>ing a statement gives the DBD driver (or more likely the
+database client library it calls) a chance to parse the SQL query.
+Once a statement has <tt class="literal">prepare(
+)</tt>d, we can execute it repeatedly via our statement handle
+without parsing it over and over. Often this is a major efficiency
+win. In fact, the default <tt class="literal">do( )</tt> DBI method does
+a <tt class="literal">prepare( )</tt> and then
+<tt class="literal">execute( )</tt> behind the scenes for each statement
+it is asked to execute.</p>
+
+
+
+
+
+<p>Like the <tt class="literal">do</tt> call we saw earlier,
+<tt class="literal">execute( )</tt> returns the number of rows affected.
+If the query affects zero rows, the string <tt class="literal">0E0</tt> is
+returned to allow a Boolean test to succeed. -<tt class="literal">1</tt> is
+returned if the number of rows affected is unknown by the driver.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-703"></a><a name="INDEX-704"></a>Before we
+move on to ODBC, it is worth mentioning one more twist supported by
+most DBD modules on the <tt class="literal">prepare( )</tt> theme:
+placeholders. Placeholders, also called positional markers, allow you
+to <tt class="literal">prepare( )</tt> an SQL statement that has holes in
+it to be filled at <tt class="literal">execute( )</tt> time. This allows
+you to construct queries on the fly without paying most of the parse
+time penalty. The question mark character is used as the placeholder
+for a single scalar value. Here's some Perl code to demonstrate
+the use of placeholders:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">@machines = qw(bendir shimmer sander);
+$sth = $dbh-&gt;prepare(q{SELECT name, ipaddr FROM hosts WHERE name = ?});
+foreach $name (@machines){
+  $sth-&gt;execute($name);
+  <em class="replaceable">do-something-with-the-results</em>
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Each time we go through the <tt class="literal">foreach</tt> loop, the
+<tt class="literal">SELECT</tt> query is executed with a different
+<tt class="literal">WHERE</tt> clause. Multiple placeholders are
+straightforward:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$sth-&gt;prepare(
+   q{SELECT name, ipaddr FROM hosts 
+     WHERE (name = ? AND bldg = ? AND dept = ?)});
+$sth-&gt;execute($name,$bldg,$dept);</pre>
+</blockquote>
+
+
+
+
+
+<p>Now that we know how to retrieve the number of rows affected by
+non-<tt class="literal">SELECT</tt> SQL queries, let's look into
+retrieving the results of our <tt class="literal">SELECT</tt> requests.</p>
+</dd>
+
+
+
+
+
+<dt>
+<b>Step 4: Retrieve SELECT results</b>
+</dt>
+<dd>
+<p>The mechanism here is similar to our brief discussion of cursors
+during the SQL tutorial in <a href="appd_01.htm">Appendix D, "The Fifteen-Minute SQL Tutorial"</a>. When we send
+a <tt class="literal">SELECT</tt> statement to the server using
+<tt class="literal">execute( )</tt>, we're using a mechanism that
+allows us to retrieve the results one line at a time.</p>
+
+
+
+
+
+<p>In DBI, we call one of the methods in <a href="ch07_02.htm#ch07-71952">Table 7-1</a> to
+return data from the result set.</p>
+
+
+
+
+
+
+<a name="ch07-71952"></a>
+<h4 class="objtitle">Table 7.1. DBI Methods for Returning Data</h4>
+<table border="1">
+
+
+
+
+<tr>
+<th>
+<p>Name</p>
+</th>
+<th>
+<p>Returns</p>
+</th>
+<th>
+<p>Returns If No More Rows</p>
+</th>
+</tr>
+
+
+
+
+
+
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">fetchrow_arrayref(  )</tt>
+</p>
+</td>
+<td>
+<p>An array reference to an anonymous array with values that are the
+columns of the next row in a result set</p>
+</td>
+<td>
+<p>
+<tt class="literal">undef</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">fetchrow_array(  )</tt>
+</p>
+</td>
+<td>
+<p>An array with values that are the columns of the next row in a result
+set</p>
+</td>
+<td>
+<p>An empty list</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">fetchrow_hashref(  )</tt>
+</p>
+</td>
+<td>
+<p>A hash reference to an anonymous hash with keys that are the column
+names and values that are the values of the columns of the next row
+in a result set</p>
+</td>
+<td>
+<p>
+<tt class="literal">undef</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">fetchall_arrayref(  )</tt>
+</p>
+</td>
+<td>
+<p>A reference to an array of arrays data structure</p>
+</td>
+<td>
+<p>A reference to an empty array</p>
+</td>
+</tr>
+
+
+
+
+
+</table>
+
+
+
+
+
+<p>Let's see these methods in context. For each of these examples,
+assume the following was executed just prior:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$sth = $dbh-&gt;prepare(q{SELECT name,ipaddr,dept from hosts}) or
+  die "Unable to prepare our query: ".$dbh-&gt;errstr."\n";
+$sth-&gt;execute or die "Unable to execute our query: ".$dbh-&gt;errstr."\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's <tt class="literal">fetchrow_arrayref(  )</tt> in action:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">while ($aref = $sth-&gt;fetchrow_arrayref){
+  print "name: "   .  $aref-&gt;[0] . "\n";
+  print "ipaddr: " .  $aref-&gt;[1] . "\n";
+  print "dept: "   .  $aref-&gt;[2] . "\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>The DBI documentation mentions that <tt class="literal">fetchrow_hashref(
+)</tt> is less efficient than <tt class="literal">fetchrow_arrayref(
+)</tt> because of the extra processing it entails, but it can
+yield more readable code. Here's an example:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">while ($href = $sth-&gt;fetchrow_hashref){
+  print "name: "   .  $href-&gt;{name}  . "\n";
+  print "ipaddr: " .  $href-&gt;{ipaddr}. "\n";
+  print "dept: "   .  $href-&gt;{dept}  . "\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Finally, let's take a look at the "convenience"
+method, <tt class="literal">fetchall_arrayref( )</tt>. This method sucks
+the entire result set into one data structure, returning a reference
+to an array of references. Be careful to limit the size of your
+queries when using this method because it does pull the entire result
+set into memory. If you have a 100GB result set, this may prove to be
+a bit problematic.</p>
+
+
+
+
+
+<p>Each reference returned looks exactly like something we would receive
+from <tt class="literal">fetchrow_arrayref( )</tt>. See <a href="ch07_02.htm#ch07-48625">Figure 7-2</a>.</p>
+
+
+
+
+
+<a name="ch07-48625"></a>
+<div class="figure">
+<img alt="figure" src="figs/psa_0702.gif"></div>
+<h4 class="objtitle">Figure 7.2. The data structure returned by fetchrow_arrayref</h4>
+
+<p>Here's some code that will print out the entire query result
+set:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$aref_aref = $sth-&gt;fetchall_arrayref;
+foreach $rowref (@$aref_aref){
+  print "name: "   .  $rowref-&gt;[0] . "\n";
+  print "ipaddr: " .  $rowref-&gt;[1] . "\n";
+  print "dept: "   .  $rowref-&gt;[2] . "\n";
+  print '-'x30,"\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>This code sample is specific to our particular data set because it
+assumes a certain number of columns in a certain order. For instance,
+we assume the machine name is returned as the first column in the
+query (<tt class="literal">$rowref-&gt;[0]</tt>).</p>
+
+
+
+
+
+<p>We can use some magic attributes (often called metadata) of statement
+handles to rewrite our result retrieval code to make it more generic.
+Specifically, if we look at
+<tt class="literal">$sth-&gt;{NUM_OF_FIELDS}</tt> after a query, it will
+tell us the number of fields (columns) in our result set.
+<tt class="literal">$sth-&gt;{NAME}</tt> contains a reference to an array
+with the names of each column. Here's a more generic way to
+write the last example:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$aref_aref = $sth-&gt;fetchall_arrayref;
+foreach $rowref (@$aref_aref){
+  for ($i=0; $i &lt; $sth-&gt;{NUM_OF_FIELDS};i++;){
+    print $sth-&gt;{NAME}-&gt;[$i].": ".$rowref-&gt;[$i]."\n";
+  } 
+  print '-'x30,"\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Be sure to see the DBI documentation for more metadata attributes.</p>
+</dd>
+
+
+
+
+
+
+<dt>
+<b>Step 5: Close the connection to the server</b>
+</dt>
+<dd>
+<p>In DBI this is simply:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># tells server you will not need more data from statement handle
+# (optional, since we're just about to disconnect)
+$sth-&gt;finish;  
+# disconnects handle from database
+$dbh-&gt;disconnect;</pre>
+</blockquote>
+</dd>
+
+</dl>
+
+
+
+
+<a name="ch07-2-fm2xml"></a>
+<h3 class="sect2">7.2.1. DBI Leftovers</h3>
+
+
+
+
+
+<p>There are two remaining DBI topics worth mentioning before we move on
+to ODBC. The first is a set of methods I call "shortcut"
+methods. The methods in <a href="ch07_02.htm#ch07-43698">Table 7-2</a> combine steps 3
+and 4 from above.</p>
+
+
+
+
+
+<a name="ch07-43698"></a>
+<h4 class="objtitle">Table 7.2. DBI Shortcut Methods</h4>
+<table border="1">
+
+
+
+<tr>
+<th>
+<p>Name</p>
+</th>
+<th>
+<p>Combines These Methods into a Single Method</p>
+</th>
+</tr>
+
+
+
+
+
+
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">selectrow_arrayref($stmnt)</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">prepare($stmnt)</tt>, <tt class="literal">execute()</tt>,
+<tt class="literal">fetchrow_arrayref( )</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">selectcol_arrayref($stmnt)</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">prepare($stmnt)</tt>, <tt class="literal">execute()</tt>,
+<tt class="literal">(@{fetchrow_arrayref( )})[0] </tt>(i.e., returns
+first column for each row)</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">selectrow_array($stmnt)</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">prepare($stmnt)</tt>, <tt class="literal">execute()</tt>,
+<tt class="literal">fetchrow_array( )</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+
+</table>
+
+
+
+
+
+<p>The second topic worth mentioning is DBI's ability to bind
+variables to query results. The methods <tt class="literal">bind_col(
+)</tt> and <tt class="literal">bind_columns( )</tt> are used to
+tell DBI to automatically place the results of a query into a
+specific variable or list of variables. This usually saves a step or
+two when coding. Here's an example using
+<tt class="literal">bind_columns( )</tt> that makes its use clear:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$sth = $dbh-&gt;prepare(q{SELECT name,ipaddr,dept from hosts}) or
+  die "Unable to prep our query:".$dbh-&gt;errstr".\n";
+$rc = $sth-&gt;execute or 
+  die "Unable to execute our query:".$dbh-&gt;errstr".\n";
+
+# these variables will receive the 1st, 2nd, and 3rd columns 
+# from our SELECT
+$rc = $sth-&gt;bind_columns(\$name,\$ipaddr,\$dept);
+
+while ($sth-&gt;fetchrow_arrayref){
+    # $name, $ipaddr, and $dept are automagically filled in from 
+    # the fetched query results row
+    do-something-with-the-results
+}<a name="INDEX-705"></a>
+<a name="INDEX-706"></a>
+<a name="INDEX-707"></a>
+<a name="INDEX-708"></a>
+<a name="INDEX-709"></a>
+</pre>
+</blockquote>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch07_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch07_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">7.1. Interacting with an SQL Server from Perl</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">7.3. Using the ODBC Framework</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

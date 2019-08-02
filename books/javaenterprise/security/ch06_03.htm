@@ -1,0 +1,1861 @@
+<html>
+<head>
+<title>Implementation Techniques (Java Security)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Scott Oaks">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-403-7E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Implementation Techniques">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm" alt="Java Security"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch06_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch06_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch06_01.htm">Chapter 6: Implementing Security Policies</a></td><td align="right" valign="top" width="172"><a href="ch06_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch06_04.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">6.3. Implementation Techniques</h2>
+
+<p>We'll now turn our attention to implementing security policies.
+Our goal is to show how to write a security manager--one that
+can be used in conjunction with the access controller, and one that
+can stand alone. We'll plug these security managers into our
+<tt class="literal">JavaRunner</tt> program, and we'll also discuss
+the implementation of the security manager that comes with the
+<tt class="literal">Launcher</tt> and how that security manager may be
+installed.
+</p>
+
+<a name="SEC-CH-6-SECT-3.1"></a>
+<h3 class="sect2">6.3.1. Utility Classes</h3>
+
+<p>
+<a name="INDEX-792"></a><a name="INDEX-793"></a>In order to make our
+implementation of the security manger a bit easier, we'll
+provide a few utility classes.
+</p>
+
+<p>As we intimated above, there are many times when we want to reject an
+operation if there is any untrusted class on the stack. In order to
+simplify this operation, we define this
+method:<a name="INDEX-794"></a>
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">	private void checkClassLoader(String ask, String ex) {
+		// Use the ask string to prompt the user if the operation
+		// should succeed
+		if (inClassLoader()) {
+			throw new SecurityException(ex);
+		}
+	}</pre>
+</blockquote>
+
+<p>We've passed a string to this method that allows us to ask the
+user if the operation in question should be permitted; for example,
+the application could pop up a dialog window and give the user the
+opportunity to accept the operation. Whether or not that ability is a
+good idea is open to debate; we've left it to the reader to
+provide the logic to implement that feature (if desired).
+</p>
+
+<p>There are a number of tests we want our security manager to reject if
+they are attempted directly by an untrusted class, but should succeed
+if they are attempted indirectly by an untrusted class. For these
+tests in Java 1.1, we have to rely on the class depth to tell us
+whether the call originated from an untrusted class or not. We use
+this method to help us with that
+task:<a name="INDEX-795"></a>
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">private void checkClassDepth(int depth, String ask, String ex) {
+	int clDepth = classLoaderDepth();
+	if (clDepth &gt; 0 &amp;&amp; clDepth &lt;= depth + 1) {
+		throw new SecurityException(ex);
+	}
+}</pre>
+</blockquote>
+
+<p>Note that we have to add 1 to the class depth for this method to
+succeed, since calling this method has pushed another method frame
+onto the stack.
+</p>
+
+
+<a name="SEC-CH-6-SECT-3.2"></a>
+<h3 class="sect2">6.3.2. Implementing Network Access</h3>
+
+<p>
+<a name="INDEX-796"></a><a name="INDEX-797"></a>Regardless of the release on which
+your security manager is based, you typically must write the
+necessary methods to handle network access, because the default
+methods of the security manager are usually inadequate. In 1.1, the
+default behavior for the <tt class="literal">checkConnect()</tt> method
+is to throw a security violation.
+</p>
+
+<p>In 1.2, the default behavior for the
+<tt class="literal">checkConnect()</tt><a name="INDEX-798"></a> method is to use the
+access controller to see if the appropriate entry is in the policy
+file. This is very useful in some circumstances: we can, for example,
+specify that all code loaded from
+<em class="filename">network.xyz.com</em> can access any other machine in
+the <em class="filename">xyz.com</em> domain, but no other machines. But
+we cannot set up a general rule for the mode of network access
+we're most accustomed to. We cannot set up a rule saying that
+code loaded from a particular machine can only make a network
+connection back to that machine. The problem lies in the fact that we
+cannot pattern match entries in the policy file; we cannot say
+something like:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">grant codeBase http://%template/ {
+		permission java.net.SocketPermission "%template", "connect";
+};</pre>
+</blockquote>
+
+<p>So if we want to implement a security policy where code can only make
+a connection back to the host from which it was loaded, we must
+provide a new implementation of the
+<tt class="literal">checkConnect()</tt> method:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">private ClassLoader getNonSystemClassLoader() {
+	Class c[] = getClassContext();
+	ClassLoader sys = ClassLoader.getSystemClassLoader();
+	for (int i = 1; i &lt; c.length; i++) {
+		ClassLoader cl = c[i].getClassLoader();
+		if (cl != null &amp;&amp; !cl.equals(sys))
+		     return cl:
+	}
+	return null
+}
+
+public void checkConnect(String host, int port) {
+	try {
+		super.checkConnect(host, port);
+		return;
+	} catch (AccessControlException ace) {
+		// continue
+	}
+
+	//In 1.1, use currentClassLoader() instead
+	ClassLoader loader = getNonSystemClassLoader();
+	String remoteHost;
+
+	if (loader == null)
+		return;
+	if (!(loader instanceof JavaRunnerLoader))
+		throw new SecurityException("Class loader out of sync");
+	JavaRunnerLoader cl = (JavaRunnerLoader) loader;
+	remoteHost = cl.getHost();
+
+	if (host.equals(remoteHost))
+		return;
+
+	try {
+		class testHost implements PrivilegedExceptionAction {
+			String local, remote;
+			testHost(String local, String remote) {
+				this.local = local;
+				this.remote = remote;
+			}
+			public Object run() throws UnknownHostException {
+				InetAddress hostAddr = InetAddress.getByname(local);
+				InetAddress remoteAddr = InetAddress.getByName(remote);
+				if (hostAddr.equals(remoteAddr))
+					return new Boolean("true");
+				return new Boolean("false"); 
+			}
+		}
+		testHost th = new testHost(host, remoteHost);
+		Boolean b = (Boolean) AccessController.doPrivileged(th);
+		if (b.booleanValue())
+			return;
+	} catch (PrivilegedActionException pae) {
+	//Must be an UnknownHostException; continue and throw exception
+	}
+
+	throw new SecurityException(
+				"Can't connect from " + remoteHost + " to " + host);
+}</pre>
+</blockquote>
+
+<p>First, we check our superclass to see if it allows the connection.
+This is only appropriate for 1.2-based security
+managers--calling the superclass checks the policy file to see
+if the connection should be made according to information in that
+file. If that's true, then we simply want to return: the check
+should succeed. Otherwise, we continue so we can make sure the
+destination machine is the same machine we loaded this particular
+class from. For 1.1, this test must be omitted; the superclass in 1.1
+would immediately throw an exception.
+</p>
+
+<p>If there is no class loader on the stack, we want to permit access to
+any host, so we simply return. Otherwise, we obtain the hostname the
+untrusted class was loaded from (via the
+<tt class="literal">getHost()</tt> method of the class loader) and
+compare that to the hostname the untrusted class is attempting to
+contact. If the strings are equal, we're all set and can
+return. Otherwise, we implement the logic we described earlier by
+obtaining the IP address for each hostname and comparing the two IP
+addresses.
+</p>
+
+<p>Note that the logic here for allowing the
+<tt class="literal">InetAddress</tt> class to resolve the hostname to an
+IP address is based on the access controller. For a 1.1-based
+security manager, you would set the <tt class="literal">inCheck</tt>
+variable to true, execute the calls that are in the
+<tt class="literal">run()</tt> method of the
+<tt class="literal">testHost</tt> class, and then set
+<tt class="literal">inCheck</tt> to false. You would also need to
+synchronize this method and the <tt class="literal">getInCheck()</tt>
+methods.
+</p>
+
+<p>This implementation requires yet another change to the
+<a name="INDEX-799"></a>class loader we're
+using. The class loader must now be able to provide us with the name
+of the host from which a particular class was loaded. Since our class
+loader is based on a URL, that's an easy method to implement:
+we simply return the host of the URL:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class JavaRunnerLoader extends SecureClassLoader {
+	URL urlBase;
+	... other code from previous examples ...
+	String getHost() {
+		return urlBase.getHost();
+	}
+}</pre>
+</blockquote>
+
+<p>
+<a name="INDEX-800"></a>
+If you choose to implement a different network security model for
+your
+<tt class="literal">checkConnect()</tt><a name="INDEX-801"></a><a name="INDEX-802"></a> method, there are a few things that you
+should be aware of:
+</p>
+
+<ul>
+<li>
+<p>The <tt class="literal">checkConnect()</tt> method is frequently called
+with a port of -1. That usage comes primarily from the methods of the
+<tt class="literal">InetAddress</tt> class; in order to resolve the name
+of a machine, you must be able to make a connection to that machine.
+So if you want to restrict a connection to the privileged ports on
+your machine (those less than 1024), make sure you test to see that
+the port is between
+and 1023, rather than simply less than 1024.
+</p>
+</li>
+<li>
+<p>The host argument passed to the <tt class="literal">checkConnect()</tt>
+method is frequently an IP address rather than a symbolic hostname.
+This is an artifact of the way in which the default socket
+implementation (that is, the <tt class="literal">PlainSocketImpl</tt>
+class) operates: this class actually generates two calls to the
+<tt class="literal">checkConnect()</tt> method. The first call contains
+the actual hostname and a port number of -1 (because the
+<tt class="literal">PlainSocketImpl</tt> class has called the
+<tt class="literal">InetAddress.getByName()</tt> method), and the second
+call contains the IP address and the actual port number.
+</p>
+</li>
+<li>
+<p>If you choose to disallow all network access by untrusted classes and
+you are using a network-based class loader to load classes, you
+cannot simply write a <tt class="literal">checkConnect()</tt> method that
+calls the <tt class="literal">inClassLoader()</tt> method and throws an
+exception if it returns <tt class="literal">true</tt>. The class loader
+must be allowed to open a socket in order to retrieve additional
+classes that are referenced by the untrusted class, and such a
+request will contain the untrusted class on the stack when the call
+is made. In Java 1.1, you can use the <tt class="literal">inClass()</tt>
+method to see if the class loader is attempting to open the socket,
+in which case you should let the operation succeed. In Java 1.2, you
+can use the <tt class="literal">doPrivileged()</tt> method of the access
+controller from within the class loader to attempt to open the URL.
+</p>
+</li>
+<li>
+<p>There is another <tt class="literal">checkConnect()</tt> method that
+accepts as arguments the hostname, the port number, and an arbitrary
+object (a context). Like the similar <tt class="literal">checkRead()</tt>
+method, this version of the <tt class="literal">checkConnect()</tt>
+method is never called by the Java API, so the easiest route to take
+is not to implement it at all. The type of information you might
+choose to encode within the context could be, for example, the
+hostname that was retrieved from the current class loader. However,
+since the security manager is responsible for obtaining the context
+in the first place, there's no reason why that information
+cannot be used directly rather than calling this second
+<tt class="literal">checkConnect()</tt> method.
+</p>
+</li>
+</ul>
+
+<p>You may want to implement a similar policy in the
+<tt class="literal">checkAccept()</tt><a name="INDEX-803"></a> method so that a class
+can only accept a connection from the host from which it was loaded.
+Since we've just implemented that logic in the
+<tt class="literal">checkConnect()</tt> method, the easiest way to
+implement this method is:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public void checkAccept(String host, int port) {
+	try {
+		super.checkAccept(host, port);
+		return;
+	} catch (AccessControlException ace) {
+		// continue
+	}
+	checkConnect(host, port);
+}</pre>
+</blockquote>
+
+<a name="INDEX-804"></a>
+<a name="INDEX-805"></a>
+
+
+<a name="SEC-CH-6-SECT-3.3"></a>
+<h3 class="sect2">6.3.3. Network Permissions in the Class Loader</h3>
+
+<p>
+<a name="INDEX-806"></a><a name="INDEX-807"></a><a name="INDEX-808"></a>In Java 1.2, there is another
+way to achieve the network permissions we just outlined. Instead of
+overriding the <tt class="literal">checkConnect()</tt> method of the
+security manager, we can arrange for the
+<a name="INDEX-809"></a>protection domain of each
+class to carry with it the permission to open a socket to the host it
+was loaded from. We can add this permission without regard to the
+permissions that might be in the policy file.
+</p>
+
+<p>This implementation requires us to override the
+<tt class="literal">getPermissions()</tt> method of the
+<tt class="literal">SecureClassLoader</tt> class as follows:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">protected PermissionCollection getPermissions(CodeSource cs) {
+	if (!cs.equals(this.cs))
+		    return null;
+	Policy pol = Policy.getPolicy();
+	PermissionCollection pc = pol.getPermissions(cs);
+	pc.add(new SocketPermission(urlBase.getHost(), "connect");
+	return pc;
+}</pre>
+</blockquote>
+
+<p>As long as we use the correct code source to define the class, when
+the class loader resolves its permissions the appropriate socket
+permission will be added to the user-defined set of permissions.
+</p>
+
+
+<a name="SEC-CH-6-SECT-3.4"></a>
+<h3 class="sect2">6.3.4. Implementing Thread Security</h3>
+
+<p>
+<a name="INDEX-810"></a><a name="INDEX-811"></a>Implementing a model of thread
+security requires that you implement the
+<tt class="literal">checkAccess()</tt> methods as well as implementing
+the <tt class="literal">getThreadGroup()</tt><a name="INDEX-812"></a><a name="INDEX-813"></a> method. In 1.1, the
+<tt class="literal">checkAccess()</tt> methods by default throw a
+security exception. In 1.2, the default behavior of the security
+manager is to allow the <tt class="literal">checkAccess()</tt> method to
+succeed unless the target thread is a member of the system thread
+group or the target thread group is the system thread group. In those
+cases, the program must have been granted a runtime permission of
+<tt class="literal">modifyThread</tt> or
+<tt class="literal">modifyThreadGroup</tt> (depending on which
+<tt class="literal">checkAccess()</tt> method is involved) for the
+operation to succeed. Hence, any thread can modify any thread or
+thread group except for those belonging to the system thread group.
+Both releases return the thread group of the calling thread for the
+<tt class="literal">getThreadGroup()</tt> method.
+</p>
+
+<p>We'll show an example that implements a hierarchical notion of
+<a name="INDEX-814"></a><a name="INDEX-815"></a>
+thread permissions which fits well within the notion of the virtual
+machine's thread hierarchy (see <a href="#SEC-CH-6-FIG-1">Figure 6-1</a>).
+In this model, a thread can manipulate any thread that appears within
+its thread group or within a thread group that is descended from its
+thread group. In the example, Program #1 has created two thread
+groups. The Calc thread can manipulate itself, the I/O thread, and
+any thread in the Program #1 thread groups; it cannot manipulate any
+threads in the system thread group or in Program #2's thread
+group. Similarly, threads within Program #1's thread subgroup
+#1 can only manipulate threads within that group.
+</p>
+
+<a name="SEC-CH-6-FIG-1"></a>
+<div class="figure">
+<img alt="figure" src="figs/JSEC_0601.gif" webstripperlinkwas="figs/JSEC_0601.gif"></div>
+<h4 class="objtitle">Figure 6-1. A Java thread hierarchy</h4>
+
+<p>This is a different security model than that which is implemented by
+the JDK's <tt class="literal">appletviewer</tt> and by some
+browsers in 1.1. In those models, any thread in any thread group of
+the applet can modify any other thread in any other thread group of
+the applet, but threads in one applet are still prevented from
+modifying threads in another applet or from modifying the system
+threads. But the model we'll describe fits the thread hierarchy
+a little better.
+</p>
+
+<p>Note that this security model doesn't fit well within the idea
+of thread permissions and protection domains. An entry in the policy
+file granting permission to manipulate threads to the classes from
+which Program #1 is loaded will thus grant Program #1 permission to
+manipulate any threads in the virtual machine. The 1.2 default
+security manager checks for the <tt class="literal">modifyThread</tt> and
+<tt class="literal">modifyThreadGroup</tt> permissions as described
+above.
+</p>
+
+<p>The key to our model of thread security depends on the
+<tt class="literal">getThreadGroup()</tt> method. We can use this method
+to ensure that each class loader creates its threads in a new thread
+group as follows:
+</p>
+
+<ul>
+<li>
+<p>If the program attempts to create a thread in a particular thread
+group, the <tt class="literal">checkAccess()</tt> method can throw a
+security exception if the thread group in question is not a
+descendant of the thread group that belongs to the class loader.
+</p>
+</li>
+<li>
+<p>If the program attempts to create a thread without specifying the
+thread group to which it should belong, we can arrange for the
+<tt class="literal">getThreadGroup()</tt> method to return the class
+loader's default thread group. This works because the
+constructors of the thread class call the
+<tt class="literal">getThreadGroup()</tt> method directly to obtain the
+thread group to which a thread should belong.
+</p>
+</li>
+</ul>
+
+<p>The simplest way to implement <tt class="literal">getThreadGroup()</tt>
+is to create a new thread group for each instance of a class loader.
+In a browser-type program, this does not necessarily create a new
+thread group for each applet, because the same instance of a class
+loader might load two or more different applets if those applets
+share the same codebase. If we adopt this approach, those different
+applets will share the same default thread group. This might be
+considered a feature. It is also the approach we'll show; the
+necessary code to put different programs loaded by the same class
+loader into different thread groups is a straightforward extension.
+</p>
+
+<p>Our <tt class="literal">getThreadGroup()</tt> method, then, looks like
+this:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public ThreadGroup getThreadGroup() {
+	ClassLoader loader = currentClassLoader();
+	if (loader == null || !(loader instanceof JavaRunnerLoader))
+		return super.getThreadGroup();
+	JavaRunnerLoader cl = (JavaRunnerLoader) loader;
+	return cl.getThreadGroup();
+}</pre>
+</blockquote>
+
+<p>We want each instance of a class loader to provide a different thread
+group. The simplest way to implement this logic is to defer to the
+class loader to provide the thread group. If there is no class
+loader, we'll use the thread group our superclass recommends
+(which, if we've directly extended the
+<tt class="literal">SecurityManager</tt> class, will be the thread group
+of the calling thread).
+</p>
+
+<p>Of course, not every class loader has a
+<tt class="literal">getThreadGroup()</tt> method, so if the class loader
+we find isn't of the class that we expect, we again have to
+defer to our superclass to provide the correct thread group (which,
+by default, is the thread group of the calling thread). Otherwise, we
+can ask the class loader, which implies that we need to provide a
+<tt class="literal">getThreadGroup()</tt> method within that class
+loader:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class JavaRunnerLoader extends SecureClassLoader {
+	private ThreadGroup threadGroup;
+	private static int groupNum;
+	...
+	ThreadGroup getThreadGroup() {
+		if (threadGroup == null)
+			threadGroup = new ThreadGroup("JavaRunner ThreadGroup-"
+									+ groupNum++);
+		return threadGroup;
+	}
+}</pre>
+</blockquote>
+
+<p>Now we've achieved the first part of our goal: when the program
+attempts to create a thread without specifying a thread group that it
+should belong to, the thread is assigned to the desired group. For
+the second part of our goal, we need to ensure that the
+<tt class="literal">checkAccess()</tt> method only allows classes from
+that class loader to create a thread within that thread group (or one
+of its descendent thread groups).
+</p>
+
+<p>In order to achieve this second goal, we must implement the
+<tt class="literal">checkAccess()</tt> methods as follows:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public void checkAccess(Thread t) {
+	ThreadGroup current = Thread.currentThread().getThreadGroup();
+	if (!current.parentOf(t.getThreadGroup()))
+		super.checkAccess(t);
+}
+public void checkAccess(ThreadGroup tg) {
+	ThreadGroup current = Thread.currentThread().getThreadGroup();
+	if (!current.parentOf(tg))
+            super.checkAccess(tg);
+}</pre>
+</blockquote>
+
+<p>This logic prevents threads in sibling thread groups from
+manipulating each other, as well as preventing threads in groups that
+are lower in the thread hierarchy from manipulating threads in their
+parent groups. Though that makes it more restrictive than the model
+employed by the 1.1 JDK, it matches the concept of a thread group
+hierarchy better than the JDK's model.
+</p>
+
+<p>There are three caveats with this model. The first has to do with the
+way in which thread groups are created. When you create a thread
+group without specifying a parent thread group, the new thread group
+is placed into the thread hierarchy as a child of the thread group of
+the currently executing thread. For example, in <a href="#SEC-CH-6-FIG-1">Figure 6-1</a>, when the Calc thread creates a new thread
+group, by default that thread group is a child of Program Thread
+Group #1 (e.g., it could be Program Subgroup #1). Hence, if you start
+a program, you must ensure that it starts by executing it in the
+thread group that would be returned by its class loader--that
+is, the default thread group of the program. That's why we
+included that logic at the beginning of our
+<tt class="literal">JavaRunner</tt> example.
+</p>
+
+<p>The second caveat is that threads may not be expecting this type of
+enforcement of the thread hierarchy, since it does not match many
+popular browser implementations. Hence, programs may fail under this
+model, while they may succeed under a different
+<a name="INDEX-816"></a><a name="INDEX-817"></a><a name="INDEX-818"></a><a name="INDEX-819"></a> model.
+</p>
+
+<p>Finally, remember that in 1.2, the <tt class="literal">stop()</tt> method
+of the <tt class="literal">Thread</tt> class first calls the
+<tt class="literal">checkPermission()</tt> class of the security manager
+to see if the current stack has a runtime permission of
+"stopThread". For backward compatibility, all protection
+domains have that permission by default, but a particular user may
+change that in the policy file.
+</p>
+
+
+<a name="SEC-CH-6-SECT-3.5"></a>
+<h3 class="sect2">6.3.5. Implementing Package Access</h3>
+
+<p>
+<a name="INDEX-820"></a><a name="INDEX-821"></a><a name="INDEX-822"></a>
+A final area for which the default security manager is sometimes
+inadequate is the manner in which it checks for package access and
+definition. In 1.1, the default security manager rejects all package
+access and definition attempts.
+</p>
+
+<p>In 1.2, the situation is complex. For package access, the security
+manager looks for a property defined in the
+<em class="filename">java.security</em> file named
+<tt class="literal">package.access</tt>. This property is a list of
+comma-separated package names for which access should be checked. If
+the class loader uses the <tt class="literal">checkPackageAccess()</tt>
+method (many do not) and attempts to access a package in the list
+specified in the<em class="filename"> java.security</em> file, then the
+program must have a runtime permission with a name of
+<tt class="literal">accessClassInPackage.&lt;</tt><em class="replaceable">packagename</em><tt class="literal">&gt;</tt>.
+For defining a class, the operation is similar; the property name in
+the <em class="filename">java.security</em> file is
+<tt class="literal">package.definition</tt>, and the appropriate runtime
+permission has a name of
+<tt class="literal">defineClassInPackage.&lt;</tt><em class="replaceable">packagename</em><tt class="literal">&gt;</tt>.
+This model works well, but it requires that the
+<em class="filename">java.security</em> file and all the
+<em class="filename">java.policy</em> files be coordinated in their
+attempts to protect package access and definition.
+</p>
+
+<p>For that reason, and also to provide a better migration between
+releases (and because it's the only way to do it in 1.1), you
+may want to include the logic to process some policies within your
+new security manager. In that way, users will not need to make any
+changes on their system; in this case, the user will not have to put
+the appropriate <tt class="literal">RuntimePermission</tt> entries into
+the <em class="filename">java.policy</em> files by hand.
+</p>
+
+<p>The
+<tt class="literal">checkPackageAccess()</tt><a name="INDEX-823"></a>
+method is most often used to restrict untrusted classes from directly
+calling certain packages--e.g., you may not want untrusted
+classes directly calling the <tt class="literal">com.xyz.support</tt>
+pacakge of your application. Unfortunately, the only way to do that
+while relying on the security manager is to rely on the class depth,
+which we want to avoid.
+</p>
+
+<p>One solution is to introduce a property for the application that
+defines packages that the untrusted classes in the application are
+not allowed to access. HotJava and the<tt class="literal">
+appletviewer</tt> do this by setting properties of the form:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">package.restrict.access.pkgname = true</pre>
+</blockquote>
+
+<p>In the <tt class="literal">checkPackageAccess()</tt> method, you can use
+the parameter to construct this property (substituting for the
+<tt class="literal">pkgname</tt>) and see if the corresponding property
+is set: if it is, and if the <tt class="literal">inClassLoader()</tt>
+method returns <tt class="literal">true</tt>, you can throw the security
+exception. For our purposes, however, we will allow classes to access
+any package, and write our <tt class="literal">checkPackageAccess()</tt>
+method like this:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public void checkPackageAccess(String pkg) {
+}</pre>
+</blockquote>
+
+<p>The <tt class="literal">checkPackageDefinition()</tt> method is somewhat
+different--you probably don't want untrusted classes
+defining things in the <tt class="literal">java</tt> package, for
+example. So we want to test for that package explicitly. But we also
+want to respect the permissions for the applications, so the general
+solution for cases such as this is to first check with the access
+controller (via the security manager's superclass), and then to
+implement the original logic:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public void checkPackageDefinition(String pkg) {
+	if (!pkg.startsWith("java."))
+		return;
+	try {
+		super.checkPackageDefinition(pkg);
+		return;
+	} catch (AccessControlException ace) {
+		// continue
+	}
+	if (inClassLoader())
+		throw new SecurityException("Can't define java classes");
+}</pre>
+</blockquote>
+
+<p>Note that the name in the test contains the period
+separator--you don't want an untrusted class to be able to
+define a class named <tt class="literal">java.lang.String</tt>, but you
+do want it to be able to define a class named
+<tt class="literal">javatest.myClass</tt>. On the other hand, you may or
+may not want to grant access to classes in the
+<tt class="literal">javax</tt> package. This method also requires a
+change to the class loader that we'll show at the end of the
+chapter.<a name="INDEX-824"></a><a name="INDEX-825"></a><a name="INDEX-826"></a>
+</p>
+
+
+<a name="SEC-CH-6-SECT-3.6"></a>
+<h3 class="sect2">6.3.6. Establishing a Security Policy in 1.2</h3>
+
+<p>
+<a name="INDEX-827"></a><a name="INDEX-828"></a>We'll now give
+specific information on how to establish a security policy for 1.2.
+In Java 1.2, the <tt class="literal">SecurityManager</tt><a name="INDEX-829"></a><a name="INDEX-830"></a><a name="INDEX-831"></a> class is
+a concrete class--you use it directly, or you may subclass it.
+The simplest implementation of the
+<tt class="literal">SecurityManager</tt><a name="INDEX-832"></a> class is:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class JavaRunnerManager extends SecurityManager {
+}</pre>
+</blockquote>
+
+<p>The
+<tt class="literal">JavaRunnerManager</tt><a name="INDEX-833"></a> class inherits the default
+behavior of the <tt class="literal">SecurityManager</tt> class for all
+its methods--but it's important to realize that this
+default behavior is not the behavior we discussed in <a href="ch04_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch04_01.htm">Chapter 4, "The Security Manager Class"</a>. The behavior we discussed in that chapter
+stemmed from the security manager implementations of various popular
+browsers--that may be the security that is appropriate for your
+application, but the default behavior for the Security Manager class
+comes from the <em class="filename">java.policy</em> files.
+</p>
+
+<p>The default behavior of the public methods of the
+<tt class="literal">SecurityManager</tt> class is to call the access
+controller with an appropriate permission. For example, the
+implementation of the <tt class="literal">checkExit()</tt> method is:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public void checkExit(int status) {
+	AccessController.checkPermission(new RuntimePermission("exitVM"));
+}</pre>
+</blockquote>
+
+<p>This is why the default security policy for the application can be
+specified via the <em class="filename">java.policy</em><a name="INDEX-834"></a><a name="INDEX-835"></a><a name="INDEX-836"></a>files.
+<a href="#SEC-CH-6-TABLE-12">Table 6-3</a> lists the methods of the security
+manager and the permission they construct when they call the access
+controller.
+</p>
+
+<a name="SEC-CH-6-TABLE-12"></a>
+<h4 class="objtitle">Table 6-3. The Relationship Between the Security Manager and the Access Controller </h4>
+<table border="1">
+
+
+
+<tr>
+<th>
+<p>Method</p>
+</th>
+<th>
+<p>Permission</p>
+</th>
+</tr>
+
+<tr>
+<td>
+<a name="INDEX-837"></a>
+<a name="INDEX-838"></a>
+<a name="INDEX-839"></a>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkCreateClassLoader()</pre>
+</blockquote>
+</td>
+<td>
+<a name="INDEX-840"></a>
+<a name="INDEX-841"></a>
+<a name="INDEX-842"></a>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">RuntimePermission("createClassLoader")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkAccess(Thread t)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">RuntimePermission("modifyThread")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkAccess(ThreadGroup tg)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">RuntimePermission("modifyThreadGroup")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkExit(int status)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">RuntimePermission("exitVM")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkExec(String cmd)</pre>
+</blockquote>
+</td>
+<td>
+<a name="INDEX-843"></a>
+<a name="INDEX-844"></a>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">FilePermission(cmd, "execute")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkLink(String lib)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">RuntimePermission("loadLibrary." + lib)</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkRead(FileDescriptor fd)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">RuntimePermission("readFileDescriptor")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkRead(String file)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">FilePermission(file, "read")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkRead(String file, Object context)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">FilePermission(file, "read");</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkWrite(FileDescriptor fd)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">RuntimePermission("writeFileDescriptor")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkWrite(String file)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">FilePermission(file, "write")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkDelete(String file)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">FilePermission(file, "delete")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkConnect(String h, int p)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">
+<em class="emphasis">if port == -1</em>
+SocketPermission(h, "resolve")
+<em class="emphasis">otherwise</em>
+SocketPermission(h + ":" + p, "connect") </pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkConnect(String h, int p, Object context)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">
+<em class="emphasis">same as</em> checkConnect()</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkListen(int port)</pre>
+</blockquote>
+</td>
+<td>
+<a name="INDEX-845"></a>
+<a name="INDEX-846"></a>
+<a name="INDEX-847"></a>
+<a name="INDEX-848"></a>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">
+<em class="emphasis">if port == 0</em>
+SocketPermission("localhost:1024-","listen") <em class="emphasis">otherwise</em>
+SocketPermission("localhost:" + port, "listen") </pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkAccept(String host, int port)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">SocketPermission(host + ":" + port, "accept")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkMulticast() [both signatures]</pre>
+</blockquote>
+</td>
+<td>
+<a name="INDEX-849"></a>
+<a name="INDEX-850"></a>
+<a name="INDEX-851"></a>
+<a name="INDEX-852"></a>
+<a name="INDEX-853"></a>
+<a name="INDEX-854"></a>
+<a name="INDEX-855"></a>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">SocketPermission(maddr.getHostAddress(), "accept,connect")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkPropertiesAccess()</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">PropertyPermission("*", "read, write")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkPropertyAccess(String key)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">PropertyPermission(key, "read")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkTopLevelWindow(Object w)</pre>
+</blockquote>
+</td>
+<td>
+<a name="INDEX-856"></a>
+<a name="INDEX-857"></a>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">AWTPermission("showWindowWithoutWarningBanner")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkPrintJobAccess()</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">RuntimePermission("queuePrintJob")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkSystemClipboardAccess()</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">AWTPermission("accessClipboard");</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkAwtEventQueueAccess()</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">AWTPermission("accessEventQueue");</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkPackageAccess(String pkg)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">RuntimePermission("accessClassInPackage." + pkg)</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkPackageDefinition(String pkg)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">RuntimePermission("defineClassInPackage." + pkg)</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkSetFactory()</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">RuntimePermission("setFactory")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkMemberAccess(Class c, int which)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">RuntimePermission("accessDeclaredMembers")</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkSecurityAccess(String action)</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">SecurityPermission(action)</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkPermission(Permission p)</pre>
+</blockquote>
+</td>
+<td>
+<p>
+<tt class="literal">p</tt> (that is, the permission parameter)
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkPermission(Permission p, Object o)</pre>
+</blockquote>
+</td>
+<td>
+<p>
+<tt class="literal">p</tt> (that is, the permission parameter)<a name="INDEX-858"></a><a name="INDEX-859"></a>
+</p>
+</td>
+</tr>
+
+</table>
+
+<p>There are five slight exceptions to the rules laid out in <a href="#SEC-CH-6-TABLE-12">Table 6-3</a>:
+</p>
+
+<ul>
+<li>
+<p>The
+<tt class="literal">checkAccess()</tt><a name="INDEX-860"></a> methods only check for the given
+permission if the target thread (group) is in the system thread
+group.
+</p>
+</li>
+<li>
+<p>If the command passed to the
+<tt class="literal">checkExec()</tt><a name="INDEX-861"></a> method is not a fully
+qualified pathname (that is, if the command will be found by
+examining the user's <tt class="literal">PATH</tt> variable), the
+string passed to create the file permission is
+"<tt class="literal">&lt;&lt;ALL FILES&gt;&gt;</tt><a name="INDEX-862"></a>." The domain must have
+permission to execute all files in the filesystem in this case.
+</p>
+</li>
+<li>
+<p>The methods that use a context expect the context to be an instance
+of the <a name="INDEX-863"></a><a name="INDEX-864"></a><tt class="literal">AccessControlContext</tt> class. They then call the
+<tt class="literal">checkPermission()</tt> method of that context, using
+the same permission that would normally be used in that call (e.g., a
+file permission with a <tt class="literal">read</tt> action for the
+<tt class="literal">checkRead()</tt> method). As we mentioned, these
+methods are never called by the core API. If the context is not an
+access control context, then a <tt class="literal">SecurityException</tt>
+will be thrown.
+</p>
+</li>
+<li>
+<p>The
+<tt class="literal">checkTopLevelWindow()</tt><a name="INDEX-865"></a> method catches the
+<tt class="literal">AccessControlException</tt> if it is thrown by the
+access controller. In this case, it returns
+<tt class="literal">false</tt>. This method does not (by default) throw
+an exception.
+</p>
+</li>
+<li>
+<p>The
+<tt class="literal">checkMemberAccess()</tt><a name="INDEX-866"></a> method does not call the
+access controller if the program is inspecting public values (that
+is, if the <tt class="literal">which</tt> flag is
+<tt class="literal">Member.PUBLIC</tt>) or if the current class loader is
+the same class that loaded the target class.
+</p>
+</li>
+</ul>
+
+<p>For the most part, it's possible to use the default security
+manager and the permission mappings we've just identified to
+support virtually any security policy. But there are certain useful
+exceptions a security manager will often define:
+</p>
+
+<ul>
+<li>
+<p>Network permissions may want to follow the implementation outlined
+above.
+</p>
+</li>
+<li>
+<p>Package access and definition permissions may follow the
+implementation outlined above.
+</p>
+</li>
+<li>
+<p>Exit permissions may be summarily granted to all applications (unless
+the application is a server that should stick around).
+</p>
+</li>
+<li>
+<p>Thread permissions may follow the thread hierarchy rather than the
+default all-or-nothing policy.
+</p>
+</li>
+</ul>
+
+<p>For a complete 1.2-based security manager, then, you typically need
+to override only the methods involved with these four exceptions. The
+1.2-based security manager we'll use for our
+<tt class="literal">JavaRunner</tt> program looks like this:
+<a name="INDEX-867"></a><a name="INDEX-868"></a><a name="INDEX-869"></a><a name="INDEX-870"></a><a name="INDEX-871"></a><a name="INDEX-872"></a>
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class JavaRunnerManager extends SecurityManager {
+	public void checkConnect(String host, int port) {
+		.. follow implementation given above ..
+	}
+	public void checkPackageAccess(String pkg) {
+		.. follow implementation given above ..
+	}
+	public void checkPackageDefinition(String pkg) {
+		.. follow implementation given above ..
+	}
+	public void checkExit(int status) {
+	}
+
+	public void checkAccess(Thread t) {
+		.. follow implementation given above ..
+	}
+	public void checkAccess(ThreadGroup tg) {
+		.. follow implementation given above ..
+	}
+}</pre>
+</blockquote>
+
+
+<a name="SEC-CH-6-SECT-3.7"></a>
+<h3 class="sect2">6.3.7. Establishing a 1.1 Security Policy</h3>
+
+<p>
+<a name="INDEX-873"></a><a name="INDEX-874"></a>Establishing a security
+policy in 1.1 is done only by ensuring that the correct security
+manager is in place. In this section, we're going to discuss
+how a 1.1-based security manager can be implemented.
+</p>
+
+<a name="SEC-CH-6-SECT-3.7.1"></a>
+<h3 class="sect3">6.3.7.1. The RMI security manager</h3>
+
+<p>
+<a name="INDEX-875"></a><a name="INDEX-876"></a>One of the times a security manager is
+often used in a Java application is in an RMI server. An RMI server
+has the capability of loading code from an RMI client located on a
+remote machine and executing that code on the
+server--essentially transforming the server (temporarily) into a
+client.<a href="#FOOTNOTE-5">[5]</a> In essence, the security
+ramifications of using RMI servers are similar to those of an applet,
+but in reverse: you now want to protect your server machine from the
+side effects of untrusted code it got from a client.
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-5"></a>
+<p>[5]This used to be called "peer
+computing," although that term has fallen out of favor. But
+it's a useful concept: just because one machine has to initiate
+a request shouldn't mean that the roles of client and server
+have to be immutable.</p> </blockquote>
+
+<p>In the most common case, you'll want your RMI server to have a
+simple security model. If the code it's executing was
+completely loaded from the server, the operation should succeed; if
+any of the code it's executing was loaded from the client, the
+operation should fail. Hence, the Java API provides the
+<tt class="literal">RMISecurityManager</tt><a name="INDEX-877"></a><a name="INDEX-878"></a><a name="INDEX-879"></a><a name="INDEX-880"></a> class, which implements just such a
+policy. In general, the methods of the
+<tt class="literal">RMISecurityManager</tt> class look like this:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public void checkAccess(Thread t) {
+	if (inClassLoader())
+		throw new SecurityException("checkAccess");
+}</pre>
+</blockquote>
+
+<p>
+<a name="INDEX-881"></a>
+You can check the source code
+(<tt class="literal">java.rmi.RMISecurityManager</tt>) for exact details;
+this example is a conflation of code found there.
+</p>
+
+<p>Hence, in the RMI security manager, all local code is trusted and all
+remote code is untrusted. There are certain methods of this class
+that have slightly different implementations, however. Because the
+<tt class="literal">RMISecurityManager</tt> provides a useful basis for a
+default implementation of your own security manager, we'll list
+those exceptions here so you can use the
+<tt class="literal">RMISecurityManager</tt> class and understand where
+you're starting out.
+</p>
+
+<dl>
+<dt>
+<b>public void <a name="INDEX-882"></a>
+checkPropertyAccess(String key)</b>
+</dt>
+<dd>
+<p>An untrusted class can check properties only if a special property is
+set. If an untrusted class wants to check the property
+<tt class="literal">foo.bar</tt>, the property
+<tt class="literal">foo.bar.stub</tt> must be set to
+<tt class="literal">true</tt>.
+</p>
+</dd>
+
+<dt>
+<b>public void <a name="INDEX-883"></a>
+checkRead(FileDescriptor fd)</b>
+</dt>
+<dt>
+<b>public void <a name="INDEX-884"></a>
+checkWrite(FileDescriptor fd)</b>
+</dt>
+<dd>
+<p>An untrusted class can read or write a file if that file is a socket.
+Note that the untrusted class still cannot create the socket.
+</p>
+</dd>
+
+<dt>
+<b>public void <a name="INDEX-885"></a>
+checkConnect(String host, int port)</b>
+</dt>
+<dd>
+<p>An untrusted class can connect a socket only if called from certain
+internal RMI classes. If you're using the
+<tt class="literal">RMISecurityManager</tt> class as the basis for a
+non-RMI application, the untrusted class is not able to make any
+connections.
+</p>
+</dd>
+
+<dt>
+<b>public void <a name="INDEX-886"></a>
+checkTopLevelWindow(Object window)</b>
+</dt>
+<dd>
+<p>An untrusted class can create a separate window, but it will have the
+warning banner.
+</p>
+</dd>
+
+<dt>
+<b>public void <a name="INDEX-887"></a>
+checkPackageAccess(String pkg)</b>
+</dt>
+<dd>
+<p>An untrusted class can access a package unless the external
+properties specifically prohibit such access.
+</p>
+</dd>
+
+<dt>
+<b>public void <a name="INDEX-888"></a>
+checkPackageDefinition(String pkg)</b>
+</dt>
+<dd>
+<p>An untrusted class can access a package definition unless the
+external properties specifically prohibit such access.
+</p>
+</dd>
+
+<dt>
+<b>public void <a name="INDEX-889"></a>
+checkSetFactory()</b>
+</dt>
+<dd>
+<p>Neither an untrusted class <em class="emphasis">nor</em> a trusted class
+can change a socket factory.
+</p>
+</dd>
+
+<dt>
+<b>public void <a name="INDEX-890"></a>
+checkMemberAccess()</b>
+</dt>
+<dd>
+<p>An untrusted class can only check the member access for public
+members.<a name="INDEX-891"></a><a name="INDEX-892"></a>
+</p>
+</dd>
+
+</dl>
+
+
+
+<a name="SEC-CH-6-SECT-3.7.2"></a>
+<h3 class="sect3">6.3.7.2. A complete 1.1 security manager</h3>
+
+<p>In Java 1.1, the <tt class="literal">SecurityManager</tt><a name="INDEX-893"></a> class is abstract, so you can't
+directly instantiate a security manager object. However, none of the
+methods of <tt class="literal">SecurityManager</tt> is itself abstract,
+meaning that the simplest implementation of the
+<tt class="literal">SecurityManager</tt> class is this:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class StrictSecurityManager extends SecurityManager {
+}</pre>
+</blockquote>
+
+<p>The <tt class="literal">StrictSecurityManager</tt><a name="INDEX-894"></a> class inherits the default behavior
+of the <tt class="literal">SecurityManager</tt> class for all its
+methods--but once again it's important to realize that
+this default behavior is not the behavior we discussed earlier in
+terms of what an untrusted class might or might not be allowed to do.
+The default behavior of the public methods in the
+<tt class="literal">SecurityManager</tt> class in 1.1--and hence of
+the <tt class="literal">StrictSecurityManager</tt> class above--is
+to deny every operation to every class, trusted or not. Each of the
+public methods of the <tt class="literal">SecurityManager</tt> class
+looks similar to this:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public void checkAccess(Thread g) {
+    throw new SecurityException (); 
+}</pre>
+</blockquote>
+
+<p>Thus, if you want to implement your own security manager, you need
+only override the methods for which you want to provide a more
+relaxed security policy. If you want to allow (at least some) thread
+operations, you must override the <tt class="literal">checkAccess()</tt>
+methods; if you do not override those methods, no thread operations
+will be allowed by any class.
+</p>
+
+<div class="sidebar">
+<h4 class="objtitle">A Null Security Manager</h4>
+
+<p>
+<a name="INDEX-895"></a><a name="INDEX-896"></a>The default
+security manager class makes you override each method to create a
+relaxed security policy for that method, but sometimes it might be
+easier to start with a null security manager: one that provides a
+completely wide-open policy for every check. You could then override
+only those methods for which you wanted to tighten the security
+policy.
+</p>
+
+<p>The Java API does not provide such a class, but one is available in
+source form with the Java API source files--if you copy the
+<em class="filename">SecurityManager.java</em> file from the API source
+directory and edit it, you'll find a
+<tt class="literal">NullSecurityManager</tt><a name="INDEX-897"></a> class that implements each method with a
+wide-open security policy. You can edit out everything but this
+class, make it a public class, and use it for the basis of your
+customized security manager. This class was removed from the 1.2
+source.
+</p>
+</div>
+
+<p>In typical usage, a 1.1-based security manager might want to deny a
+large number of operations if there is any untrusted class on the
+stack. These methods might be implemented with the
+<tt class="literal">checkClassLoader()</tt><a name="INDEX-898"></a> method we discussed
+above. Candidates for this type of check are:
+</p>
+
+<table border="1">
+
+
+
+
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkAccept()</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkMemberAccess()</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkSecurityAccess()</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkAWTEventQueueAccess()</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkMulticast()</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkSystemClipboardAccess()</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkExit()</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkPrintJobAccess()</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">
+</pre>
+</blockquote>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkListen()</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkSecurityAccess()</pre>
+</blockquote>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">
+</pre>
+</blockquote>
+</td>
+</tr>
+
+</table>
+
+<p>Similarly, there are a number of tests that we want to fail if they
+are attempted directly by an untrusted class, but that we want to
+succeed if they are attempted indirectly by an untrusted class. For
+these tests, we have to rely on the class depth to tell us whether
+the call originated from an untrusted class or not; we use the
+<tt class="literal">checkClassDepth()</tt><a name="INDEX-899"></a> method to help us with
+that task. Here are the candidate methods for this test along with
+the depth that checked for each method:
+</p>
+
+<table border="1">
+
+
+
+
+
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkCreateClassLoader()</pre>
+</blockquote>
+</td>
+<td>
+<p>2</p>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkLink()</pre>
+</blockquote>
+</td>
+<td>
+<p>3</p>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkDelete()</pre>
+</blockquote>
+</td>
+<td>
+<p>2</p>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkPropertiesAccess()</pre>
+</blockquote>
+</td>
+<td>
+<p>2</p>
+</td>
+</tr>
+<tr>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkExec()</pre>
+</blockquote>
+</td>
+<td>
+<p>2</p>
+</td>
+<td>
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">checkPropertyAccess()</pre>
+</blockquote>
+</td>
+<td>
+<p>2</p>
+</td>
+</tr>
+
+</table>
+
+<p>Finally, there are some methods we must implement with their own
+logic. Although we've saved these for last, they are most
+interesting since these are the methods that you'll need to pay
+the most attention to when you write your own security
+manager.<a name="INDEX-900"></a><a name="INDEX-901"></a><a name="INDEX-902"></a>
+</p>
+
+
+
+<a name="SEC-CH-6-SECT-3.7.3"></a>
+<h3 class="sect3">6.3.7.3. Implementing the file access methods</h3>
+
+<p>
+<a name="INDEX-903"></a><a name="INDEX-904"></a><a name="INDEX-905"></a><a name="INDEX-906"></a>If you are going to implement a
+security manager, you must determine a policy for reading and writing
+files and implement it in each of the
+<tt class="literal">checkRead()</tt> and
+<tt class="literal">checkWrite()</tt> methods. The logic you put into
+each method is slightly different.
+</p>
+
+<div class="sidebar">
+<h4 class="objtitle">Allowing File Access</h4>
+
+<p>If you want to write a policy that allows some files on the local
+machine to be read or written, make sure that you use the
+<tt class="literal">File.getCanonicalPath()</tt><a name="INDEX-907"></a> method to find out the actual name
+of the file before you grant access to that file. If, for example,
+you want programs to have access to the <em class="filename">/tmp</em>
+directory on your machine, you want to make sure that access to
+<em class="filename">/tmp/../etc/passwd</em> is still denied; the program
+must not be allowed to use the parent directory to jump out of the
+directory you've allowed. The
+<tt class="literal">getCanonicalPath()</tt> method removes all references
+to parent directories, as well as following all symbolic links,
+shortcuts, and aliases to find out the actual name of the file
+that's being referenced.
+</p>
+</div>
+
+<p>In the case where these methods take a single string argument, the
+logic is straightforward: the program is attempting to open a file
+with the given name, and you should either accept or reject that
+operation. We'll base our decision on the depth of the class
+loader. Untrusted classes may not directly open a file for reading or
+writing, but they may cause that to happen through the Java API:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public void checkRead(String file) {
+	checkClassDepth(2, "Read the file " + file,
+						"Can't read local files");
+}
+public void checkWrite(String file) {
+	checkClassDepth(2, "Write the file " + file,
+						"Can't write local files");
+}</pre>
+</blockquote>
+
+<p>In the case where these methods take a
+<tt class="literal">FileDescriptor</tt> as an argument, the policy is a
+little harder to define. As far as the Java API is concerned, these
+methods are only called as a result of calling the
+<tt class="literal">Socket.getInputStream()</tt> or
+<tt class="literal">Socket.getOutputStream()</tt> methods--which
+means that the security manager is really being asked to determine if
+the socket associated with the given file descriptor should be
+allowed to be read or written. By this time, the socket has already
+been created and has made a valid connection to the remote machine,
+and the security manager has had the opportunity to prohibit that
+connection at that time.
+</p>
+
+<p>What type of access, then, would you prohibit when you implement
+these methods? It partially depends on the types of checks your
+security manager made when the socket was created. We'll assume
+for now that a socket created by an untrusted class can only connect
+to the site from which the class was loaded, while a socket created
+by a trusted class can connect to any site. Hence, you might want to
+prohibit an untrusted class from opening the data stream of a socket
+created by a trusted class--although if the class is trusted,
+you typically want to trust that class's judgement, and if that
+class passed the socket reference to an untrusted class, the
+untrusted class should be able to read from or write to the socket.
+</p>
+
+<p>On the other hand, it is important to be sure that these methods are
+actually being called from the socket class. An untrusted class could
+attempt to pass an arbitrary file descriptor to the
+<tt class="literal">File*Stream</tt> constructor, breaking into your
+machine.
+</p>
+
+<p>Typically, then, the only checks you put into this method are to
+determine that the <tt class="literal">FileDescriptor</tt> object is
+valid and the <tt class="literal">FileDescriptor</tt> object does indeed
+belong to the socket class:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public void checkRead(FileDescriptor fd) {
+	if (!inClassLoader())
+		return;
+	if (!fd.valid() || !inClass("java.net.SocketInputStream"))
+		throw new SecurityException("Can't read a file descriptor");
+}
+public void checkWrite(FileDescriptor fd) {
+	if (!inClassLoader())
+		return;
+	if (!fd.valid() || !inClass("java.net.SocketOutputStream"))
+		throw new SecurityException("Can't write a file descriptor");
+}</pre>
+</blockquote>
+
+<a name="INDEX-908"></a>
+<a name="INDEX-909"></a>
+<a name="INDEX-910"></a>
+<a name="INDEX-911"></a>
+
+
+
+<a name="SEC-CH-6-SECT-3.7.4"></a>
+<h3 class="sect3">6.3.7.4. Implementing network, thread, and package access</h3>
+
+<p>
+<a name="INDEX-912"></a><a name="INDEX-913"></a><a name="INDEX-914"></a><a name="INDEX-915"></a>A typical
+1.1-based security manager would implement thread, network, and
+package access as we described above.
+</p>
+
+
+
+<a name="SEC-CH-6-SECT-3.7.5"></a>
+<h3 class="sect3">6.3.7.5. Implementing miscellaneous methods</h3>
+
+<p>There is one more method of the security manager that we must
+implement with slightly different rules: the
+<tt class="literal">checkTopLevelWindow()</tt><a name="INDEX-916"></a>
+method. This method uses the standard class depth test for an
+untrusted class, but it shouldn't throw an exception, so it
+looks like this:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public boolean checkTopLevelWindow(Object window) {
+	if (classLoaderDepth() == 3)
+		return false;
+	return true;
+}</pre>
+</blockquote>
+
+<a name="INDEX-917"></a>
+<a name="INDEX-918"></a>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch06_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch06_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch06_04.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">6.2. Security Managers and the Class Loader</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">6.4. Running Secure Applications</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

@@ -1,0 +1,165 @@
+<html><head>
+<title>Recipe 17.4. Setting Up a UDP Client</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:30Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch17_01.htm" title="17. Sockets"><link rel="prev" href="ch17_04.htm" title="17.3. Communicating over TCP"><link rel="next" href="ch17_06.htm" title="17.5. Setting Up a UDP Server"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_04.htm" title="17.3. Communicating over TCP"><img src="../gifs/txtpreva.gif" alt="Previous: 17.3. Communicating over TCP" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch17_01.htm" title="17. Sockets">Chapter 17<br>Sockets</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_06.htm" title="17.5. Setting Up a UDP Server"><img src="../gifs/txtnexta.gif" alt="Next: 17.5. Setting Up a UDP Server" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch17-37500">17.4. Setting Up a UDP Client</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-562">Problem<a class="indexterm" name="ch17-idx-1000004718-0"></A
+><a class="indexterm" name="ch17-idx-1000004718-1"></A
+><a class="indexterm" name="ch17-idx-1000004718-2"></A
+><a class="indexterm" name="ch17-idx-1000004718-3"></A
+></A
+></H3
+><p class="para">You want to exchange messages with another process using UDP (datagrams).</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-568">Solution</A
+></H3
+><p class="para">To set up a UDP socket handle, use either the low-level Socket module on your own filehandle:</P
+><pre class="programlisting">use Socket;
+socket(SOCKET, PF_INET, SOCK_DGRAM, getprotobyname(&quot;udp&quot;)) 
+    or die &quot;socket: $!&quot;;</PRE
+><p class="para">or else IO::Socket, which returns an anonymous one:</P
+><pre class="programlisting">use IO::Socket;
+$handle = IO::Socket::INET-&gt;new(Proto =&gt; 'udp') 
+    or die &quot;socket: $@&quot;;     # yes, it uses $@ here</PRE
+><p class="para">Then to send a message to a machine named <code class="literal">$HOSTNAME</CODE
+> on port number <code class="literal">$PORTNO</CODE
+>, use:</P
+><pre class="programlisting">$ipaddr   = inet_aton($HOSTNAME);
+$portaddr = sockaddr_in($PORTNO, $ipaddr);
+send(SOCKET, $MSG, 0, $portaddr) == length($MSG)
+        or die &quot;cannot send to $HOSTNAME($PORTNO): $!&quot;;</PRE
+><p class="para">To receive a message of length no greater than $<code class="literal">MAXLEN</CODE
+>, use:</P
+><pre class="programlisting">$portaddr = recv(SOCKET, $MSG, $MAXLEN, 0)      or die &quot;recv: $!&quot;;
+($portno, $ipaddr) = sockaddr_in($portaddr);
+$host = gethostbyaddr($ipaddr, AF_INET);
+print &quot;$host($portno) said $MSG\n&quot;;</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-608">Discussion</A
+></H3
+><p class="para"><a class="indexterm" name="ch17-idx-1000004726-0"></A
+>Datagram sockets are unlike stream sockets. Streams provide sessions, giving the illusion of a stable connection. You might think of them as working like a telephone call&nbsp;-  expensive to set up, but once established, reliable and easy to use. Datagrams, though, are more like the postal system&nbsp;- it's cheaper and easier to send a letter to your friend on the other side of the world than to call them on the phone. Datagrams are easier on the system than streams. You send a small amount of information one message at a time. But your messages' delivery isn't guaranteed, and they might arrive in the wrong order. Like a small post box, the receiver's queue might fill up and cause further messages to be dropped.</P
+><p class="para">Why then, if datagrams are unreliable, do we have them? Because some applications are most sensibly implemented in terms of datagrams. For instance, in streaming audio, it's more important that the stream as a whole be preserved than that every packet get through, especially if packets are being dropped because there's not enough bandwidth for them all. Another use for datagrams is broadcasting, which corresponds to mass mailing of advertisements in the postal model, and is equally popular in most circles. One use for broadcast packets is to send out a message to your local subnet saying "Hey, is there anybody around here who wants to be my server?"</P
+><p class="para">Because datagrams don't provide the illusion of a lasting connection, you get a little more freedom in how you use them. You don't have to <code class="literal">connect</CODE
+> your socket to the remote end that you're sending data. Instead, address each datagram individually when you <code class="literal">send</CODE
+>. Assuming <code class="literal">$remote_addr</CODE
+> is the result of a call to <code class="literal">sockaddr_in</CODE
+>, do this:</P
+><pre class="programlisting">send(MYSOCKET, $msg_buffer, $flags, $remote_addr)
+    or die &quot;Can't send: $!\n&quot;;</PRE
+><p class="para">The only flag argument used much is MSG_OOB, which lets you send and receive out-of-band data in advanced applications.</P
+><p class="para">The remote address should be a port and internet address combination returned by the Socket module's <code class="literal">sockaddr_in</CODE
+><a class="indexterm" name="ch17-idx-1000004732-0"></A
+> function. If you want, call <code class="literal">connect</CODE
+> on that address instead. Then you can omit the last argument to your <code class="literal">send</CODE
+>s, after which they'll all go to that recipient. Unlike streams, you are free to reconnect to another machine with the same datagram socket.</P
+><p class="para"><a class="xref" href="#ch17-37821" title="clockdrift">Example 17.1</A
+> is a small example of a UDP program. It contacts the UDP time port of the machine whose name is given on the command line, or of the local machine by default. This doesn't work on all machines, but those with a server will send you back a 4-byte integer packed in network byte order that represents the time that machine thinks it is. The time returned, however, is in the number of seconds since 1900. You have to subtract the number of seconds between 1900 and 1970 to feed that time to the <code class="literal">localtime</CODE
+> or <code class="literal">gmtime</CODE
+> conversion functions.</P
+><div class="example"><h4 class="example"><a class="title" name="ch17-37821">Example 17.1: clockdrift</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl
+# <a class="indexterm" name="ch17-idx-1000004736-0"></A
+>clockdrift - compare another system's clock with this one
+use strict;
+use Socket;
+
+my ($host, $him, $src, $port, $ipaddr, $ptime, $delta);
+my $SECS_of_70_YEARS      = 2_208_988_800;
+
+socket(MsgBox, PF_INET, SOCK_DGRAM, getprotobyname(&quot;udp&quot;))
+    or die &quot;socket: $!&quot;;
+$him = sockaddr_in(scalar(getservbyname(&quot;time&quot;, &quot;udp&quot;)), 
+    inet_aton(shift || '127.1'));
+defined(send(MsgBox, 0, 0, $him))
+    or die &quot;send: $!&quot;;
+defined($src = recv(MsgBox, $ptime, 4, 0))
+    or die &quot;recv: $!&quot;;
+($port, $ipaddr) = sockaddr_in($src);
+$host = gethostbyaddr($ipaddr, AF_INET);
+my $delta = (unpack(&quot;N&quot;, $ptime) - $SECS_of_70_YEARS) - time();
+print &quot;Clock on $host is $delta seconds ahead of this one.\n&quot;;</PRE
+></DIV
+><p class="para">If the machine you're trying to contact isn't alive or if its response is lost, you'll only know because your program will get stuck in the <code class="literal">recv</CODE
+> waiting for an answer that will never come.<a class="indexterm" name="ch17-idx-1000004728-0"></A
+><a class="indexterm" name="ch17-idx-1000004728-1"></A
+><a class="indexterm" name="ch17-idx-1000004728-2"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-668">See Also</A
+></H3
+><p class="para">The 
+<a class="olink" href="../prog/ch03_139.htm">&#13;<code class="literal">send</CODE
+></A
+>, 
+
+<a class="olink" href="../prog/ch03_119.htm">&#13;<code class="literal">recv</CODE
+></A
+>, 
+
+<a class="olink" href="../prog/ch03_047.htm">&#13;<code class="literal">gethostbyaddr</CODE
+></A
+>, 
+
+and 
+<a class="olink" href="../prog/ch03_182.htm">&#13;<code class="literal">unpack</CODE
+> </A
+>
+
+functions in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlfunc </I
+>(1); the documentation for the standard Socket and IO::Socket modules; the 
+section on 
+<a class="olink" href="../prog/ch06_02.htm#PERL2-CH-6-SECT-2.4.3">&#13;"UDP: message passing"</A
+> in <a class="olink" href="../prog/ch06_01.htm">Chapter 6</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlipc </I
+>(1); <cite class="citetitle">Unix Network Programming</CITE
+>; <a class="xref" href="ch17_06.htm" title="Setting Up a UDP Server">Recipe 17.5</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_04.htm" title="17.3. Communicating over TCP"><img src="../gifs/txtpreva.gif" alt="Previous: 17.3. Communicating over TCP" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_06.htm" title="17.5. Setting Up a UDP Server"><img src="../gifs/txtnexta.gif" alt="Next: 17.5. Setting Up a UDP Server" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">17.3. Communicating over TCP</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">17.5. Setting Up a UDP Server</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

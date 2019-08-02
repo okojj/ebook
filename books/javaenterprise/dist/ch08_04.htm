@@ -1,0 +1,800 @@
+<html>
+<head>
+<title>Monitoring Bandwidth (Java Distributed Computing)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jim Farley">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-206-9E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Monitoring Bandwidth">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm" alt="Java Distributed Computing"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch08_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch08_03.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch08_01.htm">Chapter 8: Bandwidth-Limited Systems</a></td><td align="right" valign="top" width="172"><a href="ch08_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch08_05.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">8.4. Monitoring Bandwidth</h2>
+
+<p>The ability to monitor the effective bandwidth previously seen by an
+application directly supports the ability to adapt to variable
+runtime environments. Some bandwidth measures that may be valuable to
+an adaptive distributed system are:
+</p>
+
+<ul>
+<li>
+<p>Average data throughput rate over a given time period</p>
+</li>
+<li>
+<p>Total data throughput over a given time period</p>
+</li>
+<li>
+<p>Estimate of time until a given amount of data will be available</p>
+</li>
+<li>
+<p>Other first- and second-order statistics on data rate and throughput
+over time (variances, median rate, data "acceleration,"
+or change in throughput rate, etc.).
+</p>
+</li>
+</ul>
+
+<p>Ideally, we would like to capture these bandwidth measures in real
+time, or as close to real time as we can get, and we would like to
+have these measures in terms of both raw (unprocessed) data
+throughput and real (application) data throughput.
+</p>
+
+<p>The <tt class="literal">DataMonitor</tt><a name="INDEX-1132"></a> class shown in <a href="#JDP-CH-8-EX-2">Example 8-1</a> provides a container for holding byte counts
+of data (either inbound or outbound), along with corresponding start
+and stop times. The start and stop times log the time interval for
+the data transaction. The <tt class="literal">DataMonitor</tt> provides
+an
+<tt class="literal">addSample()</tt><a name="INDEX-1133"></a>
+method for adding bandwidth measurement samples. Each of these
+samples is interpreted as being the number of bytes processed since
+the last sample, and the time interval during which the data was
+processed. Once a number of samples have been collected by the
+<tt class="literal">DataMonitor</tt>, it can be queried for statistics
+about the historical data rate. In this example we only show three
+methods offering basic measurements of data throughput: one provides
+the average data rate for all samples stored in the monitor
+(<tt class="literal">getAverageRate()</tt><a name="INDEX-1134"></a><a name="INDEX-1135"></a><a name="INDEX-1136"></a>), another
+provides the data rate for any given sample stored in the monitor
+(<tt class="literal">getRateFor()</tt>), and the third returns the data
+rate for the last sample stored (<tt class="literal">getLastRate()</tt>).
+</p>
+
+<a name="JDP-CH-8-EX-2"></a>
+<div class="example">
+<h4 class="objtitle">Example 8-1. A Data Monitoring Class</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.Bandwidth;
+
+import java.util.Vector;
+import java.util.Date;
+import java.util.Enumeration;
+
+class DataSample {
+  long byteCount;
+  Date start;
+  Date end;
+
+  DataSample(long bc, Date ts, Date tf) {
+    byteCount = bc;
+    start = ts;
+    end = tf;
+  }
+}
+
+public class DataMonitor {
+  protected Vector samples;
+  protected Date epoch;
+
+  public DataMonitor() {
+    samples = new Vector();
+    epoch = new Date();
+  }
+
+  // Add a sample with a start and finish time.
+  public void addSample(long bcount, Date ts, Date tf) {
+    samples.addElement(new DataSample(bcount, ts, tf));
+  }
+
+  // Get the data rate of a given sample.
+  public float getRateFor(int sidx) {
+    float rate = 0.0;
+    int scnt = samples.size();
+    if (scnt &gt; sidx &amp;&amp; sidx &gt;= 0) {
+      DataSample s = samples.elementAt(sidx);
+      Date start = s.start;
+      Date end = s.end;
+      if (start == null &amp;&amp; sidx &gt;= 1) {
+        DataSample prev = samples.elementAt(sidx - 1);
+        start = prev.end;
+      }
+
+      if (start != null &amp;&amp; end != null) {
+        long msec = end.getTime() - start.getTime();
+        rate = 1000 * (float)s.byteCount / (float)msec;
+      }
+    }
+
+    return rate;
+  }
+
+  // Get the rate of the last sample
+  public float getLastRate() {
+    int scnt = samples.size();
+    return getRateFor(scnt - 1);
+  }
+
+  // Get the average rate over all samples.
+  public float getAverageRate() {
+    long msCount = 0;
+    long byteCount = 0;
+    Date start;
+    Date finish;
+    int scnt = samples.size();
+    for (int i = 0; i &lt; scnt; i++) {
+      DataSample ds = (DataSample)samples.elementAt(i);
+
+      if (ds.start != null)
+        start = ds.start;
+      else if (i &gt; 0) {
+        DataSample prev = (DataSample)samples.elementAt(i-1);
+        start = ds.end;
+      }
+      else
+        start = epoch;
+
+      if (ds.end != null)
+        finish = ds.end;
+      else if (i &lt; scnt - 1) {
+        DataSample next = (DataSample)samples.elementAt(i+1);
+        finish = ds.start;
+      }
+      else
+        finish = new Date();
+
+      // Only include this sample if we could figure out a start
+      // and finish time for it.
+      if (start != null &amp;&amp; finish != null) {
+        byteCount += ds.byteCount;
+        msCount += finish.getTime() - start.getTime();
+      }
+    }
+
+    float rate = -1;
+    if (msCount &gt; 0) {
+      rate = 1000 * (float)byteCount / (float)msCount;
+    }
+
+    return rate;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="INDEX-1137"></a>
+
+<a name="JDP-CH-8-SECT-4.1"></a>
+<h3 class="sect2">8.4.1. Raw Data Monitoring</h3>
+
+<p>
+<a name="INDEX-1138"></a><a name="INDEX-1139"></a><a name="INDEX-1140"></a><a name="INDEX-1141"></a>Logically, in order to monitor the
+raw data throughput of our local agent, we need to put a
+"bytemeter" on the input and output streams used to
+transmit data. The <tt class="literal">RTInputStream</tt><a name="INDEX-1142"></a><a name="INDEX-1143"></a> and
+<tt class="literal">RTOutputStream</tt> classes shown in Examples <a href="#JDP-CH-8-EX-3">Example 8-2</a> and <a href="#JDP-CH-8-EX-4">Example 8-3</a> are
+extensions of <tt class="literal">FilterInputStream</tt> and
+<tt class="literal">FilterOutputStream</tt> that monitor their own data
+rates using the <tt class="literal">DataMonitor</tt> class. After each
+<tt class="literal">read()</tt> and <tt class="literal">write()</tt>
+operation, a data point is stored in the stream's
+<tt class="literal">DataMonitor</tt>. During the course of a transaction,
+the agent can query the stream for statistics on its throughput over
+time.
+</p>
+
+<a name="JDP-CH-8-EX-3"></a>
+<div class="example">
+<h4 class="objtitle">Example 8-2. A Self-Monitoring Input Stream</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.Bandwidth;
+
+import java.io.InputStream;
+import java.io.FilterInputStream;
+import java.util.Date;
+import java.io.IOException;
+
+public class RTInputStream extends FilterInputStream {
+  DataMonitor monitor;
+
+  RTInputStream(InputStream in) {
+    super(in);
+    monitor = new DataMonitor();
+  }
+
+  public int read() throws IOException {
+    Date start = new Date();
+    int b = super.read();
+    monitor.addSample(1, start, new Date());
+    return b;
+  }
+
+  public int read(byte data[]) throws IOException {
+    Date start = new Date();
+    int cnt = super.read(data);
+    monitor.addSample(cnt, start, new Date());
+    return cnt;
+  }
+
+  public int read(byte data[], int off, int len)
+    throws IOException {
+    Date start = new Date();
+    int cnt = super.read(data, off, len);
+    monitor.addSample(cnt, start, new Date());
+    return cnt;
+  }
+
+  public float averageRate() {
+    return monitor.getAverageRate();
+  }
+
+  public float lastRate() {
+    return monitor.getLastRate();
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="JDP-CH-8-EX-4"></a>
+<div class="example">
+<h4 class="objtitle">Example 8-3. A Self-Monitoring Output Stream</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.Bandwidth;
+
+import java.io.OutputStream;
+import java.io.FilterOutputStream;
+import java.util.Date;
+import java.io.IOException;
+
+public class RTOutputStream extends FilterOutputStream {
+  DataMonitor monitor;
+
+  RTOutputStream(OutputStream out) {
+    super(out);
+    monitor = new DataMonitor();
+  }
+
+  public void write(int b) throws IOException {
+    Date start = new Date();
+    super.write(b);
+    monitor.addSample(1, start, new Date());
+  }
+
+  public void write(byte data[]) throws IOException {
+    Date start = new Date();
+    super.write(data);
+    monitor.addSample(data.length, start, new Date());
+  }
+
+  public void write(byte data[], int off, int len)
+    throws IOException {
+    Date start = new Date();
+    super.write(data, off, len);
+    monitor.addSample(data.length, start, new Date());
+  }
+
+  public float averageRate() {
+    return monitor.getAverageRate();
+  }
+
+  public float lastRate() {
+    return monitor.getLastRate();
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>One problem with monitoring resource usage is that measuring
+resources affects the measurements themselves (along the lines of the
+Hiesenberg Uncertainty Principle). In our case, adding more
+operations for gathering measurements of data rates can affect the
+rate that we send and receive data. In our
+<tt class="literal">RTInputStream</tt>, for example, we've added
+three operations to the <tt class="literal">read()</tt> method from
+<tt class="literal">FilterInputStream</tt>:
+</p>
+
+<blockquote>
+<pre class="programlisting">public int read() throws IOException {
+    Date start = new Date();
+    int b = super.read();
+    monitor.addSample(1, start, new Date());
+    return b;
+}</pre>
+</blockquote>
+
+<p>Suppose we are streaming an audio file from a server for local,
+real-time playback. If we assume that data I/O, decoding, and writing
+to the local audio device are all done from a single thread, then the
+flow of control over time is fairly simple: some data is read in,
+which takes a finite amount of time. This data is decoded and
+converted to a format suitable for our audio device. Then the audio
+data is written to the audio device, and more data is read in to
+start the cycle over again. In this case, the effective raw data
+input rate for the system over one read/decode/write cycle is the
+total amount of data read (d<sub class="subscript">T</sub>),
+divided by the sum of the times for the reading (t<sub class="subscript">r</sub>), decoding (t<sub class="subscript">d</sub>) and writing (t<sub class="subscript">w</sub>) of the data:
+</p>
+
+<img alt="figure" src="figs/jdc_eq0801.gif" webstripperlinkwas="figs/jdc_eq0801.gif">
+
+<p>Now suppose we use the <tt class="literal">RTInputStream</tt> to monitor
+the raw data rate that we see from the server in order to react to
+overflow or underflow of our buffers. Each
+<tt class="literal">read()</tt> operation now carries the additional
+overhead of registering a data sample with the
+<tt class="literal">DataMonitor</tt> on the
+<tt class="literal">RTInputStream</tt> (t<sub class="subscript">c</sub>). So our net data rate is modified by the
+addition of this term:<a name="INDEX-1144"></a><a name="INDEX-1145"></a>
+</p>
+
+<img alt="figure" src="figs/jdc_eq0802.gif" webstripperlinkwas="figs/jdc_eq0802.gif">
+
+<p>Ideally, the time to register a measurement is negligible compared to
+the time allocated to reading, decoding, and writing data, so that
+the effect of measuring on the data rate is minimized. One way to
+accomplish this is to read and process large amounts of data in each
+cycle (take relatively few data rate measurements). This hinders our
+ability to track data rate variations over time, relying instead on
+rate averages over significant stretches of time. The opposite
+approach is to ignore the effect of data monitoring, and read very
+small packets of data in each cycle, resulting in many rate
+measurements over time. This will cause a larger negative impact on
+the data rate itself. The art of effective data throughput monitoring
+lies in achieving a good compromise between these two positions:
+gather enough information to make reasonable judgements about the
+state of our bandwidth resources, but limit the information
+collection process so that the impact on the data rate is
+bearable.<a name="INDEX-1146"></a><a name="INDEX-1147"></a><a name="INDEX-1148"></a><a name="INDEX-1149"></a>
+</p>
+
+
+<a name="JDP-CH-8-SECT-4.2"></a>
+<h3 class="sect2">8.4.2. Real Data Monitoring</h3>
+
+<p>
+<a name="INDEX-1150"></a><a name="INDEX-1151"></a><a name="INDEX-1152"></a><a name="INDEX-1153"></a>A measurement of the raw data
+throughput our local agent is seeing only tells us how well we are
+pushing or pulling data at the network level. It doesn't tell
+us anything about whether our local data processing is keeping up
+with the network requirements of the system. For example, we may be
+pulling encoded audio data from the network fast enough, but if
+decoding that data takes longer than expected, then the playback
+quality may suffer from skips and silent gaps as our local buffers
+for holding raw data overflow, or our buffers for holding decoded
+data underflow. To detect and react to these situations, we need to
+be able to monitor real data throughput: the rate at which we are
+processing data from its format on the network to a format suitable
+for the local application, and vice versa.
+</p>
+
+<p>With a basic data monitoring facility in place, such as our
+<tt class="literal">DataMonitor</tt> class, we can construct an
+infrastructure for monitoring the production and consumption of real
+application data. Data flowing into an agent from the network is
+generally filtered in some way before being displayed, saved, or
+otherwise used locally. Similarly, local data is typically filtered
+before being sent out on the network to another agent. These filters
+may compress, modify, or subdivide the data passed through them, for
+example. We can think of these filters as content producers,
+consumers, or both, depending on our perspective and their roles in
+the local agent. These producers and consumers are data processors
+that are wrapped around data input and output streams.
+</p>
+
+<p>One way to construct this infrastructure is to develop basic
+interfaces for these content consumers and producers, which include
+the ability to monitor the rate at which data is consumed or
+produced. <a href="#JDP-CH-8-EX-5">Example 8-4</a> shows a
+<tt class="literal">ContentConsumer</tt><a name="INDEX-1154"></a><a name="INDEX-1155"></a> class and <a href="#JDP-CH-8-EX-6">Example 8-5</a> shows a <tt class="literal">ContentProducer</tt>
+class that demonstrates this idea. A
+<tt class="literal">ContentConsumer</tt> accepts data and consumes it,
+which can mean various things depending on the circumstances. A
+consumer may display data on the screen, store data in a database or
+file, or it may feed some kind of analysis engine. A
+<tt class="literal">ContentProducer</tt> generates data (perhaps by
+asking a user for manual input) by pulling data from persistent
+storage, or as a product of some processing by another producer. Both
+classes contain a source that is a
+<tt class="literal">ContentProducer</tt>, and a destination that is a
+<tt class="literal">ContentConsumer</tt>. This allows for chaining
+consumers and producers together to form data processing pipelines.
+The source of a <tt class="literal">ContentConsumer</tt> is the
+<tt class="literal">ContentProducer</tt> that is feeding it data, and its
+destination is the next consumer in the pipeline. The source of a
+<tt class="literal">ContentProducer</tt> is the previous producer in the
+pipeline, and its destination is a consumer to which it can feed
+data.
+</p>
+
+<a name="JDP-CH-8-EX-5"></a>
+<div class="example">
+<h4 class="objtitle">Example 8-4. A Content Consumer Class</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.Bandwidth;
+
+import java.io.InputStream;
+import java.io.OutputStream;
+
+public class ContentConsumer
+{
+  protected ContentProducer source = null;
+  protected ContentConsumer dest = null;
+  protected DataMonitor     monitor = new DataMonitor();
+
+  public ContentConsumer(ContentProducer src) {
+    source = src;
+  }
+
+  public ContentConsumer(ContentConsumer dst) {
+    dest = dst;
+  }
+
+  public void setSource(ContentProducer p) {
+    source = p;
+  }
+
+  public void setDest(ContentConsumer c) {
+    dest = c;
+  }
+
+  // Consume data from our producer until it is exhausted.
+  public boolean consumeAll() {
+    boolean success = false;
+    if (source != null) {
+      byte[] data = source.produce(0);
+      while (data != null) {
+        success = consume(data);
+        data = source.produce(0);
+      }
+    }
+
+    return success;
+  }
+
+  // Consume a chunk of data
+  public boolean consume(byte[] data) {
+    // Log the start of the consumption cycle
+    Date start = new Date();
+
+    boolean success;
+    success = preConsume(data);
+    if (success)
+      success = doConsume(data);
+    if (success)
+      success = postConsume(data);
+
+    // Mark the end of our consumption cycle
+    monitor.addSample(data.length, start, new Date());
+
+    // Pass the data on to the next consumer in the chain,
+    // if present.
+    if (dest != null) {
+      dest.consume(data);
+    }
+
+    return success;
+  }
+
+  protected boolean preConsume(byte[] data) {
+    return true;
+  }
+
+  // Default consumption procedure.
+  protected boolean doConsume(byte[] data) {
+    return true;
+  }
+
+  // Default post-consumption procedure: log the data consumption
+  // size and finish time with our monitor.
+  protected boolean postConsume(byte[] data) {
+    return true;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="JDP-CH-8-EX-6"></a>
+<div class="example">
+<h4 class="objtitle">Example 8-5. A Content Producer Class</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.Bandwidth;
+
+import java.io.InputStream;
+import java.io.OutputStream;
+
+public class ContentProducer
+{
+  protected ContentProducer source = null;
+  protected ContentConsumer dest = null;
+  protected DataMonitor     monitor = new DataMonitor();
+
+  public ContentProducer(ContentProducer src) {
+    source = src;
+  }
+
+  public ContentProducer(ContentConsumer dst) {
+    dest = dst;
+  }
+
+  public void setSource(ContentProducer p) {
+    source = p;
+  }
+
+  public void setDest(ContentConsumer c) {
+    dest = c;
+  }
+
+  // Produce data and pass it to our destination, if present.
+  public boolean produceAll() {
+    boolean success = false;
+    if (dest != null) {
+      byte[] data = produce();
+      while (data != null) {
+        success = dest.consume(data);
+        if (success)
+          data = produce();
+        else
+          data = null;
+      }
+    }
+
+    return success;
+  }
+
+  // Produce a chunk of data, within the given limit.
+  public byte[] produce(long limit) {
+    // Record the start time.
+    Date start = new Date();
+
+    boolean success;
+    byte[] data = null;
+    success = preProduction(limit);
+    if (success)
+      data = doProduction(limit);
+    if (success &amp;&amp; data != null)
+      success = postProduction(data, limit);
+
+    // Record the data sample in our monitor.
+    monitor.addSample(data.length, start, new Date());
+
+    // Pass the data on to our destination, if present
+    if (data != null &amp;&amp; dest != null)
+      dest.consume(data);
+
+    return data;
+  }
+
+  // Default preconsumption procedure.
+  protected boolean preProduction(long limit) {
+    return true;
+  }
+
+  // Default production procedure: ask for data from our source,
+  // if present, and pass along unmodified (e.g., a no-op).
+  protected byte[] doProduction(long limit) {
+    byte[] data = null;
+    if (source != null) {
+      data = source.produce(limit);
+    }
+
+    return data;
+  }
+
+  // Default postconsumption procedure.
+  protected boolean postProduction(byte[] data, long limit) {
+    return true;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>The <tt class="literal">ContentConsumer</tt> has
+<tt class="literal">consume()</tt><a name="INDEX-1156"></a><a name="INDEX-1157"></a> and
+<tt class="literal">consumeAll()</tt> methods. The
+<tt class="literal">consumeAll()</tt> method accepts no arguments, and
+its default implementation consumes data from its producer until it
+is exhausted. The <tt class="literal">consume()</tt> method accepts a
+data buffer in the form of a byte array, and consumes the data by
+calling its
+<tt class="literal">preConsume()</tt><a name="INDEX-1158"></a><a name="INDEX-1159"></a><a name="INDEX-1160"></a>,
+<tt class="literal">doConsume()</tt>, and
+<tt class="literal">postConsume()</tt> methods. The default
+implementation of the <tt class="literal">preConsume()</tt> method does
+nothing, but can be overridden in subclasses to prepare for the
+consumption process (e.g., open the database connection, connect to
+the display device, etc.). The default
+<tt class="literal">doConsume()</tt> method simply writes the data to the
+next consumer in the chain, if present, but could be overridden to
+store data in a database, draw data to a display device, etc. The
+default <tt class="literal">postConsume()</tt> method also does nothing,
+but can be overridden to clean up after the data is consumed (e.g.,
+close the database connection, disconnect from the display device,
+etc.). In addition to calling these methods, the
+<tt class="literal">consume()</tt> method also creates a data sample for
+the <tt class="literal">Data-Monitor</tt> associated with the consumer.
+The start of the <tt class="literal">consume()</tt> method is noted, the
+consumption methods are called in order, the finish time is noted,
+and the sample is given to the <tt class="literal">DataMonitor</tt> for
+recording.
+</p>
+
+<p>A <tt class="literal">ContentProducer</tt> has
+<tt class="literal">produce()</tt><a name="INDEX-1161"></a><a name="INDEX-1162"></a> and <tt class="literal">produceAll()</tt>
+methods that are analogous to the <tt class="literal">consume()</tt> and
+<tt class="literal">consumeAll()</tt> methods on
+<tt class="literal">Content-Consumer</tt>. The
+<tt class="literal">produceAll()</tt> method produces data and passes it
+to the destination consumer, if present, until the producer is
+exhausted. The <tt class="literal">produce()</tt> method generates a
+chunk of data by calling the
+<tt class="literal">preProduction()</tt><a name="INDEX-1163"></a><a name="INDEX-1164"></a><a name="INDEX-1165"></a>,
+<tt class="literal">doProduction(),</tt> and
+<tt class="literal">postProduction()</tt> methods. The default
+<tt class="literal">pre</tt><tt class="literal">Production()</tt> and
+<tt class="literal">postProduction()</tt> methods do nothing, and the
+default <tt class="literal">doProduction()</tt> method simply requests a
+data chunk from the previous producer in the chain, if present.
+</p>
+
+<p>Using these classes, we can construct both consumption pipelines and
+production pipelines that monitor their data throughput. For example,
+we can create a consumption pipeline that sends an input data stream
+to replicated databases on the network:
+</p>
+
+<blockquote>
+<pre class="programlisting">ContentProducer input = new MyProducer(host, port);
+ContentConsumer dbase1 =
+    new RDBMSConsumer("jdbc:odbc://dbhost/mydata");
+input.setDest(dbase1);
+ContentConsumer dbase2 = ...;
+dbase1.setDest(dbase2);
+    ...
+input.produceAll();</pre>
+</blockquote>
+
+<p>Once the replication process is finished, we can ask each consumer
+for its estimated average bandwidth to get a feel for the quality of
+our connection to each database. We could also monitor the bandwidth
+levels during the replication process if we wanted to try to optimize
+the process, perhaps by dropping off databases with unreasonably slow
+connections.
+</p>
+
+<p>We can also create <a name="INDEX-1166"></a> production pipelines. For example, we
+could generate a graphics pipeline where image data from a file is
+sequentially modified with various effects to produce a finished
+image that is displayed on the screen:
+</p>
+
+<blockquote>
+<pre class="programlisting">ContentProducer source = new FileProducer("source.jpg");
+ContentProducer effect1 = new BlurEffect();
+effect1.setSource(source);
+ContentProducer effect2 = new GrainEffect();
+effect2.setSource(effect1);
+ContentConsumer display = new ScreenConsumer();
+display.setSource(effect2);
+
+display.consumeAll();</pre>
+</blockquote>
+
+<p>We can also monitor both raw and real data rates if we want to
+compare the two. Suppose we feed our image processing pipeline with
+an image read from an <tt class="literal">InputStream</tt>; we can wrap
+the input stream with an <tt class="literal">RTInputStream</tt> to
+monitor the rate of the "raw" image data flowing into the
+pipeline:
+</p>
+
+<blockquote>
+<pre class="programlisting">InputStream imgStream = ...;
+RTInputStream rtStream = new RTInputStream(imgStream);
+ContentProducer source = new StreamProducer(rtStream);
+    ...</pre>
+</blockquote>
+
+<p>During or after the image processing, we can monitor the estimated
+rate of raw image input, or the rate of processed data production at
+any point in the pipeline.
+</p>
+
+<p>Creating explicit representations of content consumers and producers
+is necessary only because we are discussing environments in which
+bandwidth is the limiting factor. Applications that deal with data in
+any way (which all applications do) can be broken down logically into
+data consumers and producers, and many of the objects that are
+defined to implement a system can be thought of as producers or
+consumers of data, or both. For example, in our scheduling database
+system from <a href="ch07_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch07_01.htm">Chapter 7, "Databases"</a> we could consider the
+<tt class="literal">SchedResource</tt> class as both a producer and
+consumer of data, since it both delivered data from the schedule
+database to the local agent and delivered data from the local agent
+to the database when the parameters of the resource object were
+updated. It is only our need to monitor the flow of data that makes
+it valuable for us to represent our data flow with producer and
+<tt class="literal"></tt><a name="INDEX-1167"></a><a name="INDEX-1168"></a> consumer <a name="INDEX-1169"></a><a name="INDEX-1170"></a><a name="INDEX-1171"></a><a name="INDEX-1172"></a> classes.<a name="INDEX-1173"></a><a name="INDEX-1174"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch08_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch08_03.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch08_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch08_05.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">8.3. Scope of This Chapter</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">8.5. Bandwidth Management</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

@@ -1,0 +1,428 @@
+<html>
+<head>
+<title>The NamingShell Application (Java Enterprise in a Nutshell)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David Flanagan, Jim Farley, William Crawford and Kristopher Magnusson">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-483-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="The NamingShell Application">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm" alt="Java Enterprise in a Nutshell"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch06_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch06_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch06_01.htm">Chapter 6: JNDI</a></td><td align="right" valign="top" width="172"><a href="ch06_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch06_06.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY --><h2 class="sect1">6.5. The NamingShell Application</h2>
+<p>
+<a name="INDEX-1499"></a><a name="INDEX-1500"></a><a name="INDEX-1501"></a>
+Earlier, we discussed how we might modify the
+  <tt class="literal">Lookup</tt> example to make it more general, allowing
+  us to look up Enterprise JavaBeans and remote objects. The rest of
+  the examples in this chapter are going to be based on the
+  <tt class="literal">NamingShell</tt> code shown in <a href="#ch06-pgfid-982363">Example 6-2</a>. <tt class="literal">NamingShell</tt> is an extensible JNDI shell that
+  enables us to perform naming operations in any JNDI-accessible
+  naming system. The shell provides methods for getting and setting
+  the current object and other shell-related details, and it also
+  keeps track of the name of the current object, something a
+  <tt class="literal">Context</tt> cannot do for itself.</p>
+<p>
+<a name="INDEX-1502"></a>
+Once you have loaded <tt class="literal">NamingShell</tt>, you can use the
+shell to execute JNDI-related commands, just as you would use a
+regular shell to execute operating-system commands. I encourage you to
+download the code for <tt class="literal">NamingShell</tt> right now, so
+that you can experiment with it as we proceed through the rest of the
+chapter. <tt class="literal">NamingShell</tt> uses the name you type to
+locate a command dynamically from the filesystem. The shell has no
+interpreter; however, <tt class="literal">NamingShell</tt> expects a command
+to implement the <tt class="literal">Command</tt> interface and its
+<tt class="literal">execute()</tt> method. This means a command really
+interprets itself. A command throws a
+<tt class="literal">CommandException</tt> when execution fails. </p>
+<p>As you can see, <tt class="literal">NamingShell</tt> itself contains
+very little real JNDI code. All the JNDI functionality is implemented
+in the various <tt class="literal">Command</tt> classes we create to handle
+particular JNDI operations. The shell simply supports the loading of
+commands and keeps track of various shell-related details.</p>
+
+<a name="ch06-pgfid-982363"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-2. The NamingShell Class</h4>
+<blockquote>
+<pre class="programlisting">
+import java.io.*;
+import java.util.*;
+import javax.naming.*;
+ 
+class NamingShell {
+    
+  // Private variables
+  private static Hashtable COMMAND_TABLE = new Hashtable();
+  private static String  JNDIPROPS_FILENAME  = ".jndienv";
+  private static String  PROMPT = "[no initial context]";
+  private static String  VERSION = "1.0";
+  private static Context CURRENT_CONTEXT, INITIAL_CONTEXT;
+  private static String  CURRENT_NAME, INITIAL_NAME;
+  private static boolean RUNNING = true;
+
+  // Shell operations
+  private static void exit(int status) { System.exit(status); }
+    
+  // Accessor methods
+  public static Hashtable getCommands() { return COMMAND_TABLE; }
+  public static Context getCurrentContext() { return CURRENT_CONTEXT; }
+  public static String getCurrentName() { return CURRENT_NAME; }
+  public static String getDefaultPropsFilename() { return JNDIPROPS_FILENAME; }
+  public static Context getInitialContext() { return INITIAL_CONTEXT; }
+  public static String getInitialName() { return INITIAL_NAME; }
+  public static String getPrompt() { return PROMPT; }
+  public static void setCurrentContext(Context ctx) { CURRENT_CONTEXT = ctx; }
+  public static void setInitialContext(Context ctx) { INITIAL_CONTEXT = ctx; }
+  public static void setInitialName(String name) { INITIAL_NAME = name; }    
+  public static void setPrompt(String prompt) { PROMPT = prompt; }
+  public static void setCurrentName(String name) {
+    CURRENT_NAME = name;
+    setPrompt(name);
+  }
+
+  // Executes a preinstantiated command we are sure is already
+  // present in the table
+  private static void execute(Command c, Vector v) {
+    if (c == null) {
+      System.out.println("No command was loaded; cannot execute the command.");
+      return;
+    }
+    try {
+      c.execute(CURRENT_CONTEXT, v);
+    }
+    catch (CommandException ce) {
+      System.out.println(ce.getMessage());
+    }
+  }
+    
+  // Another private method that enables us to specify a command
+  // by its string name and that loads the command first
+  private static void execute(String s, Vector v) {
+    execute(loadCommand(s), v);
+  }
+            
+  // Loads the command specified in commandName; the help command
+  // relies on this method
+  public static Command loadCommand(String commandName) {
+    // The method returns a null command unless some of its 
+    // internal logic assigns a new reference to it
+    Command theCommand = null;
+        
+    // First see if the command is already present in the hashtable
+    if (COMMAND_TABLE.containsKey(commandName)) {
+      theCommand = (Command)COMMAND_TABLE.get(commandName);
+      return theCommand;
+    }
+
+    try {
+      // Here we use a little introspection to see if a class
+      // implements Command before we instantiate it
+      Class commandInterface = Class.forName("Command");
+      Class commandClass = Class.forName(commandName);
+            
+      // Check to see if the class is assignable from Command 
+      // and if so, put the instance in the command table
+      if (!(commandInterface.isAssignableFrom(commandClass))) 
+        System.out.println("[" + commandName + "]: Not a command");
+      else {
+        theCommand = (Command)commandClass.newInstance();
+        COMMAND_TABLE.put(commandName, theCommand);
+	return theCommand;
+      }
+    }
+    catch (ClassNotFoundException cnfe) {
+      System.out.println("[" + commandName + "]: command not found");
+    }
+    catch (IllegalAccessException iae) {
+      System.out.println("[" + commandName + "]: illegal acces");
+    }
+    catch (InstantiationException ie) {
+      System.out.println("["+commandName+"]: command couldn't be instantiated");
+    }
+    finally {
+      return theCommand;          // theCommand is null if we get here
+    }
+  }
+    
+  // This method reads a line of input, gets the command and arguments
+  // within the line of input, and then dynamically loads the command
+  // from the current directory of the running shell
+  private static void readInput() {
+    // Get the input from System.in
+    BufferedReader br = new BufferedReader(new InputStreamReader(System.in));  
+        
+    // Begin reading input
+    try {
+      while (RUNNING) {
+        System.out.print(PROMPT + "% ");
+                
+        // Tokenize the line, read each token, and pass the token
+        // into a convenient remaining arguments Vector that we
+        // pass into the Command
+        StringTokenizer tokenizer = new StringTokenizer(br.readLine());
+        Vector remainingArgs = new Vector();
+        String commandToken = "";
+        if (tokenizer.hasMoreTokens()) {
+          commandToken = tokenizer.nextToken();
+          while (tokenizer.hasMoreTokens())
+            remainingArgs.addElement(tokenizer.nextToken());
+        }
+                
+        // Dynamically load the class for the appropriate command
+        // based upon the case-sensitive name of the first token,
+        // which is the command token
+        if (!(commandToken.equals(""))) 
+          execute(commandToken, remainingArgs);
+      }
+    }
+    catch (java.io.IOException ioe) {
+      System.out.println("Caught an IO exception reading a line of input");
+    }
+  }
+  // Constructor
+  NamingShell(String[] args) {
+  }
+    
+  // Main method that reads input until the user exits
+  public static void main(String[] args) {
+    System.out.println("NamingShell " + VERSION);
+    System.out.println("Type help for more information or exit to quit");
+    shell.readInput();
+    System.out.println("Exiting");
+  }
+}</pre>
+</blockquote>
+</div>
+<a name="ch06-pgfid-977240"></a>
+<h3 class="sect2">6.5.1. The Command Interface</h3>
+<p>
+<a name="INDEX-1503"></a><a name="INDEX-1504"></a><a name="INDEX-1505"></a><a name="INDEX-1506"></a><a name="INDEX-1507"></a>
+
+The <tt class="literal">Command</tt> interface (shown in <a href="#ch06-pgfid-982392">Example 6-3</a>)
+describes a standard interface for a shell command. It has an
+<tt class="literal">execute()</tt> method that contains the command logic
+and a <tt class="literal">help()</tt> method for displaying online help for
+the command. If <tt class="literal">execute()</tt> encounters a naming
+exception (or some other exception), it throws a
+<tt class="literal">CommandException</tt> (shown in <a href="#ch06-pgfid-982425">Example 6-4</a>), which
+stores the first exception as an instance variable so that the shell
+can display the exception appropriately. </p>
+<a name="ch06-pgfid-982392"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-3. The Command Interface</h4>
+<blockquote>
+<pre class="programlisting">
+import java.util.Vector;
+import javax.naming.Context;
+
+public interface Command {
+  public void execute(Context c, Vector v)
+    throws CommandException;
+  public void help();    
+}</pre>
+</blockquote>
+</div>
+<a name="ch06-pgfid-982425"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-4. The CommandException Class</h4>
+<blockquote>
+<pre class="programlisting">
+public class CommandException extends Exception {
+  Exception e; // root exception
+  CommandException(Exception e, String message) {
+    super(message);
+    this.e = e;
+  }
+  public Exception getRootException() {
+    return e;
+  }
+}</pre>
+</blockquote>
+</div>
+<a name="ch06-pgfid-976229"></a>
+<h3 class="sect2">6.5.2. Loading an Initial Context</h3>
+<p>
+<a name="INDEX-1508"></a><a name="INDEX-1509"></a>
+As I said earlier, to use JNDI to look up an object in a naming system
+  (or, in fact, to do anything with the naming system), you first have
+  to create an <tt class="literal">InitialContext</tt> for that naming
+  system. So, the first command we need to implement is
+  <em class="emphasis">initctx</em>, for loading an initial context into
+  <tt class="literal">NamingShell</tt>. <a href="#ch06-pgfid-982528">Example 6-5</a> shows an implementation
+  of this command.</p>
+<a name="ch06-pgfid-982528"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-5. The initctx Command</h4>
+<blockquote>
+<pre class="programlisting">
+import java.io.*;
+import java.util.*;
+import javax.naming.*;
+
+public class initctx implements Command {
+    
+  public void execute(Context c, Vector v) {
+    String jndiPropsFilename;
+    // If no properties file is specified, use the default file;
+    // otherwise use the specified file
+    if (v.isEmpty())
+      jndiPropsFilename = NamingShell.getDefaultPropsFilename();
+    else
+      jndiPropsFilename = (String)v.firstElement();
+            
+    try {
+      Properties props = new Properties();
+      File jndiProps = new File(jndiPropsFilename);
+      props.load(new FileInputStream(jndiProps));
+           
+      NamingShell.setInitialContext(new InitialContext(props));
+      NamingShell.setInitialName("/");
+      NamingShell.setCurrentContext(NamingShell.getInitialContext());
+      NamingShell.setCurrentName(NamingShell.getInitialName());
+      System.out.print("Created initial context using ");
+      System.out.println(jndiProps.getAbsolutePath());
+    }
+    catch (NamingException ne) {
+      System.out.println("Couldn't create the initial context");
+    }
+    catch (FileNotFoundException fnfe) {
+      System.out.print("Couldn't find properties file: ");
+      System.out.println(jndiPropsFilename);
+    }
+    catch (IOException ioe) {
+      System.out.print("Problem loading the properties file: ");
+      System.out.println(jndiPropsFilename);
+    }
+    catch (Exception e) {
+      System.out.println("There was a problem starting the shell");
+    }
+  }
+    
+  public void help() { System.out.println("Usage: initctx [filename]"); }
+}</pre>
+</blockquote>
+</div>
+<p>
+<a name="INDEX-1510"></a>
+The <em class="emphasis">initctx</em> command accepts an argument that specifies the name of a properties file to use in creating the <tt class="literal">Properties</tt> object that is passed to the <tt class="literal">InitialContext</tt> constructor. If no filename is specified, <em class="emphasis">initctx</em> looks for the default properties file specified by <tt class="literal">NamingShell</tt>. So, with <tt class="literal">NamingShell</tt>, all you have to do to use a particular naming service is create an appropriate properties file for that service.</p>
+<a name="ch06-pgfid-977508"></a>
+<h3 class="sect2">6.5.3. Running the Shell</h3>
+<p>
+<a name="INDEX-1511"></a><a name="INDEX-1512"></a><a name="INDEX-1513"></a>
+With <tt class="literal">NamingShell</tt> and
+<em class="emphasis">initctx</em>, we have enough functionality to actually
+run the shell. Before you try running the shell, make sure that the
+JNDI libraries (in <em class="filename">jndi.jar</em>) and any other
+specialized providers are specified in your classpath. Here's
+how we might start <tt class="literal">NamingShell</tt> and establish an
+initial context, once the classpath is set appropriately:</p>
+<blockquote>
+<pre class="programlisting">
+% java NamingShell
+NamingShell 1.0
+Type help for more information or exit to quit
+[no initial context]% initctx
+Created initial context using C:\temp\samples\book\.jndienv
+/%</pre>
+</blockquote>
+<p>
+<a name="INDEX-1514"></a> 
+
+In this case, since we didn't specify a properties file,
+  <tt class="literal">NamingShell</tt> looks for the
+  <em class="filename">.jndienv</em> file in the current directory. For the
+  purpose of our next few examples, let's assume that this file
+  contains property settings that allow us to use the filesystem
+  provider from Sun. You can change initial contexts at any time
+  during the shell session by running <em class="emphasis">initctx</em>
+  with a new filename. After you have created an initial context, you
+  can begin performing naming operations by typing in commands. To
+  exit the shell, simply use the <em class="emphasis">exit</em>
+  command.<a href="#FOOTNOTE-2">[2]</a>
+If you are not sure how a command works, you can get help for that command by typing:
+</p>
+<blockquote class="footnote">
+<a name="FOOTNOTE-2"></a>
+<p>[2]The
+  <em class="emphasis">help</em> and <em class="emphasis">exit</em> commands are
+  implemented as separate classes, just like the JNDI-related
+  commands. We've not going to examine the code for these
+  commands, as they don't use JNDI. However, the code for these
+  commands is provided in the example code that is available online
+  (at <a href="http://www.oreilly.com/catalog/jentnut/">http://www.oreilly.com/catalog/jentnut/</a> ).</p>
+</blockquote>
+<blockquote>
+<pre class="programlisting">
+/% help <em class="replaceable">command</em>
+</pre>
+</blockquote>
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch06_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch06_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch06_06.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">6.4. Looking Up Objects in a Context</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">6.6. Listing the Children of a Context</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

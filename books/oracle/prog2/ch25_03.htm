@@ -1,0 +1,1133 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 25] 25.3 Tuning Access to Your Data</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein &amp; Bill Pribyl"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T19:13:15Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates CD-ROM-1-56592-335-9E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-335-9E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle PL/SQL"><META
+NAME="DC.Title"
+CONTENT="Oracle PL/SQL Programming, 2nd Edition"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch25_01.htm"
+TITLE="25. Tuning PL/SQL Applications"><LINK
+REL="prev"
+HREF="ch25_02.htm"
+TITLE="25.2 Tuning Access to Compiled Code"><LINK
+REL="next"
+HREF="ch25_04.htm"
+TITLE="25.4 Tuning Your Algorithms"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd Edition"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch25_02.htm"
+TITLE="25.2 Tuning Access to Compiled Code"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 25.2 Tuning Access to Compiled Code"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch25_01.htm"
+TITLE="25. Tuning PL/SQL Applications"
+>Chapter 25<BR>Tuning PL/SQL Applications</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch25_04.htm"
+TITLE="25.4 Tuning Your Algorithms"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 25.4 Tuning Your Algorithms"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-3"
+>25.3 Tuning Access to Your Data</A
+></H2
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999827-1"
+></A
+> <A
+CLASS="indexterm"
+NAME="ch25-idx-999827-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999827-3"
+></A
+> <A
+CLASS="indexterm"
+NAME="ch25-idx-999827-4"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999827-5"
+></A
+>Much of the tuning you do will attempt to optimize the way PL/SQL programs manipulate data in the Oracle database, both queries and DML (updates, inserts, deletes). Lots of the issues here involve tuning SQL statements, and I am not even going to attempt to show you how to tune SQL (definitely not my strong suit). There are certainly steps you can take, though, in your PL/SQL code and environment to improve the performance of even an optimally constructed chunk of SQL. </P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-3.1"
+>25.3.1 Use Package Data to Minimize SQL Access</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999922-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999922-2"
+></A
+> When you declare a variable in a package body or specification, its scope is not restricted to any particular procedure or function. As a result, the scope of package-level data is the entire Oracle session, and the value of that data persists for the entire session. Take advantage of this fact to minimize the times you have to access data from the SQL layer. Performing lookups against structures located in your own <A
+CLASS="indexterm"
+NAME="AUTOID-22701"
+></A
+><A
+CLASS="indexterm"
+NAME="AUTOID-22703"
+></A
+>Program Global Area (PGA) is much, much faster than going through the SGA&nbsp;-- even if the data you want is resident in shared memory. </P
+><P
+CLASS="para"
+>This tip will come in handy most when you find that your application needs to perform multiple lookups which do not change during your session. Suppose, for example, that one of your programs needs to obtain a unique session identifier to avoid overlaps with other sessions. One of the ways to do this is to call DBMS_LOCK.ALLOCATE_UNIQUE to retrieve a unique lockname. Here is the inefficient way to do this: I need the ID or lockname in the calc_totals procedure. So I make the call to the built-in package right inside the procedure: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE calc_totals
+IS
+   v_lockname VARCHAR2(100);
+BEGIN
+   v_lockname := DBMS_LOCK.ALLOCATE_UNIQUE;
+
+   /* Use the lock name to issue a request for data. */
+   send_request (v_lockname);
+
+   . . .
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The problem with this approach is that every time calc_totals is called, the built-in function is also called to get the unique value&nbsp;-- a totally unnecessary action. After you get it the first time, you needn't get it again. </P
+><P
+CLASS="para"
+>Packages provide a natural repository for these "session-level" pieces of data. The following sesspkg (session package) defines a variable to hold the lock name and then assigns it a value on initialization of the package: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PACKAGE sesspkg
+IS
+   lockname CONSTANT VARCHAR2(100) := DBMS_LOCK.ALLOCATE_UNIQUE;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Now the calc_totals procedure can directly reference the package global in its call to send_request. The first time calc_totals is called, the sesspkg package is instantiated and the built-in function called. All subsequent calls to calc_totals within that session will not, however, result in any additional processing inside sesspkg. Instead, it simply returns the value resident in the constant. </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE calc_totals
+IS
+BEGIN
+   /* Use the lock name to issue a request for data. */
+   send_request (sesspkg.lockname);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>You can apply a similar technique for lookups against database tables&nbsp;-- both persistent and session-based. In the following example, the SELECT from v$parameter will be executed only once per session, regardless of how many times the db_name function is executed. Since the database name will never change during the session, this is reasonable. Note also the judicious use of a function with side effects, where one side effect (modification of a persistent package variable) is used to gain the efficiency: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: dbdata.spp */
+
+CREATE OR REPLACE PACKAGE db_data
+IS
+   /* function to return the name of the database */
+   FUNCTION db_name RETURN VARCHAR2;
+END db_data;
+/
+CREATE OR REPLACE PACKAGE BODY db_data
+IS
+   /* DB_name variable only manipulated by this function */
+   v_db_name  VARCHAR2(8) := NULL;
+
+   /* function to return the name of the database */
+   FUNCTION db_name RETURN VARCHAR2
+   IS
+   BEGIN
+      IF v_db_name IS NULL
+      THEN
+         SELECT SUBSTR(value,1,8) INTO v_db_name
+           FROM v$parameter
+          WHERE name = `db_name';
+      END IF;
+      RETURN v_db_name;
+   END db_name;
+END db_data;</PRE
+></BLOCKQUOTE
+><BLOCKQUOTE
+CLASS="note"
+><P
+CLASS="para"
+><STRONG
+>NOTE:</STRONG
+> You will need to have access to the v$parameter table granted to you from SYS if you want to compile and use this package outside of the SYS account. </P
+></BLOCKQUOTE
+><P
+CLASS="para"
+>For a final example of using package data to reduce SQL I/O and improve performance, <A
+CLASS="xref"
+HREF="ch10_01.htm"
+>Chapter 10, <CITE
+CLASS="chapter"
+>PL/SQL Tables</CITE
+></A
+>, shows how you can use a PL/SQL table stored in a package to "remember" values which have already been queried in that session. If the value is in the PL/SQL table, the function returns that value. If not, it retrieves the value from the database table and, before returning the value, stores it in the PL/SQL table.<A
+CLASS="indexterm"
+NAME="AUTOID-22718"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22719"
+></A
+> </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-3.2"
+>25.3.2 Call PL/SQL Functions in SQL to Reduce I/O</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999927-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999927-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999927-3"
+></A
+><A
+CLASS="xref"
+HREF="ch17_01.htm"
+>Chapter 17, <CITE
+CLASS="chapter"
+>Calling PL/SQL Functions in SQL</CITE
+></A
+>, explains how to create and place functions inside SQL statements. There are many advantages to this approach, which can result in cleaner, easier to read SQL and performance improvements. The following example illustrates the use of packaged functions in SQL to minimize I/O in a SQL query (and thereby to improve performance); it also takes advantage of persistent package data to minimize data access. </P
+><P
+CLASS="para"
+>Suppose we are given a table of address information, primary-keyed by a unique system-generated identifier as follows: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE TABLE  addresses
+   (id  NUMBER  NOT NULL PRIMARY KEY
+   ,street VARCHAR2(200)
+   ,city VARHAR2(200)
+   ,state CHAR(2)
+   ,ZIP VARCHAR2(20))
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Suppose also that we have a complex view joining several tables and that one or more columns <EM
+CLASS="emphasis"
+>may</EM
+> contain address identifiers (or be NULL) and that we want to join in a single address according to some prioritization: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE VIEW termination_notices
+    (customer_id  NUMBER
+    ,termination_reason VARCHAR2(10)
+    ,customer_addr_id NUMBER
+    ,employer_addr_id NUMBER)
+AS
+   SELECT ...
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>We want to assemble a new view (or PL/SQL cursor) which will de-reference one of the address ids as follows: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>IF customer_addr_id IS NOT NULL
+THEN
+    use that address
+ELSIF spouse_addr_id IS NOT NULL
+THEN
+    use that address
+ELSE
+    no address
+END IF;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>We can create a new view to meet these requirements using UNIONed SELECTs each joining in different addresses, but this will be very complex and could involve multiple scans through the termination_notices view. Another possibility is to use PL/SQL functions to provide address lookups and then include these functions directly in the new view or cursor SELECT statement. One possible problem with this approach is that since we will want to provide all elements of the address in multiple columns, we are in danger of doing address lookups four times per row (once for each column of the addresses table). This can be avoided by making use of the persistent state of package variables: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE PACKAGE address_info
+IS
+   /* these are the functions we will call in SQL */
+   --
+   FUNCTION streetaddr(addr_id_IN IN address.id%TYPE)
+      RETURN address.street%TYPE;
+   PRAGMA RESTRICT_REFERENCES (streetaddr,WNDS);
+   --
+   FUNCTION cityaddr(addr_id_IN IN address.id%TYPE)
+      RETURN address.city%TYPE;
+   PRAGMA RESTRICT_REFERENCES (cityaddr,WNDS);
+   --
+   FUNCTION stateaddr(addr_id_IN IN address.id%TYPE)
+      RETURN address.state%TYPE;
+   PRAGMA RESTRICT_REFERENCES (stateaddr,WNDS);
+   --
+   FUNCTION zipaddr(addr_id_IN IN address.id%TYPE)
+      RETURN address.ZIP%TYPE;
+   PRAGMA RESTRICT_REFERENCES (zipaddr,WNDS);
+   --
+END address_info;
+/
+CREATE OR REPLACE PACKAGE BODY address_info
+IS
+   /* curr_addr_rec is maintained by load_addr procedure */
+   curr_addr_rec   address%ROWTYPE;
+   --
+   /* procedure to load curr_addr_rec by id            */
+   PROCEDURE load_addr(addr_id_IN IN address.id%TYPE)
+   IS
+   null_addr_rec   address%ROWTYPE;
+   BEGIN
+      IF curr_addr_rec.id != addr_id_IN OR curr_addr_rec.id IS NULL
+      THEN
+         SELECT *
+           INTO curr_addr_rec
+           FROM address
+          WHERE id = addr_id_IN;
+      END IF;
+   EXCEPTION
+      WHEN NO_DATA_FOUND THEN curr_addr_rec := null_addr_rec;
+   END load_addr;
+   --
+   /* functions which return components of curr_addr_rec */
+   FUNCTION streetaddr(addr_id_IN IN address.id%TYPE)
+      RETURN address.street%TYPE
+   IS
+   BEGIN
+      load_addr(addr_id_IN);
+      RETURN curr_addr_rec.street;
+   END streetaddr;
+   --
+   FUNCTION cityaddr(addr_id_IN IN address.id%TYPE)
+      RETURN address.city%TYPE
+   IS
+   BEGIN
+      load_addr(addr_id_IN);
+      RETURN curr_addr_rec.city;
+   END cityaddr;
+   --
+   FUNCTION stateaddr(addr_id_IN IN address.id%TYPE)
+      RETURN address.state%TYPE
+   IS
+   BEGIN
+      load_addr(addr_id_IN);
+      RETURN curr_addr_rec.state;
+   END stateaddr;
+   --
+   FUNCTION zipaddr(addr_id_IN IN address.id%TYPE)
+      RETURN address.ZIP%TYPE
+   IS
+   BEGIN
+      load_addr(addr_id_IN);
+      RETURN curr_addr_rec.ZIP;
+   END zipaddr;
+   --
+END address_info;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Following is a version of the view built upon this package which gives us the addresses to which to mail termination notices. </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE VIEW termination_notice_mailing
+IS
+SELECT  customer_id
+,DECODE(customer_addr_id,NULL,
+                 DECODE(employer_addr_id,NULL,TO_CHAR(NULL)
+                           ,address_info.streetaddr(employer_addr_id))
+               ,address_info.streetaddr(customer_addr_id) )
+        street
+,DECODE(customer_addr_id,NULL,
+                 DECODE(employer_addr_id,NULL,TO_CHAR(NULL)
+                            ,address_info.cityaddr(employer_addr_id))
+               ,address_info.cityaddr(customer_addr_id) )
+        city
+,DECODE(customer_addr_id,NULL,
+                 DECODE(employer_addr_id,NULL,TO_CHAR(NULL)
+                            ,address_info.stateaddr(employer_addr_id))
+               ,address_info.stateaddr(customer_addr_id) )
+        state
+,DECODE(customer_addr_id,NULL,
+                 DECODE(employer_addr_id,NULL,TO_CHAR(NULL)
+                            ,address_info.zipaddr(employer_addr_id))
+               ,address_info.zipaddr(customer_addr_id) )
+        ZIP
+ FROM termination_notices;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice that the DECODEs handle the prioritization of which address to use based on whether customer_addr_id and employer_addr_id are NULL. Notice also that the package ensures that we will hit the address table at most once per row selected. Certainly this is still a complex view, but we only have to scan the termination_notices view once, and we join in the correct address only when we need it. </P
+><P
+CLASS="para"
+>As you can see, taking full advantage of all of this technology to improve performance doesn't always result in very attractive code. When you are faced with programs that do not meet minimal requirements, however, you must be ready to abandon elegance and even (as a last resort) simplicity to get the job done.<A
+CLASS="indexterm"
+NAME="AUTOID-22746"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22747"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22748"
+></A
+> </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-3.3"
+>25.3.3 Avoid Client-Side SQL</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999931-1"
+></A
+> <A
+CLASS="indexterm"
+NAME="ch25-idx-999931-2"
+></A
+> Set as a goal for yourself or your entire development team that no one ever places a chunk of SQL code on the client side of the divide. Why? Because if you put all SQL or data access inside stored code in the database you get the following: </P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>You are much more likely to share that same SQL across multiple programs or even applications. This will result in a higher percentage of shared, preparsed SQL. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Multiple SQL statements can be batched together into a single procedure or function, so that a single network access kicks off a sequence of SQL activity on the server without unnecessary network traffic. </P
+></LI
+></UL
+><P
+CLASS="para"
+>Objections to this advice are often raised by Oracle Developer/2000 developers. When you create a form in Oracle Forms, the base table block takes care of an awful lot of the required SQL, including some very complex locking mechanisms. Am I saying that you should abandon all of that "automatic" stuff and write a large volume of code? Definitely not (though with Oracle Developer/2000 Release 2 you will be able to build "base table blocks" around stored procedures and functions <EM
+CLASS="emphasis"
+>instead of</EM
+> using tables). I would strongly recommend, though, that the <EM
+CLASS="emphasis"
+>only</EM
+> SQL you allow in your Oracle Forms modules is the stuff generated automatically for you. </P
+><P
+CLASS="para"
+>You should most certainly never write POST-QUERY triggers (as an example) which contain multiple SELECT statements to do foreign key lookups. This is the most common place for additional SQL to show up in a form. Your tables are wonderfully normalized and you must, therefore, translate a key into a descriptor for display purposes. How do you do this? In the POST-QUERY trigger, you issue implicit SELECT after implict SELECT to get the data. Your trigger then looks like this: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>BEGIN
+   SELECT dept_name INTO :emp.dname
+     FROM department
+    WHERE dept_id = :emp.deptid;
+
+   SELECT title_name INTO :emp.tname
+     FROM titles
+    WHERE title_id = :emp.title_id;
+
+   /* and so on and so on... */
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This is very bad news for at least two reasons: First, chances are that you have this same or similar code in some other program. Surely this can't be the only place you look up a department name from a department ID. Second, you are forcing lots of unnecessary network activity. </P
+><P
+CLASS="para"
+>Ideally, you should consolidate all the parts of your POST_QUERY triggers that contain SQL statements into a single procedure, preferably inside a package, as shown here: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>BEGIN
+   emppkg.lookups (:emp.deptid, :emp.dname, :emp.title_id, :emp.tname);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The emppkg.lookups procedure bundles together each of the different foreign key lookups, which means that it requires just one network call to get the job done. <A
+CLASS="indexterm"
+NAME="AUTOID-22771"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22772"
+></A
+> </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-3.4"
+>25.3.4 Take Advantage of DBMS_SQL Batch Processing</A
+></H3
+><P
+CLASS="para"
+>The PL/SQL8 version of <A
+CLASS="indexterm"
+NAME="ch25-idx-999935-1"
+></A
+> <A
+CLASS="indexterm"
+NAME="ch25-idx-999935-2"
+></A
+>DBMS_SQL allows you to perform bulk updates, inserts, deletes, and queries. The new version of this handy package (which allows for the execution of dynamic SQL and dynamic PL/SQL inside PL/SQL programs) offers the following programs to support "array processing": </P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+>DBMS_SQL.<A
+CLASS="indexterm"
+NAME="AUTOID-22784"
+></A
+> DEFINE_ARRAY</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>This procedure allows you to associate a column in a cursor with a PL/SQL table. When you fetch from the cursor, you will be able to dump a specified number of values from multiple rows into that PL/SQL table. </P
+></DD
+><DT
+CLASS="term"
+>DMBS_SQL.<A
+CLASS="indexterm"
+NAME="AUTOID-22790"
+></A
+> BIND_ARRAY </DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>This procedure allows you to bind multiple values from a PL/SQL table to a DML statement, so that you can, say, insert 100 rows in a single call to DBMS_SQL.EXECUTE, instead of having to make 100 calls to this function. </P
+></DD
+></DL
+><P
+CLASS="para"
+>See <CITE
+CLASS="citetitle"
+>Oracle Built-in Packages</CITE
+> for more information on this feature. It is the closest you can get to true array processing for SQL inside a PL/SQL program.<A
+CLASS="indexterm"
+NAME="AUTOID-22796"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22797"
+></A
+> </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-3.5"
+>25.3.5 Avoid Procedural Code When Possible  </A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-22801"
+></A
+><A
+CLASS="indexterm"
+NAME="AUTOID-22804"
+></A
+>Compared to Oracle SQL, PL/SQL is a slow language when it comes to processing SQL statements. So whenever possible, you should take advantage of set-oriented SQL statements instead of row-at-a-time cursor processing in PL/SQL. Consider the following block of code: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DECLARE
+   CURSOR table_X_cur
+   IS
+      SELECT column_A,column_B,column_C
+        FROM table_X
+         FOR UPDATE of column_A;
+   table_X_rec table_X_cur%ROWTYPE;
+BEGIN
+   OPEN table_X_cur;
+   FETCH table_X_cur INTO table_X_rec;
+   WHILE table_X_cur%FOUND
+   LOOP
+      UPDATE table_X
+         SET column_A = table_X_rec.column_B * table_X_rec.column_C
+       WHERE CURRENT OF table_X_cur;
+      FETCH table_X_cur INTO table_X_rec;
+   END LOOP;
+   CLOSE table_X_cur;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>You can replace all of that stuff with this single UPDATE statement:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>UPDATE table_X  SET column_A = column_B * column_C;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I hope you will find this tip to be self-evident; <EM
+CLASS="emphasis"
+>you</EM
+> would never be tempted to write a whole bunch of PL/SQL code when a simple UPDATE statement would suffice! It is worth the reminder, however, because as we spend more and more of our time cranking out PL/SQL code, we can easily lose perspective. We might find ourselves trying to do everything in PL/SQL and forget about our other options. </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-3.6"
+>25.3.6 Use PL/SQL to Improve Performance of IO-Intensive SQL</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999949-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999949-2"
+></A
+> <A
+CLASS="indexterm"
+NAME="ch25-idx-999949-3"
+></A
+>Now that I have finished telling you to use SQL whenever possible and avoid PL/SQL, it is time to urge you to use PL/SQL, particularly explicit cursors, to improve the performance of some types of SQL statements. Go figure! </P
+><P
+CLASS="para"
+>Actually, it shouldn't be the least bit confusing. SQL is optimized for set-at-a-time processing. PL/SQL is designed for record-at-a-time logic. If your interaction with the database always occurs on an entire set, or between more than one set related through equi-joins, SQL is the obvious choice. If your requirements dictate that you must perform procedural-style logic on the data in order to produce the desired result, PL/SQL could have a dramatic impact on the performance of your program. </P
+><P
+CLASS="para"
+>A good indicator of the potential for improvement with PL/SQL is the presence of a correlated sub-query. Consider the following query, which displays the department name followed by the name of the employee who receives the highest salary in that department: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT 'Top employee in ' || D.name || ' is ' ||
+         E.last_name || ', ' || E.first_name
+  FROM department D, employee E
+ WHERE D.department_id = E.department_id
+   AND E.salary = (SELECT MAX (salary)
+                     FROM employee E2
+                    WHERE E2.department_id = E.department_id);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The records retrieved by the inner SELECT statement (which calculates the maximum salary for a department) is correlated to the department ID of the outer employee record. The maximum salary for a department is therefore calculated again and again for each employee record in the outer query. If the company has five departments and 1000 employees in those five departments, then the query will perform 1000 subqueries. Yet the maximum salary really needs to be computed only five times, once per department. </P
+><P
+CLASS="para"
+>You can use PL/SQL and a cursor FOR loop to cut to a minimum the number of times the department maximum is calculated. The resulting execution time will be greatly reduced, especially for large numbers of records in the employee table: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE display_best_paid IS
+/*
+|| Display the name of the employee who makes the highest salary
+|| in each department.
+*/
+   -- Cursor for each department (and its max salary) in the company.
+   CURSOR dept_cur IS
+      SELECT D.department_id, name, MAX (salary) max_salary
+        FROM department D, employee E
+       WHERE D.department_id = E.department_id
+       GROUP BY D.department_id
+       ORDER BY name;
+BEGIN
+   &lt;&lt;dept_loop&gt;&gt;
+   FOR dept_rec IN dept_cur
+   LOOP
+      DECLARE
+         CURSOR emp_cur IS
+            SELECT last_name || ', ' || first_name emp_name
+              FROM employee
+             WHERE department_id = dept_rec.department_id
+               AND salary = dept_rec.max_salary;
+         emp_rec emp_cur%ROWTYPE;
+      BEGIN
+         OPEN emp_cur;
+         FETCH emp_cur INTO emp_rec;
+         DBMS_OUTPUT.PUT_LINE
+            ('Top employee in ' || dept_rec.name || ' is ' ||
+             emp_rec.emp_name);
+         CLOSE emp_cur;
+      END;
+   END LOOP &lt;&lt;dept_loop&gt;&gt;;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>With the cursor FOR loop approach, the maximum salary is calculated once for each department through the use of a GROUP BY. This value is then used inside the loop to find the first employee whose salary matches the maximum. This program performs several hundred fewer logical reads than the correlated subquery version. </P
+><P
+CLASS="para"
+>This technique also comes in handy when you have a very complex SQL statement involving a large number of tables. The rules-based optimizer&nbsp;-- still used widely in Oracle shops around the world&nbsp;-- does not use table size to determine which indexes should be applied to a query. So, for example, if you have a very small table in the query included to look up a description for a code, the optimizer might use the index on that table and ignore a much more useful index in a larger table. You can help avoid confusion and, at the same time, improve performance of the query by pulling that reference table out of the query and placing it in its own cursor. Your program then executes the cursor and fetches the description before the main query executes. You then reference the retrieved value directly in the query and simplify the main query.<A
+CLASS="indexterm"
+NAME="AUTOID-22831"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22832"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22833"
+></A
+> </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-3.7"
+>25.3.7 Keep Database Triggers Small</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999953-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999953-2"
+></A
+>Up until Oracle7 Server Release 7.1, database triggers are treated like anonymous blocks of code in the System Global Area (SGA). Compiled versions of triggers are not stored in the database. Instead, the source code is recompiled each time the trigger is referenced. </P
+><P
+CLASS="para"
+>To minimize the overhead associated with these repeated compilations, you should keep your database triggers as small as possible. You should also tune your shared pool size so that it can accommodate most, if not all, of your compiled PL/SQL code without having to age out objects which are used repeatedly. </P
+><P
+CLASS="para"
+>The best way to keep your triggers small is to transfer all of the procedural logic in the trigger to a procedure. This procedure's compiled version is stored in the database and can be managed more efficiently by the instance's SGA. </P
+><P
+CLASS="para"
+>To change your trigger code to a <A
+CLASS="indexterm"
+NAME="ch25-idx-999954-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999954-2"
+></A
+>procedure call, you move all of the code inside the procedure and create a parameter for each trigger-specific variable referenced in the code (such as :new and :old variables, which allow you to compare new and old values for columns in the affected row). </P
+><P
+CLASS="para"
+>Let's convert a trigger's complex logic to a procedure. In the following trigger, I maintain a denormalized order total based on the line items for that order. This single trigger handles any changes to the line item amount, through an INSERT, UPDATE, or DELETE: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE TRIGGER total_order
+AFTER INSERT OR UPDATE OR DELETE OF line_amt ON line_item
+FOR EACH ROW
+BEGIN
+   /*
+   || If changed order for this line item or removing it,
+   || then decrease the total in the old order.
+   */
+   IF (UPDATING AND :old.order_id != :new.order_id) OR DELETING
+   THEN
+      UPDATE orders
+         SET order_total := order_total - :old.line_amt
+       WHERE order_id = :old.order_id;
+   END IF;
+   /*
+   || If a new line item or transferring line item to new order,
+   || add the line amount to the new order.
+   */
+   IF (UPDATING AND :old.order_id != :new.order_id) OR INSERTING
+   THEN
+      UPDATE orders
+         SET order_total := order_total + :new.line_amt
+       WHERE order_id = :new.order_id;
+   END IF;
+   /*
+   || If I have changed the amount of the line item and kept it
+   || in the same order, adjust total by difference of old and
+   || new line item amounts.
+   */
+   IF :old.order_id = :new.order_id AND
+      :old.line_amt != :new.line_amt AND
+      UPDATING
+   THEN
+      UPDATE orders
+         SET order_total := order_total - :old.line_amt + :new.line_amt
+       WHERE order_id = :new.order_id;
+   END IF;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Before I write the procedure, let's decide on the specification for the procedure&nbsp;--  that is, what the trigger should look like inside: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE TRIGGER total_order
+AFTER INSERT OR UPDATE OR DELETE OF line_amt ON line_item
+FOR EACH ROW
+BEGIN
+   adjust_order_total
+      (:old.order_id, :old.line_amt, :new.order_id, :new.line_amt,
+       INSERTING, UPDATING, DELETING);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The adjust_order_total contains many parameters, since it is a combined trigger (handling all three DML states: INSERT, UPDATE, and DELETE) and also references the new and old values of two different columns. With this specification, I can now create the procedure as a direct "translation" from the trigger: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE adjust_order_total
+      (old_order_id_in IN orders.order_id%TYPE,
+       old_line_amt_in IN line_item.line_amt%TYPE,
+       new_order_id_in IN orders.order_id%TYPE,
+       new_line_amt_in IN line_item.line_amt%TYPE,
+       inserting_in IN BOOLEAN,
+       updating_in IN BOOLEAN,
+       deleting_in IN BOOLEAN)
+BEGIN
+   /*
+   || If changed order for this line item or removing it,
+   || then decrease the total in the old order.
+   */
+   IF (updating_in AND old_order_id_in != new_order_id_in)
+        OR deleting_in
+   THEN
+      UPDATE orders
+         SET order_total := order_total - old_line_amt_in
+       WHERE order_id = old_order_id_in;
+   END IF;
+   /*
+   || If a new line item or transferring line item to new order,
+   || add the line amount to the new order.
+   */
+   IF (updating_in AND old_order_id_in != new_order_id_in) OR
+        inserting_in
+   THEN
+      UPDATE orders
+         SET order_total := order_total + new_line_amt_in
+       WHERE order_id = new_order_id_in;
+   END IF;
+   /*
+   || If I have changed the amount of the line item and kept it
+   || in the same order, adjust total by difference of old and
+   || new line item amounts.
+   */
+   IF old_order_id_in = new_order_id_in AND
+      old_line_amt_in != new_line_amt_in AND
+      updating_in
+   THEN
+      UPDATE orders
+         SET order_total :=
+               order_total - old_line_amt_in + new_line_amt_in
+       WHERE order_id = new_order_id_in;
+   END IF;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>By converting the trigger code to a procedure, I have not made the code more readable, nor is it more concise. The point of this conversion was, however, simply to improve transaction performance. </P
+><P
+CLASS="para"
+>Finally, even if you are running Oracle Server 7.3 or above, you should still keep your trigger code to a minimum and instead place as much of your logic as possible in packages so that this code can be more easily reused throughout your application.<A
+CLASS="indexterm"
+NAME="AUTOID-22860"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22861"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22862"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22863"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22864"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22865"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-22866"
+></A
+> </P
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch25_02.htm"
+TITLE="25.2 Tuning Access to Compiled Code"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 25.2 Tuning Access to Compiled Code"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming, 2nd Edition"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch25_04.htm"
+TITLE="25.4 Tuning Your Algorithms"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 25.4 Tuning Your Algorithms"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>25.2 Tuning Access to Compiled Code</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>25.4 Tuning Your Algorithms</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

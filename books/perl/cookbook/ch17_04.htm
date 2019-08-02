@@ -1,0 +1,203 @@
+<html><head>
+<title>Recipe 17.3. Communicating over TCP</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:24Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch17_01.htm" title="17. Sockets"><link rel="prev" href="ch17_03.htm" title="17.2. Writing a TCP Server"><link rel="next" href="ch17_05.htm" title="17.4. Setting Up a UDP Client"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_03.htm" title="17.2. Writing a TCP Server"><img src="../gifs/txtpreva.gif" alt="Previous: 17.2. Writing a TCP Server" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch17_01.htm" title="17. Sockets">Chapter 17<br>Sockets</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_05.htm" title="17.4. Setting Up a UDP Client"><img src="../gifs/txtnexta.gif" alt="Next: 17.4. Setting Up a UDP Client" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch17-32506">17.3. Communicating over TCP</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-418">Problem<a class="indexterm" name="ch17-idx-1000004697-0"></A
+><a class="indexterm" name="ch17-idx-1000004697-1"></A
+></A
+></H3
+><p class="para">You want to read or write data over a TCP connection.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-424">Solution</A
+></H3
+><p class="para">This recipe assumes you're using the Internet to communicate. For TCP-like communication within a single machine, see <a class="xref" href="ch17_07.htm" title="Using UNIX Domain Sockets">Recipe 17.6</A
+>.</P
+><p class="para">Use <code class="literal">print</CODE
+> or &lt; &gt; :</P
+><pre class="programlisting">print SERVER &quot;What is your name?\n&quot;;
+chomp ($response = &lt;SERVER&gt;);</PRE
+><p class="para">Or, use <code class="literal">send</CODE
+> and <code class="literal">recv</CODE
+> :</P
+><pre class="programlisting">defined (send(SERVER, $data_to_send, $flags))
+    or die &quot;Can't send : $!\n&quot;;
+
+recv(SERVER, $data_read, $maxlen, $flags)
+    or die &quot;Can't receive: $!\n&quot;;</PRE
+><p class="para">Or, use the corresponding methods on an IO::Socket object:</P
+><pre class="programlisting">use IO::Socket;
+
+$server-&gt;send($data_to_send, $flags)
+    or die &quot;Can't send: $!\n&quot;;
+
+$server-&gt;recv($data_read, $flags)
+    or die &quot;Can't recv: $!\n&quot;;</PRE
+><p class="para">To find out whether data can be read or written, use the <code class="literal">select</CODE
+> function, which is nicely wrapped by the standard IO::Socket class:</P
+><pre class="programlisting">use IO::Select;
+
+$select = IO::Select-&gt;new();
+$select-&gt;add(*FROM_SERVER);
+$select-&gt;add($to_client);
+
+@read_from = $select-&gt;can_read($timeout);
+foreach $socket (@read_from) {
+    # read the pending data from $socket
+}</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-486">Discussion</A
+></H3
+><p class="para">Sockets handle two completely different types of I/O, each with attendant pitfalls and benefits. The normal Perl I/O functions used on files (except for <code class="literal">seek</CODE
+> and <code class="literal">sysseek</CODE
+>) work for stream sockets, but datagram sockets require the system calls <code class="literal">send</CODE
+> and <code class="literal">recv</CODE
+>, which work on complete records.</P
+><p class="para">Awareness of <a class="indexterm" name="ch17-idx-1000004710-0"></A
+><a class="indexterm" name="ch17-idx-1000004710-1"></A
+>buffering issues is particularly important in socket programming. That's because buffering, while designed to enhance performance, can interfere with the interactive feel that some programs require. Gathering input with &lt; &gt; may try to read more data from the socket than is yet available as it looks for a record separator. Both <code class="literal">print</CODE
+> and &lt; &gt; use <code class="literal">stdio</CODE
+> buffers, so unless you've changed autoflushing (see the Introduction to <a class="xref" href="ch07_01.htm" title="File Access">Chapter 7, <cite class="chapter">File Access</CITE
+></A
+>) on the socket handle, your data won't be sent to the other end as soon as you <code class="literal">print</CODE
+> it. Instead, it will wait until a buffer fills up.</P
+><p class="para">For line-based clients and servers, this is probably okay, so long as you turn on autoflushing for output. Newer versions of IO::Socket do this automatically on the anonymous filehandles returned by <code class="literal">IO::Socket-&gt;new</CODE
+>.</P
+><p class="para">But stdio isn't the only source of buffering. Output (<code class="literal">print,</CODE
+> <code class="literal">printf</CODE
+>, or <code class="literal">syswrite</CODE
+>&nbsp;- or <code class="literal">send</CODE
+> on a TCP socket) is further subject to buffering at the operating system level under a strategy called <i class="firstterm">The Nagle Algorithm</I
+><a class="indexterm" name="ch17-idx-1000005813-0"></A
+>. When a packet of data has been sent but not acknowledged, further to-be-sent data is queued and is sent as soon as another complete packet's worth is collected or the outstanding acknowledgment is received. In some situations (mouse events being sent to a windowing system, keystrokes to a real-time application) this buffering is inconvenient or downright wrong. You can disable the Nagle Algorithm with the <a class="indexterm" name="ch17-idx-1000005814-0"></A
+>TCP_NODELAY socket option:</P
+><pre class="programlisting">use Socket;
+require &quot;sys/socket.ph&quot;;    # for &amp;TCP_NODELAY
+
+setsockopt(SERVER, SOL_SOCKET, &amp;TCP_NODELAY, 1)
+    or die &quot;Couldn't disable Nagle's algorithm: $!\n&quot;;</PRE
+><p class="para">Re-enable it with:</P
+><pre class="programlisting">setsockopt(SERVER, SOL_SOCKET, &amp;TCP_NODELAY, 0)
+    or die &quot;Couldn't enable Nagle's algorithm: $!\n&quot;;</PRE
+><p class="para">In most cases, TCP_NODELAY isn't something you need. TCP buffering is there for a reason, so don't disable it unless your application is one of the few real-time packet-intensive situations that need to.</P
+><p class="para">Load in TCP_NODELAY from <em class="emphasis">sys/socket.ph</EM
+>, a file that isn't automatically installed with Perl, but can be easily built. See <a class="xref" href="ch12_15.htm" title="Using h2ph to Translate C #include Files">Recipe 12.14</A
+> for details.</P
+><p class="para"><a class="indexterm" name="ch17-idx-1000005971-0"></A
+>Because buffering is such an issue, you have the <code class="literal">select</CODE
+><a class="indexterm" name="ch17-idx-1000004717-0"></A
+> function to determine which filehandles have unread input, which can be written to, and which have "exceptional conditions" pending. The <code class="literal">select</CODE
+> function takes three strings interpreted as binary data, each bit corresponding to a filehandle. A typical call to <code class="literal">select</CODE
+> looks like this:</P
+><pre class="programlisting">$rin = '';                          # initialize bitmask
+vec($rin, fileno(SOCKET), 1) = 1;   # mark SOCKET in $rin
+# repeat calls to vec() for each socket to check
+
+$timeout = 10;                      # wait ten seconds
+
+$nfound = select($rout = $rin, undef, undef, $timeout);
+if (vec($rout, fileno(SOCKET),1)){
+    # data to be read on SOCKET
+}</PRE
+><p class="para">The four arguments to <code class="literal">select</CODE
+> are: a bitmask indicating which filehandles to check for unread data; a bitmask indicating which filehandles to check for safety to write without blocking; a bitmask indicating which filehandles to check for exceptional conditions on; and a time in seconds indicating the maximum time to wait (this can be a floating point number).</P
+><p class="para">The function changes the bitmask arguments passed to it, so that when it returns, the only bits set correspond to filehandles ready for I/O. This leads to the common strategy of assigning an input mask (<code class="literal">$rin</CODE
+> above) to an output one (<code class="literal">$rout</CODE
+> about), so that <code class="literal">select</CODE
+> can only affect <code class="literal">$rout</CODE
+>, leaving <code class="literal">$rin</CODE
+> alone.</P
+><p class="para">You can specify a timeout of 0 to <i class="firstterm">poll</I
+> (check without blocking). Some beginning programmers think that blocking is bad, so they write programs that "busy wait"&nbsp;- they poll and poll and poll and poll. When a program blocks, the operating system recognizes that the process is pending on input and gives CPU time to other programs until input is available. When a program busy-waits, the system can't let it sleep because it's always doing something&nbsp;- checking for input! Occasionally, polling is the right thing to do, but far more often it's not. A timeout of <code class="literal">undef</CODE
+> to <code class="literal">select</CODE
+> means "no timeout," and your program will patiently block until input becomes available.</P
+><p class="para">Because <code class="literal">select</CODE
+> uses bitmasks, which are tiresome to create and difficult to interpret, we use the standard IO::Select module in the Solution section. It bypasses bitmasks and is, generally, the easier route.</P
+><p class="para">A full explanation of the exceptional data tested for with the third bitmask in <code class="literal">select</CODE
+> is beyond the scope of this book. Consult Stevens's <em class="emphasis">Unix Network Programming</EM
+> for a discussion of out-of-band and urgent data.</P
+><p class="para"><a class="indexterm" name="ch17-idx-1000005979-0"></A
+>Other <code class="literal">send</CODE
+> and <code class="literal">recv</CODE
+> flags are listed in the manpages for those system calls.<a class="indexterm" name="ch17-idx-1000004699-0"></A
+><a class="indexterm" name="ch17-idx-1000004699-1"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-552">See Also</A
+></H3
+><p class="para">The 
+<a class="olink" href="../prog/ch03_139.htm">&#13;<code class="literal">send</CODE
+></A
+>, 
+<a class="olink" href="../prog/ch03_119.htm">&#13;<code class="literal">recv</CODE
+></A
+>, 
+<a class="olink" href="../prog/ch03_038.htm">&#13;<code class="literal">fileno</CODE
+></A
+>, 
+<a class="olink" href="../prog/ch03_188.htm">&#13;<code class="literal">vec</CODE
+></A
+>, 
+<a class="olink" href="../prog/ch03_142.htm">&#13;<code class="literal">setsockopt</CODE
+></A
+>, and 
+<a class="olink" href="../prog/ch03_135.htm">&#13;<code class="literal">select</CODE
+></A
+> functions in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlfunc </I
+>(1); the sections on "I/O Operators" and on "Bitwise String Operators" in <i class="filename">perlop </I
+>(1); your system's <i class="filename">setsockopt </I
+>(2) manpage (if you have one); the documentation for the standard Socket and IO::Socket modules; the section on 
+<a class="olink" href="../prog/ch06_02.htm#PERL2-CH-6-SECT-2.4.1">&#13;"Internet TCP clients and servers"</A
+> in <a class="olink" href="../prog/ch06_01.htm">Chapter 6</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlipc </I
+>(1); <cite class="citetitle">Unix Network Programming</CITE
+>; <a class="xref" href="ch17_02.htm" title="Writing a TCP Client">Recipe 17.1</A
+>; <a class="xref" href="ch17_03.htm" title="Writing a TCP Server">Recipe 17.2</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_03.htm" title="17.2. Writing a TCP Server"><img src="../gifs/txtpreva.gif" alt="Previous: 17.2. Writing a TCP Server" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_05.htm" title="17.4. Setting Up a UDP Client"><img src="../gifs/txtnexta.gif" alt="Next: 17.4. Setting Up a UDP Client" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">17.2. Writing a TCP Server</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">17.4. Setting Up a UDP Client</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

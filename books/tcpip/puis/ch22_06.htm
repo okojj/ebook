@@ -1,0 +1,228 @@
+<html><head>
+<title>[Chapter 22] 22.6 Writing Your Own Wrappers</TITLE>
+<meta name="DC.title" content="Practical UNIX &amp; Internet Security"><meta name="DC.creator" content="Simson Garfinkel &amp; Gene Spafford"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-02-04T00:17:21Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-148-8" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch22_01.htm" title="22. Wrappers and Proxies"><link rel="prev" href="ch22_05.htm" title="22.5 UDP Relayer"><link rel="next" href="ch23_01.htm" title="23. Writing Secure SUID and Network Programs"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Practical UNIX &amp; Internet Security" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Practical UNIX &amp; Internet Security"><area shape="RECT" coords="467,0,514,18" href="../search/psrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch22_05.htm" title="22.5 UDP Relayer"><img src="../gifs/txtpreva.gif" alt="Previous: 22.5 UDP Relayer" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 22<br>Wrappers and Proxies</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="CHAPTER" href="ch23_01.htm" title="23. Writing Secure SUID and Network Programs"><img src="../gifs/txtnexta.gif" alt="Next: 23. Writing Secure SUID and Network Programs" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="PUIS-CHP-22-SECT-6">22.6 Writing Your Own Wrappers</A
+></H2
+><p class="para">In this section,
+we describe the reasons for writing your own wrappers. In most cases,
+you won't need to write your own wrappers; you'll
+find that the standard <span class="acronym">UNIX</SPAN
+> wrappers will suit
+most situations.</P
+><div class="sect2"><h3 class="sect2"><a class="title" name="PUIS-CHP-22-SECT-6.1">22.6.1 Wrappers That Provide Temporary Patches</A
+></H3
+><p class="para">A
+typical case in which you might want to build a wrapper yourself
+is when there is a report of a new bug in some existing software
+on your system that is triggered or aggravated when an environment
+variable or input is uncontrolled. By writing a small wrapper, you
+can filter what reaches the real program, and you can reset its
+environment. The software can thus continue to be used until such
+time as your vendor releases a formal patch.</P
+><p class="para">The code
+in Example 22-2 is an example of such a wrapper.
+It was originally written by Wietse Venema and released as part
+of <span class="acronym">CERT</SPAN
+> Advisory 11, in 1992. An unexpected interaction
+between Sun Microsystems' shared library implementation
+and various <span class="acronym">SUID</SPAN
+> and <span class="acronym">SGID</SPAN
+>
+programs could result in unauthorized privileges being granted to
+users. The temporary fix to the problem was to put a wrapper program
+around susceptible programs (such as the <kbd class="command">sendmail</KBD
+>
+program) to filter out environment variables that referenced unauthorized
+shared libraries&nbsp;- those variables beginning with the characters
+&quot;LD_&quot;.</P
+><div class="example"><h4 class="example"><a class="title" name="PUIS-CHP-22-EX-2">Example 22.2: Wrapper Program for sendmail</A
+></H4
+><blockquote class="screen"><pre class="screen">/* Start of C program source */
+
+/* Change the next line to reflect the full pathname
+ of the file to be protected by the wrapper code   */
+
+#define COMMAND &quot;/usr/lib/sendmail.dist&quot;
+#define VAR_NAME &quot;LD_&quot;
+
+main(argc,argv,envp)
+    int argc;
+    char **argv;
+    char **envp;
+{
+    register char  **cpp;
+    register char  **xpp;
+    register char   *cp;
+
+    for (cpp = envp; cp = *cpp;) {
+        if (strncmp(cp, VAR_NAME, strlen(VAR_NAME))==0) {
+            for (xpp = cpp; xpp[0] = xpp[1]; xpp++){
+            }    /* void */ ;
+        }
+        else {
+            cpp++;
+            }
+        }
+
+    execv(COMMAND, argv);
+    perror(COMMAND);
+    exit(1);
+}
+    /* End of C program source */</PRE
+></BLOCKQUOTE
+></DIV
+><p class="para">To use this code, you would compile it, move
+the original sendmail to a safe location, and then install the wrapper
+in place of the real program. For the example above, for instance,
+you would issue the following commands as the superuser:</P
+><blockquote class="screen"><pre class="screen"># <b class="emphasis.bold">make wrapper</B
+>
+# <b class="emphasis.bold">mv /usr/lib/sendmail /usr/lib/sendmail.dist</B
+>
+# <b class="emphasis.bold">chmod 100 /usr/lib/sendmail.dist</B
+>
+# <b class="emphasis.bold">mv ./wrapper /usr/lib/sendmail</B
+>
+# <b class="emphasis.bold">chown root /usr/lib/sendmail</B
+>
+# <b class="emphasis.bold">chmod 4711 /usr/lib/sendmail</B
+></PRE
+></BLOCKQUOTE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="PUIS-CHP-22-SECT-6.2">22.6.2 Wrappers That Provide Extra Logging</A
+></H3
+><p class="para">Another
+case in which you might want to build your own wrapper code is when
+you wish to do some extra logging of a program execution, or to
+perform additional authentication of a user. The use of a wrapper
+allows you to do this without modifying the underlying code.</P
+><p class="para">Suppose you suspect some user of your system of misusing the
+system's printer. You wish to gain some additional log
+information to help you determine what is being done. So, you might
+use a wrapper such as the one in <a class="xref" href="#PUIS-CHP-22-EX-3" title=": A Logging Wrapper">Example 22.3</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="PUIS-CHP-22-EX-3">Example 22.3: : A Logging Wrapper</A
+></H4
+><blockquote class="screen"><pre class="screen">/* Start of C program source */
+
+/* Change the next line to reflect the full pathname
+of the file to be protected by the wrapper code   */
+
+#define COMMAND &quot;/usr/lib/.hidden/lpr&quot;
+#include &lt;syslog.h&gt;
+
+main(argc,argv,envp)
+    int argc;
+    char **argv, **envp;
+{
+    int iloop;
+
+    openlog(&quot;xtra-log&quot;, LOG_PID, LOG_LPR);
+    syslog(LOG_INFO, &quot;lpr invoked with %d arguments&quot;, argc);
+    for (iloop = 1; i loop &lt; argc; iloop++){
+        if(strlen(argv[iloop])&gt;1023) argv[iloop][1023]=0;
+        syslog(LOG_INFO, &quot;arg %d is `%s'&quot;, argv[iloop]);
+    }
+    syslog(LOG_INFO, &quot;uid is %d&quot;, getuid());
+    closelog();
+
+    execv(COMMAND, argv);
+    perror(COMMAND);
+    exit(1);
+}
+    /* End of C program source */</PRE
+></BLOCKQUOTE
+></DIV
+><p class="para">To use this code, you follow the same basic
+steps as in the previous example: you compile the code, make the
+hidden directory, move the original lpr to a safe location, and
+then install the wrapper in place of the real program. For this
+example, you might issue the following commands as the superuser:</P
+><blockquote class="screen"><pre class="screen"># <b class="emphasis.bold">make wrapper</B
+>
+# <b class="emphasis.bold">mkdir /usr/lib/.hidden</B
+>
+# <b class="emphasis.bold">chmod 700 /usr/lib/.hidden</B
+>
+# <b class="emphasis.bold">mv /usr/bin/lpr /usr/lib/.hidden/lpr </B
+>
+# <b class="emphasis.bold">chmod 100 /usr/lib/.hidden/lpr </B
+>
+# <b class="emphasis.bold"> mv ./wrapper /usr/bin/lpr </B
+>
+# <b class="emphasis.bold">chown root /usr/bin/lpr </B
+>
+# <b class="emphasis.bold">chmod 4711 /usr/bin/lpr</B
+></PRE
+></BLOCKQUOTE
+><p class="para">Now, whenever someone executes the lpr command, you will find
+a copy of the arguments and other useful information in the <i class="filename">syslog</I
+>.
+See <a class="xref" href="ch10_01.htm" title="Auditing and Logging">Chapter 10, <cite class="chapter">Auditing and Logging</CITE
+></A
+>,
+for more information on syslog and other logging facilities.</P
+><p class="para">The above example can be modified in various ways to do other
+logging, change directories, or perform other checks and changes
+that might be necessary for what you want to do.</P
+><p class="para">You
+can also adopt the concept we've discussed to put a wrapper
+around shell files you want to make <span class="acronym">SUID</SPAN
+>. As
+we noted in <a class="xref" href="ch05_01.htm" title="The UNIX Filesystem">Chapter 5, <cite class="chapter">The UNIX Filesystem</CITE
+></A
+>, on most older
+<span class="acronym">UNIX</SPAN
+> systems, <span class="acronym">SUID</SPAN
+> shell files
+are a security problem. You can create a wrapper that is <span class="acronym">SUID</SPAN
+>,
+cleans up the environment (including resetting the <span class="acronym">PATH</SPAN
+>
+variable, and removing <span class="acronym">IFS</SPAN
+>), and then exec's
+the shell file from a protected directory. In this way, you'll
+get all of the benefits of a <span class="acronym">SUID</SPAN
+> shell file,
+and fewer (but, alas, still some) of the dangers.</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch22_05.htm" title="22.5 UDP Relayer"><img src="../gifs/txtpreva.gif" alt="Previous: 22.5 UDP Relayer" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Practical UNIX &amp; Internet Security"><img src="../gifs/txthome.gif" alt="Practical UNIX &amp; Internet Security" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="CHAPTER" href="ch23_01.htm" title="23. Writing Secure SUID and Network Programs"><img src="../gifs/txtnexta.gif" alt="Next: 23. Writing Secure SUID and Network Programs" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">22.5 UDP Relayer</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">23. Writing Secure SUID and Network Programs</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.htm" title="The Networking CD Bookshelf">Library Home</A
+> | <a href="../dnsbind/index.htm" title="DNS &amp; BIND">DNS &amp; BIND</A
+> | <a href="../tcpip/index.htm" title="TCP/IP Network Administration">TCP/IP</A
+> | <a href="../sendmail/index.htm" title="sendmail">sendmail</A
+> | <a href="../smdref/index.htm" title="sendmail Desktop Reference">sendmail Reference</A
+> | <a href="../firewall/index.htm" title="Building Internet Firewalls">Firewalls</A
+> | <a href="index.htm" title="Practical UNIX &amp; Internet Security">Practical Security</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

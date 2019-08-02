@@ -1,0 +1,235 @@
+<html><head>
+<title>[Chapter 3] Typeglobs and Symbol Tables</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:31:12Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="index.htm" title="Advanced Perl Programming"><link rel="prev" href="ch02_06.htm" title="2.6 Resources"><link rel="next" href="ch03_02.htm" title="3.2 Typeglobs"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch02_06.htm" title="2.6 Resources"><img src="../gifs/txtpreva.gif" alt="Previous: 2.6 Resources" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 3</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch03_02.htm" title="3.2 Typeglobs"><img src="../gifs/txtnexta.gif" alt="Next: 3.2 Typeglobs" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="chapter"><h1 class="chapter"><a class="title" name="ch03-33132">3. Typeglobs and Symbol Tables</A
+></H1
+><div class="htmltoc"><p><b>Contents:</B
+><br><a class="sect1" href="#ch03-26878" title="3.1 Perl Variables, Symbol Table, and Scoping">Perl Variables, Symbol Table, and Scoping</A
+><br><a class="sect1" href="ch03_02.htm" title="3.2 Typeglobs">Typeglobs</A
+><br><a class="sect1" href="ch03_03.htm" title="3.3 Typeglobs and References">Typeglobs and References</A
+><br><a class="sect1" href="ch03_04.htm" title="3.4 Filehandles, Directory Handles, and Formats">Filehandles, Directory Handles, and Formats</A
+></P
+><p></P
+></DIV
+><div class="epigraph" align="right"><p class="para" align="right"><i>We are symbols, and inhabit symbols.</I
+></P
+><p class="attribution" align="right">-&nbsp;Ralph Waldo Emerson</P
+></DIV
+><p class="para">This chapter discusses typeglobs, the symbol table, filehandles, formats, and the differences between dynamic and lexical scoping. At first sight, these topics may seem to lack a common theme, but as it happens, they are intimately tied to typeglobs and symbol tables. </P
+><p class="para"><a class="indexterm" name="ch03-idx-954024-0"></A
+>Typeglobs are immensely useful. They allow us to efficiently create aliases of symbols, which is the basis for a very important module called Exporter that is used in a large number of freely available modules. Typeglobs can also be aliased to ordinary references in such a way that you don't have to use the dereferencing syntax; this is not only easier on the eye, it is faster too. At the same time, using typeglobs without understanding how they work can lead to a particularly painful problem called <a class="indexterm" name="ch03-idx-954066-0"></A
+><a class="indexterm" name="ch03-idx-954066-1"></A
+><i class="firstterm">variable</I
+> <i class="firstterm">suicide</I
+>. This might explain why most Perl literature gives typeglobs very little attention. </P
+><p class="para">Closely related to typeglobs and symbol tables is the subject of dynamic versus lexical scoping (using <kbd class="command">local</KBD
+> versus <kbd class="command">my</KBD
+>). There are a couple of useful idioms that arise from these differences.</P
+><p class="para">This is the only chapter that starts off by giving a picture of what is going on inside, rather than first presenting examples that you can use directly. The hope is that you will find the subsequent discussions really easy to follow.</P
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch03-26878">3.1 Perl Variables, Symbol Table, and Scoping</A
+></H2
+><p class="para">Variables are either global or <i class="firstterm">lexical</I
+> (those tagged with <kbd class="command">my</KBD
+>). In this section we briefly study how these two are represented internally. Let us start with global variables.</P
+><p class="para"><a class="indexterm" name="ch03-idx-954026-0"></A
+><a class="indexterm" name="ch03-idx-954026-1"></A
+>Perl has a curious feature that is typically not seen in other languages: you can use the same name for both data and nondata types. For example, the scalar <kbd class="command">$spud</KBD
+>, the array <kbd class="command">@spud</KBD
+>, the hash <kbd class="command">%spud</KBD
+>, the subroutine <kbd class="command">&amp;spud</KBD
+>, the filehandle <kbd class="command">spud</KBD
+>, and the format name <kbd class="command">spud</KBD
+> are all simultaneously valid and completely independent of each other. In other words, Perl provides distinct namespaces for each type of entity. I do not have an explanation for why this feature is present. In fact, I consider it a rather dubious facility and recommend that you use a distinct name for each logical entity in your program; you owe it to the poor fellow who's going to maintain your code (which might be you!).</P
+><p class="para">Perl uses a <a class="indexterm" name="ch03-idx-954027-0"></A
+>symbol table (implemented internally as a hash table)[<a class="footnote" href="#ch03-pgfId-950192">1</A
+>] to map identifier names (the string "spud" without the prefix) to the appropriate values. But you know that a hash table does not tolerate duplicate keys, so you can't really have two entries in the hash table with the same name pointing to two different values. For this reason, Perl interposes a structure called a typeglob between the symbol table entry and the other data types, as shown in <a class="xref" href="#ch03-12543" title="Symbol table and typeglobs">Figure 3.1</A
+>; it is just a bunch of pointers to values that can be accessed by the same name, with one pointer for each value type. In the typical case, in which you have unique identifier names, all but one of these pointers are null.</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch03-pgfId-950192">[1]</A
+> Actually, it is one symbol table per package, where each package is a distinct namespace. For now, this distinction does not matter. We'll revisit this issue in <a class="xref" href="ch06_01.htm" title="Modules">Chapter 6, <cite class="chapter">Modules</CITE
+></A
+>.</P
+></DIV
+></BLOCKQUOTE
+><h4 class="figure"><a class="title" name="ch03-12543">Figure 3.1: Symbol table and typeglobs</A
+></H4
+><img class="graphic" src="figs/wpa_0301.gif" alt="Figure 3.1"><p class="para">A typeglob is a real data type accessible from script space and has the prefix "<kbd class="command">*</KBD
+>"; while you can think of it as a wildcard representing all values sharing the identifier name, there's no pattern matching going on. You can assign typeglobs, store them in arrays, create local versions of them, or print them out, just as you can for any fundamental type. More on this in a moment. <a class="indexterm" name="ch03-idx-954113-0"></A
+></P
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch03-pgfId-952464">3.1.1 Lexical Variables</A
+></H3
+><p class="para"><a class="indexterm" name="ch03-idx-954031-0"></A
+><a class="indexterm" name="ch03-idx-954031-1"></A
+><a class="indexterm" name="ch03-idx-954031-2"></A
+>Lexical variables (those tagged with <kbd class="command">my</KBD
+>) aren't listed in the symbol table at all. Every block and subroutine gets a list of one or more arrays of variables called <i class="firstterm">scratchpads</I
+> (typically one, but more if the subroutine recurses). Each lexical variable is assigned one slot from a scratchpad; in fact, different types of variables with the same name&nbsp;- <kbd class="command">$spud</KBD
+> and <kbd class="command">%spud</KBD
+>, say&nbsp;- occupy different slots. Since a subroutine's lexical variables are independent of any other's, we get truly local variables. We will have more to say on this subject in <a class="xref" href="ch20_01.htm" title="Perl Internals">Chapter 20, <cite class="chapter">Perl Internals</CITE
+></A
+>.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch03-pgfId-950273">3.1.2 Lexical Versus Dynamic Scoping</A
+></H3
+><p class="para"><a class="indexterm" name="ch03-idx-954033-0"></A
+><a class="indexterm" name="ch03-idx-954033-1"></A
+><a class="indexterm" name="ch03-idx-954033-2"></A
+>There are two ways of getting private values inside a subroutine or block. One is to use the <kbd class="command">local</KBD
+> operator, which operates on global variables only; it saves their values and arranges to have them restored at the end of the block. The other option is to use <kbd class="command">my</KBD
+>, which not only creates a new variable, it marks it as private to the block.</P
+><p class="para">On the surface, both <kbd class="command">local</KBD
+> and <kbd class="command">my</KBD
+> behave identically:</P
+><pre class="programlisting">$a = 20;                       # global variable
+{
+     local ($a);               # save $a's old value; 
+                               # new value is undef
+     my (@b);                  # Lexical variable
+     $a = 10;                  # Modify $a's new value
+     @b = (&quot;wallace&quot;, &quot;grommit&quot;);
+     print $a;                 # prints &quot;10&quot;
+     print &quot;@b&quot;;               # prints &quot;wallace grommit&quot;
+} 
+# Block ended. Back to global scope where only $a is valid
+print $a;                      # prints &quot;20&quot;, the old value
+print @b;                      # prints a warning, because no global @b</PRE
+><p class="para"><kbd class="command">A</KBD
+> global variable created because of a <kbd class="command">local</KBD
+> statement gets deallocated at the end of the block.</P
+><p class="para">While their usage is identical, there's one important difference between <kbd class="command">local</KBD
+> and <kbd class="command">my</KBD
+>. The <kbd class="command">my</KBD
+> declaration creates truly local variables, such as auto variables in C. This is called <em class="emphasis">lexical</EM
+><a class="indexterm" name="ch03-idx-954034-0"></A
+> binding. The variable is private to the block in which it is declared and is available only to that block (what you can <em class="emphasis">see</EM
+> <em class="emphasis">lexically</EM
+> defines the bounds). It is not available to subroutines that are called from the block.<em class="emphasis"></EM
+></P
+><p class="para">In contrast, the <kbd class="command">local</KBD
+> operator does <em class="emphasis">not</EM
+> create new variable. When applied to global variables, it squirrels their values away and restores them at the end of the block. Because the variables themselves are global, their new value is available not only to the block in which the <kbd class="command">local</KBD
+> operator is used, but also to <em class="emphasis">all called subroutines</EM
+>. Consider</P
+><pre class="programlisting">$x = 10;
+first();
+
+sub first {
+    local ($x) = &quot;zen&quot;;      # $x is still global, and has a new value
+    second();
+}
+sub second {
+    print $x;   # Prints &quot;zen&quot;, the current value of the global $x
+}</PRE
+><p class="para">From global scope, we call <kbd class="command">first</KBD
+>, which <i class="firstterm">localizes</I
+> the global <kbd class="command">$x</KBD
+>, sets it to a new value (the string "zen"), and calls <kbd class="command">second</KBD
+>. <kbd class="command">second</KBD
+> sees the last value of <kbd class="command">$x</KBD
+>, as set by <kbd class="command">first</KBD
+>. This process is called <em class="emphasis">dynamic scoping</EM
+><a class="indexterm" name="ch03-idx-954035-0"></A
+>, because the value of <kbd class="command">$x</KBD
+> seen by <kbd class="command">second</KBD
+> depends on the particular call stack. This feature can be quite confusing in practice, because if you wrote another subroutine that declared a <kbd class="command">local</KBD
+> <kbd class="command">$x</KBD
+> and called <kbd class="command">second</KBD
+>, it would pick up that version of <kbd class="command">$x</KBD
+>.</P
+><p class="para">In other words, <kbd class="command">local</KBD
+> makes a global variable's new value temporary; it does not change the essential nature of the variable itself (it still remains global). <kbd class="command">my</KBD
+> creates a truly local variable. Which is why you can say</P
+><pre class="programlisting">local $x{foo}; # Squirrel away $x{foo}'s value.</PRE
+><p class="para">but not</P
+><pre class="programlisting">my $x{foo};    # Error. $x{foo} is not a variable</PRE
+><p class="para">It is recommended that you use <kbd class="command">my</KBD
+> wherever possible, because you almost always want lexical scoping. In addition, as we shall see in <a class="xref" href="ch20_01.htm" title="Perl Internals">Chapter 20</A
+>, lexically scoped variables are faster than dynamically scoped variables.</P
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch03-pgfId-950309">3.1.2.1 When would you ever need to use local?</A
+></H4
+><p class="para">The fact that <kbd class="command">local</KBD
+> saves a variable's value and arranges to have that value restored at the end of the block results in a very neat idiom: localizing built-in variables. Consider a local version of the built-in array representing the program's arguments, <kbd class="command">@ARGV</KBD
+>:</P
+><pre class="programlisting">{ # Start of a new block
+    local(@ARGV) = (&quot;/home/alone&quot;, &quot;/vassily/kandinski&quot;);
+    while (&lt;&gt;) {
+        # Iterate through each file and process each line
+        print;  # print, for example
+    }
+} # Block ends. The original @ARGV restored after this.</PRE
+><p class="para">The <a class="indexterm" name="ch03-idx-954044-0"></A
+><a class="indexterm" name="ch03-idx-954044-1"></A
+>diamond operator (<kbd class="command">&lt;&gt;</KBD
+>) needs a globally defined <kbd class="command">@ARGV</KBD
+> to work, so it looks at the typeglob corresponding to the <kbd class="command">ARGV</KBD
+> entry in the symbol table.[<a class="footnote" href="#ch03-pgfId-950321">2</A
+>] What it doesn't know, however, is that <kbd class="command">local</KBD
+> has temporarily replaced <kbd class="command">@ARGV</KBD
+>'s value with a different array. The diamond operator treats each element of this array as a filename, opens it, reads a line in every iteration, and moves on to the first line of the next file when necessary. When the block is over, the original <kbd class="command">@ARGV</KBD
+> is restored. This example does not work with <kbd class="command">my</KBD
+>, because this operator creates a wholly new variable.</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch03-pgfId-950321">[2]</A
+> For efficiency, Perl doesn't do a symbol table lookup at run-time. The compilation phase ensures that the corresponding opcodes know which typeglob to pick up. More on this in <a class="xref" href="ch20_01.htm" title="Perl Internals">Chapter 20</A
+>.</P
+></DIV
+></BLOCKQUOTE
+><p class="para">This technique works for other built-in variables too. Consider the variable <kbd class="command">$/ </KBD
+>, which contains the input record separator ("\n" by default). The diamond input operator<kbd class="command"> </KBD
+> uses this separator to return the next chunk (by default, the next line). If you <kbd class="command">undef</KBD
+> it, the whole file is slurped in, in one fell swoop. To avoid having to save the original value of <kbd class="command">$/</KBD
+> and restore it later, you can use <kbd class="command">local</KBD
+> instead, like this:</P
+><pre class="programlisting">{
+    local $/ = undef; # Saves previous value of $/, and substitutes 
+                      # it with undef
+    $a = &lt;STDIN&gt;;     # Slurp all of STDIN into $a
+}</PRE
+><p class="para"><kbd class="command">local</KBD
+> is also used for localizing typeglobs, which, as it turns out, is the only way of getting local filehandles, formats, and directory handles. <a class="indexterm" name="ch03-idx-954040-0"></A
+><a class="indexterm" name="ch03-idx-954040-1"></A
+><a class="indexterm" name="ch03-idx-954040-2"></A
+><a class="indexterm" name="ch03-idx-954040-3"></A
+><a class="indexterm" name="ch03-idx-954040-4"></A
+></P
+></DIV
+></DIV
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch02_06.htm" title="2.6 Resources"><img src="../gifs/txtpreva.gif" alt="Previous: 2.6 Resources" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch03_02.htm" title="3.2 Typeglobs"><img src="../gifs/txtnexta.gif" alt="Next: 3.2 Typeglobs" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">2.6 Resources</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">3.2 Typeglobs</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

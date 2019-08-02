@@ -1,0 +1,126 @@
+<html><head>
+<title>Recipe 17.15. Making a Daemon Server</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:44Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch17_01.htm" title="17. Sockets"><link rel="prev" href="ch17_15.htm" title="17.14. Writing a Multi-Homed Server"><link rel="next" href="ch17_17.htm" title="17.16. Restarting a Server on Demand"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_15.htm" title="17.14. Writing a Multi-Homed Server"><img src="../gifs/txtpreva.gif" alt="Previous: 17.14. Writing a Multi-Homed Server" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch17_01.htm" title="17. Sockets">Chapter 17<br>Sockets</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_17.htm" title="17.16. Restarting a Server on Demand"><img src="../gifs/txtnexta.gif" alt="Next: 17.16. Restarting a Server on Demand" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch17-chap17_making_0">17.15. Making a Daemon Server</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1942">Problem<a class="indexterm" name="ch17-idx-1000004871-0"></A
+><a class="indexterm" name="ch17-idx-1000004871-1"></A
+><a class="indexterm" name="ch17-idx-1000004871-2"></A
+></A
+></H3
+><p class="para">You want your program to run as a daemon.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1948">Solution</A
+></H3
+><p class="para">If you are paranoid and running as root, <code class="literal">chroot</CODE
+> to a safe directory:</P
+><pre class="programlisting">chroot(&quot;/var/daemon&quot;)
+    or die &quot;Couldn't chroot to /var/daemon: $!&quot;;</PRE
+><p class="para">Fork once, and let the parent exit.</P
+><pre class="programlisting">$pid = fork;
+exit if $pid;
+die &quot;Couldn't fork: $!&quot; unless defined($pid);</PRE
+><p class="para">Dissociate from the controlling terminal that started us and stop being part of whatever process group we had been a member of.</P
+><pre class="programlisting">use POSIX;
+
+POSIX::setsid()
+    or die &quot;Can't start a new session: $!&quot;;</PRE
+><p class="para">Trap fatal signals, setting a flag to indicate we need to gracefully exit.</P
+><pre class="programlisting">$time_to_die = 0;
+
+sub signal_handler {
+    $time_to_die = 1;
+}
+
+$SIG{INT} = $SIG{TERM} = $SIG{HUP} = \&amp;signal_handler;
+# trap or ignore $SIG{PIPE}</PRE
+><p class="para">Wrap your actual server code in a loop:</P
+><pre class="programlisting">until ($time_to_die) {
+    # ...
+}</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-2002">Discussion</A
+></H3
+><p class="para">Before POSIX, every operating system had its own way for a process to tell the operating system "I'm going it alone, please interfere with me as little as possible." POSIX makes it much cleaner. That said, you can still take advantage of any operating system-specific calls if you want to.</P
+><p class="para">The <code class="literal">chroot</CODE
+> call is one of those non-POSIX calls. It makes a process change where it thinks the directory <code class="literal">/</CODE
+> is. For instance, after <code class="literal">chroot</CODE
+> <code class="literal">&quot;/var/daemon&quot;</CODE
+>, if the process tries to read the file <em class="emphasis">/etc/passwd</EM
+>, it will read <em class="emphasis">/var/daemon/etc/passwd</EM
+>. A <code class="literal">chroot</CODE
+>ed process needs copies of any files it will run made available inside its new <code class="literal">/</CODE
+>, of course. For instance, our chrooted process would need <em class="emphasis">/var/daemon/bin/csh</EM
+> if it were going to glob files. For security reasons, only the superuser may <code class="literal">chroot</CODE
+>. This is done by FTP servers if you login to them anonymously. It isn't really necessary to become a daemon.</P
+><p class="para">The operating system expects a child's parent to wait when the child dies. Our daemon process has no particular parent to do this, so we need to disinherit it. This we do by <code class="literal">fork</CODE
+>ing once and having our parent exit, so that the child is not associated with the process that started the parent. The child then closes all the filehandles it got from its parent (STDIN, STDERR, and STDOUT) and calls <a class="indexterm" name="ch17-idx-1000005969-0"></A
+><code class="literal">POSIX::setsid</CODE
+> to ensure that it is completely dissociated from its parent's terminal.</P
+><p class="para">Now we're almost ready to begin. We don't want signals like SIGINT to kill us immediately (its default behavior), so we use <code class="literal">%SIG</CODE
+> to catch them and set a flag saying it's time to exit. Then our main program simply becomes: "While we weren't killed, do something."</P
+><p class="para">The signal SIGPIPE is a special case. It's easy to get (by writing to a filehandle whose other end is closed) and has unforgiving default behavior (it terminates your process). You probably want to either ignore it (<code class="literal">$SIG{PIPE}</CODE
+> <code class="literal">=</CODE
+> <code class="literal">'IGNORE'</CODE
+>) or define your own signal handler to deal with it appropriately.<a class="indexterm" name="ch17-idx-1000004873-0"></A
+><a class="indexterm" name="ch17-idx-1000004873-1"></A
+><a class="indexterm" name="ch17-idx-1000004873-2"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-2016">See Also</A
+></H3
+><p class="para">Your system's <i class="filename">setsid </I
+>(2) and <i class="filename">chroot </I
+>(1) manpage (if you have them); 
+
+<a class="olink" href="../prog/ch03_017.htm">&#13;the <code class="literal">chroot</CODE
+></A
+> function in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlfunc </I
+>(1); the Unix Socket FAQ at <a class="systemitem.url" href="http://www.ibrado.com/sock-faq/">http://www.ibrado.com/sock-faq/</A
+>. <cite class="citetitle">Unix Network Programming</CITE
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_15.htm" title="17.14. Writing a Multi-Homed Server"><img src="../gifs/txtpreva.gif" alt="Previous: 17.14. Writing a Multi-Homed Server" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_17.htm" title="17.16. Restarting a Server on Demand"><img src="../gifs/txtnexta.gif" alt="Next: 17.16. Restarting a Server on Demand" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">17.14. Writing a Multi-Homed Server</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">17.16. Restarting a Server on Demand</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

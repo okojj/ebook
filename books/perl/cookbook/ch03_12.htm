@@ -1,0 +1,218 @@
+<html><head>
+<title>Recipe 3.11. Program: hopdelta</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:30:48Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch03_01.htm" title="3. Dates and Times"><link rel="prev" href="ch03_11.htm" title="3.10. Short Sleeps"><link rel="next" href="ch04_01.htm" title="4. Arrays"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch03_11.htm" title="3.10. Short Sleeps"><img src="../gifs/txtpreva.gif" alt="Previous: 3.10. Short Sleeps" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch03_01.htm" title="3. Dates and Times">Chapter 3<br>Dates and Times</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="chapter" href="ch04_01.htm" title="4. Arrays"><img src="../gifs/txtnexta.gif" alt="Next: 4. Arrays" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch03-10311">3.11. Program: hopdelta</A
+></H2
+><p class="para"><a class="indexterm" name="ch03-idx-1000006363-0"></A
+><a class="indexterm" name="ch03-idx-1000006363-1"></A
+><a class="indexterm" name="ch03-idx-1000006363-2"></A
+>Have you ever wondered why it took so long for someone's mail to get to you? With postal mail, you can't trace how long each intervening post office let your letter gather dust in their back office. But with electronic mail, you can. The message carries in its header <code class="literal">Received:</CODE
+><a class="indexterm" name="ch03-idx-1000006369-0"></A
+> lines showing when each intervening mail transport agent along the way got the message.</P
+><p class="para">The dates in the headers are hard to read. You have to read them backwards, bottom to top. They are written in many varied formats, depending on the whim of each transport agent. Worst of all, each date is written in its own local time zone. It's hard to eyeball <code class="literal">&quot;Tue,</CODE
+> <code class="literal">26</CODE
+> <code class="literal">May</CODE
+> <code class="literal">1998</CODE
+> <code class="literal">23:57:38</CODE
+> <code class="literal">-0400&quot;</CODE
+> and <code class="literal">&quot;Wed,</CODE
+> <code class="literal">27</CODE
+> <code class="literal">May</CODE
+> <code class="literal">1998</CODE
+> <code class="literal">05:04:03</CODE
+> <code class="literal">+0100&quot;</CODE
+> and realize these two dates are only 6 minutes and 25 seconds apart. <code class="literal"></CODE
+><a class="indexterm" name="ch03-idx-1000006371-0"></A
+></P
+><p class="para">The <code class="literal">ParseDate</CODE
+><a class="indexterm" name="ch03-idx-1000006379-0"></A
+><a class="indexterm" name="ch03-idx-1000006379-1"></A
+><a class="indexterm" name="ch03-idx-1000006379-2"></A
+> and <code class="literal">DateCalc</CODE
+> functions in the Date::Manip module from CPAN can help this:</P
+><pre class="programlisting">use Date::Manip qw(ParseDate DateCalc);
+$d1 = ParseDate(&quot;Tue, 26 May 1998 23:57:38 -0400&quot;);
+$d2 = ParseDate(&quot;Wed, 27 May 1998 05:04:03 +0100&quot;);
+print DateCalc($d1, $d2);
+<code class="userinput"><b><code class="replaceable"><i>+0:0:0:0:0:6:25</I
+></CODE
+></B
+></CODE
+></PRE
+><p class="para">That's a nice format for a program to read, but it's still not what the casual reader wants to see. The <em class="emphasis">hopdelta</EM
+> program, shown in <a class="xref" href="#ch03-29485" title="hopdelta">Example 3.1</A
+>, takes a mailer header and tries to analyze the deltas (difference) between each hop (mail stop). Its output is shown in the local time zone.</P
+><div class="example"><h4 class="example"><a class="title" name="ch03-29485">Example 3.1: hopdelta</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl
+# hopdelta - feed mail header, produce lines
+#            showing delay at each hop.
+use strict;
+use Date::Manip qw (ParseDate UnixDate);
+
+# print header; this should really use format/write due to
+# printf complexities
+printf &quot;%-20.20s %-20.20s %-20.20s   %s\n&quot;, 
+        &quot;Sender&quot;, &quot;Recipient&quot;, &quot;Time&quot;, &quot;Delta&quot;;
+
+$/ = '';                # paragraph mode
+$_ = &lt;&gt;;                # read header
+s/\n\s+/ /g;            # join continuation lines
+
+# calculate when and where this started
+my($start_from) = /^From.*\@([^\s&gt;]*)/m;
+my($start_date) = /^Date:\s+(.*)/m;
+my $then = getdate($start_date);
+printf &quot;%-20.20s %-20.20s %s\n&quot;, 'Start', $start_from, fmtdate($then);
+
+my $prevfrom = $start_from;
+
+# now process the headers lines from the bottom up
+for (reverse split(/\n/)) {
+    my ($delta, $now, $from, $by, $when);
+    next unless /^Received:/;
+    s/\bon (.*?) (id.*)/; $1/s;         # qmail header, I think
+    unless (($when) = /;\s+(.*)$/) {    # where the date falls
+        warn &quot;bad received line: $_&quot;;
+        next;
+    }
+    ($from) = /from\s+(\S+)/;           
+    ($from) = /\((.*?)\)/ unless $from; # some put it here
+    $from =~ s/\)$//;                   # someone was too greedy
+    ($by)   = /by\s+(\S+\.\S+)/;        # who sent it on this hop
+
+    # now random mungings to get their string parsable
+    for ($when) {
+        s/ (for|via) .*$//;
+        s/([+-]\d\d\d\d) \(\S+\)/$1/;
+        s/id \S+;\s*//;
+    }
+    next unless $now = getdate($when);          # convert to Epoch
+    $delta = $now - $then;
+
+    printf &quot;%-20.20s %-20.20s %s  &quot;, $from, $by, fmtdate($now);
+    $prevfrom = $by;
+    puttime($delta);
+    $then = $now;               
+}
+
+exit;
+
+# convert random date strings into Epoch seconds
+sub getdate {
+    my $string     =  shift;
+    $string        =~ s/\s+\(.*\)\s*$//;        # remove nonstd tz
+    my $date       =  ParseDate($string);
+    my $epoch_secs =  UnixDate($date,&quot;%s&quot;);
+    return $epoch_secs;
+}
+
+# convert Epoch seconds into a particular date string
+sub fmtdate {
+    my $epoch = shift;
+    my($sec,$min,$hour,$mday,$mon,$year) = localtime($epoch);
+    return sprintf &quot;%02d:%02d:%02d %04d/%02d/%02d&quot;,
+        $hour, $min, $sec,
+        $year + 1900, $mon + 1, $mday,
+}
+
+# take seconds and print in pleasant-to-read format
+sub puttime {
+    my($seconds) = shift;
+    my($days, $hours, $minutes);
+
+    $days    = pull_count($seconds, 24 * 60 * 60);
+    $hours   = pull_count($seconds, 60 * 60);
+    $minutes = pull_count($seconds, 60);
+
+    put_field('s', $seconds);
+    put_field('m', $minutes);
+    put_field('h', $hours);
+    put_field('d', $days);
+
+    print &quot;\n&quot;;
+}
+
+# usage: $count = pull_count(seconds, amount)
+# remove from seconds the amount quantity, altering caller's version.
+# return the integral number of those amounts so removed.
+sub pull_count {
+    my($answer) = int($_[0] / $_[1]);
+    $_[0] -= $answer * $_[1];
+    return $answer;
+}
+
+# usage: put_field(char, number)
+# output number field in 3-place decimal format, with trailing char
+# suppress output unless char is 's' for seconds
+sub put_field {
+    my ($char, $number) = @_;
+    printf &quot; %3d%s&quot;, $number, $char if $number || $char eq 's';
+}</PRE
+></DIV
+><pre class="programlisting"><code class="userinput"><b><code class="replaceable"><i>Sender               Recipient            Time                   Delta</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Start                wall.org             09:17:12 1998/05/23</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>wall.org             mail.brainstorm.net  09:20:56 1998/05/23    44s   3m</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>mail.brainstorm.net  jhereg.perl.com      09:20:58 1998/05/23     2s</I
+></CODE
+></B
+></CODE
+> 
+<a class="indexterm" name="ch03-idx-1000006365-0"></A
+><a class="indexterm" name="ch03-idx-1000006365-1"></A
+><a class="indexterm" name="ch03-idx-1000006365-2"></A
+><a class="indexterm" name="ch03-idx-1000006216-0"></A
+></PRE
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch03_11.htm" title="3.10. Short Sleeps"><img src="../gifs/txtpreva.gif" alt="Previous: 3.10. Short Sleeps" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="chapter" href="ch04_01.htm" title="4. Arrays"><img src="../gifs/txtnexta.gif" alt="Next: 4. Arrays" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">3.10. Short Sleeps</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">4. Arrays</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

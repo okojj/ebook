@@ -1,0 +1,196 @@
+<html><head>
+<title>Recipe 11.4. Taking References to Functions</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:40:33Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch11_01.htm" title="11. References and Records"><link rel="prev" href="ch11_04.htm" title="11.3. Taking References to Hashes"><link rel="next" href="ch11_06.htm" title="11.5. Taking References to Scalars"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch11_04.htm" title="11.3. Taking References to Hashes"><img src="../gifs/txtpreva.gif" alt="Previous: 11.3. Taking References to Hashes" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch11_01.htm" title="11. References and Records">Chapter 11<br>References and Records</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch11_06.htm" title="11.5. Taking References to Scalars"><img src="../gifs/txtnexta.gif" alt="Next: 11.5. Taking References to Scalars" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch11-28899">11.4. Taking References to Functions</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-476">Problem<a class="indexterm" name="ch11-idx-1000004810-0"></A
+><a class="indexterm" name="ch11-idx-1000004810-1"></A
+></A
+></H3
+><p class="para">You need to manipulate a subroutine by reference. This might happen if you need to create a signal handler, a Tk callback, or a hash of function pointers.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-482">Solution</A
+></H3
+><p class="para">To get a code reference:</P
+><pre class="programlisting">$cref = \&amp;func;
+$cref = sub { ... };</PRE
+><p class="para">To call a code reference:</P
+><pre class="programlisting">@returned = $cref-&gt;(@arguments);
+@returned = &amp;$cref(@arguments);</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-498">Discussion</A
+></H3
+><p class="para">If the name of a function is <code class="literal">func</CODE
+>, you can produce a reference to this code by preceding that name with <code class="literal">\&amp;</CODE
+>. You can also create anonymous functions using the <code class="literal">sub</CODE
+> <code class="literal">{}</CODE
+> notation. These code references can be stored just like any other reference.</P
+><p class="para">Perl 5.004 introduced the postfix arrow notation for dereferencing a code reference. Prior to that, to call a subroutine by reference, you had to say <code class="literal">&amp;$funcname(@ARGS)</CODE
+>, where <code class="literal">$funcname</CODE
+> contained the name of a function. Although it is still possible to store the name of a function in a variable, such as:</P
+><pre class="programlisting">$funcname = &quot;thefunc&quot;;
+&amp;$funcname();</PRE
+><p class="para">that's not a very good solution for several reasons. First, it uses symbolic references, not real (hard) references, so it is forbidden under the <code class="literal">use</CODE
+> <code class="literal">strict</CODE
+> <code class="literal">'refs'</CODE
+> pragma. Symbolic references to variables are usually a bad idea, since they can't access lexical variables, only globals, and aren't reference counted.</P
+><p class="para">Second, it doesn't include package information, so if executed in a different package, it would try to call the wrong function. Finally, in the odd case that the function were redefined at some point, the symbolic reference would get whatever the current definition for the function was, whereas the hard reference would retain its old definition.</P
+><p class="para">Instead of placing the name of the function in the variable, use the backslash operator to create a reference to the function. This is the normal way to store a function in a variable or pass it to another function. You can mix and match references to named functions with references to unnamed ones:</P
+><pre class="programlisting">my %commands = (
+    &quot;happy&quot; =&gt; \&amp;joy,
+    &quot;sad&quot;   =&gt; \&amp;sullen,
+    &quot;done&quot;  =&gt; sub { die &quot;See ya!&quot; },
+    &quot;mad&quot;   =&gt; \&amp;angry,
+);
+
+print &quot;How are you? &quot;;
+chomp($string = &lt;STDIN&gt;);
+if ($commands{$string}) {
+    $commands{$string}-&gt;();
+} else {
+    print &quot;No such command: $string\n&quot;;
+} </PRE
+><p class="para">If you create an anonymous function that refers to a lexical (<code class="literal">my</CODE
+>) variable from an enclosing scope, Perl's reference counting ensures that the lexical variable is never deallocated so long as that function reference exists:</P
+><pre class="programlisting">sub counter_maker {
+    my $start = 0;
+    return sub {                      # this is a closure
+        return $start++;              # lexical from enclosing scope
+    };
+}
+
+$counter = counter_maker();
+
+for ($i = 0; $i &lt; 5; $i ++) {
+    print &amp;$counter, &quot;\n&quot;;
+}</PRE
+><p class="para">Even though <code class="literal">counter_maker</CODE
+> has ended and <code class="literal">$start</CODE
+> has gone out of scope, Perl doesn't free it because the anonymous subroutine referenced by <code class="literal">$counter</CODE
+> still has a reference to <code class="literal">$start</CODE
+>. If we call <code class="literal">counter_maker</CODE
+> again, it'll return another anonymous subroutine reference that uses a <em class="emphasis">different</EM
+> <code class="literal">$start</CODE
+>:</P
+><pre class="programlisting">$counter1 = counter_maker();
+$counter2 = counter_maker();
+
+for ($i = 0; $i &lt; 5; $i ++) {
+    print &amp;$counter1, &quot;\n&quot;;
+}
+
+print &amp;$counter1, &quot; &quot;, &amp;$counter2, &quot;\n&quot;;
+<code class="userinput"><b><code class="replaceable"><i>0</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>1</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>2</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>3</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>4</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>5 0</I
+></CODE
+></B
+></CODE
+></PRE
+><p class="para"><a class="indexterm" name="ch11-idx-1000004818-0"></A
+>Closures are often used in callback routines. In graphical and other event-based programming, you associate code with a keypress, mouse click, window expose event, etc. The code will be called much later, probably from an entirely different scope. Variables mentioned in the closure must be available when it's finally called. To work properly, such variables must be lexicals, not globals.</P
+><p class="para">Another use for closures is function generators, that is, functions that create and return brand new functions. <code class="literal">counter_maker</CODE
+> is a function generator. Here's another simple one:</P
+><pre class="programlisting">sub timestamp {
+    my $start_time = time(); 
+    return sub { return time() - $start_time };
+} 
+$early = timestamp(); 
+sleep 20; 
+$later = timestamp(); 
+sleep 10;
+printf &quot;It's been %d seconds since early.\n&quot;, $early-&gt;();
+printf &quot;It's been %d seconds since later.\n&quot;, $later-&gt;();
+<code class="userinput"><b><code class="replaceable"><i>It's been 30 seconds since early.</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>It's been 10 seconds since later.</I
+></CODE
+></B
+></CODE
+></PRE
+><p class="para">Each call to <code class="literal">timestamp</CODE
+> generates and returns a brand new function. The <code class="literal">timestamp</CODE
+> function creates a lexical called <code class="literal">$start_time</CODE
+> that contains the current clock time (in epoch seconds). Every time that closure is called, it returns how many seconds have passed since it was created by subtracting its starting time from the current time.<a class="indexterm" name="ch11-idx-1000004812-0"></A
+><a class="indexterm" name="ch11-idx-1000004812-1"></A
+><a class="indexterm" name="ch11-idx-1000004812-2"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-614">See Also</A
+></H3
+><p class="para">The section on <a class="olink" href="../prog/ch04_03.htm#PERL2-CH-4-SECT-3.6">"Closures"</A
+> in <a class="olink" href="../prog/ch04_01.htm">Chapter 4</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and the discussion on closures in <i class="filename">perlref </I
+>(1); <a class="xref" href="ch10_12.htm" title="Prototyping Functions">Recipe 10.11</A
+>; <a class="xref" href="ch11_05.htm" title="Taking References to Functions">Recipe 11.4</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch11_04.htm" title="11.3. Taking References to Hashes"><img src="../gifs/txtpreva.gif" alt="Previous: 11.3. Taking References to Hashes" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch11_06.htm" title="11.5. Taking References to Scalars"><img src="../gifs/txtnexta.gif" alt="Next: 11.5. Taking References to Scalars" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">11.3. Taking References to Hashes</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">11.5. Taking References to Scalars</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

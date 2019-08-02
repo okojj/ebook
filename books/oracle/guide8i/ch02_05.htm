@@ -1,0 +1,816 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 2] 2.5 Examples</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T19:24:58Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates CDROM-1-56592-675-7E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-675-7E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle 8i Features"><META
+NAME="DC.Title"
+CONTENT="Oracle PL/SQL Programming Guide to Oracle 8i Features"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch02_01.htm"
+TITLE="2. Choose Your Transaction!"><LINK
+REL="prev"
+HREF="ch02_04.htm"
+TITLE="2.4 Rules and Restrictions"><LINK
+REL="next"
+HREF="ch03_01.htm"
+TITLE="3. Invoker Rights: Your Schema or Mine? "></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch02_04.htm"
+TITLE="2.4 Rules and Restrictions"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 2.4 Rules and Restrictions"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch02_01.htm"
+TITLE="2. Choose Your Transaction!"
+>Chapter 2<BR>Choose Your Transaction!</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch03_01.htm"
+TITLE="3. Invoker Rights: Your Schema or Mine? "
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 3. Invoker Rights: Your Schema or Mine? "
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch02-41295"
+>2.5 Examples</A
+></H2
+><P
+CLASS="para"
+>This section provides some complete examples of where you might use autonomous transactions in your applications.</P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.1"
+>2.5.1 Building an Autonomous Logging Mechanism</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch-02-alm"
+></A
+><A
+CLASS="indexterm"
+NAME="AUTOID-1061"
+></A
+>A very common requirement in applications is to keep a log of errors that occur during transaction processing. The most convenient repository for this log is a database table; with a table, all the information is retained in the database and you can use SQL to retrieve and analyze the log.</P
+><P
+CLASS="para"
+>One problem with a database table log, however, is that entries in the log become a part of your transaction. If you perform (or have performed to you) a ROLLBACK, you can easily erase your log. How frustrating! Now, it is true that you can get fancy and use savepoints to preserve your log entries while cleaning up your transaction, but that approach is not only fancy, it is complicated. With autonomous transactions, however, logging becomes simpler, more manageable, and less error prone. </P
+><P
+CLASS="para"
+>Suppose I have a log table defined as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: log81.pkg */
+CREATE TABLE log81tab (
+    code INTEGER,
+    text VARCHAR2(4000),
+    created_on DATE,
+    created_by VARCHAR2(100),
+    changed_on DATE,
+    changed_by VARCHAR2(100),
+    machine VARCHAR2(100),
+    program VARCHAR2(100)
+    );</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I can use it to store errors (SQLCODE and SQLERRM) that have occurred, or even use it for non-error-related logging. The machine and program columns record information available from the virtual V$SESSION table, as you will see.</P
+><P
+CLASS="para"
+>So I have my table. Now, how should I write to my log? Here's what you should <EM
+CLASS="emphasis"
+>not</EM
+> do:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>EXCEPTION
+   WHEN OTHERS
+   THEN
+      v_code := SQLCODE;
+      v_msg := SQLERRM;
+      INSERT INTO log81tab VALUES (
+         v_code, v_msg, SYSDATE, USER, SYSDATE, USER, NULL, NULL);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-1071"
+></A
+>In other words, never expose your underlying logging mechanism by explicitly inserting into it in your exception sections and other locations. Instead, you should build a layer of code around the table (this is known as <EM
+CLASS="emphasis"
+>encapsulation</EM
+>). Why do this? Two reasons:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>If you ever change your table's structure, all those uses of the log table will not be disrupted.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>People will be able to use the log table in a much easier, more consistent manner.</P
+></LI
+></UL
+><P
+CLASS="para"
+>So here is my very simple logging package. It consists of two procedures:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE PACKAGE log81
+IS
+   PROCEDURE putline (
+      code_in IN INTEGER,
+      text_in IN VARCHAR2
+      );
+      
+   PROCEDURE saveline (
+      code_in IN INTEGER,
+      text_in IN VARCHAR2
+      );
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>What is the difference between putline and saveline? The log81.saveline procedure (as you will see in the package body) is an autonomous transaction routine, whereas log81.putline simply performs the insert. Here is the package body:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: log81.pkg */
+CREATE OR REPLACE PACKAGE BODY log81
+IS
+   CURSOR sess IS
+       SELECT MACHINE, PROGRAM
+         FROM V$SESSION
+        WHERE AUDSID = USERENV('SESSIONID');
+   rec sess%ROWTYPE;
+
+   PROCEDURE putline (
+      code_in IN INTEGER,
+      text_in IN VARCHAR2
+      )
+   IS
+   BEGIN
+      INSERT INTO log81tab
+           VALUES (
+              code_in,
+              text_in,
+              SYSDATE,
+              USER,
+              SYSDATE,
+              USER,
+              rec.machine,
+              rec.program
+           );
+   END;
+   
+   PROCEDURE saveline (
+      code_in IN INTEGER,
+      text_in IN VARCHAR2
+      )
+   IS
+      PRAGMA AUTONOMOUS_TRANSACTION;
+   BEGIN
+      putline (code_in, text_in);
+      COMMIT;
+   EXCEPTION WHEN OTHERS THEN ROLLBACK;
+   END;
+BEGIN
+   OPEN sess; FETCH sess INTO rec; CLOSE sess;
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Here are some comments on this implementation that you might find helpful:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>I obtain some useful information from V$SESSION when the package is initialized (the values are not going to change during my session, so I should only query it once) and incorporate that into the log. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The putline procedure performs the straight insert. You would probably want to add some exception handling to this program if you applied this idea in your production application.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The saveline procedure calls the putline procedure (I don't want any redundant code), but does so from within the context of an autonomous transaction.</P
+></LI
+></UL
+><P
+CLASS="para"
+>With this package in place, my error handler shown earlier can be as simple as this:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>EXCEPTION
+   WHEN OTHERS
+   THEN
+      log81.saveline (SQLCODE, SQLERRM);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>No muss, no fuss; developers don't have to concern themselves with the structure of the log table. They don't even have to know they are writing to a database table. And because I have used an autonomous transaction, they can rest assured that no matter what happens in their application, the log entry has been saved.<A
+CLASS="indexterm"
+NAME="AUTOID-1094"
+></A
+></P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch02-60041"
+>2.5.2 Using Autonomous Transactions in a Database Trigger</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch-02-comst"
+></A
+><A
+CLASS="indexterm"
+NAME="ch-02-dte"
+></A
+><A
+CLASS="indexterm"
+NAME="ch-02-rollbst"
+></A
+>The grand new benefit of autonomous transactions for database triggers is that inside those triggers you can now issue COMMITs and ROLLBACKs, statements that are otherwise not allowed in database triggers. The changes you commit and roll back will not, however, affect the main transaction that caused the database trigger to fire. They will only apply to DML activity taking place inside the trigger itself (or through stored program units called within the trigger). </P
+><P
+CLASS="para"
+>Why would this be of value to you? You may want to take an action in the database trigger that is not affected by the ultimate disposition of the transaction that caused the trigger to fire. For example, suppose that you want to keep track of each action against a table, whether or not the action completed. You might even want to be able to detect which actions failed. Let's see how you can use autonomous transactions to do this.</P
+><P
+CLASS="para"
+>First, let's construct a simple autonomous transaction trigger on the ceo_compensation table that writes a simple message to the following ceo_comp_history table. Here are the two table definitions:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: autontrigger.sql */
+CREATE TABLE ceo_compensation (
+   company VARCHAR2(100),
+   name VARCHAR2(100), 
+   compensation NUMBER,
+   layoffs NUMBER);
+CREATE TABLE ceo_comp_history (
+   name VARCHAR2(100), 
+   description VARCHAR2(255),
+   occurred_on DATE);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Here is the before-insert trigger to run all the elements in the script:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE TRIGGER bef_ins_ceo_comp
+BEFORE INSERT ON ceo_compensation FOR EACH ROW
+DECLARE
+   PRAGMA AUTONOMOUS_TRANSACTION;
+BEGIN
+   INSERT INTO ceo_comp_history VALUES (
+      :new.name, 'BEFORE INSERT', SYSDATE);
+   COMMIT;
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>With this trigger in place, I can now be certain to track every insert <EM
+CLASS="emphasis"
+>attempt</EM
+>, as shown in the steps below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>BEGIN
+   INSERT INTO ceo_compensation VALUES (
+      'Mattel', 'Jill Barad', 9100000, 2700);
+      
+   INSERT INTO ceo_compensation VALUES (
+      'American Express Company', 
+      'Harvey Golub', 33200000, 3300);
+      
+   INSERT INTO ceo_compensation VALUES (
+      'Eastman Kodak', 'George Fisher', 10700000, 20100);
+      
+   ROLLBACK; --I wish!
+END;
+/
+SELECT name, 
+       description, 
+       TO_CHAR (occurred_on, 
+          'MM/DD/YYYY HH:MI:SS') occurred_on
+  FROM ceo_comp_history;   
+NAME                 DESCRIPTION           OCCURRED_ON
+-------------------- --------------------- -------------------
+Jill Barad           BEFORE INSERT         03/17/1999 04:00:56
+Harvey Golub         BEFORE INSERT         03/17/1999 04:00:56
+George Fisher        BEFORE INSERT         03/17/1999 04:00:56</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>You will find in the <I
+CLASS="filename"
+>autontrigger.sql</I
+> script all the statements needed to create these objects and run your own test. You can even add your CEO's name to the series of INSERTs if he or she fits the bill.<A
+CLASS="indexterm"
+NAME="AUTOID-1115"
+></A
+></P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.2.1"
+>2.5.2.1 Fine-tuning the database trigger</A
+></H4
+><P
+CLASS="para"
+>But there is something of a problem with the trigger I just defined. I defined the trigger as an autonomous transaction because I performed the alert in the body of the trigger. But what if I want to perform some additional DML for the main transaction here in the trigger? It won't be rolled back with the rest of the transaction (if a rollback occurs). That won't do at all, from the perspective of data integrity.</P
+><P
+CLASS="para"
+>Generally, I would recommend that you not make a database trigger itself the autonomous transaction. Instead, push all of the independent DML activity (such as writing to the audit or history table) into its own procedure. Make <EM
+CLASS="emphasis"
+>that</EM
+> procedure the autonomous transaction. Have the trigger call the procedure. </P
+><P
+CLASS="para"
+>The <I
+CLASS="filename"
+>autontrigger2.sql</I
+> script contains the following reworking of the database trigger. First, I create the audit procedure:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: autontrigger2.sql */
+CREATE OR REPLACE PROCEDURE audit_ceo_comp (
+   name IN VARCHAR2,
+   description IN VARCHAR2,
+   occurred_on IN DATE
+   )
+IS
+   PRAGMA AUTONOMOUS_TRANSACTION;
+BEGIN
+   INSERT INTO ceo_comp_history VALUES (
+      audit_ceo_comp.name,
+      audit_ceo_comp.description,
+      audit_ceo_comp.occurred_on
+      );
+   COMMIT;
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Then I change the trigger to the following.<A
+CLASS="indexterm"
+NAME="AUTOID-1125"
+></A
+></P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE TRIGGER aft_ins_ceo_comp
+AFTER INSERT ON ceo_compensation FOR EACH ROW
+DECLARE
+   ok BOOLEAN := is_valid_comp_info (:NEW.name);
+BEGIN
+   IF ok 
+   THEN
+      audit_ceo_comp (
+         :new.name, 'AFTER INSERT', SYSDATE);
+   ELSE
+      RAISE VALUE_ERROR;
+   END IF;
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Note the following differences:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The trigger is now an after-insert trigger, rather than a before-insert trigger. I want to wait until after the INSERT to the compensation table takes place. Then I will perform my audit.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>When the is_valid_comp_info function returns FALSE, I will not even perform an audit. Instead, I will stop the transaction by raising an error. This demonstrates the other reason you don't want the trigger itself to be autonomous. In some situations, I always want to perform my audit. Under other circumstances, however, I may want to <EM
+CLASS="emphasis"
+>stop</EM
+> my main transaction by raising an exception. I can't have both of those events happen if the exception is raised in the same block and transaction as the audit DML. </P
+></LI
+></UL
+><P
+CLASS="para"
+>As you take advantage of the new autonomous transaction pragma, plan out how you will be using these new code elements. You will almost always be better off hiding the details of your new, independent transactions behind a procedural interface.<A
+CLASS="indexterm"
+NAME="AUTOID-1135"
+></A
+></P
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.3"
+>2.5.3 Building a Retry Counter </A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch-02-rce"
+></A
+>Suppose that you want to let a user try to get access to a resource (a file, a row of data, etc.) <EM
+CLASS="emphasis"
+>N</EM
+> times before an outright rejection. You also want to keep track of attempts between connections to the database. The autonomous transaction is a perfect fit, due to the COMMITs required.</P
+><P
+CLASS="para"
+>You will find a simple prototype of a retry mechanism in the <I
+CLASS="filename"
+>retry.pkg</I
+> file on the companion disk. This mechanism allows you to specify the "item" on which you are placing a limit and keeping track of attempts. These limits are maintained for each unique username. Here is the specification of this package:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: retry.pkg */
+CREATE OR REPLACE PACKAGE retry
+IS       
+   PROCEDURE incr_attempts (item IN VARCHAR2);
+   
+   PROCEDURE set_limit (item IN VARCHAR2, limit IN INTEGER);
+   
+   FUNCTION limit (item IN VARCHAR2) RETURN INTEGER; 
+
+   FUNCTION limit_reached (item IN VARCHAR2) RETURN BOOLEAN; 
+       
+   PROCEDURE clear_attempts (item IN VARCHAR2);
+   
+   FUNCTION attempts (item IN VARCHAR2) RETURN INTEGER; 
+       
+   FUNCTION attempts_left (item IN VARCHAR2) RETURN INTEGER; 
+       
+   FUNCTION attempted_at (item IN VARCHAR2) RETURN DATE; 
+       
+   PROCEDURE show_retries (item IN VARCHAR2 := '%');
+END retry;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The programs are self-explanatory; the implementations are also very straightforward. Here, for example, is the implementation of the procedure that lets you increment the number of attempts. Notice the COMMITs and ROLLBACKs; these are required, since I have used the autonomous transaction pragma.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE incr_attempts (item IN VARCHAR2)
+IS
+   PRAGMA AUTONOMOUS_TRANSACTION;
+BEGIN
+   INSERT INTO retry_counter VALUES (
+      USER, incr_attempts.item, SYSDATE, 1);
+   <B
+CLASS="emphasis.bold"
+>COMMIT;</B
+>
+EXCEPTION
+   WHEN DUP_VAL_ON_INDEX
+   THEN
+      UPDATE retry_counter
+         SET last_attempt = SYSDATE,
+             tries = tries + 1
+       WHERE username = USER 
+         AND item = incr_attempts.item;
+<B
+CLASS="emphasis.bold"
+>      COMMIT;</B
+>
+         
+   WHEN OTHERS THEN <B
+CLASS="emphasis.bold"
+>ROLLBACK</B
+>; RAISE;
+END;
+</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Here is a script based on the "three strikes" law in California that exercises the package:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: retry.tst */
+DECLARE
+   law_and_order VARCHAR2(20) := 'law_and_order';
+   TYPE string_t IS TABLE OF VARCHAR2(50);
+   crime string_t := string_t (
+      'Steal car at age 14',
+      'Caught with a joint at 17',
+      'Steal pack of cigarettes at age 42'
+      );
+      
+BEGIN
+   retry.set_limit (law_and_order, 2);
+   
+   FOR indx IN crime.FIRST .. crime.LAST
+   LOOP
+      DBMS_OUTPUT.PUT_LINE (crime(indx));
+      IF retry.limit_reached (law_and_order)
+      THEN
+         DBMS_OUTPUT.PUT_LINE (
+            '...Spend rest of life in prison');
+      ELSE
+         DBMS_OUTPUT.PUT_LINE (
+            '...Receive punishment that fits the crime');
+         retry.incr_attempts (law_and_order);
+      END IF;
+   END LOOP;
+END;
+/   </PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Here is the output in SQL*Plus:<A
+CLASS="indexterm"
+NAME="AUTOID-1154"
+></A
+></P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; @retry.tst
+Steal car at age 14
+...Receive punishment that fits the crime
+Caught with a joint at 17
+...Receive punishment that fits the crime
+Steal pack of cigarettes at age 42
+...Spend rest of life in prison</PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch02_04.htm"
+TITLE="2.4 Rules and Restrictions"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 2.4 Rules and Restrictions"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch03_01.htm"
+TITLE="3. Invoker Rights: Your Schema or Mine? "
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 3. Invoker Rights: Your Schema or Mine? "
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>2.4 Rules and Restrictions</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>3. Invoker Rights: Your Schema or Mine? </TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

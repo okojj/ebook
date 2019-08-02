@@ -1,0 +1,150 @@
+<html><head>
+<title>Recipe 15.13. Controlling Another Program with Expect</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:43:26Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch15_01.htm" title="15. User Interfaces"><link rel="prev" href="ch15_13.htm" title="15.12. Managing the Screen"><link rel="next" href="ch15_15.htm" title="15.14. Creating Menus with Tk"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch15_13.htm" title="15.12. Managing the Screen"><img src="../gifs/txtpreva.gif" alt="Previous: 15.12. Managing the Screen" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch15_01.htm" title="15. User Interfaces">Chapter 15<br>User Interfaces</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch15_15.htm" title="15.14. Creating Menus with Tk"><img src="../gifs/txtnexta.gif" alt="Next: 15.14. Creating Menus with Tk" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch15-28528">15.13. Controlling Another Program with Expect</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch15-pgfId-1281">Problem<a class="indexterm" name="ch15-idx-1000005146-0"></A
+><a class="indexterm" name="ch15-idx-1000005146-1"></A
+><a class="indexterm" name="ch15-idx-1000005146-2"></A
+><a class="indexterm" name="ch15-idx-1000005146-3"></A
+></A
+></H3
+><p class="para">You want to automate interaction with a full-screen program that expects to have a terminal behind STDIN and STDOUT.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch15-pgfId-1287">Solution</A
+></H3
+><p class="para">Use the Expect module from CPAN:</P
+><pre class="programlisting">use Expect;
+
+$command = Expect-&gt;spawn(&quot;program to run&quot;)
+    or die &quot;Couldn't start program: $!\n&quot;;
+
+# prevent the program's output from being shown on our STDOUT
+$command-&gt;log_stdout(0);
+
+# wait 10 seconds for &quot;Password:&quot; to appear
+unless ($command-&gt;expect(10, &quot;Password&quot;)) {
+    # timed out
+}
+
+# wait 20 seconds for something that matches /[lL]ogin: ?/
+unless ($command-&gt;expect(20, -re =&gt; '[lL]ogin: ?')) {
+    # timed out
+}
+
+# wait forever for &quot;invalid&quot; to appear
+unless ($command-&gt;expect(undef, &quot;invalid&quot;)) {
+    # error occurred; the program probably went away
+}
+
+# send &quot;Hello, world&quot; and a carriage return to the program
+print $command &quot;Hello, world\r&quot;;
+
+# if the program will terminate by itself, finish up with
+$command-&gt;soft_close();
+    
+# if the program must be explicitly killed, finish up with
+$command-&gt;hard_close();</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch15-pgfId-1355">Discussion</A
+></H3
+><p class="para">This module requires two other modules from CPAN: <a class="indexterm" name="ch15-idx-1000005152-0"></A
+><a class="indexterm" name="ch15-idx-1000005152-1"></A
+>IO::Pty and IO::Stty. It sets up a pseudo-terminal to interact with programs that insist on using talking to the terminal device driver. People often use this for talking to <em class="emphasis">passwd</EM
+> to change passwords. <em class="emphasis">telnet</EM
+> (Net::Telnet, described in <a class="xref" href="ch18_07.htm" title="Simulating Telnet from a Program">Recipe 18.6</A
+>, is probably more suitable and portable) and <em class="emphasis">ftp</EM
+> are also programs that expect a real tty.</P
+><p class="para">Start the program you want to run with <code class="literal">Expect-&gt;spawn</CODE
+>, passing a program name and arguments either in a single string or as a list. Expect starts the program and returns an object representing that program, or <code class="literal">undef</CODE
+> if the program couldn't be started.</P
+><p class="para">To wait for the program to emit a particular string, use the <code class="literal">expect</CODE
+> method. Its first argument is the number of seconds to wait for the string, or <code class="literal">undef</CODE
+> to wait forever. To wait for a string, give that string as the second argument to <code class="literal">expect</CODE
+>. To wait for a regular expression, give <code class="literal">&quot;-re&quot;</CODE
+> as the second argument and a string containing the pattern as the third argument. You can give further strings or patterns to wait for:</P
+><pre class="programlisting">$which = $command-&gt;expect(30, &quot;invalid&quot;, &quot;succes&quot;, &quot;error&quot;, &quot;boom&quot;);
+if ($which) {
+    # found one of those strings
+}</PRE
+><p class="para">In scalar context, <code class="literal">expect</CODE
+> returns the number of arguments it matched. In the example above, <code class="literal">expect</CODE
+> would return 1 if the program emitted <code class="literal">&quot;invalid&quot;</CODE
+>, 2 if it emitted <code class="literal">&quot;succes&quot;</CODE
+>, and so on. If none of the patterns or strings matches, <code class="literal">expect</CODE
+> returns false.</P
+><p class="para">In list context, <code class="literal">expect</CODE
+> returns a five-element list. The first element is the number of the pattern or string that matched, the same as its return value in scalar context. The second argument is a string indicating why <code class="literal">expect</CODE
+> returned. If there were no error, the second argument will be <code class="literal">undef</CODE
+>. Possible errors are <code class="literal">&quot;1:TIMEOUT&quot;</CODE
+>, <code class="literal">&quot;2:EOF&quot;</CODE
+>, <code class="literal">&quot;3:spawn</CODE
+> <code class="literal">id(...)died&quot;</CODE
+> and <code class="literal">&quot;4:...&quot;</CODE
+>. (See the <i class="filename">Expect </I
+>(3) manpage for the precise meaning of these messages.) The third argument of <code class="literal">expect</CODE
+>'s return list is the string matched. The fourth argument is text before the match, and the fifth argument is text after the match.</P
+><p class="para">Sending <a class="indexterm" name="ch15-idx-1000005153-0"></A
+>input to the program you're controlling with Expect is as simple as using <code class="literal">print</CODE
+>. The only catch is that terminals, devices, and sockets all vary in what they send and expect as the line terminator &nbsp;-  we've left the sanctuary of the C standard I/O library, so the behind-the-scenes conversion to <code class="literal">&quot;\n&quot;</CODE
+> isn't taking place. We recommend trying <code class="literal">&quot;\r&quot;</CODE
+> at first. If that doesn't work, try <code class="literal">&quot;\n&quot;</CODE
+> and <code class="literal">&quot;\r\n&quot;</CODE
+>.</P
+><p class="para">When you're finished with the spawned program, you have three options. One, you can continue with your main program, and the spawned program will be forcibly killed when the main program ends. This will accumulate processes, though. Two, if you know the spawned program will terminate normally either when it has finished sending you output or because you told it to stop &nbsp;-  for example, <em class="emphasis">telnet</EM
+> after you exit the remote shell &nbsp;-  call the <code class="literal">soft_close</CODE
+> method. If the spawned program could continue forever, like <em class="emphasis">tail -f</EM
+>, then use the <code class="literal">hard_close</CODE
+> method; this kills the spawned program.<a class="indexterm" name="ch15-idx-1000005148-0"></A
+><a class="indexterm" name="ch15-idx-1000005148-1"></A
+><a class="indexterm" name="ch15-idx-1000005148-2"></A
+><a class="indexterm" name="ch15-idx-1000005148-3"></A
+><a class="indexterm" name="ch15-idx-1000005148-4"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch15-pgfId-1381">See Also</A
+></H3
+><p class="para">The documentation for the Expect, IO::Pty, and IO::Stty modules from CPAN; <cite class="citetitle">Exploring Expect</CITE
+>, by Don Libes, O'Reilly &amp; Associates (1995).</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch15_13.htm" title="15.12. Managing the Screen"><img src="../gifs/txtpreva.gif" alt="Previous: 15.12. Managing the Screen" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch15_15.htm" title="15.14. Creating Menus with Tk"><img src="../gifs/txtnexta.gif" alt="Next: 15.14. Creating Menus with Tk" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">15.12. Managing the Screen</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">15.14. Creating Menus with Tk</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

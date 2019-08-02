@@ -1,0 +1,473 @@
+<html>
+<head>
+<title>Anatomy of a Class Loader (Java Security)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Scott Oaks">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-403-7E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Anatomy of a Class Loader">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm" alt="Java Security"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_01.htm">Chapter 3: Java Class Loaders</a></td><td align="right" valign="top" width="172"><a href="ch03_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">3.2. Anatomy of a Class Loader</h2>
+
+<p>
+<a name="INDEX-217"></a><a name="INDEX-218"></a><a name="INDEX-219"></a>When the Java virtual machine needs
+access to a particular class, it is up to a class loader to provide
+the class. The class loader goes through the following steps to load
+and define a class:
+</p>
+
+<ol>
+<li>
+<p>If the class loader has already loaded this class, it should find the
+previously defined class object and return that object immediately.
+</p>
+</li>
+
+<li>
+<p>The security manager is consulted to see if this program is allowed
+to access the class in question. If it is not, a security exception
+is thrown. This step may be considered optional.
+</p>
+</li>
+<li>
+<p>Otherwise, an internal class loader is consulted to attempt to load
+the class from the <tt class="literal">CLASSPATH</tt>. If that succeeds,
+the class loader returns. This ensures that classes within the Java
+API will not be superseded by classes loaded from the network (or
+other location).
+</p>
+
+<p>The way this is done varies between 1.1 and 1.2.<a href="#FOOTNOTE-2">[2]</a> In 1.1, there is a single method
+(the <tt class="literal">findSystemClass()</tt> method) that handles this
+step. In 1.2, a class loader must delegate to another class loader to
+find classes that are on the <tt class="literal">CLASSPATH</tt> and call
+the <tt class="literal">findSystemClass()</tt> method to find classes
+that are in the core API.
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-2"></a>
+<p>[2]1.2
+is now Java 2.</p> </blockquote>
+</li>
+<li>
+<p>The <a name="INDEX-220"></a><a name="INDEX-221"></a>security manager is consulted to see if
+this program is allowed to create the class in question. If it is
+not, a security exception is thrown. This step may be considered
+optional.
+</p>
+</li>
+<li>
+<p>The class file is read into an array of bytes. The mechanism by which
+the class loader reads the file and creates the byte array will vary
+depending on the class loader (which, after all, is one of the points
+of having different class loaders).
+</p>
+</li>
+<li>
+<p>The byte codes are run through the bytecode verifier. </p>
+</li>
+<li>
+<p>A <tt class="literal">Class</tt> object is constructed from the
+bytecodes. In the process, the methods defining the class are
+created. In Java 1.1 and later, this process also ensures that the
+name in the class file matches the name that the class loader thought
+it was asked to load.
+</p>
+</li>
+<li>
+<p>
+<a name="INDEX-222"></a><a name="INDEX-223"></a>
+Before the class can be used, it must be resolved--which is to
+say that any classes that it immediately references must also be
+found by this class loader. The set of classes that are immediately
+referenced contains any classes that the class extends as well as any
+classes used by the static initializers of the class. Note that
+classes that are used only as instance variables, method parameters,
+or local variables are not normally loaded in this phase: they are
+loaded when the class actually references them (although certain
+compiler optimizations may require that these classes be loaded when
+the class is resolved).
+</p>
+</li>
+</ol>
+
+<p>Step 5 of this process varies depending on
+the policy of the particular class loader--the data for the
+class may be read from the network or the filesystem (or from any
+other location, such as a database). The other steps of this process
+will remain fixed for a well-defined class loader.<a name="INDEX-224"></a><a name="INDEX-225"></a><a name="INDEX-226"></a>
+</p>
+
+<p>There are a number of class loaders that are used in Java programs,
+described in the following sections.
+</p>
+
+<a name="SEC-CH-3-SECT-2.1"></a>
+<h3 class="sect2">3.2.1. The Internal Class Loader</h3>
+
+<p>
+<a name="INDEX-227"></a><a name="INDEX-228"></a><a name="INDEX-229"></a><a name="INDEX-230"></a>All Java programs must have the
+capability of loading certain classes--the Java API classes and
+any others located in the user's
+<tt class="literal">CLASSPATH</tt>. Some of these classes are
+bootstrapped into the virtual machine. The first thing the virtual
+machine typically does is load the Java API class files (the
+<em class="filename">rt.jar</em> file) for future use.
+</p>
+
+<p>The internal class loader uses the native operating system's
+file access methods to open and read the class files into byte
+arrays. When one of these classes contains a reference to another
+class, the internal class loader is again consulted to load the
+referenced class.
+</p>
+
+<p>Unlike other class loaders we'll explore, the internal class
+loader cannot be overridden. Most of the internal class loader, in
+fact, is written in native code so that it can be accessed directly
+by the virtual machine (a requirement for the virtual machine to be
+able to bootstrap the API classes).
+</p>
+
+<p>The internal class loader is often referred to as the default class
+loader or the primordial class loader. Due to some details of the
+<tt class="literal">Class</tt> class, we often speak of classes that are
+loaded by the internal class loader as having no class loader at all
+(and as a result, the internal class loader is sometimes called the
+null class loader).
+</p>
+
+<p>There is a significant change in the use of the primordial class
+loader between Java 1.1 and 1.2. In 1.1, the primordial class loader
+was used to load all classes on the <tt class="literal">CLASSPATH</tt>.
+In 1.2, the primordial class loader is used only to load the Java API
+class files; the virtual machine constructs an instance of the
+<tt class="literal">URLClassLoader</tt> class to load the classes from
+the <tt class="literal">CLASSPATH</tt>.<a name="INDEX-231"></a><a name="INDEX-232"></a><a name="INDEX-233"></a>
+</p>
+
+
+<a name="SEC-CH-3-SECT-2.2"></a>
+<h3 class="sect2">3.2.2. The Applet Class Loader</h3>
+
+<p>
+<a name="INDEX-234"></a>An applet needs the ability to load
+classes via HTTP from the network. Hence, applet class loaders
+typically use the URL class to read in the data for a class file from
+the applet's <tt class="literal">CODEBASE</tt> host.
+</p>
+
+<p>There is no standard applet class loader in the Java API--each
+Java browser is responsible for implementing its own class loader. In
+practice, the class loaders of various browsers are indistinguishable
+(and are usually based on the reference class loader implemented in
+Sun's <tt class="literal">appletviewer</tt>), but a Java programmer
+cannot simply instantiate an applet class loader in a
+platform-independent way.<a href="#FOOTNOTE-3">[3]</a>
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-3"></a>
+<p>[3]If you want, you can figure
+out which class in the JDK on your system is the applet class loader,
+instantiate an instance of that class, and use it, but all virtual
+machines will not necessarily have that class available.</p>
+</blockquote>
+
+
+<a name="SEC-CH-3-SECT-2.3"></a>
+<h3 class="sect2">3.2.3. The RMI Class Loader</h3>
+
+<p>
+<a name="INDEX-235"></a><a name="INDEX-236"></a><a name="INDEX-237"></a><a name="INDEX-238"></a>Beginning with JDK 1.1, the Java API
+includes an RMI class loader that can be used by any application.
+Despite its name, the RMI class loader needn't be used in an
+RMI application, and it is not truly a class loader--that is, it
+does not extend the <tt class="literal">ClassLoader</tt> class. In
+function, the <tt class="literal">RMIClassLoader</tt> class
+(<tt class="literal">java.rmi.server.RMIClassLoader</tt>) is very similar
+to the applet class loader--it uses the HTTP protocol to load
+the desired class file from a remote machine and then defines the
+class from the data in that file.
+</p>
+
+<p>The RMI class loader cannot be instantiated directly; you must use
+one of its static methods to load a class. Once an initial class is
+loaded by the RMI class loader, any classes it references will also
+be loaded by the RMI class loader. In addition, the RMI class loader
+can only load classes from the URL specified by the
+<tt class="literal">java.rmi.server.codebase</tt> property, so it is not
+a generic solution to all applications where a class loader might be
+used.
+</p>
+
+<p>If you are loading individual, unsigned classes (i.e., classes that
+are not in a JAR file) from a single URL (i.e., a single directory,
+whether a file-based or an HTTP-based URL), using the RMI class
+loader is the simplest option for Java 1.1 applications. For Java 1.2
+applications, you can use the RMI class loader for this purpose, or
+you can use the URL class loader; the URL class loader will offer you
+more flexibility.
+</p>
+
+
+<a name="SEC-CH-3-SECT-2.4"></a>
+<h3 class="sect2">3.2.4. The Secure Class Loader</h3>
+
+<p>
+<a name="INDEX-239"></a><a name="INDEX-240"></a><a name="INDEX-241"></a>Beginning with Java 1.2, the Java API
+includes a class loader in the <tt class="literal">java.security</tt>
+package called <tt class="literal">SecureClassLoader</tt>. This class has
+a protected constructor, so its real use is to provide the basis for
+the development of other class loaders. The distinguishing feature of
+the secure class loader is that it associates a protection domain
+with each class that it loads. Protection domains form the basis of
+the operation of the access controller; we'll see more about
+them in <a href="ch05_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch05_01.htm">Chapter 5, "The Access Controller"</a>. For now, just accept the fact
+that if you want to use the access controller to establish your
+security policy, you'll need to use a class loader that extends
+the <tt class="literal">SecureClassLoader</tt> class.
+</p>
+
+
+<a name="SEC-CH-3-SECT-2.5"></a>
+<h3 class="sect2">3.2.5. The URL Class Loader</h3>
+
+<p>Also beginning with Java 1.2, the Java API includes a general-purpose
+class loader that can load classes from a set of URLs: the
+<tt class="literal">URLClassLoader</tt><a name="INDEX-242"></a><a name="INDEX-243"></a><a name="INDEX-244"></a> class
+(<tt class="literal">java.net.URLClassLoader</tt>). This class is public
+and fully implemented, so for 1.2-based applications, it provides a
+truly useful, general purpose class loader:
+</p>
+
+<dl>
+<dt>
+<b>public class URLClassLoader extends SecureClassLoader <img alt="figure" src="gifs/bstar.gif" webstripperlinkwas="gifs/bstar.gif"></b>
+</dt>
+<dd>
+<p>Load classes from a set of URLs. A URL in this set may be a
+directory-based URL, in which case the class loader will attempt to
+locate individual class files under that directory. A URL in this set
+may also be a JAR file, in which case the JAR file will be loaded,
+and the class loader will attempt to find a class in the JAR file.
+</p>
+</dd>
+
+</dl>
+
+<p>An instance of the <tt class="literal">URLClassLoader</tt> class is
+created via one of these constructors:
+</p>
+
+<dl>
+<dt>
+<b>public URLClassLoader(URL urls[]) <img alt="figure" src="gifs/bstar.gif" webstripperlinkwas="gifs/bstar.gif"></b>
+</dt>
+<dt>
+<b>public URLClassLoader(URL urls[], ClassLoader parent) <img alt="figure" src="gifs/bstar.gif" webstripperlinkwas="gifs/bstar.gif"></b>
+</dt>
+<dd>
+<p>Construct a class loader based on the given array of URLs. This class
+loader attempts to find a class by searching each URL in the order in
+which it appears in the array.
+</p>
+
+<p>The second of these constructors constructs a URL class loader that
+uses the 1.2-based delegation model for loading classes (which we
+discuss at the end of this chapter). In that case, the parent class
+loader will be asked to load the class first; if it fails, this URL
+class loader proceeds to load the class. This is the preferred
+constructor to use.
+</p>
+</dd>
+
+</dl>
+
+<p>An instance of the <tt class="literal">URLClassLoader</tt> class may also
+be obtained via one of these methods:
+</p>
+
+<dl>
+<dt>
+<b>public static URLClassLoader newInstance(URL[] urls) <img alt="figure" src="gifs/bstar.gif" webstripperlinkwas="gifs/bstar.gif"></b>
+</dt>
+<dt>
+<b>public static URLClassLoader newInstance(URL[] urls, ClassLoader parent) <img alt="figure" src="gifs/bstar.gif" webstripperlinkwas="gifs/bstar.gif"></b>
+</dt>
+<dd>
+<p>Create and return a URL class loader. The difference between these
+methods and constructing a URL class loader directly is that the
+class loader returned from these methods will call the security
+manager's <tt class="literal">checkPackageAccess()</tt> method
+before it attempts to define a class; this is the optional step 2
+referred to earlier. In 1.2, only class loaders obtained this way
+will perform that optional step (unless you write your own class
+loader to perform that step).
+</p>
+</dd>
+
+</dl>
+
+<p>We can construct a URL class loader like this:</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">URL urls[] = new URL[2];
+urls[0] = new URL("http://piccolo.East/~sdo/");
+urls[1] = new URL("file:/home/classes/LocalClasses.jar");
+URLClassLoader ucl = new URLClassLoader(urls, parent);</pre>
+</blockquote>
+
+<p>When we use this class loader to load the class
+<tt class="literal">com.sdo.Car</tt>, the class loader first attempts to
+load it via the URL
+<em class="filename">http://piccolo.East/~sdo/com/sdo/Car.class</em>; if
+that fails, it looks for the class in the
+<em class="filename">LocalClasses.jar</em> file.
+</p>
+
+<p>It should come as no surprise that this class is the basis for
+running the <tt class="literal">Launcher</tt>. In that case, the array of
+URLs is created based on the list of URLs that make up the
+<tt class="literal">CLASSPATH</tt> (but not including the core Java API
+classes).
+</p>
+
+
+<a name="SEC-CH-3-SECT-2.6"></a>
+<h3 class="sect2">3.2.6. Choosing the Right Class Loader</h3>
+
+<p>
+<a name="INDEX-245"></a><a name="INDEX-246"></a>With
+all these class loaders to choose from, which is the better choice:
+an existing class loader or your own custom class loader? The answer
+depends upon your needs. It is better not to write your own class
+loader if an existing one can fit your needs, but that's not
+always possible. Here are some guidelines:
+</p>
+
+<ol>
+<li>
+<p>Start by trying to use an instance of the
+<tt class="literal">URLClassLoader</tt> class. This class can load
+classes from multiple sites, using file-based and HTTP-based URLs. It
+can process individual class files and JAR files (including signed
+JAR files, which will become important later in our discussion). This
+class is the basis of the <tt class="literal">Launcher</tt>, although
+with the <tt class="literal">Launcher</tt> itself, you're limited
+to file-based URLs.
+</p>
+
+<p>When would you not use the URL class loader? Here are some possible
+cases:
+</p>
+
+<ul>
+<li>
+<p>When you want to load classes other than via HTTP or the file system.
+You may have classes that are held in a database, or you may want to
+define the bytecodes for a class programmatically.
+</p>
+
+</li>
+<li>
+
+<p>When you want to load classes from different hosts and you have
+<em class="emphasis">a priori</em> knowledge of which class is
+on which host. The URL class loader will search for classes in its
+list of URLs sequentially; prior knowledge may allow you to load
+classes more efficiently.<a href="#FOOTNOTE-4">[4]</a><a name="INDEX-247"></a><a name="INDEX-248"></a><a name="INDEX-249"></a><a name="INDEX-250"></a>
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-4"></a>
+<p>[4]In 1.2, the
+<tt class="command">URLClassLoader</tt> class fails to handle multiple
+HTTP-based URLs correctly. It is hoped that this will be fixed
+someday; if it is not and you need to load classes from multiple web
+servers, you will need to use your own class loader--see the
+information about the <tt class="command">MultiLoader</tt> class in <a href="ch03_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_05.htm">Section 3.5.1, "Loading from Multiple Sites"</a> later in this
+chapter.</p> </blockquote>
+</li>
+</ul>
+
+</li>
+<li>
+<p>If you're on a 1.1-based system and only need to load classes
+from a single site, use the <a name="INDEX-251"></a><a name="INDEX-252"></a><a name="INDEX-253"></a><a name="INDEX-254"></a>RMI class loader. Remember that you
+will have to define as a property the location where those classes
+are found.
+</p>
+</li>
+<li>
+<p>Otherwise, you'll need to provide a custom class loader.</p>
+</li>
+</ol>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch03_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">3.1. Security and the Class Loader</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">3.3. Loading Classes</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

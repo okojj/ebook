@@ -1,0 +1,557 @@
+<!doctype html public "-//ORA//DTD CD HTML 3.2//EN">
+<html>
+<head>
+<title>[Chapter 10] 10.6 Archie</TITLE>
+<meta name="author" content="Shishir Gundavaram">
+<meta name="date" content="Tue Aug 26 16:41:51 1997">
+<meta name="form" content="html">
+<meta name="metadata" content="dublincore.0.1">
+<meta name="objecttype" content="book part">
+<meta name="otheragent" content="gmat dbtohtml">
+<meta name="publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="source" content="SGML">
+<meta name="subject" content="cgi programming">
+<meta name="title" content="CGI Programming on the World Wide Web">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+</HEAD>
+<body bgcolor="#FFFFFF">
+
+<div class=htmlnav>
+<h1><a href='index.html'><img src="gifs/smbanner.gif" alt="CGI Programming on the World Wide Web" border=0></a></H1>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch10_05.html"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 10<br>Gateways to Internet Information Servers</FONT></B></TD>
+<td width=172 align=right valign=top><a href="ch10_07.html"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+</table>
+
+&nbsp;
+<hr align=left width=515>
+</DIV>
+<div class=sect1>
+<h2 class=sect1><a class="TITLE" name="CGI-CHP-10-SECT-6">10.6 Archie</A></h2>
+
+<p class=para>
+Archie is a database/index of the numerous
+FTP sites (and their contents) throughout the world. You can use
+an Archie client to search the database for specific files. In this
+example, we will use Brendan Kehoe's Archie client software (version
+1.3) to connect to an Archie server and search for user-specified
+information. Though we could have easily written a client using
+the socket library, it would be a waste of time, since an excellent
+one exists. This Archie gateway is based on ArchiPlex, developed
+by Martijn Koster.
+
+<div class=screen>
+<p>
+<pre>
+#!/usr/local/bin/perl
+$webmaster = "Shishir Gundavaram (shishir\@bu\.edu)";
+$archie = "/usr/local/bin/archie";
+$error = "CGI Archie Gateway Error";
+$default_server = "archie.rutgers.edu";
+$timeout_value = 180;
+</PRE>
+</DIV>
+
+<p class=para>
+The <i class=emphasis>archie</I> variable contains the full
+path to the Archie client. Make sure you have an Archie client with
+this pathname on your local machine; if you do not have a client,
+you have to telnet to a machine with a client and run this program
+there.
+
+<p class=para>
+The default server to search is stored. This is used in case
+the user failed to select a server.
+
+<p class=para>
+Finally, <i class=emphasis>timeout_value</I> contains the number
+of seconds after which an gateway will return an error message and
+terminate. This is so that the user will not have to wait forever
+for the search results.
+
+<div class=screen>
+<p>
+<pre>
+%servers = ( 
+  'ANS Net (New York, USA)',         'archie.ans.net',
+  'Australia',                       'archie.au',
+  'Canada',                          'archie.mcgill.ca',
+  'Finland/Mainland Europe',         'archie.funet.fi',
+  'Germany',                         'archie.th-darmstadt.de',
+  'Great Britain/Ireland',           'archie.doc.ac.ac.uk',
+  'Internic Net (New York, USA)',    'ds.internic.net',
+  'Israel',                          'archie.ac.il',
+  'Japan',                           'archie.wide.ad.jp',
+  'Korea',                           'archie.kr',
+  'New Zealand',                     'archie.nz',
+  'Rutgers University (NJ, USA)',    'archie.rutgers.edu',
+  'Spain',                           'archie.rediris.es',
+  'Sweden',                          'archie.luth.se',
+  'SURANet (Maryland, USA)',         'archie.sura.net',
+  'Switzerland',                     'archie.switch.ch',
+  'Taiwan',                          'archie.ncu.edu.tw',
+  'University of Nebrasksa (USA)',   'archie.unl.edu' );
+</PRE>
+</DIV>
+
+<p class=para>
+Some of the Archie servers and their IP names are stored in
+an associative array. We will create the form for this gateway dynamically,
+listing all of the servers located in this array.
+
+<div class=screen>
+<p>
+<pre>
+$request_method = $ENV{'REQUEST_METHOD'};
+if ($request_method eq "GET") {
+    &amp;display_form ();
+</PRE>
+</DIV>
+
+<p class=para>
+The form will be created and displayed if this program was
+accessed with the browser.
+
+<div class=screen>
+<p>
+<pre>
+} elsif ($request_method eq "POST") {
+    &amp;parse_form_data (*FORM);
+    $command = &amp;parse_archie_fields ();
+</PRE>
+</DIV>
+
+<p class=para>
+All of the form data is decoded and stored in the <i class=emphasis>FORM</I>
+associative array. The <i class=emphasis>parse_archie_fields</I>
+subroutine uses the form data in constructing a query to be passed
+to the Archie client.
+
+<div class=screen>
+<p>
+<pre>
+    $SIG{'ALRM'} = "time_to_exit";
+    alarm ($timeout_value);
+</PRE>
+</DIV>
+
+<p class=para>
+To understand how this array is used, you have to understand
+that the UNIX kernel checks every time an interrupt
+or break arrives for a program, and asks, "What routine should I
+call?" The routine that the program wants called is a signal handler.
+Perl associates a handler with a signal in the SIG associative array.
+
+<p class=para>
+As shown above, the traditional way to implement a time-out
+is to set an ALRM signal to be called after a
+specified number of seconds. The first line says that when an alarm
+is signaled, the <i class=emphasis>time_to_exit</I> subroutine should be 
+executed. The Perl 
+<i class=emphasis></I>
+alarm call on the
+second line schedules the ALRM signal to be sent
+in the number of seconds represented by the 
+<i class=emphasis>$timeout_value</I> variable.
+
+<div class=screen>
+<p>
+<pre>
+    open (ARCHIE, "$archie $command |");
+    $first_line = &lt;ARCHIE&gt;;
+</PRE>
+</DIV>
+
+<p class=para>
+A pipe is opened to the Archie client. The <i class=emphasis>command</I>
+variable contains a "query" that specifies various command-line
+options, such as search type and Archie server address, as well
+as the string to search for. The <i class=emphasis>parse_archie_fields</I>
+subroutine makes sure that no shell metacharacters are specified,
+since the <i class=emphasis>command</I> variable is "exposed" to
+the shell.
+
+<div class=screen>
+<p>
+<pre>
+    if ($first_line =~ /(failed|Usage|WARNING|Timed)/) {
+        &amp;return_error (500, $error,
+            "The archie client encountered a bad request.");
+    } elsif ($first_line =~ /No [Mm]atches/) {
+        &amp;return_error (500, $error,
+        "There were no matches for &lt;B&gt;$FORM{'query'}&lt;/B&gt;.");
+    }
+</PRE>
+</DIV>
+
+<p class=para>
+If the first line from the Archie server contains either an
+error or a "No Matches" string, the <i class=emphasis>return_error</I>
+subroutine is called to return a more friendly (and verbose) message.
+If there is no error, the first line is usually blank.
+
+<div class=screen>
+<p>
+<pre>
+    print "Content-type: text/html", "\n\n";
+    print "&lt;HTML&gt;", "\n";
+    print "&lt;HEAD&gt;&lt;TITLE&gt;", "CGI Archie Gateway", "&lt;/TITLE&gt;&lt;/HEAD&gt;", "\n";
+    print "&lt;BODY&gt;", "\n";
+    print "&lt;H1&gt;", "Archie search for: ", $FORM{'query'}, "&lt;/H1&gt;", "\n";
+    print "&lt;HR&gt;", "&lt;PRE&gt;", "\n";
+</PRE>
+</DIV>
+
+<p class=para>
+The usual type of header information is output. The following
+lines of code parse the output from the Archie server, and create
+hypertext links to the matched files. Here is the typical format
+for the Archie server output. It lists each host where a desired
+file (in this case, <i class=emphasis>emacs</I>) is found, followed
+by a list of all publicly accessible directories containing a file
+of that name. Files are listed in long format, so you can see how
+old they are and what their sizes are.
+
+<div class=screen>
+<p>
+<pre>
+Host amadeus.ireq-robot.hydro.qc.ca
+    Location: /pub
+      DIRECTORY drwxr-xr-x        512  Dec 18 1990  emacs
+Host anubis.ac.hmc.edu
+    Location: /pub
+      DIRECTORY drwxr-xr-x        512  Dec  6 1994  emacs
+    Location: /pub/emacs/packages/ffap
+      DIRECTORY drwxr-xr-x        512  Apr  5 02:05  emacs
+    Location: /pub/perl/dist
+      DIRECTORY drwxr-xr-x        512  Aug 16 1994  emacs
+    Location: /pub/perl/scripts/text-processing
+           FILE -rwxrwxrwx         16  Feb 25 1994  emacs
+</PRE>
+</DIV>
+
+<p class=para>
+We can enhance this output by putting in hypertext
+links. That way, the user can open a connection to any of the hosts
+with a click of a button and retrieve the file. Here is the code
+to parse this output:
+
+<div class=screen>
+<p>
+<pre>
+    while (&lt;ARCHIE&gt;) {
+        if ( ($host) = /^Host (\S+)$/ ) {
+            $host_url = join ("", "ftp://", $host);
+            s|$host|&lt;A HREF="$host_url"&gt;$host&lt;/A&gt;|;
+            &lt;ARCHIE&gt;;
+</PRE>
+</DIV>
+
+<p class=para>
+If the line starts with a "Host", the specified host is stored.
+A URL to the host is created with the join function, using the 
+<i class=emphasis>ftp</I> scheme and the hostname--for example, if the hostname were <i class=emphasis>ftp.ora.com</I>,
+the URL would be <i class=emphasis>ftp://ftp.ora.com</I>. 
+Finally, the blank line after this line is discarded.
+
+<div class=screen>
+<p>
+<pre>
+        } elsif (/^\s+Location:\s+(\S+)$/) {
+            $location = $1;
+            s|$location|&lt;A HREF="${host_url}${location}"&gt;$location&lt;/A&gt;|;
+        } elsif ( ($type, $file) = /^\s+(DIRECTORY|FILE).*\s+(\S+)/) {
+            s|$type|&lt;I&gt;$type&lt;/I&gt;|;
+            s|$file|&lt;A HREF="${host_url}${location}/${file}"&gt;$file&lt;/A&gt;|;
+        } elsif (/^\s*$/) {
+            print "&lt;HR&gt;";
+        }
+        
+        print;
+    }
+</PRE>
+</DIV>
+
+<p class=para>
+One subtle feature of regular expressions is shown here: They
+are "greedy," eating up as much text as they can. The expression
+(DIRECTORY|FILE).*\s+ means
+match DIRECTORY or FILE, then
+match as many characters as you can up to whitespace. There are
+chunks of whitespace throughout the line, but the .* takes up everything
+up to the last whitespace. This leaves just the word "emacs" to
+match the final parenthesized expression (\S+).
+
+
+<p>
+<img align=middle src="figs/exp1002.gif" alt="[Graphic: Figure from the text]" width=502 height=232 border=0>
+
+<p class=para>
+The rest of the lines are read and parsed in the same manner
+and displayed (see <a href="#CGI-CHP-10-FIG-1">Figure 10.1</A>). If the line is empty, a horizontal rule is output--to indicate the end of each entry.
+
+<div class=figure>
+<h4 class=figure><a class="TITLE" name="CGI-CHP-10-FIG-1">Figure 10.1: Archie results</A></h4>
+
+
+<p>
+<img align=middle src="figs/cgi1001.gif" alt="[Graphic: Figure 10-1]" width=470 height=368 border=0>
+
+</DIV>
+
+<div class=screen>
+<p>
+<pre>
+    $SIG{'ALRM'} = "DEFAULT";
+    close (ARCHIE);
+    print "&lt;/PRE&gt;";
+    print "&lt;/BODY&gt;&lt;/HTML&gt;", "\n";
+</PRE>
+</DIV>
+
+<p class=para>
+Finally, the ALRM signal is reset, and
+the file handle is closed.
+
+<div class=screen>
+<p>
+<pre>
+} else {
+    &amp;return_error (500, $error, "Server uses unspecified method");
+}
+exit (0);
+</PRE>
+</DIV>
+
+<p class=para>
+Remember how we set the SIG array so that a signal would cause
+the <i class=emphasis>time_to_exit</I> subroutine to run? Here it
+is:
+
+<div class=screen>
+<p>
+<pre>
+sub time_to_exit
+{
+    close (ARCHIE);
+    &amp;return_error (500, $error,
+        "The search was terminated after $timeout_value seconds.");
+}
+</PRE>
+</DIV>
+
+<p class=para>
+When this subroutine runs, it means that the 180 seconds that
+were allowed for the search have passed, and that it is time to
+terminate the script. Generally, the Archie server returns the matched
+FTP sites and its files quickly, but there are times when it can
+be queued up with requests. In such a case, it is wise to terminate
+the script, rather than let the user wait for a long period of time.
+
+<p class=para>
+Now, we have to build a command that the Archie client recognizes
+using the <i class=emphasis>parse_archie_fields subroutine</I>:
+
+<div class=screen>
+<p>
+<pre>
+sub parse_archie_fields
+{
+    local ($query, $server, $type, $address, $status, $options);
+    $status = 1;
+    $query = $FORM{'query'};
+    $server = $FORM{'server'};
+    $type = $FORM{'type'};
+    if ($query !~ /^\w+$/) {
+        &amp;return_error (500, $error, 
+            "Search query contains invalid characters.");
+</PRE>
+</DIV>
+
+<p class=para>
+If the <i class=emphasis>query</I> field contains non-alphanumeric characters (characters
+other than A-Z, a-z, 0-9, _), an error message is output.
+
+<div class=screen>
+<p>
+<pre>
+    } else {
+        foreach $address (keys %servers) {
+            if ($server eq $address) {
+                $server = $servers{$address};
+                $status = 0;
+            }
+        }
+</PRE>
+</DIV>
+
+<p class=para>
+The <i class=emphasis>foreach</I> loop iterates through the keys of the <i class=emphasis>servers</I>
+associative array. If the user-specified server matches the name
+as contained in the array, the IP name is stored in the server variable,
+and the status is set to zero.
+
+<div class=screen>
+<p>
+<pre>
+        if ($status) {
+            &amp;return_error (500, $error, "Please select a valid archie host.");
+</PRE>
+</DIV>
+
+<p class=para>
+A status of non-zero indicates that the user specified an
+invalid address for the Archie server.
+
+<div class=screen>
+<p>
+<pre>
+        } else {
+            if ($type eq "cs_sub") {
+                $type = "-c";
+            } elsif ($type eq "ci_sub") {
+                $type = "-s";
+            } else {
+                $type = "-e";
+            }
+</PRE>
+</DIV>
+
+<p class=para>
+If the user selected "Case Sensitive Substring", the "-c"
+switch is used. The "-s" switch indicates a "Case Insensitive Substring".
+If the user did not select any option, the "-e" switch ("Exact Match")
+is used.
+
+<div class=screen>
+<p>
+<pre>
+            $options = "-h $server $type $query";
+            return ($options);
+        }
+    }
+}
+</PRE>
+</DIV>
+
+<p class=para>
+A string containing all of the options is created, and then
+returned to the main program.
+
+<p class=para>
+Our last task is a simple one--to create a form that allows
+the user to enter a query, using the <i class=emphasis>display_form</I> subroutine. The
+program creates the form dynamically because some information is
+subject to change (i.e., the list of servers).
+
+<div class=screen>
+<p>
+<pre>
+sub display_form
+{
+    local ($archie);
+    print &lt;&lt;End_of_Archie_One;
+Content-type: text/html
+&lt;HTML&gt;
+&lt;HEAD&gt;&lt;TITLE&gt;Gateway to Internet Information Servers&lt;/TITLE&gt;&lt;/HEAD&gt;
+&lt;BODY&gt;
+&lt;H1&gt;CGI Archie Gateway&lt;/H1&gt;
+&lt;HR&gt;
+&lt;FORM ACTION="/cgi-bin/archie.pl" METHOD="POST"&gt;
+Please enter a string to search from: &lt;BR&gt;
+&lt;INPUT TYPE="text" NAME="query" SIZE=40&gt;
+&lt;P&gt;
+What archie server would you like to use (&lt;B&gt;please&lt;/B&gt;, be considerate
+and use the one that is closest to you): &lt;BR&gt;
+&lt;SELECT NAME="server" SIZE=1&gt;
+End_of_Archie_One
+    foreach $archie (sort keys %servers) {
+        if ($servers{$archie} eq $default_server) {
+            print "&lt;OPTION SELECTED&gt;", $archie, "\n";
+        } else {
+            print "&lt;OPTION&gt;", $archie, "\n";
+        }
+    }        
+</PRE>
+</DIV>
+
+<p class=para>
+This loop iterates through the associative array and displays
+all of the server names.
+
+<div class=screen>
+<p>
+<pre>
+    print &lt;&lt;End_of_Archie_Two;
+&lt;/SELECT&gt;
+&lt;P&gt;
+Please select a type of search to perform: &lt;BR&gt;
+&lt;INPUT TYPE="radio" NAME="type" VALUE="exact" CHECKED&gt;Exact&lt;BR&gt;
+&lt;INPUT TYPE="radio" NAME="type" VALUE="ci_sub"&gt;Case Insensitive Substring&lt;BR&gt;
+&lt;INPUT TYPE="radio" NAME="type" VALUE="cs_sub"&gt;Case Sensitive Substring&lt;BR&gt;
+&lt;P&gt;
+&lt;INPUT TYPE="submit" VALUE="Start Archie Search!"&gt;
+&lt;INPUT TYPE="reset"  VALUE="Clear the form"&gt;
+&lt;/FORM&gt;
+&lt;HR&gt;
+&lt;/BODY&gt;
+&lt;/HTML&gt;
+End_of_Archie_Two
+}
+</PRE>
+</DIV>
+
+<p class=para>
+The dynamic form looks like that in <a href="#CGI-CHP-10-FIG-2">Figure 10.2</A>.
+
+<div class=figure>
+<h4 class=figure><a class="TITLE" name="CGI-CHP-10-FIG-2">Figure 10.2: Archie form</A></h4>
+
+
+<p>
+<img align=middle src="figs/cgi1002.gif" alt="[Graphic: Figure 10-2]" width=410 height=334 border=0>
+
+</DIV>
+
+<p class=para>
+This was a rather simple program because we did not have to
+deal with the Archie server directly, but rather through a pre-existing
+client. Now, we will look at an example that is a little bit more
+complicated.
+
+</DIV>
+
+
+<div class=htmlnav>
+
+<p>
+<hr align=left width=515>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch10_05.html"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><a href="index.html"><img src='gifs/txthome.gif' border=0 alt='Home'></a></td>
+<td width=172 align=right valign=top><a href="ch10_07.html"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+<tr>
+<td width=172 align=left valign=top>Checking Hypertext (HTTP) Links</td>
+<td width=171 align=center valign=top><a href="index/idx_0.html"><img src='gifs/index.gif' alt='Book Index' border=0></a></td>
+<td width=172 align=right valign=top>Network News on the Web</td>
+</tr>
+</table>
+<hr align=left width=515>
+
+<img src="gifs/smnavbar.gif" usemap="#map" border=0> 
+<map name="map"> 
+<area shape="Rect" coords="0,0,45,20" href="../html/index.html" alt="HTML: The Definitive Guide">
+<area shape="Rect" coords="46,0,164,37" href="index.html" alt="CGI Programming">
+<area shape="Rect" coords="163,0,248,32" href="../jscript/index.html" alt="JavaScript: The Definitive Guide">
+<area shape="Rect" coords="247,0,371,44" href="../perl/index.html" alt="Programming Perl">
+<area shape="Rect" coords="371,0,524,46" href="../webnut/index.html" alt="WebMaster in a Nutshell">
+</MAP>
+</DIV>
+
+</BODY>
+</HTML>

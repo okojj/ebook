@@ -1,0 +1,362 @@
+<html>
+<head>
+<title>Java Class Loaders (Java Security)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Scott Oaks">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-403-7E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Java Class Loaders">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm" alt="Java Security"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch02_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch02_03.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm">Java Security</a></td><td align="right" valign="top" width="172"><a href="ch03_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_02.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+
+<h1 class="chapter">Chapter 3.  Java Class Loaders</h1>
+<div class="htmltoc">
+<h4 class="tochead">Contents:</h4>
+<p>
+<a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_01.htm">Security and the Class Loader</a>
+<br>
+<a href="ch03_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_02.htm">Anatomy of a Class Loader</a>
+<br>
+<a href="ch03_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_03.htm">Loading Classes</a>
+<br>
+<a href="ch03_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_04.htm">Implementing a Class Loader</a>
+<br>
+<a href="ch03_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_05.htm">Extensions to the Class Loader</a>
+<br>
+<a href="ch03_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_06.htm">Miscellaneous Class Loading Topics</a>
+<br>
+<a href="ch03_07.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_07.htm">Summary</a>
+<br>
+</p>
+</div>
+
+
+<p>In this chapter, we're going to explore Java's class
+loading mechanism--the mechanism by which files containing Java
+bytecodes are read into the Java virtual machine and converted into
+class definitions. The operation of Java programs depends on the
+class loader; given Java's desire to ensure security throughout
+its architecture, it should come as no surprise that class loaders
+are also a very important piece of the Java security story. The class
+loader normally works in conjunction with the security manager and
+access controller to provide the bulk of the protections associated
+with the Java sandbox.
+</p>
+
+<p>The <a name="INDEX-200"></a><a name="INDEX-201"></a>class loader is
+important in Java's security model because initially, only the
+class loader knows certain information about classes that have been
+loaded into the virtual machine. Only the class loader knows where a
+particular class originated, and only the class loader knows whether
+or not a particular class was signed (although the class loader
+arranges for the <tt class="literal">Class</tt> object itself to carry
+its signature with it). Hence, one of the keys to writing a secure
+Java application is to understand the role of the class loader and to
+write (or at least use) a secure class loader.
+</p>
+
+<p>We'll address both those points in this chapter. We begin with
+an overview of how the class loader functions, and the features that
+its basic functions add to the overall security of the Java platform.
+We'll then look into writing our own class loader, the
+motivation for which will vary depending on the release of Java
+you're using and the type of application you are running.
+</p>
+
+<p>As with the other elements of the Java sandbox, the ability to create
+and use a class loader is limited to Java applications. Java applets
+use the class loader provided for them by the browser in which they
+are running, and they are generally prohibited from creating their
+own class loader.
+</p>
+
+
+
+<h2 class="sect1">3.1. Security and the Class Loader</h2>
+
+<p>
+<a name="INDEX-202"></a>There are two instances where the
+class loader plays an important role in the Java security model: it
+must coordinate with Java's security manager or access
+controller, and it must enforce certain rules about the namespace
+used by Java classes.
+</p>
+
+<a name="SEC-CH-3-SECT-1.1"></a>
+<h3 class="sect2">3.1.1. Class Loaders and Security Enforcement</h3>
+
+<p>
+<a name="INDEX-203"></a><a name="INDEX-204"></a><a name="INDEX-205"></a><a name="INDEX-206"></a><a name="INDEX-207"></a>The class loader must coordinate with the
+security manager and access controller of the virtual machine in
+order to determine the security policy for a Java program.
+We'll explore this in more detail in the next few chapters when
+we discuss these various security mechanisms; for now, we'll
+just consider the motivation for the following connection.
+</p>
+
+<p>As we know, a Java applet cannot (normally) read a file when the
+applet is being run in a browser such as HotJava.<a href="#FOOTNOTE-1">[1]</a> The HotJava browser
+itself, however, can read files, even while it is also running
+applets. Both the browser and the applets are using the same classes
+to (attempt to) read a file, so clearly there must be something that
+allows the <tt class="literal">java.io</tt> classes to determine that one
+case should fail while the other case should succeed. That
+differentiation is the by-product of the class loader: the class
+loader allows the security manager to find out particular information
+about the class, which allows the security manager to apply the
+correct security policy depending on the context of the request. When
+we discuss the security manager, we'll discuss the specific
+mechanics by which this can be achieved. For now, it is only
+important to keep in mind that the class loader is the piece of the
+Java architecture that is able to make this distinction. Since it
+loaded the class, it knows if the class came from the network (i.e.,
+the class is part of the applet and should not be trusted) or if the
+class came from the local filesystem (i.e., the class is part of the
+browser and should be trusted). It also knows if the class was
+delivered with a digital signature, and the exact location from which
+the class was loaded. All these pieces of information may be used by
+the security manager and access controller to establish a security
+policy.
+</p>
+<blockquote class="footnote">
+<a name="FOOTNOTE-1"></a>
+<p>[1]This is true of all Java-enabled browsers, of course, but the
+point is clearer when we consider the HotJava browser since that
+browser is written in Java.</p> </blockquote>
+
+
+<a name="SEC-CH-3-SECT-1.2"></a>
+<h3 class="sect2">3.1.2. Class Loaders and Namespaces</h3>
+
+<p>
+<a name="INDEX-208"></a><a name="INDEX-209"></a>
+The second place where the class loader provides security in Java is
+more subtle and has to do with Java's namespace rules. Recall
+that the full name of a Java class is qualified by the name of the
+package to which the class belongs; there is no standard class called
+<tt class="literal">String</tt> in the Java API, but there is the class
+<tt class="literal">java.lang.String</tt>. On the other hand, a class
+does not need to belong to a package, in which case its full name is
+just the name of the class. It's often said that these classes
+are in the default package, but that's slightly misleading: as
+it turns out, there is a different default package for each class
+loader in use by the virtual machine.
+</p>
+
+<p>Consider what happens if you surf to a page at
+<em class="filename">www.sun.com</em> and load an applet that uses a class
+called <tt class="literal">Car</tt> (with no package name); after that,
+you surf to a page at <em class="filename">www.ora.com</em> and load a
+different applet that uses a class called <tt class="literal">Car</tt>
+(also with no package name). Clearly, these are two different
+classes, but they have the same fully qualified name--how can
+the virtual machine distinguish between these two classes?
+</p>
+
+<p>The answer to that question lies in the internal workings of the
+class loader. When a class is loaded by a class loader, it is stored
+in a reference internal to that class loader. A class loader in Java
+is simply an object whose type is some class that extends the
+<tt class="literal">ClassLoader</tt> class. When the virtual machine
+needs access to a particular class, it asks the appropriate class
+loader. For example, when the virtual machine is executing the code
+from <em class="filename">sun.com</em> and needs access to the
+<tt class="literal">Car</tt> class, it asks the class loader that loaded
+the applet (<tt class="literal">r1</tt> in <a href="#SEC-CH-3-FIG-2">Figure 3-1</a>)
+to provide that class.
+</p>
+
+<a name="SEC-CH-3-FIG-2"></a>
+<div class="figure">
+<img alt="figure" src="figs/JSEC_0301.gif" webstripperlinkwas="figs/JSEC_0301.gif"></div>
+<h4 class="objtitle">Figure 3-1. Different instances of the class loaders help to disambiguate class names</h4>
+
+<p>In order for this scheme to work, the <tt class="literal">Car</tt> class
+from <em class="filename">www.ora.com</em> must be loaded using a
+different class loader than that which loaded the
+<tt class="literal">Car</tt> class from <em class="filename">www.sun.com</em>.
+That way, when the virtual machine asks the class loader
+<tt class="literal">r2</tt> for the definition of the
+<tt class="literal">Car</tt> class, it will get back (correctly) the
+definition from ora.com. The class loader does not need to be a
+different class; as this example implies, it must merely be a
+different <em class="emphasis">instance</em> of the class. Hence, applets
+that have a different <a name="INDEX-210"></a><tt class="literal">CODEBASE</tt> (even
+if they originate on the same host) are always loaded by different
+instances of the browser's class loader. Applets on the same
+page with the same <tt class="literal">CODEBASE</tt>, however, may use
+the same class loader so that they may share class files (as well as
+sharing other information). Some browsers also allow applets on
+different pages to be loaded by the same class loader as long as
+those applets have the same <tt class="literal">CODEBASE</tt>, which is
+generally a more efficient and useful implementation.
+</p>
+
+<p>
+<a name="INDEX-211"></a>This differentiation between
+class files loaded from different class loaders occurs no matter what
+packages are involved. Don't be confused by the fact that there
+were no explicit package names given in our example. A large computer
+company might define a class named <tt class="literal">com.sun.Car</tt>,
+a large oil company might also define a class called
+<tt class="literal">com.sun.Car</tt>, and the two classes need to be
+considered as distinct classes--which they will be if (and only
+if) they are loaded by different instances of the class loader.
+</p>
+
+<p>So far we've given a logical reason why the class loader is
+involved in the namespace resolution of Java classes. You might think
+that if everyone were to follow the convention that the beginning of
+their package name must be their Internet domain in reverse
+order--e.g., <tt class="literal">com.sun</tt> for Sun
+Microsystems--this idea of different class loaders
+wouldn't be necessary. But there are security reasons for this
+namespace separation as well.
+</p>
+
+<p>
+<a name="INDEX-212"></a><a name="INDEX-213"></a>In Java, classes that are members of the
+same package have certain privileges that other classes do not
+have--they can access all the classes of the package that have
+the default protection (that is, the classes that are neither
+<tt class="literal">public</tt>, <tt class="literal">private</tt>, nor
+<tt class="literal">protected</tt>). Additionally, they can access any
+instance variable of classes in the package if the instance variable
+also has the default protection. As we discussed in <a href="ch02_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch02_01.htm">Chapter 2, "Java Language Security"</a>, the ability to reference only those items to
+which a class has access is a key part of the security restrictions
+Java places on a program to ensure memory and API integrity.
+</p>
+
+<p>So let's assume that no class loader based package separation
+exists, and that we rely on Sun Microsystems to name its classes
+<tt class="literal">com.sun.Car</tt> and so on. Everything would proceed
+reasonably, until we surf to <em class="filename">www.EvilSite.org</em>,
+where someone has placed a class called
+<tt class="literal">com.sun.DoSomethingEvil</tt>. Without the namespace
+separation introduced by the class loader, this class would suddenly
+have access to all the default protected classes and default
+protected variables of every class that had been downloaded from Sun.
+Worse, that site could supply a class called
+<tt class="literal">com.sun.Car</tt> with a much different implementation
+than Sun's--such that when the user (metaphorically, of
+course) applied the car's brakes, the new implementation sped
+up instead. Clearly, this is not a desirable situation.
+</p>
+
+<p>Note too that with a badly written class loader, the hackers at
+<em class="filename">EvilSite.org</em> have the potential to supply new
+classes to override the core classes of the Java API. When the class
+loader that loaded the applet from <em class="filename">EvilSite</em> is
+asked to provide the <tt class="literal">java.lang.String</tt> class, it
+must provide the expected version of that class and not some version
+from <em class="filename">EvilSite.org</em>. In practice, this is not a
+problem, because the class loader is written to find and return the
+core class first.
+</p>
+
+<p>Without enforcement of the namespace separation that we've just
+outlined, there is no way to ensure that the hackers at
+<em class="filename">EvilSite.org</em> have not forged a class into the
+<tt class="literal">com.sun</tt> package. The only way to prevent such
+forgeries would be to require that every class be a signed class
+which authenticated that it did in fact come from
+<tt class="literal">sun.com</tt> (or wherever its package name indicates
+that it should have come from). Authenticated classes certainly have
+their place in Java's security model, but it would be
+unmanageable to require that every site sign and authenticate every
+class on its site.
+</p>
+
+<p>Hence, the separation of classes based on the class loader that
+loaded them--and the convention that applets on different pages
+are loaded by different class loaders--has its benefits for Java
+security as well as solving a messy logistical problem. We'll
+now look into the details of how the class loader <a name="INDEX-214"></a><a name="INDEX-215"></a> actually
+works.<a name="INDEX-216"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch02_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch02_03.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch03_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_02.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">2.3. Summary</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">3.2. Anatomy of a Class Loader</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

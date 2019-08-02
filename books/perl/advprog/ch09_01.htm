@@ -1,0 +1,280 @@
+<html><head>
+<title>[Chapter 9] Tie</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:34:50Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="index.htm" title="Advanced Perl Programming"><link rel="prev" href="ch08_04.htm" title="8.4 Resources"><link rel="next" href="ch09_02.htm" title="9.2 Tying Arrays"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch08_04.htm" title="8.4 Resources"><img src="../gifs/txtpreva.gif" alt="Previous: 8.4 Resources" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 9</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch09_02.htm" title="9.2 Tying Arrays"><img src="../gifs/txtnexta.gif" alt="Next: 9.2 Tying Arrays" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="chapter"><h1 class="chapter"><a class="title" name="ch09-11447">9. Tie</A
+></H1
+><div class="htmltoc"><p><b>Contents:</B
+><br><a class="sect1" href="#ch09-20680" title="9.1 Tying Scalars">Tying Scalars</A
+><br><a class="sect1" href="ch09_02.htm" title="9.2 Tying Arrays">Tying Arrays</A
+><br><a class="sect1" href="ch09_03.htm" title="9.3 Tying Hashes">Tying Hashes</A
+><br><a class="sect1" href="ch09_04.htm" title="9.4 Tying Filehandles">Tying Filehandles</A
+><br><a class="sect1" href="ch09_05.htm" title="9.5 Example: Monitoring Variables">Example: Monitoring Variables</A
+><br><a class="sect1" href="ch09_06.htm" title="9.6 Comparisons with Other Languages">Comparisons with Other Languages</A
+></P
+><p></P
+></DIV
+><div class="epigraph" align="right"><p class="para" align="right"><i>Give me a wild tie brother,<br>One with a cosmic urge,<br>A tie that will swear and rip and tear,<br>When it sees my old blue serge.</I
+></P
+><p class="attribution" align="right">-&nbsp;Stoddard King, <em class="emphasis">The Ties That Bind</EM
+></P
+></DIV
+><p class="para"><a class="indexterm" name="ch09-idx-955087-0"></A
+><a class="indexterm" name="ch09-idx-955087-1"></A
+>Normally, when you read or update a scalar, array, hash, or filehandle, Perl performs the appropriate operation on the corresponding internal data structure. Alternatively, you can use the <kbd class="command">tie</KBD
+> keyword to bind  the value (or variable) to a user-defined object, so that when you read from or write to that variable, Perl simply calls a specific method of the object it is tied to. In other words, while it provides the implementation for a "normal" variable, Perl expects a user-defined module to do so for a tied variable. Once a variable is tied, even accesses from the C API of the Perl library are delegated to the corresponding tied object. </P
+><p class="para">This approach may seem like syntactic sugar, but as you'll see from the examples in this chapter, it is the <em class="emphasis">syntax</EM
+> that gives it its power: an ordinary variable can be made to invoke a user-defined function whenever a variable is manipulated, without the user's code changing or being necessarily aware of the subterfuge. The most common use of this technique is to tie a hash variable to a module that can manipulate DBM files, which are typically disk-based hash tables (they can also be BTrees). This technique allows you to make a hash value persistent and is capable of storing much more information than can fit into available memory, while giving the impression that you are manipulating an ordinary associative array.</P
+><p class="para">In the following pages, we will study how <kbd class="command">tie</KBD
+> works with the various data types, and look at a few useful examples of this feature. </P
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch09-20680">9.1 Tying Scalars</A
+></H2
+><p class="para"><a class="indexterm" name="ch09-idx-955100-0"></A
+><a class="indexterm" name="ch09-idx-955100-1"></A
+><a class="indexterm" name="ch09-idx-955100-2"></A
+>At the most basic level, there are only four things you can do with a scalar. You can create it, get or set its value, and destroy it (by ending the scope or <kbd class="command">undef</KBD
+>'ing it). <kbd class="command">tie</KBD
+> allows you to supply a subroutine to be called back for each of these operations. </P
+><p class="para">The syntax of <kbd class="command">tie</KBD
+> is as follows:</P
+><pre class="programlisting">tie <code class="replaceable"><i>variable</I
+></CODE
+>, <code class="replaceable"><i>classname</I
+></CODE
+>, <code class="replaceable"><i>list</I
+></CODE
+>;</PRE
+><p class="para">The first parameter should be one of the four supported types described above. The second parameter is the name of a user-defined class. You are expected to have invoked <kbd class="command">use</KBD
+> <code class="replaceable"><i>classname</I
+></CODE
+> or <kbd class="command">require</KBD
+> <code class="replaceable"><i>classname</I
+></CODE
+> before calling <kbd class="command">tie</KBD
+>.</P
+><p class="para">When this statement is executed, Perl checks the type of the variable (the first parameter). It then calls the method <kbd class="command"><code class="replaceable"><i>classname</I
+></CODE
+>-&gt;TIESCALAR(<a class="indexterm" name="ch09-idx-955135-0"></A
+><code class="replaceable"><i>list</I
+></CODE
+>)</KBD
+>, or <kbd class="command">TIEARRAY</KBD
+>, <kbd class="command">TIEHASH</KBD
+>, or <kbd class="command">TIEHANDLE</KBD
+>, depending on whether the tied variable is a scalar, array, hash, or filehandle. It is a run-time error if this method is not present in the class. <kbd class="command">TIESCALAR()</KBD
+> is expected to return an object, which is then internally associated with (or <i class="firstterm">tied</I
+> to) the given variable. Now, when you read and write to the variable, Perl internally calls <kbd class="command"><code class="replaceable"><i>object</I
+></CODE
+>-&gt;FETCH()</KBD
+><a class="indexterm" name="ch09-idx-955136-0"></A
+> and <kbd class="command"><code class="replaceable"><i>object</I
+></CODE
+>-&gt;STORE(<a class="indexterm" name="ch09-idx-955137-0"></A
+><code class="replaceable"><i>new value</I
+></CODE
+>)</KBD
+>, respectively. Finally, when the tied variable goes out of scope, Perl calls <kbd class="command"><code class="replaceable"><i>object</I
+></CODE
+>-&gt;DESTROY()</KBD
+><a class="indexterm" name="ch09-idx-955138-0"></A
+>. Simple, isn't it?</P
+><p class="para">The names <kbd class="command">FETCH</KBD
+>, <kbd class="command">STORE</KBD
+>, and <kbd class="command">TIESCALAR</KBD
+> are similar to <kbd class="command">AUTOLOAD</KBD
+> and <kbd class="command">DESTROY</KBD
+> in that they have a special significance for Perl only under appropriate circumstances. That is, a module can have a method called <kbd class="command">FETCH</KBD
+>, which can be used normally like any other user-defined subroutine. But if you use <kbd class="command">tie</KBD
+>, this method assumes a special meaning.</P
+><p class="para">Perl does not care about the exact data structure used for the object (whether you used a hash or ObjectTemplate). <a class="xref" href="#ch09-18512" title="Flow of Control in a Tie Scalar Operation">Table 9.1</A
+> shows a variable "<kbd class="command">$temperature</KBD
+>" tied to an automatic temperature control system, which is represented by a Perl module called AC.pm.[<a class="footnote" href="#ch09-pgfId-950651">1</A
+>] An attempt to read <kbd class="command">$temperature</KBD
+>'s value is translated to a call to the temperature sensor, and an attempt to set its value translates to a command to the heating system to do what is needed.</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch09-pgfId-950651">[1]</A
+> Air conditioning, not alternating current!</P
+></DIV
+></BLOCKQUOTE
+><br><table class="table" border="1" cellpadding="3"><caption class="table"><a class="title" name="ch09-18512">Table 9.1: Flow of Control in a Tie Scalar Operation</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">When you say:</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Perl translates it to the method call:</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">The method looks like this:</P
+></TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">tie $temperature,
+    'AC';</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">$obj = AC-&gt;TIESCALAR()</PRE
+><p class="para">Perl now "ties" </P
+><p class="para"><code class="literal">$temperature</CODE
+> and <kbd class="command">$obj</KBD
+></P
+></TD
+><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">package AC;
+sub TIESCALAR {
+  ...
+  $ac = bless {...},
+        $pkg;
+  return $ac;
+}</PRE
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">$x = $temperature;</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">$x = $obj-&gt;FETCH();</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">sub FETCH {
+  $ac-&gt;get_temp();
+}</PRE
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">$temperature = 20;</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">$obj-&gt;STORE(20);</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">sub STORE {
+ ($obj, $t) = @_;
+ $ac-&gt;set_temp($t);
+}</PRE
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">untie $temperature;
+#or
+undef $temperature;</PRE
+><p class="para">or when <code class="literal">$temperature</CODE
+> goes out of scope </P
+></TD
+><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">$obj-&gt;DESTROY()</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">sub DESTROY {
+}</PRE
+></TD
+></TR
+></TBODY
+></TABLE
+><p class="para">As you can see, the AC module is an ordinary class with a constructor and three object methods (whose names happen to be special). Perl interacts with this module behind the scenes, providing the user with a much simpler interaction model. You can get the tied object as the return value of <kbd class="command">tie</KBD
+> or invoke the <kbd class="command">tied</KBD
+> function to get to it at any other time. Therefore the statement </P
+><pre class="programlisting">$temperature = 20;</PRE
+><p class="para">is identical to</P
+><pre class="programlisting">(tied $temperature)-&gt;STORE(20);</PRE
+><p class="para">The <kbd class="command">untie</KBD
+> function restores the original value of the variable and also calls the object's <kbd class="command">DESTROY</KBD
+> method.</P
+><p class="para">Perl does not constrain the object's module in any way other than to expect it to provide the methods we saw earlier. It can store whatever data it wants, can have other methods, and is perfectly usable even in a non-tie context.</P
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch09-pgfId-945598">9.1.1 Example: Stopwatch</A
+></H3
+><p class="para"><a class="indexterm" name="ch09-idx-955139-0"></A
+>Let us look at a simple example of a stopwatch using a tied scalar. When you store any value into it, it notes the current time (that is, it ignores the value). When you retrieve a value from it, it returns the amount of time elapsed since the last time a store was attempted on it. This is how it is used:</P
+><pre class="programlisting">use Stopwatch;
+tie $s, 'Stopwatch';
+
+# $s is scalar transparently tied to a Stopwatch object.
+$s = 0;             # Writing to it forces a reset
+sleep(10);          # Sleep 10 seconds
+print &quot;$s\n&quot;;       # Should print 10</PRE
+><p class="para">The example might sometimes print 9 because of <kbd class="command">sleep</KBD
+>'s resolution. </P
+><p class="para"><a class="xref" href="#ch09-23233" title="Stopwatch Implemented Using tie">Example 9.1</A
+> shows how Stopwatch is implemented.</P
+><div class="example"><h4 class="example"><a class="title" name="ch09-23233">Example 9.1: Stopwatch Implemented Using tie</A
+></H4
+><pre class="programlisting">package Stopwatch;
+
+sub TIESCALAR {
+   my ($pkg) = @_;
+   my $obj = time();  # $obj stores the time at last reset.
+   return (bless \$obj, $pkg);
+}
+
+sub FETCH {
+   my ($r_obj) = @_;
+   # Return the time elapsed since it was last reset 
+   return (time() - $$r_obj); 
+}
+
+sub STORE {
+   my ($r_obj, $val) = @_;
+   # Ignore the value. Any write to it is seen as a reset
+   return ($$r_obj = time());
+}
+
+1;</PRE
+></DIV
+><p class="para"><kbd class="command">TIESCALAR</KBD
+> notes the current time and returns a reference to a blessed scalar (with the current time in it). As was mentioned earlier, you are under no obligation to provide a blessed <em class="emphasis">scalar</EM
+> reference; Perl does not care whether the object is a scalar or an array or a complex data structure. The only requirement is that it be blessed into a module that supports the <kbd class="command">FETCH</KBD
+> and <kbd class="command">STORE</KBD
+> methods. In this case, <kbd class="command">FETCH</KBD
+> computes the interval between the current time (as reported by <kbd class="command">time</KBD
+>) and the last reset time. </P
+><p class="para">Incidentally, the time calculations in this module work at the granularity of only a second. If you want a finer granularity, you can use the <a class="indexterm" name="ch09-idx-955143-0"></A
+><a class="indexterm" name="ch09-idx-955143-1"></A
+>Time::HiRes module available from CPAN, which gives microsecond resolution on Unix systems (gives access to the usleep and ualarm system calls). On Microsoft Windows systems, you can use the <kbd class="command">Win32::Timer</KBD
+><a class="indexterm" name="ch09-idx-955144-0"></A
+><a class="indexterm" name="ch09-idx-955144-1"></A
+> call for millisecond-level timing.<a class="indexterm" name="ch09-idx-955141-0"></A
+></P
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch09-pgfId-945636">9.1.1.1 tie works with anonymous values</A
+></H4
+><p class="para"><a class="indexterm" name="ch09-idx-955145-0"></A
+>The first argument to <kbd class="command">tie</KBD
+> must boil down to a scalar, array, hash, or filehandle <em class="emphasis">value </EM
+>; it does not <em class="emphasis">have</EM
+> to be a variable. The following code shows two valid examples of scalar ties:</P
+><pre class="programlisting">$r = \$s; 
+tie $$r, 'Stopwatch';  # Indirect tie to $s
+
+@foo = (1, 2);
+tie $foo[1], 'Stopwatch';</PRE
+><p class="para">As you can see, this facility works with the underlying values and is not associated with a variable name (unlike the <em class="emphasis">trace</EM
+> facility in TCL).<a class="indexterm" name="ch09-idx-955102-0"></A
+><a class="indexterm" name="ch09-idx-955102-1"></A
+><a class="indexterm" name="ch09-idx-955102-2"></A
+></P
+></DIV
+></DIV
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch08_04.htm" title="8.4 Resources"><img src="../gifs/txtpreva.gif" alt="Previous: 8.4 Resources" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch09_02.htm" title="9.2 Tying Arrays"><img src="../gifs/txtnexta.gif" alt="Next: 9.2 Tying Arrays" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">8.4 Resources</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">9.2 Tying Arrays</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

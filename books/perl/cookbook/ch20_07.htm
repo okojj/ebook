@@ -1,0 +1,155 @@
+<html><head>
+<title>Recipe 20.6. Extracting or Removing HTML Tags</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:45:58Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch20_01.htm" title="20. Web Automation"><link rel="prev" href="ch20_06.htm" title="20.5. Converting HTML to ASCII"><link rel="next" href="ch20_08.htm" title="20.7. Finding Stale Links"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch20_06.htm" title="20.5. Converting HTML to ASCII"><img src="../gifs/txtpreva.gif" alt="Previous: 20.5. Converting HTML to ASCII" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch20_01.htm" title="20. Web Automation">Chapter 20<br>Web Automation</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch20_08.htm" title="20.7. Finding Stale Links"><img src="../gifs/txtnexta.gif" alt="Next: 20.7. Finding Stale Links" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch20-22334">20.6. Extracting or Removing HTML Tags</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-599">Problem<a class="indexterm" name="ch20-idx-1000002635-0"></A
+><a class="indexterm" name="ch20-idx-1000002635-1"></A
+><a class="indexterm" name="ch20-idx-1000002635-2"></A
+><a class="indexterm" name="ch20-idx-1000002635-3"></A
+><a class="indexterm" name="ch20-idx-1000002635-4"></A
+><a class="indexterm" name="ch20-idx-1000002635-5"></A
+><a class="indexterm" name="ch20-idx-1000002635-6"></A
+><a class="indexterm" name="ch20-idx-1000002635-7"></A
+></A
+></H3
+><p class="para">You want to remove HTML tags from a string, leaving just plain text.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-605">Solution</A
+></H3
+><p class="para">The following oft-cited solution is simple but wrong on all but the most trivial HTML:</P
+><pre class="programlisting">($plain_text = $html_text) =~ s/&lt;[^&gt;]*&gt;//gs;     #WRONG</PRE
+><p class="para">A correct but slower and slightly more complicated way is to use the CPAN modules:</P
+><pre class="programlisting">use HTML::Parse;
+use HTML::FormatText;
+$plain_text = HTML::FormatText-&gt;new-&gt;format(parse_html($html_text));</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-621">Discussion</A
+></H3
+><p class="para">As with almost everything else, there is more than one way to do it. Each solution attempts to strike a balance between speed and flexibility. Occasionally you may find HTML that's simple enough that a trivial command line call will work:</P
+><pre class="programlisting">% perl -pe 's/&lt;[^&gt;]*&gt;//g' file</PRE
+><p class="para">However, this will break on with files whose tags cross line boundaries, like this:</P
+><pre class="programlisting">&lt;IMG SRC = &quot;foo.gif&quot;
+     ALT = &quot;Flurp!&quot;&gt;</PRE
+><p class="para">So, you'll see people doing this instead:</P
+><pre class="programlisting">% perl -0777 -pe 's/&lt;[^&gt;]*&gt;//gs' file</PRE
+><p class="para">or its scripted equivalent:</P
+><pre class="programlisting">{
+    local $/;               # temporary whole-file input mode
+    $html = &lt;FILE&gt;;
+    $html =~ s/&lt;[^&gt;]*&gt;//gs;
+}</PRE
+><p class="para">But even that isn't good enough except for simplistic HTML without any interesting bits in it. This approach fails for the following examples of valid HTML (among many others):</P
+><pre class="programlisting">&lt;IMG SRC = &quot;foo.gif&quot; ALT = &quot;A &gt; B&quot;&gt;
+
+&lt;!-- &lt;A comment&gt; --&gt;
+
+&lt;script&gt;if (a&lt;b &amp;&amp; a&gt;c)&lt;/script&gt;
+
+&lt;# Just data #&gt;
+
+&lt;![INCLUDE CDATA [ &gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt; ]]&gt;</PRE
+><p class="para">If HTML comments include other tags, those solutions would also break on text like this:</P
+><pre class="programlisting">&lt;!-- This section commented out.
+    &lt;B&gt;You can't see me!&lt;/B&gt;
+--&gt;</PRE
+><p class="para">The only solution that works well here is to use the HTML parsing routines from CPAN. The second code snippet shown above in the Solution demonstrates this better technique.</P
+><p class="para">For more flexible parsing, subclass the HTML::Parser class and only record the text elements you see:</P
+><pre class="programlisting">package MyParser;
+use HTML::Parser;
+use HTML::Entities qw(decode_entities);
+
+@ISA = qw(HTML::Parser);
+
+sub text {
+    my($self, $text) = @_;
+    print decode_entities($text);
+}
+
+package main;
+MyParser-&gt;new-&gt;parse_file(*F);</PRE
+><p class="para">If you're only interested in simple tags that don't contain others <a class="indexterm" name="ch20-idx-1000003776-0"></A
+>nested inside, you can often make do with an approach like the following, which extracts the title from a non-tricky HTML document:</P
+><pre class="programlisting">($title) = ($html =~ m#&lt;TITLE&gt;\s*(.*?)\s*&lt;/TITLE&gt;#is);</PRE
+><p class="para">Again, the regex approach has its flaws, so a more complete solution using LWP to process the HTML is shown in <a class="xref" href="#ch20-11677" title="htitle">Example 20.4</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch20-11677">Example 20.4: htitle</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl
+# htitle - get html title from URL
+
+die &quot;usage: $0 url ...\n&quot; unless @ARGV;
+require LWP;
+
+foreach $url (@ARGV) {
+    $ua = LWP::UserAgent-&gt;new();
+    $res = $ua-&gt;request(HTTP::Request-&gt;new(GET =&gt; $url));
+    print &quot;$url: &quot; if @ARGV &gt; 1;
+    if ($res-&gt;is_success) {
+        print $res-&gt;title, &quot;\n&quot;;
+    } else {
+        print $res-&gt;status_line, &quot;\n&quot;;
+    }
+}</PRE
+></DIV
+><p class="para">Here's an example of the output:</P
+><pre class="programlisting">% htitle http://www.ora.com
+www.oreilly.com -- Welcome to O'Reilly &amp; Associates!
+
+% htitle http://www.perl.com/ http://www.perl.com/nullvoid
+http://www.perl.com/: The www.perl.com Home Page
+http://www.perl.com/nullvoid: 404 File Not Found<a class="indexterm" name="ch20-idx-1000002637-0"></A
+><a class="indexterm" name="ch20-idx-1000002637-1"></A
+><a class="indexterm" name="ch20-idx-1000002637-2"></A
+><a class="indexterm" name="ch20-idx-1000002637-3"></A
+><a class="indexterm" name="ch20-idx-1000002637-4"></A
+><a class="indexterm" name="ch20-idx-1000002637-5"></A
+><a class="indexterm" name="ch20-idx-1000002637-6"></A
+></PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-761">See Also</A
+></H3
+><p class="para">The documentation for the CPAN modules HTML::TreeBuilder, HTML::Parser, HTML::Entities, and LWP::UserAgent; <a class="xref" href="ch20_06.htm" title="Converting HTML to ASCII">Recipe 20.5</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch20_06.htm" title="20.5. Converting HTML to ASCII"><img src="../gifs/txtpreva.gif" alt="Previous: 20.5. Converting HTML to ASCII" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch20_08.htm" title="20.7. Finding Stale Links"><img src="../gifs/txtnexta.gif" alt="Next: 20.7. Finding Stale Links" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">20.5. Converting HTML to ASCII</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">20.7. Finding Stale Links</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

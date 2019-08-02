@@ -1,0 +1,227 @@
+<html><head>
+<title>Recipe 4.15. Sorting a List by Computable Field</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:32:11Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch04_01.htm" title="4. Arrays"><link rel="prev" href="ch04_15.htm" title="4.14. Sorting an Array Numerically"><link rel="next" href="ch04_17.htm" title="4.16. Implementing a Circular List"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch04_15.htm" title="4.14. Sorting an Array Numerically"><img src="../gifs/txtpreva.gif" alt="Previous: 4.14. Sorting an Array Numerically" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch04_01.htm" title="4. Arrays">Chapter 4<br>Arrays</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch04_17.htm" title="4.16. Implementing a Circular List"><img src="../gifs/txtnexta.gif" alt="Next: 4.16. Implementing a Circular List" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch04-20687">4.15. Sorting a List by Computable Field</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch04-pgfId-1299">Problem</A
+></H3
+><p class="para">You want to sort a list by something more complex than a simple string or numeric comparison.</P
+><p class="para">This is common when working with objects ("sort by the employee's salary") or complex data structures ("sort by the third element in the array that this is a reference to"). It's also applicable when you want to sort by more than one key, for instance, sorting by birthday and then by name when multiple people have the same birthday.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch04-pgfId-1307">Solution</A
+></H3
+><p class="para">Use the customizable comparison routine in <code class="literal">sort</CODE
+>:</P
+><pre class="programlisting">@ordered = sort { compare() } @unordered;</PRE
+><p class="para">You can speed this up by precomputing the field.</P
+><pre class="programlisting">@precomputed = map { [compute(),$_] } @unordered;
+@ordered_precomputed = sort { $a-&gt;[0] &lt;=&gt; $b-&gt;[0] } @precomputed;
+@ordered = map { $_-&gt;[1] } @ordered_precomputed;</PRE
+><p class="para">And, finally, you can combine the three steps:</P
+><pre class="programlisting">@ordered = map { $_-&gt;[1] }
+           sort { $a-&gt;[0] &lt;=&gt; $b-&gt;[0] }
+           map { [compute(), $_] }
+           @unordered;</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch04-pgfId-1335">Discussion</A
+></H3
+><p class="para">The use of a comparison routine was explained in <a class="xref" href="ch04_15.htm" title="Sorting an Array Numerically">Recipe 4.14</A
+>. As well as using built-in operators like &lt;=&gt;, you can construct more complex tests:</P
+><pre class="programlisting">@ordered = sort { $a-&gt;name cmp $b-&gt;name } @employees;</PRE
+><p class="para">You often see <code class="literal">sort</CODE
+> used like this in part of a <code class="literal">foreach</CODE
+> loop:</P
+><pre class="programlisting">foreach $employee (sort { $a-&gt;name cmp $b-&gt;name } @employees) {
+    print $employee-&gt;name, &quot; earns \$&quot;, $employee-&gt;salary, &quot;\n&quot;;
+}</PRE
+><p class="para">If you're going to do a lot of work with elements in a particular order, it's more efficient to sort it once and work from that:</P
+><pre class="programlisting">@sorted_employees = sort { $a-&gt;name cmp $b-&gt;name } @employees;
+foreach $employee (@sorted_employees) {
+    print $employee-&gt;name, &quot; earns \$&quot;, $employee-&gt;salary, &quot;\n&quot;;
+}
+# load %bonus
+foreach $employee (@sorted_employees) {
+    if ( $bonus{ $employee-&gt;ssn } ) {
+      print $employee-&gt;name, &quot; got a bonus!\n&quot;;
+    }
+}</PRE
+><p class="para">We can put multiple comparisons in the routine and separate them with <code class="literal">||</CODE
+>. <code class="literal">||</CODE
+> is a short-circuit operator: it returns the first true (non-zero) value it finds. This means we can sort by one kind of comparison, but if the elements are equal (the comparison returns 0) we can sort by another. This has the effect of a sort within a sort:</P
+><pre class="programlisting">@sorted = sort { $a-&gt;name cmp $b-&gt;name
+                           ||
+                  $b-&gt;age &lt;=&gt; $a-&gt;age } @employees;</PRE
+><p class="para">This first considers the names of the two employees to be compared. If they're not equal, <code class="literal">||</CODE
+> stops and returns the result of the <code class="literal">cmp</CODE
+> (effectively sorting them in ascending order by name). If the names are equal, though, <code class="literal">||</CODE
+> keeps testing and returns the result of the &lt;=&gt; (sorting them in descending order by age). The result is a list that is sorted by name and by age within groups of the same name.</P
+><p class="para">Let's look at a real-life example of sorting. Here we fetch all users, as User::pwent objects. Then we sort them by name and print the sorted list:</P
+><pre class="programlisting">use User::pwent qw(getpwent);
+@users = ();
+# fetch all users
+while (defined($user = getpwent)) {
+    push(@users, $user);
+}
+    @users = sort { $a-&gt;name cmp $b-&gt;name } @users;
+foreach $user (@users) {
+    print $user-&gt;name, &quot;\n&quot;;
+}</PRE
+><p class="para">We can have more than simple comparisons, or combinations of simple comparisons. This code sorts a list of names by comparing the <em class="emphasis">second</EM
+> letters of the names. It gets the second letters by using <code class="literal">substr</CODE
+>:</P
+><pre class="programlisting">@sorted = sort { substr($a,1,1) cmp substr($b,1,1) } @names;</PRE
+><p class="para">and here we sort by length of the strings:</P
+><pre class="programlisting">@sorted = sort { length $a &lt;=&gt; length $b } @strings;</PRE
+><p class="para">The <code class="literal">sort</CODE
+> function calls the code block each time it needs to compare two elements, and the number of comparisons grows dramatically with the number of elements we're sorting. Sorting 10 elements requires (on average) 46 comparisons, but sorting 1,000 elements requires 14,000 comparisons. A time-consuming operation like a <code class="literal">split</CODE
+> or a subroutine call for each comparison can easily make your program crawl.</P
+><p class="para">Fortunately, we can remove this bottleneck by running the operation once per element prior to the sort. Use <a class="indexterm" name="ch04-idx-1000006770-0"></A
+><code class="literal">map</CODE
+> to store the results of the operation in an array whose elements are anonymous arrays containing both the computed field and the original field. Then we <code class="literal">sort</CODE
+> this array of arrays on the precomputed field, and use <code class="literal">map</CODE
+> to get the sorted original data. This <code class="literal">map</CODE
+>-<code class="literal">sort</CODE
+>-<code class="literal">map</CODE
+> concept is useful and common, so let's look at it in more depth.</P
+><p class="para">Let's apply <code class="literal">map</CODE
+>-<code class="literal">sort</CODE
+>-<code class="literal">map</CODE
+> to the sorting by string length example:</P
+><pre class="programlisting">@temp = map { [ length $_, $_ ] } @strings;
+@temp = sort { $a-&gt;[0] &lt;=&gt; $b-&gt;[0] } @temp;
+@sorted = map { $_-&gt;[1] } @temp;</PRE
+><p class="para">The first line creates a temporary array of strings and their lengths, using <code class="literal">map</CODE
+>. The second line sorts the temporary array by comparing the precomputed lengths. The third line turns the sorted temporary array of strings and lengths back into a sorted array of strings. This way we calculated the length of each string only once.</P
+><p class="para">Because the input to each line is the output of the previous line (the <code class="literal">@temp</CODE
+> array we make in line 1 is fed to <code class="literal">sort</CODE
+> in line 2, and that output is fed to <code class="literal">map</CODE
+> in line 3), we can combine it into one statement and eliminate the temporary array:</P
+><pre class="programlisting">@sorted = map  { $_-&gt;[1] }
+          sort { $a-&gt;[0] &lt;=&gt; $b-&gt;[0] }
+          map  { [ length $_, $_ ] }
+          @strings;</PRE
+><p class="para">The operations now appear in reverse order. When you meet a <code class="literal">map</CODE
+>-<code class="literal">sort</CODE
+>-<code class="literal">map</CODE
+>, you should read it from the bottom up to determine the function:</P
+><dl class="variablelist"><dt class="term"><code class="literal">@strings</CODE
+> </DT
+><dd class="listitem"><p class="para">The last part is the data to be sorted. Here it's just an array, but later we'll see that this can be a subroutine or even backticks. Anything that returns a list to be sorted is fair game.</P
+></DD
+><dt class="term"><code class="literal">map</CODE
+> </DT
+><dd class="listitem"><p class="para">The <code class="literal">map</CODE
+> closest to the bottom builds the temporary list of anonymous arrays. This list contains the precomputed fields (<code class="literal">length</CODE
+> <code class="literal">$_ </CODE
+>) and also records the original element (<code class="literal">$_ </CODE
+>) by storing them both in an anonymous array. Look at this <code class="literal">map</CODE
+> line to find out how the fields are computed.</P
+></DD
+><dt class="term"><code class="literal">sort</CODE
+> </DT
+><dd class="listitem"><p class="para">The <code class="literal">sort</CODE
+> line sorts the list of anonymous arrays by comparing the precomputed fields. It won't tell you much, other than whether the list is sorted in ascending or descending order.</P
+></DD
+><dt class="term"><code class="literal">map</CODE
+> </DT
+><dd class="listitem"><p class="para">The <code class="literal">map</CODE
+> at the top of the statement turns the sorted list of anonymous arrays back into a list of the sorted original elements. It will generally be the same for every <code class="literal">map</CODE
+>-<code class="literal">sort</CODE
+>-<code class="literal">map</CODE
+>.</P
+></DD
+></DL
+><p class="para">Here's a more complicated example, which sorts by the first number that appears on each line in <code class="literal">@fields</CODE
+>:</P
+><pre class="programlisting">@temp = map { [ /(\d+)/, $_ ] } @fields;
+@sorted_temp = sort { $a-&gt;[0] &lt;=&gt; $b-&gt;[0] } @temp;
+@sorted_fields = map { $_-&gt;[1] } @sorted_temp;</PRE
+><p class="para">The regular expression mumbo-jumbo in the first line extracts the first number from the line being processed by <code class="literal">map</CODE
+>. We use the regular expression <code class="literal">/(\d+)/</CODE
+> in a list context to extract the number.</P
+><p class="para">We can remove the temporary arrays in that code, giving us:</P
+><pre class="programlisting">@sorted_fields = map  { $_-&gt;[1] }
+                 sort { $a-&gt;[0] &lt;=&gt; $b-&gt;[0] }
+                 map  { [ /(\d+)/, $_ ] }
+                 @fields;</PRE
+><p class="para">This final example compactly sorts colon-separated data, as from Unix's <em class="emphasis">passwd</EM
+> file. It sorts the file numerically by fourth field (group id), then numerically by the third field (user id), and then alphabetically by the first field (user name).</P
+><pre class="programlisting">print map  { $_-&gt;[0] }             # whole line
+      sort {
+              $a-&gt;[1] &lt;=&gt; $b-&gt;[1]  # gid
+                      ||
+              $a-&gt;[2] &lt;=&gt; $b-&gt;[2]  # uid
+                      ||
+              $a-&gt;[3] cmp $b-&gt;[3]  # login
+      }
+      map  { [ $_, (split /:/)[3,2,0] ] }
+      `cat /etc/passwd`;</PRE
+><p class="para">This compact, <code class="literal">map</CODE
+>-<code class="literal">sort</CODE
+>-<code class="literal">map</CODE
+> technique is more reminiscent of the functional world of Lisp and Scheme programming than Perl's normal C and <em class="emphasis">awk</EM
+> heritage. Because it was first pointed out by Randal <a class="indexterm" name="ch04-idx-1000006804-0"></A
+>Schwartz, this black art is often referred to as the <i class="firstterm">Schwartzian Transform</I
+>.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch04-pgfId-1569">See Also</A
+></H3
+><p class="para">The <code class="literal">sort</CODE
+> function in <i class="filename">perlfunc </I
+>(1) and <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; the <code class="literal">cmp</CODE
+> and <code class="literal">&lt;=&gt;</CODE
+> operators in <i class="filename">perlop </I
+>(1) and <a class="olink" href="../prog/ch02_01.htm">Chapter 2</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; <a class="xref" href="ch04_15.htm" title="Sorting an Array Numerically">Recipe 4.14</A
+><a class="indexterm" name="ch04-idx-1000006760-0"></A
+><a class="indexterm" name="ch04-idx-1000006760-1"></A
+><a class="indexterm" name="ch04-idx-1000006760-2"></A
+><a class="indexterm" name="ch04-idx-1000006760-3"></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch04_15.htm" title="4.14. Sorting an Array Numerically"><img src="../gifs/txtpreva.gif" alt="Previous: 4.14. Sorting an Array Numerically" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch04_17.htm" title="4.16. Implementing a Circular List"><img src="../gifs/txtnexta.gif" alt="Next: 4.16. Implementing a Circular List" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">4.14. Sorting an Array Numerically</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">4.16. Implementing a Circular List</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

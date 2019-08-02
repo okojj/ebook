@@ -1,0 +1,542 @@
+<html>
+<head>
+<title>Sockets (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Sockets">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch16_04.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch16_01.htm">Chapter 16: Interprocess Communication</a></td><td align="right" valign="top" width="172"><a href="ch17_01.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">16.5. Sockets</h2>
+
+<p>
+<a name="INDEX-3063"></a><a name="INDEX-3064"></a><a name="INDEX-3065"></a>
+The IPC mechanisms discussed earlier all have one severe restriction:
+they're designed for communication between processes running
+on the same computer.  (Even though files can sometimes be shared
+across machines through mechanisms like NFS, locking fails miserably on
+many NFS implementations, which takes away most of the fun of
+concurrent access.)  For general-purpose networking, sockets are
+the way to go.  Although sockets were invented under BSD, they
+quickly spread to other forms of Unix, and nowadays you can find a
+socket interface on nearly every viable operating system out there.
+If you don't have sockets on your machine, you're going to have
+tremendous difficulty using the Internet.</p>
+
+<p>
+<a name="INDEX-3066"></a><a name="INDEX-3067"></a><a name="INDEX-3068"></a><a name="INDEX-3069"></a><a name="INDEX-3070"></a>
+With sockets, you can do both virtual circuits (as TCP streams) and
+datagrams (as UDP packets).  You may be able to do even more, depending
+on your system.  But the most common sort of socket programming uses
+TCP over Internet-domain sockets, so that's the kind we cover here.
+Such sockets provide reliable connections that work a little bit like
+bidirectional pipes that aren't restricted to the local machine.  The
+two killer apps of the Internet, email and web browsing, both rely almost
+exclusively on TCP sockets.</p>
+
+<p>
+<a name="INDEX-3071"></a><a name="INDEX-3072"></a>
+You also use UDP heavily without knowing it.  Every time your machine
+tries to find a site on the Internet, it sends UDP packets to your DNS
+server asking it for the actual IP address.  You might use UDP yourself
+when you want to send and receive datagrams.  Datagrams are cheaper than
+TCP connections precisely because they aren't connection oriented;
+that is, they're less like making a telephone call and more like dropping a
+letter in the mailbox.  But UDP also lacks the reliability
+that TCP provides, making it more suitable for situations where you
+don't care whether a packet or two gets folded, spindled, or
+mutilated.  Or for when you know that a higher-level protocol will enforce
+some degree of redundancy or fail-softness (which is what DNS does.)</p>
+
+<p>
+<a name="INDEX-3073"></a>
+Other choices are available but far less common.  You can use
+Unix-domain sockets, but they only work for local communication.
+Various systems support various other non-IP-based protocols.  Doubtless
+these are somewhat interesting to someone somewhere, but we'll
+restrain ourselves from talking about them somehow.</p>
+
+<p>
+<a name="INDEX-3074"></a><a name="INDEX-3075"></a>
+The Perl functions that deal with sockets have the same names
+as the corresponding syscalls in C, but their arguments tend to
+differ for two reasons: first, Perl filehandles work differently
+from C file descriptors; and second, Perl already knows the length
+of its strings, so you don't need to pass that information.  See
+<a href="ch29_01.htm">Chapter 29, "Functions"</a> for details on each socket-related
+syscall.</p>
+
+<p>
+<a name="INDEX-3076"></a><a name="INDEX-3077"></a><a name="INDEX-3078"></a>
+One problem with ancient socket code in Perl was that people would use
+hard-coded values for constants passed into socket functions, which
+destroys portability.  Like most syscalls, the socket-related ones
+quietly but politely return <tt class="literal">undef</tt> when they fail,
+instead of raising an exception.  It is therefore essential to check
+these functions' return values, since if you pass them garbage, they
+aren't going to be very noisy about it.  If you ever see code that
+does anything like explicitly setting <tt class="literal">$AF_INET = 2</tt>,
+you know you're in for big trouble.  An immeasurably superior approach
+is to use the <tt class="literal">Socket</tt> module or the even friendlier
+<tt class="literal">IO::Socket</tt> module, both of which are
+
+standard.  These modules provide various constants and helper
+functions you'll need for setting up clients and servers.  For optimal
+success, your socket programs should always start out like this (and
+don't forget to add the <tt class="userinput"><b>-T</b></tt> taint-checking
+switch to the shebang line for servers):
+<blockquote>
+<pre class="programlisting">#!/usr/bin/perl -w
+use strict;
+use sigtrap;
+use Socket;  # or IO::Socket</pre>
+</blockquote>
+<a name="INDEX-3079"></a>
+As noted elsewhere, Perl is at the mercy of your C libraries for much
+of its system behavior, and not all systems support all sorts of
+sockets.  It's probably safest to stick with normal TCP and UDP socket
+operations.  For example, if you want your code to stand a chance of
+being portable to systems you haven't thought of, don't expect there
+to be support for a reliable sequenced-packet protocol.  Nor should
+you expect to pass open file descriptors between unrelated processes
+over a local Unix-domain socket.  (Yes, you can really do that on many
+Unix machines--see your local <em class="emphasis">recvmsg</em>(2)
+manpage.)</p>
+
+<p>
+<a name="INDEX-3080"></a><a name="INDEX-3081"></a>
+If you just want to use a standard Internet service like mail, news,
+domain name service, FTP, Telnet, the Web, and so on, then instead
+of starting from scratch, try using existing CPAN modules for these.
+Prepackaged modules designed for these include <tt class="literal">Net::SMTP</tt> (or
+<tt class="literal">Mail::Mailer</tt>), <tt class="literal">Net::NNTP</tt>, <tt class="literal">Net::DNS</tt>, <tt class="literal">Net::FTP</tt>, <tt class="literal">Net::Telnet</tt>,
+and the various HTTP-related modules.  The <tt class="literal">libnet</tt> and <tt class="literal">libwww</tt>
+module suites both comprise many individual networking modules.
+Module areas on CPAN you'll want to look at are section 5 on
+Networking and IPC, section 15 on WWW-related modules, and section
+16 on Server and Daemon Utilities.</p>
+
+<p>In the sections that follow, we present several sample clients and servers without a great
+deal of explanation of each function used, as that would mostly
+duplicate the descriptions we've already provided in <a href="ch29_01.htm">Chapter 29, "Functions"</a>.</p>
+
+
+<h3 class="sect2">16.5.1. Networking Clients </h3>
+
+<a name="INDEX-3082"></a><a name="INDEX-3083"></a><a name="INDEX-3084"></a><a name="INDEX-3085"></a><a name="INDEX-3086"></a><a name="INDEX-3087"></a>
+<p>Use Internet-domain sockets when you want reliable client-server
+communication between potentially different machines.</p>
+
+<p>
+<a name="INDEX-3088"></a>
+To create a TCP client that connects to a server somewhere, it's
+usually easiest to use the standard <tt class="literal">IO::Socket::INET</tt> module:
+<blockquote>
+<pre class="programlisting">use IO::Socket::INET;
+
+$socket = IO::Socket::INET-&gt;new(PeerAddr =&gt; $remote_host,
+                                PeerPort =&gt; $remote_port,
+                                Proto    =&gt; "tcp",
+                                Type     =&gt; SOCK_STREAM)
+    or die "Couldn't connect to $remote_host:$remote_port : $!\n";
+
+# send something over the socket,
+print $socket "Why don't you call me anymore?\n";
+
+# read the remote answer,
+$answer = &lt;$socket&gt;;
+
+# and terminate the connection when we're done.
+close($socket);</pre>
+</blockquote>
+
+A shorthand form of the call is good enough when you just have a
+host and port combination to connect to, and are willing to use
+defaults for all other fields:
+<blockquote>
+<pre class="programlisting">$socket = IO::Socket::INET-&gt;new("www.yahoo.com:80")
+    or die "Couldn't connect to port 80 of yahoo: $!";</pre>
+</blockquote>
+<a name="INDEX-3089"></a>
+To connect using the basic <tt class="literal">Socket</tt> module:
+<blockquote>
+<pre class="programlisting">use Socket;
+
+# create a socket
+socket(Server, PF_INET, SOCK_STREAM, getprotobyname('tcp'));
+
+# build the address of the remote machine
+$internet_addr = inet_aton($remote_host)
+    or die "Couldn't convert $remote_host into an Internet address: $!\n";
+$paddr = sockaddr_in($remote_port, $internet_addr);
+
+# connect
+connect(Server, $paddr)
+    or die "Couldn't connect to $remote_host:$remote_port: $!\n";
+
+select((select(Server), $| = 1)[0]);  # enable command buffering
+
+# send something over the socket
+print Server "Why don't you call me anymore?\n";
+
+# read the remote answer
+$answer = &lt;Server&gt;;
+
+# terminate the connection when done
+close(Server);</pre>
+</blockquote>
+<a name="INDEX-3090"></a><a name="INDEX-3091"></a>
+If you want to close only your side of the connection, so that the
+remote end gets an end-of-file, but you can still read data coming
+from the server, use the <tt class="literal">shutdown</tt> syscall for a half-close:
+<blockquote>
+<pre class="programlisting"># no more writing to server
+shutdown(Server, 1);    # Socket::SHUT_WR constant in v5.6</pre>
+</blockquote>
+</p>
+
+
+
+
+
+
+<h3 class="sect2">16.5.2. Networking Servers</h3>
+
+<p>
+<a name="INDEX-3092"></a><a name="INDEX-3093"></a><a name="INDEX-3094"></a>
+Here's a corresponding server to go along with it.  It's pretty
+easy with the standard <tt class="literal">IO::Socket::INET</tt> class:
+<blockquote>
+<pre class="programlisting">use IO::Socket::INET;
+
+$server = IO::Socket::INET-&gt;new(LocalPort =&gt; $server_port,
+                                Type      =&gt; SOCK_STREAM,
+                                Reuse     =&gt; 1,
+                                Listen    =&gt; 10 )   # or SOMAXCONN
+    or die "Couldn't be a tcp server on port $server_port: $!\n";
+
+while ($client = $server-&gt;accept()) {
+    # $client is the new connection
+}
+
+close($server);</pre>
+</blockquote>
+
+You can also write that using the lower-level <tt class="literal">Socket</tt> module:
+<blockquote>
+<pre class="programlisting">use Socket;
+
+# make the socket
+socket(Server, PF_INET, SOCK_STREAM, getprotobyname('tcp'));
+
+# so we can restart our server quickly
+setsockopt(Server, SOL_SOCKET, SO_REUSEADDR, 1);
+
+# build up my socket address
+$my_addr = sockaddr_in($server_port, INADDR_ANY);
+bind(Server, $my_addr)
+    or die "Couldn't bind to port $server_port: $!\n";
+
+# establish a queue for incoming connections
+listen(Server, SOMAXCONN)
+    or die "Couldn't listen on port $server_port: $!\n";
+
+# accept and process connections
+while (accept(Client, Server)) {
+    # do something with new Client connection
+}
+
+close(Server);</pre>
+</blockquote>
+
+The client doesn't need to <tt class="literal">bind</tt> to any address, but the server
+does.  We've specified its address as <tt class="literal">INADDR_ANY</tt>, which means
+that clients can connect from any available network interface.  If you
+want to sit on a particular interface (like the external side of a
+gateway or firewall machine), use that interface's real address
+instead.  (Clients can do this, too, but rarely need to.)</p>
+
+<p>
+<a name="INDEX-3095"></a><a name="INDEX-3096"></a>
+If you want to know which machine connected to you, call
+<tt class="literal">getpeername</tt> on the client connection.  This returns
+an IP address, which you'll have to translate into a name on your own
+(if you can):
+<blockquote>
+<pre class="programlisting">use Socket;
+$other_end = getpeername(Client)
+    or die "Couldn't identify other end: $!\n";
+($port, $iaddr) = unpack_sockaddr_in($other_end);
+$actual_ip = inet_ntoa($iaddr);
+$claimed_hostname = gethostbyaddr($iaddr, AF_INET);</pre>
+</blockquote>
+
+This is trivially spoofable because the owner of that IP address
+can set up their reverse tables to say anything they want.  For 
+a small measure of additional confidence, translate back the 
+other way again:
+<blockquote>
+<pre class="programlisting">@name_lookup = gethostbyname($claimed_hostname)
+    or die "Could not reverse $claimed_hostname: $!\n";
+@resolved_ips = map { inet_ntoa($_) } @name_lookup[ 4 .. $#name_lookup ];
+$might_spoof = !grep { $actual_ip eq $_ } @resolved_ips;</pre>
+</blockquote>
+<a name="INDEX-3097"></a><a name="INDEX-3098"></a><a name="INDEX-3099"></a>
+Once a client connects to your server, your server can do I/O both
+to and from that client handle.  But while the server is so engaged,
+it can't service any further incoming requests from other clients.
+To avoid getting locked down to just one client at a time,
+many servers immediately <tt class="literal">fork</tt> a clone of themselves to handle
+each incoming connection.  (Others <tt class="literal">fork</tt> in advance, or multiplex
+I/O between several clients using the <tt class="literal">select</tt> syscall.)
+<blockquote>
+<pre class="programlisting">REQUEST:
+while (accept(Client, Server)) {
+    if ($kidpid = fork) {
+        close Client;         # parent closes unused handle
+        next REQUEST;
+    } 
+    defined($kidpid)   or die "cannot fork: $!" ;
+    
+    close Server;             # child closes unused handle
+    
+    select(Client);           # new default for prints
+    $| = 1;                   # autoflush
+    
+    # per-connection child code does I/O with Client handle
+    $input = &lt;Client&gt;;
+    print Client "output\n";  # or STDOUT, same thing
+    
+    open(STDIN, "&lt;&lt;&amp;Client")    or die "can't dup client: $!";
+    open(STDOUT, "&gt;&amp;Client")    or die "can't dup client: $!";
+    open(STDERR, "&gt;&amp;Client")    or die "can't dup client: $!";
+    
+    # run the calculator, just as an example
+    system("bc -l");     # or whatever you'd like, so long as
+                         # it doesn't have shell escapes!
+    print "done\n";      # still to client
+    
+    close Client;
+    exit;  # don't let the child back to accept!
+}</pre>
+</blockquote>
+<a name="INDEX-3100"></a><a name="INDEX-3101"></a>
+This server clones off a child with <tt class="literal">fork</tt> for each incoming
+request.  That way it can handle many requests at once, as long as
+you can create more processes.  (You might want to limit this.)
+Even if you don't <tt class="literal">fork</tt>, the <tt class="literal">listen</tt> will allow up to <tt class="literal">SOMAXCONN</tt>
+(usually five or more) pending connections.  Each connection uses
+up some resources, although not as much as a process.  Forking
+servers have to be careful about cleaning up after their expired
+children (called "zombies" in Unix-speak) because otherwise they'd
+quickly fill up your process table.  The <tt class="literal">REAPER</tt> code discussed
+in the section <a href="ch16_01.htm#ch16-sect-signals">Section 16.1, "Signals"</a> will take care of that for you, or you
+may be able to assign <tt class="literal">$SIG{CHLD} = 'IGNORE'</tt>.</p>
+
+<p>
+<a name="INDEX-3102"></a>
+Before running another command, we connect the standard input and
+output (and error) up to the client connection.  This way any command
+that reads from <tt class="literal">STDIN</tt> and writes to <tt class="literal">STDOUT</tt> can also talk to the
+remote machine.  Without the reassignment, the command couldn't find
+the client handle--which by default gets closed across the <tt class="literal">exec</tt>
+boundary, anyway.</p>
+
+<p>
+<a name="INDEX-3103"></a><a name="INDEX-3104"></a><a name="INDEX-3105"></a>
+When you write a networking server, we strongly suggest that you
+use the <tt class="userinput"><b>-T</b></tt> switch to enable taint checking even if you aren't
+running setuid or setgid.  This is always a good idea for servers
+and any other program that runs on behalf of someone else (like all
+CGI scripts), because it lessens the chances that people from the
+outside will be able to compromise your system.  See the section
+<a href="ch23_01.htm#ch23-sect-hid">Section 16.1, "Handling Insecure Data"</a> in <a href="ch23_01.htm">Chapter 23, "Security"</a> for much
+more about all this.</p>
+
+<p>
+<a name="INDEX-3106"></a><a name="INDEX-3107"></a>
+One additional consideration when writing Internet programs:  many
+protocols specify that the line terminator should be <tt class="literal">CRLF</tt>, which can be
+specified various ways:  <tt class="literal">"\015\12"</tt>, or <tt class="literal">"\xd\xa"</tt>, or even
+<tt class="literal">chr(13).chr(10)</tt>.  As of version 5.6 of Perl, saying <tt class="literal">v13.10</tt> also
+produces the same string.  (On many machines, you can also use
+<tt class="literal">"\r\n"</tt> to mean <tt class="literal">CRLF</tt>, but don't use <tt class="literal">"\r\n"</tt> if you want to be
+portable to Macs, where the meanings of <tt class="literal">\r</tt> and <tt class="literal">\n</tt> are reversed!)
+Many Internet programs will in fact accept a bare <tt class="literal">"\012"</tt> as a line
+terminator, but that's because Internet programs usually try to be
+liberal in what they accept and strict in what they emit.  (Now if only
+we could get people to do the same...)</p>
+
+<a name="INDEX-3108"></a><a name="INDEX-3109"></a><a name="INDEX-3110"></a>
+
+
+
+
+
+
+<h3 class="sect2">16.5.3. Message Passing</h3>
+
+<p>
+<a name="INDEX-3111"></a><a name="INDEX-3112"></a><a name="INDEX-3113"></a>
+As we mentioned earlier, UDP communication involves much lower overhead
+but provides no reliability, since there are no promises that messages
+will arrive in a proper order--or even that they will arrive at all.
+UDP is often said to stand for Unreliable Datagram Protocol.</p>
+
+<p>Still, UDP offers some advantages over TCP, including the ability to
+broadcast or multicast to a whole bunch of destination hosts at once
+(usually on your local subnet).  If you find yourself getting overly concerned
+about reliability and starting to build checks into your message system,
+then you probably should just use TCP to start with.  True, it costs
+more to set up and tear down a TCP connection, but if you can amortize that
+over many messages (or one long message), it doesn't much matter.</p>
+
+<p>
+<a name="INDEX-3114"></a>
+Anyway, here's an example of a UDP program.  It contacts the UDP time
+port of the machines given on the command line, or everybody
+it can find using the universal broadcast address if no arguments
+were supplied.<a href="#FOOTNOTE-13">[13]</a> Not all
+machines have a time server enabled, especially across firewall
+boundaries, but those that do will send you back a 4-byte integer
+packed in network byte order that represents what time that machine
+thinks it is.  The time returned, however, is in the number of
+seconds since 1900.  You have to subtract the number of seconds
+between 1900 and 1970 to feed that time to the <tt class="literal">localtime</tt> or
+<tt class="literal">gmtime</tt> conversion functions.
+<blockquote>
+<pre class="programlisting">#!/usr/bin/perl
+# clockdrift - compare other systems' clocks with this one
+#              without arguments, broadcast to anyone listening.
+#              wait one-half second for an answer.
+
+use v5.6.0;  # or better
+use warnings;
+use strict;
+use Socket;
+
+unshift(@ARGV, inet_ntoa(INADDR_BROADCAST))
+    unless @ARGV;
+
+socket(my $msgsock, PF_INET, SOCK_DGRAM, getprotobyname("udp"))
+    or die "socket: $!";
+
+# Some borked machines need this.  Shouldn't hurt anyone else.
+setsockopt($msgsock, SOL_SOCKET, SO_BROADCAST, 1)
+    or die "setsockopt: $!";
+
+my $portno = getservbyname("time", "udp")    
+    or die "no udp time port";
+
+for my $target (@ARGV) {
+    print "Sending to $target:$portno\n";
+    my $destpaddr = sockaddr_in($portno, inet_aton($target));
+    send($msgsock, "x", 0, $destpaddr)
+        or die "send: $!";
+}
+
+# daytime service returns 32-bit time in seconds since 1900
+my $FROM_1900_TO_EPOCH = 2_208_988_800;
+my $time_fmt = "N";   # and it does so in this binary format
+my $time_len = length(pack($time_fmt, 1));  # any number's fine
+
+my $inmask = '';  # string to store the fileno bits for select
+vec($inmask, fileno($msgsock), 1) = 1;
+
+# wait only half a second for input to show up
+while (select(my $outmask = $inmask, undef, undef, 0.5)) {
+    defined(my $srcpaddr = recv($msgsock, my $bintime, $time_len, 0))
+        or die "recv: $!";
+    my($port, $ipaddr) = sockaddr_in($srcpaddr);
+    my $sendhost = sprintf "%s [%s]",
+                    gethostbyaddr($ipaddr, AF_INET) || 'UNKNOWN',
+                    inet_ntoa($ipaddr);
+    my $delta = unpack($time_fmt, $bintime) -
+                      $FROM_1900_TO_EPOCH - time();
+    print "Clock on $sendhost is $delta seconds ahead of this one.\n";
+}</pre>
+</blockquote>
+</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-13"></a>
+<p>[13] If that doesn't work, run <em class="emphasis">ifconfig 
+-a</em>
+to find the proper local broadcast address.</p>
+
+</blockquote>
+
+<a name="INDEX-3115"></a><a name="INDEX-3116"></a>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch16_04.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch17_01.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">16.4. System V IPC</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">17. Threads</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

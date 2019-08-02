@@ -1,0 +1,161 @@
+<html><head>
+<title>Recipe 14.6. Sorting Large DBM Files</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:42:51Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch14_01.htm" title="14. Database Access"><link rel="prev" href="ch14_06.htm" title="14.5. Locking DBM Files"><link rel="next" href="ch14_08.htm" title="14.7. Treating a Text File as a Database Array"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch14_06.htm" title="14.5. Locking DBM Files"><img src="../gifs/txtpreva.gif" alt="Previous: 14.5. Locking DBM Files" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch14_01.htm" title="14. Database Access">Chapter 14<br>Database Access</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch14_08.htm" title="14.7. Treating a Text File as a Database Array"><img src="../gifs/txtnexta.gif" alt="Next: 14.7. Treating a Text File as a Database Array" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch14-41357">14.6. Sorting Large DBM Files</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch14-pgfId-604">Problem<a class="indexterm" name="ch14-idx-1000004972-0"></A
+><a class="indexterm" name="ch14-idx-1000004972-1"></A
+><a class="indexterm" name="ch14-idx-1000004972-2"></A
+></A
+></H3
+><p class="para">You want to process a large dataset you'd like to commit to a DBM file in a particular order.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch14-pgfId-610">Solution</A
+></H3
+><p class="para">Use the <a class="indexterm" name="ch14-idx-1000004973-0"></A
+>DB_File's B-tree bindings and supply a comparison function of your own devising:</P
+><pre class="programlisting">use DB_File;
+
+# specify the Perl sub to do key comparison using the
+# exported $DB_BTREE hash reference
+$DB_BTREE-&gt;{'compare'} = sub {
+    my ($key1, $key2) = @_ ;
+    &quot;\L$key1&quot; cmp &quot;\L$key2&quot; ;
+};
+
+tie(%hash, &quot;DB_File&quot;, $filename, O_RDWR|O_CREAT, 0666, $DB_BTREE)
+    or die &quot;can't tie $filename: $!&quot;;</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch14-pgfId-638">Description</A
+></H3
+><p class="para">An annoyance of hashes, whether in memory or as DBM files, is that they do not maintain proper ordering. The CPAN module Tie::IxHash can make a regular hash in memory maintain its insertion order, but that doesn't help you for DBM databases or arbitrary sorting criteria.</P
+><p class="para">The DB_File module supports a nice solution to this using a <a class="indexterm" name="ch14-idx-1000004974-0"></A
+>B-tree implementation. One advantage of a B-tree over a regular DBM hash is its ordering. When the user defines a comparison function, all calls to <code class="literal">keys</CODE
+>, <code class="literal">values</CODE
+>, and <code class="literal">each</CODE
+> are automatically ordered. For example, <a class="xref" href="#ch14-17113" title="sortdemo">Example 14.4</A
+> is a program that maintains a hash whose keys will always be sorted case-insensitively.</P
+><div class="example"><h4 class="example"><a class="title" name="ch14-17113">Example 14.4: sortdemo</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl
+# <a class="indexterm" name="ch14-idx-1000005040-0"></A
+>sortdemo - show auto dbm sorting
+use strict;
+use DB_File;
+
+$DB_BTREE-&gt;{'compare'} = sub {
+    my ($key1, $key2) = @_ ;
+    &quot;\L$key1&quot; cmp &quot;\L$key2&quot; ;
+};
+
+my %hash;
+my $filename = '/tmp/sorthash.db';
+tie(%hash, &quot;DB_File&quot;, $filename, O_RDWR|O_CREAT, 0666, $DB_BTREE)
+    or die &quot;can't tie $filename: $!&quot;;
+
+my $i = 0;
+for my $word (qw(Can't you go camp down by Gibraltar)) {
+    $hash{$word} = ++$i;
+}
+
+while (my($word, $number) = each %hash) {
+    printf &quot;%-12s %d\n&quot;, $word, $number;
+}</PRE
+></DIV
+><p class="para">By default, the entries in a B-tree DB_File database are stored alphabetically. Here, though, we provide a case-insensitive comparison function, so using <code class="literal">each</CODE
+> to fetch all the keys would show:</P
+><pre class="programlisting"><code class="userinput"><b><code class="replaceable"><i>by           6</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>camp         4</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Can't        1</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>down         5</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Gibraltar    7</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>go           3</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>you          2</I
+></CODE
+></B
+></CODE
+></PRE
+><p class="para">This sorting property on hashes is so convenient that it's worth using even without a permanent database. If you pass <code class="literal">undef</CODE
+> where the filename is expected on the <code class="literal">tie</CODE
+>, DB_File will create a file in <em class="emphasis">/tmp</EM
+> and then immediately unlink it, giving an anonymous database:</P
+><pre class="programlisting">tie(%hash, &quot;DB_File&quot;, undef, O_RDWR|O_CREAT, 0666, $DB_BTREE)
+        or die &quot;can't tie: $!&quot;;</PRE
+><p class="para">Remember these two things if you supply a comparison for your BTREE database. One, the new compare function must be specified when you create the database. Two, you cannot change the ordering once the database has been created; you must use the same compare function every time you access the database.</P
+><p class="para">Using BTREE databases under DB_File also permits duplicate or partial keys. See its documentation for examples.<a class="indexterm" name="ch14-idx-1000004976-0"></A
+><a class="indexterm" name="ch14-idx-1000004976-1"></A
+><a class="indexterm" name="ch14-idx-1000004976-2"></A
+><a class="indexterm" name="ch14-idx-1000004976-3"></A
+><a class="indexterm" name="ch14-idx-1000004976-4"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch14-pgfId-1000004725">See Also</A
+></H3
+><p class="para"><a class="xref" href="ch05_07.htm" title="Retrieving from a Hash in Insertion Order">Recipe 5.6</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch14_06.htm" title="14.5. Locking DBM Files"><img src="../gifs/txtpreva.gif" alt="Previous: 14.5. Locking DBM Files" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch14_08.htm" title="14.7. Treating a Text File as a Database Array"><img src="../gifs/txtnexta.gif" alt="Next: 14.7. Treating a Text File as a Database Array" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">14.5. Locking DBM Files</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">14.7. Treating a Text File as a Database Array</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

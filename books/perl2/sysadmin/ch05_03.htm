@@ -1,0 +1,1650 @@
+<html>
+<head>
+<title>Domain Name Service (DNS)  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Domain Name Service (DNS)">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch05_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch05_01.htm">Chapter 5: TCP/IP Name Services</a></td><td align="right" valign="top" width="172"><a href="ch05_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">5.3. Domain Name Service (DNS)</h2>
+
+
+
+
+
+<p>As useful as they are, NIS and WINS still suffer from flaws that make
+them unsuitable for "entire-Internet" uses.</p>
+
+
+
+
+
+<dl>
+<dt>
+<b>Scale</b>
+</dt>
+<dd>
+<p>Even though these schemes allow for multiple servers, each server
+must have a complete copy of the entire network topology.<a href="#FOOTNOTE-4">[4]</a> This topology must be duplicated to every
+other server, a time-consuming process if the universe becomes
+sufficiently large. WINS also suffers because of its dynamic
+registration model. A sufficient number of WINS clients could melt
+down any set of Internet-wide WINS servers with registration
+requests.</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-4"></a>
+<p>[4]NIS+ offers mechanisms for a client to search for information
+outside of the local domain, but they are not as flexible as those in
+DNS.</p>
+
+
+
+
+</blockquote>
+</dd>
+
+
+
+
+
+<dt>
+<b>Administrative control</b>
+</dt>
+<dd>
+<p>We've been talking about strictly technical issues up until
+now, but that's not the only side of administration. NIS, in
+particular, requires a single point of administration. Whomever
+controls the master server controls the entire NIS domain lead by
+that machine. Any changes to the network namespace must pass through
+that administrative gatekeeper. This doesn't work for a
+namespace the size of the Internet.</p>
+</dd>
+
+</dl>
+
+
+
+
+
+<p>
+<a name="INDEX-485"></a><a name="INDEX-486"></a>A new model called Domain
+Name Service (DNS) was invented to deal with the flaws inherent in
+maintaining host files or NIS/NIS+/WINS-like systems. Under DNS, the
+network namespace is partitioned into a set of somewhat arbitrary
+"top-level domains." Each top-level domain can then be
+subdivided into smaller domains, each of those partitioned, and so
+on. At each dividing point it is possible to designate a different
+party to retain authoritative control over that portion of the
+namespace. This handles our administrative control concern.</p>
+
+
+
+
+
+<p>Network clients that reside in the individual parts of this hierarchy
+consult the name server closest to them in the hierarchy. If the
+information the client is looking for can be found on that local
+server, it is returned to the client. On most networks, the majority
+of name-to-IP address queries are for machines on that network, so
+the local servers handle most of the local traffic. This satisfies
+the scale problem. Multiple DNS servers (also known as secondary or
+slave servers) can be set up for redundancy and load-balancing
+purposes.<a name="INDEX-487"></a><a name="INDEX-488"></a>
+</p>
+
+
+
+
+
+<p>If a DNS server is asked about a part of the namespace that it does
+not control or know about, it can either instruct the client to look
+elsewhere (usually higher up in the tree) or fetch the required
+information on behalf of the client by contacting other DNS servers.</p>
+
+
+
+
+
+<p>In this scheme, no single server needs to know the entire network
+topology, most queries are handled locally, local administrators
+retain local control, and everybody is happy. DNS offers such an
+advantage compared to other systems that most other systems like NIS
+and WINS offer a way to integrate DNS. For instance, SunOS NIS
+servers can be instructed to perform a DNS query if a client asks
+them for a host they do not know. The results of this query are
+returned as a standard NIS query reply so the client has no knowledge
+that any magic has been performed on its behalf. Microsoft DNS
+servers have similar functionality: if a client asks a Microsoft DNS
+server for the address of a local machine that it does not know
+about, the server can be configured to consult a WINS server on the
+client's behalf.<a name="INDEX-489"></a><a name="INDEX-490"></a>
+</p>
+
+
+
+
+
+<a name="ch05-7-fm2xml"></a>
+<h3 class="sect2">5.3.1. Generating DNS Configuration Files</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-491"></a>Production of DNS
+configuration files follows the same procedure that we've been
+using to generate host and NIS source files, namely:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>Store data in a separate database (the same database can and probably
+should be the source for all of the files we've been
+discussing).</p>
+</li>
+<li>
+<p>Convert data to the output format of our choice, checking for errors
+as we go.</p>
+</li>
+<li>
+<p>Use RCS (or an equivalent source control system) to store old
+revisions of files.</p>
+</li>
+</ul>
+<p>For DNS, we have to expand the second step because the conversion
+process is more complicated. As we launch into these complications,
+you may find it handy to have the <em class="emphasis">DNS and BIND</em>
+book by Paul Albitz and Cricket Liu (O'Reilly) on hand for
+information on the DNS configuration files we'll be creating.</p>
+
+
+
+
+
+<a name="ch05-8-fm2xml"></a>
+<h3 class="sect3">5.3.1.1. Creating the administrative header</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-492"></a><a name="INDEX-493"></a>DNS configuration files begin with an
+administrative header that provides information about the server and
+the data it is serving. The most important part of this header is the
+Start of Authority (SOA) resource record. The SOA
+contains:<a name="INDEX-494"></a><a name="INDEX-495"></a>
+</p>
+
+
+
+
+
+<ul>
+<li>
+<p>The name of the administrative domain served by this DNS server</p>
+</li>
+<li>
+<p>The name of the primary DNS server for that domain</p>
+</li>
+<li>
+<p>Contact info for the DNS administrator(s)</p>
+</li>
+<li>
+<p>The serial number of the configuration file (more on this in a moment)</p>
+</li>
+<li>
+<p>Refresh and retry values for secondary servers (i.e., when they
+synchronize with the primary server)</p>
+</li>
+<li>
+<p>Time To Live (TTL) settings for the data being served (i.e., how long
+the information being provided can be safely cached)</p>
+</li>
+</ul>
+<p>Here's an example header:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">@ IN SOA   dns.oog.org. hostmaster.oog.org. (
+                          1998052900 ; serial
+                            10800    ; refresh
+                            3600     ; retry
+                            604800   ; expire
+                            43200)   ; TTL
+
+@                           IN  NS  dns.oog.org.</pre>
+</blockquote>
+
+
+
+
+
+<p>Most of this information is just tacked on the front of a DNS
+configuration file verbatim each time it is generated. The one piece
+we need to worry about is the serial number. Once every
+<em class="emphasis">X</em> seconds (where <em class="emphasis">X</em> is
+determined by the refresh value from above), secondary name servers
+contact their primary servers looking for an update to their DNS
+data. Modern DNS secondary servers (like BIND v8+ or Microsoft DNS)
+can also be told by their master server to check for an update when
+the master data has changed. In both cases, the secondary servers
+query the primary server for its SOA record. If the SOA record
+contains a serial number higher than their current serial number, a
+zone transfer is initiated (that is, the secondary downloads a new
+data set). As a result, it is important to increment this number each
+time a new DNS configuration file is created. Many DNS problems are
+caused by failures to update the serial
+number.<a name="INDEX-496"></a><a name="INDEX-497"></a>
+</p>
+
+
+
+
+
+<p>There are at least two ways to make sure the serial number is always
+incremented:</p>
+
+
+
+
+
+<ol>
+<li>
+<p>Read the previous configuration file and increment the value found
+there.</p>
+</li>
+<li>
+<p>Compute a new value based on an external number source
+"guaranteed" to increment over time (like the system
+clock or RCS version number of the file).</p>
+</li>
+</ol>
+<p>Here's some example code that uses a combination of these two
+methods to generate a valid header for a DNS zone file. It creates a
+serial number formatted as recommended in Albitz and Liu's book
+(YYYYMMDDXX where Y=year, M=month, D=day, and XX=a two-digit counter
+to allow for more than one change per day):</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># get today's date in the form of YYYYMMDD
+@localtime = localtime;
+$today = sprintf("%04d%02d%02d",$localtime[5]+1900,
+                                $localtime[4]+1,
+                                $localtime[3]);
+
+# get username on either NT/2000 or Unix
+$user = ($^O eq "MSWin32")? $ENV{USERNAME} :
+                            (getpwuid($&lt;))[6]." (".(getpwuid($&lt;))[0].")";
+
+sub GenerateHeader{
+    my($header);
+
+    # open old file if possible and read in serial number     
+    # assumes the format of the old file
+    if (open (OLDZONE,$target)){
+	    while (&lt;OLDZONE&gt;) {
+	        next unless (/(\d{8}).*serial/); 
+	        $oldserial = $1;
+	        last;
+	    }
+	    close (OLDZONE);
+    }
+    else {
+	    $oldserial = "000000"; # otherwise, start with a 0 number
+    }
+    
+    # if old serial number was for today, increment last 2 digits, else 
+    # start a new number for today
+    $olddate = substr($oldserial,0,6);
+    $count = (($olddate == $today) ? substr($oldserial,6,2)+1 : 0);
+
+    $serial = sprintf("%6d%02d",$today,$count);
+
+    # begin the header
+    $header .= "; dns zone file - GENERATED BY $0\n";
+    $header .= "; DO NOT EDIT BY HAND!\n;\n";
+    $header .= "; Converted by $user on ".scalar((localtime))."\n;\n";
+    
+    # count the number of entries in each department and then report
+    foreach my $entry (keys %entries){
+        $depts{$entries{$entry}-&gt;{department}}++;
+    }
+    foreach my $dept (keys %depts) {
+        $header .= "; number of hosts in the $dept department:            
+                    $depts{$dept}.\n";
+    }
+    $header .= "; total number of hosts: ".scalar(keys %entries)."\n;\n\n";
+
+    $header .= &lt;&lt;"EOH";
+
+@ IN SOA   dns.oog.org. hostmaster.oog.org. (
+                           $serial ; serial
+                            10800    ; refresh
+                            3600     ; retry
+                            604800   ; expire
+                            43200)   ; TTL
+
+@                           IN  NS  dns.oog.org.
+
+EOH
+
+   return $header;
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Our code attempts to read in the previous DNS configuration file to
+determine the last serial number in use. This number then gets split
+into date and counter fields. If the date we've read is the
+same as the current date, we need to increment the counter. If not,
+we create a serial number based on the current date with a counter
+value of <tt class="literal">00</tt>. Once we have our serial number, the
+rest of the code concerns itself with writing out a pretty header in
+the proper form.<a name="INDEX-498"></a><a name="INDEX-499"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+<a name="ch05-9-fm2xml"></a>
+<h3 class="sect3">5.3.1.2. Generating multiple configuration files</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-500"></a><a name="INDEX-501"></a>Now that we've covered the
+process of writing a correct header for our DNS configuration files,
+there is one more complication we need to address. A well-configured
+DNS server has both forward (name-to-IP address) and reverse (IP
+address-to-name) mapping information available for every domain, or
+zone, it controls. This requires two configuration files per zone.
+The best way to keep these synchronized is to create them both at the
+same time.</p>
+
+
+
+
+
+<p>This is the last file generation script we'll see in this
+chapter, so let's put everything we've done so far
+together. Our script will take a simple database file and generate
+the necessary DNS zone configuration files.</p>
+
+
+
+
+
+<p>To keep this script simple, I've made a few assumptions about
+the data, the most important of which has to do with the topology of
+the network and namespace. This script assumes that the network
+consists of a single class C subnet with a single DNS zone. As a
+result, we only create a single forward mapping file and its reverse
+map sibling file. Adding code to handle multiple subnets and zones
+(i.e., creating separate files for each) would be an easy addition.</p>
+
+
+
+
+
+<p>Here's a quick walk-through:</p>
+
+
+
+
+
+<ol>
+<li>
+<p>Read in the database file into a hash of hashes, checking the data as
+we go.</p>
+</li>
+<li>
+<p>Generate a header.</p>
+</li>
+<li>
+<p>Write out the forward mapping (name-to-IP address) file and check it
+into RCS.</p>
+</li>
+<li>
+<p>Write out the reverse mapping (IP address-to-name) file and check it
+into RCS.</p>
+</li>
+</ol>
+<p>Here is the code and its output:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Rcs;
+
+$datafile   = "./database"; # our host database
+$outputfile = "zone.$$";    # our temporary output file
+$target     = "zone.db";    # our target output
+$revtarget  = "rev.db";     # out target output for the reverse mapping
+$defzone    = ".oog.org";   # the default zone being created
+$recordsep  = "-=-\n";     
+
+# get today's date in the form of YYYYMMDD 
+@localtime = localtime;
+$today = sprintf("%04d%02d%02d",$localtime[5]+1900,
+                                $localtime[4]+1,
+                                $localtime[3]);
+
+# get username on either NT/2000 or Unix
+$user = ($^O eq "MSWin32")? $ENV{USERNAME} :
+                            (getpwuid($&lt;))[6]." (".(getpwuid($&lt;))[0].")";
+
+# read in the database file
+open(DATA,$datafile) or die "Unable to open datafile:$!\n";
+
+while (&lt;DATA&gt;) {
+    chomp; # remove record separator
+    # split into key1,value1
+    @record = split /:\s*|\n/m; 
+
+    $record ={};                     # create a reference to empty hash
+    %{$record} = @record;            # populate that hash with @record
+
+    # check for bad hostname
+    if ($record-&gt;{name} =~ /[^-.a-zA-Z0-9]/) {
+	    warn "!!!! ",$record-&gt;{name} .
+         " has illegal host name characters, skipping...\n";
+	    next;
+    }
+
+    # check for bad aliases
+    if ($record-&gt;{aliases} =~ /[^-.a-zA-Z0-9\s]/) {
+	    warn "!!!! " . $record-&gt;{name} .
+             " has illegal alias name characters, skipping...\n";
+	    next;
+    }
+
+    # check for missing address
+    unless ($record-&gt;{address}) {
+	    warn "!!!! " . $record-&gt;{name} .
+             " does not have an IP address, skipping...\n";
+	    next;
+    }
+
+    # check for duplicate address
+    if (defined $addrs{$record-&gt;{address}}) {
+	    warn "!!!! Duplicate IP addr:" . $record-&gt;{name}.
+             " &amp; " . $addrs{$record-&gt;{address}} . ", skipping...\n";
+	    next;
+    }
+    else {
+   	    $addrs{$record-&gt;{address}} = $record-&gt;{name};
+    }
+
+    $entries{$record-&gt;{name}} = $record; # add this to a hash of hashes
+
+}
+close(DATA);
+
+$header = &amp;GenerateHeader;
+
+# create the forward mapping file
+open(OUTPUT,"&gt; $outputfile") or 
+  die "Unable to write to $outputfile:$!\n";
+print OUTPUT $header;
+
+foreach my $entry (sort byaddress keys %entries) {
+    print OUTPUT
+          "; Owned by ",$entries{$_}-&gt;{owner}," (",
+          $entries{$entry}-&gt;{department},"): ",
+          $entries{$entry}-&gt;{building},"/",
+          $entries{$entry}-&gt;{room},"\n";
+
+    # print A record
+    printf OUTPUT "%-20s\tIN A     %s\n",      
+      $entries{$entry}-&gt;{name},$entries{$entry}-&gt;{address};
+
+    # print any CNAMES (aliases)
+    if (defined $entries{$entry}-&gt;{aliases}){
+ 	    foreach my $alias (split(' ',$entries{$entry}-&gt;{aliases})) {
+           printf OUTPUT "%-20s\tIN CNAME %s\n",$alias,
+                                                $entries{$entry}-&gt;{name};
+	    }
+    }
+    print OUTPUT "\n";
+}
+
+close(OUTPUT);
+
+Rcs-&gt;bindir('/usr/local/bin');
+my $rcsobj = Rcs-&gt;new;
+$rcsobj-&gt;file($target);
+$rcsobj-&gt;co('-l');
+rename($outputfile,$target) or 
+  die "Unable to rename $outputfile to $target:$!\n";
+$rcsobj-&gt;ci("-u","-m"."Converted by $user on ".scalar(localtime));
+
+# now create the reverse mapping file
+open(OUTPUT,"&gt; $outputfile") or 
+  die "Unable to write to $outputfile:$!\n";
+print OUTPUT $header;
+foreach my $entry (sort byaddress keys %entries) {
+    print OUTPUT
+          "; Owned by ",$entries{$entry}-&gt;{owner}," (",
+          $entries{$entry}-&gt;{department},"): ",
+          $entries{$entry}-&gt;{building},"/",
+          $entries{$entry}-&gt;{room},"\n";
+
+    printf OUTPUT "%-3d\tIN PTR    %s$defzone.\n\n", 
+      (split/\./,$entries{$entry}-&gt;{address})[3], 
+      $entries{$entry}-&gt;{name};
+
+}
+
+close(OUTPUT);
+$rcsobj-&gt;file($revtarget);
+$rcsobj-&gt;co('-l'); # assumes target has been checked out at least once
+rename($outputfile,$revtarget) or 
+  die "Unable to rename $outputfile to $revtarget:$!\n";
+$rcsobj-&gt;ci("-u","-m"."Converted by $user on ".scalar(localtime));
+
+sub GenerateHeader{
+    my($header);
+    if (open(OLDZONE,$target)){
+   	    while (&lt;OLDZONE&gt;) {
+	        next unless (/(\d{8}).*serial/);
+	        $oldserial = $1;
+	        last;
+	    }
+	    close(OLDZONE);
+    }
+    else {
+	    $oldserial = "000000";
+    }
+    
+    $olddate = substr($oldserial,0,6);
+    $count = ($olddate == $today) ? substr($oldserial,6,2)+1 : 0;
+
+    $serial = sprintf("%6d%02d",$today,$count);
+
+    $header .= "; dns zone file - GENERATED BY $0\n";
+    $header .= "; DO NOT EDIT BY HAND!\n;\n";
+    $header .= "; Converted by $user on ".scalar(localtime)."\n;\n";
+
+    # count the number of entries in each department and then report
+    foreach $entry (keys %entries){
+        $depts{$entries{$entry}-&gt;{department}}++;
+    }
+    foreach $dept (keys %depts) {
+        $header .= "; number of hosts in the $dept department: 
+                    $depts{$dept}.\n";
+    }
+    $header .= "; total number of hosts: ".scalar(keys %entries)."\n#\n\n";
+
+    $header .= &lt;&lt;"EOH";
+
+@ IN SOA   dns.oog.org. hostmaster.oog.org. (
+                          $serial     ; serial
+                            10800     ; refresh
+                            3600      ; retry
+                            604800    ; expire
+                            43200)    ; TTL
+
+@                           IN  NS  dns.oog.org.
+
+EOH
+
+   return $header;
+}
+
+sub byaddress {
+   @a = split(/\./,$entries{$a}-&gt;{address});
+   @b = split(/\./,$entries{$b}-&gt;{address});
+   ($a[0]&lt;=&gt;$b[0]) ||
+   ($a[1]&lt;=&gt;$b[1]) ||
+   ($a[2]&lt;=&gt;$b[2]) ||
+   ($a[3]&lt;=&gt;$b[3]);
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's the forward mapping file (<em class="filename">zone.db</em>)
+that gets created:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">; dns zone file - GENERATED BY createdns
+; DO NOT EDIT BY HAND!
+;
+; Converted by David N. Blank-Edelman (dnb); on Fri May 29 15:46:46 1998
+;
+; number of hosts in the design department: 1.
+; number of hosts in the software department: 1.
+; number of hosts in the IT department: 2.
+; total number of hosts: 4
+;
+
+@ IN SOA   dns.oog.org. hostmaster.oog.org. (
+                          1998052900 ; serial
+                            10800    ; refresh
+                            3600     ; retry
+                            604800   ; expire
+                            43200)   ; TTL
+
+@                           IN  NS  dns.oog.org.
+
+; Owned by Cindy Coltrane (marketing): west/143
+bendir              				IN A     192.168.1.3
+ben                 				IN CNAME bendir
+bendoodles          				IN CNAME bendir
+
+; Owned by David Davis (software): main/909
+shimmer             				IN A     192.168.1.11
+shim                				IN CNAME shimmer
+shimmy              				IN CNAME shimmer
+shimmydoodles       				IN CNAME shimmer
+
+; Owned by Ellen Monk (design): main/1116
+sulawesi            				IN A     192.168.1.12
+sula                				IN CNAME sulawesi
+su-lee              				IN CNAME sulawesi
+
+; Owned by Alex Rollins (IT): main/1101
+sander              				IN A     192.168.1.55
+sandy               				IN CNAME sander
+micky               				IN CNAME sander
+mickydoo            				IN CNAME sander</pre>
+</blockquote>
+
+
+
+
+
+<p>And here's the reverse mapping file
+(<em class="filename">rev.db</em>):</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">; dns zone file - GENERATED BY createdns
+; DO NOT EDIT BY HAND!
+;
+; Converted by David N. Blank-Edelman (dnb); on Fri May 29 15:46:46 1998
+;
+; number of hosts in the design department: 1.
+; number of hosts in the software department: 1.
+; number of hosts in the IT department: 2.
+; total number of hosts: 4
+;
+
+@ IN SOA   dns.oog.org. hostmaster.oog.org. (
+                          1998052900 ; serial
+                            10800    ; refresh
+                            3600     ; retry
+                            604800   ; expire
+                            43200)   ; TTL
+
+@                           IN  NS  dns.oog.org.
+
+; Owned by Cindy Coltrane (marketing): west/143
+3  	IN PTR    bendir.oog.org.
+
+; Owned by David Davis (software): main/909
+11 	IN PTR    shimmer.oog.org.
+
+; Owned by Ellen Monk (design): main/1116
+12 	IN PTR    sulawesi.oog.org.
+
+; Owned by Alex Rollins (IT): main/1101
+55 	IN PTR    sander.oog.org.</pre>
+</blockquote>
+
+
+
+
+
+<p>This method of creating files opens up many more possibilities. Up to
+now, we've generated files using content from a single text
+file database. We read a record from the database and we write it out
+to our file, perhaps with a dash of nice formatting. Only data that
+appeared in the database found its way into the files we created.</p>
+
+
+
+
+
+<p>Sometimes it is useful to have content added in the conversion
+process by the script itself. For instance, in the case of DNS
+configuration files generation, you may wish to embellish the
+conversion script so it inserts MX (Mail eXchange) records pointing
+to a central mail server for every host in your database. A trivial
+code change from:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># print A record
+    printf OUTPUT "%-20s\tIN A     %s\n",
+      $entries{$entry}-&gt;{name},$entries{$entry}-&gt;{address};</pre>
+</blockquote>
+
+
+
+
+
+<p>to:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># print A record
+printf OUTPUT "%-20s\tIN A     %s\n",      
+      $entries{$entry}-&gt;{name},$entries{$entry}-&gt;{address};
+    
+# print MX record
+print OUTPUT "                   IN MX 10 $mailserver\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>will configure DNS so that mail destined for any host in the domain
+is received by the machine <tt class="literal">$mailserver</tt> instead. If
+that machine is configured to handle mail for its domain, we've
+activated a really useful infrastructure component (i.e., centralized
+mail handling) with just a single line of Perl code. <a name="INDEX-502"></a><a name="INDEX-503"></a><a name="INDEX-504"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch05-10-fm2xml"></a>
+<h3 class="sect2">5.3.2. DNS Checking: An Iterative Approach</h3>
+
+
+
+
+
+<p>We've spent considerable time in this chapter on the creation
+of the configuration information to be served by network name
+services, but that's only one side of the coin for system and
+network administrators. Keeping a network healthy also entails
+checking these services once they're up and running to make
+sure they are behaving in a correct and consistent manner.</p>
+
+
+
+
+
+<p>For instance, for a system/network administrator, a great deal rides
+on the question "Are all of my DNS servers up?" In a
+troubleshooting situation, it's equally valuable to know
+"Are they all serving the same information?", or, more
+specifically, "Are the servers responding to the same queries
+with the same responses? Are they in sync as intended?"
+We'll put these questions to good use in this section.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-505"></a>In
+<a href="ch02_01.htm">Chapter 2, "Filesystems"</a> we saw an example of the Perl motto
+"There's More Than One Way To Do It." Perl's
+TMTOWTDI-ness makes the language an excellent prototype language in
+which to do "iterative development." Iterative
+development is one way of describing the evolutionary process that
+takes place when writing system administration (and other) programs
+to handle a particular task. With Perl it's all too possible to
+bang out a quick-and-dirty hack that gets a job done. Later on, you
+may return to this script and re-write it so it is more elegant.
+There's even likely to be yet a third iteration of the same
+code, this time taking a different approach to solving the problem.</p>
+
+
+
+
+
+<p>Here are three different approaches to the same problem of DNS
+consistency checking. These approaches will be presented in the order
+someone might realistically follow while trying to solve the problem
+and refine the solution. This ordering reflects one view on how a
+solution to a problem can evolve in Perl; your take on this may
+differ. The third approach, using the <tt class="literal">Net::DNS</tt>
+module, is probably the easiest and most error-proof of the bunch.
+But <tt class="literal">Net::DNS</tt> may not address every situation, so
+we're going to walk through some "roll your own"
+approaches first. Be sure to note the pros and cons listed after each
+solution has been presented.</p>
+
+
+
+
+
+<p>Here's the task: write a Perl script that takes a hostname and
+checks a list of DNS servers to see if they all return the same
+information when queried about this host. To make this task simpler,
+we're going to assume that the host has a single, static IP
+address (i.e., does not have multiple interfaces or addresses
+associated with it).</p>
+
+
+
+
+
+<p>Before we look at each approach in turn, let me show you the
+"driver" code we're going to use:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$hostname = $ARGV[0];
+@servers = qw(nameserver1 nameserver2 nameserver3); # name servers
+
+foreach $server (@servers) {
+    &amp;lookupaddress($hostname,$server);          # populates %results
+}
+%inv = reverse %results;                        # invert the result hash
+if (keys %inv &gt; 1) {   
+    print "There is a discrepancy between DNS servers:\n";
+    use Data::Dumper;
+    print Data::Dumper-&gt;Dump([\%results],["results"]),"\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>For each of the DNS servers listed in the <tt class="literal">@servers</tt>
+list, we call the <tt class="literal">&amp;lookupaddress( )</tt>
+subroutine. <tt class="literal">&amp;lookupaddress( )</tt> queries a
+specific DNS server for the IP address of a given hostname and places
+the results into a hash called <tt class="literal">%results</tt>. Each DNS
+server has a key in <tt class="literal">%results</tt> with the IP address
+returned by that server as its value.</p>
+
+
+
+
+
+<p>There are many ways to determine if all of the values in
+<tt class="literal">%results</tt> are the same (i.e., all DNS servers
+returned the same thing in response to our query). Here we choose to
+invert <tt class="literal">%results</tt> into another hash table, making
+all of the keys into values, and vice versa. If all values in
+<tt class="literal">%results</tt> are the same, there should be exactly one
+key in the inverted hash. If not, we know we've got a situation
+on our hands, so we call <tt class="literal">Data::Dumper-&gt;Dump(
+)</tt> to nicely display the contents of
+<tt class="literal">%results</tt> for the system administrator to puzzle
+over.</p>
+
+
+
+
+
+<p>Here's a sample of what the output looks like when something
+goes wrong:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">There is a discrepancy between DNS servers:
+$results = {
+             nameserver1 =&gt; '192.168.1.2',
+             nameserver2 =&gt; '192.168.1.5',
+             nameserver3 =&gt; '192.168.1.2',
+           };</pre>
+</blockquote>
+
+
+
+
+
+<p>Let's take a look at the contestants for the
+<tt class="literal">&amp;lookupaddress( )</tt> subroutines.</p>
+
+
+
+
+
+<a name="ch05-11-fm2xml"></a>
+<h3 class="sect3">5.3.2.1. Using nslookup</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-506"></a><a name="INDEX-507"></a><a name="INDEX-508"></a>If your
+background is in Unix, or you've done some programming in other
+scripting languages besides Perl, your first attempt might look a
+great deal like a shell script. An external program called from the
+Perl script does the hard work in the following code:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Data::Dumper;
+
+$hostname = $ARGV[0];
+$nslookup = "/usr/local/bin/nslookup";              # nslookup binary
+@servers = qw(nameserver1 nameserver2 nameserver3); # name of the name servers
+foreach $server (@servers) {
+    &amp;lookupaddress($hostname,$server);              # populates %results
+}
+%inv = reverse %results;                            # invert the result hash
+if (scalar(keys %inv) &gt; 1) {                       
+    print "There is a discrepancy between DNS servers:\n";
+    print Data::Dumper-&gt;Dump([\%results],["results"]),"\n";
+}
+
+# ask the server to look up the IP address for the host
+# passed into this program on the command line, add info to 
+# the %results hash
+sub lookupaddress {
+    my($hostname,$server) = @_;
+
+    open(NSLOOK,"$nslookup $hostname $server|") or
+      die "Unable to start nslookup:$!\n";
+    
+    while (&lt;NSLOOK&gt;) {
+        # ignore until we hit "Name: "
+ 	    next until (/^Name:/);              
+        # next line is Address: response
+ 	    chomp($results{$server} = &lt;NSLOOK&gt;); 
+        # remove the field name
+        die "nslookup output error\n" unless /Address/;
+	    $results{$server} =~ s/Address(es)?:\s+//;	    
+        # we're done with this nslookup 
+        last;    
+    }
+    close(NSLOOK);
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>The benefits of this approach are:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>It's a short, quick program to write (perhaps even translated
+line by line from a real shell script).</p>
+</li>
+<li>
+<p>We did not have to write any messy network code.</p>
+</li>
+<li>
+<p>It takes the Unix approach of using a general purpose language to
+glue together other smaller, specialized programs to get a job done,
+rather than creating a single monolithic program.</p>
+</li>
+<li>
+<p>It may be the only approach for times when you can't code the
+client-server communication in Perl; for instance, you have to talk
+with a server that requires a special client and there's no
+alternative.</p>
+</li>
+</ul>
+<p>The drawbacks of this approach are:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>It's dependent on another program outside the script. What if
+this program is not available? What if this program's output
+format changes?</p>
+</li>
+<li>
+<p>It's slower. It has to start up another process each time it
+wants to make a query. We could have reduced this overhead by opening
+a two-way pipe to an <em class="emphasis">nslookup</em> process that stays
+running while we need it. This would take a little more coding skill,
+but would be the right thing to do if we were going to continue down
+this path and further enhance this code.</p>
+</li>
+<li>
+<p>You have less control. We are at the external program's mercy
+for implementation details. For instance, here
+<tt class="command">nslookup</tt> (more specifically the resolver library
+<tt class="command">nslookup</tt> is using) is handling server timeouts,
+query retries, and appending a domain search list for us.</p>
+</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+<a name="ch05-12-fm2xml"></a>
+<h3 class="sect3">5.3.2.2. Working with raw network sockets</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-509"></a><a name="INDEX-510"></a>If
+you are a "power sysadmin," you may decide calling
+another program is not acceptable. You might want to implement the
+DNS queries using nothing but Perl. This entails constructing network
+packets by hand, shipping them out on the wire, and then parsing the
+results returned from the server.</p>
+
+
+
+
+
+<p>This is probably the most complicated code you'll find in this
+entire book, written by looking at the reference sources described
+below along with several examples of existing networking code
+(including the module by Michael Fuhr we'll see in the next
+section). Here is a rough overview of what is going on. Querying a
+DNS server consists of constructing a specific network packet header
+and packet contents, sending it to a DNS server, and then receiving
+and parsing the response from that server.<a href="#FOOTNOTE-5">[5]</a>
+</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-5"></a>
+<p>[5]For the
+nitty-gritty details, I highly recommend you open RFC1035 to the
+section entitled "Messages" and read along.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<p>Each and every DNS packet (of the sort we are interested in) can have
+up to five distinct sections:</p>
+
+
+
+
+
+<dl>
+<dt>
+<b>Header </b>
+</dt>
+<dd>
+<p>Contains flags and counters pertaining to the query or answer (always
+present).</p>
+</dd>
+
+
+
+
+
+<dt>
+<b>Question </b>
+</dt>
+<dd>
+<p>Contains the question being asked of the server (present for a query
+and echoed in a response).</p>
+</dd>
+
+
+
+
+
+<dt>
+<b>Answer</b>
+</dt>
+
+<dd>
+<p>
+
+Contains all the data for the answer to a DNS query (present in a DNS response packet).</p>
+</dd>
+
+
+
+
+
+
+<dt>
+<b>Authority</b>
+</dt>
+<dd>
+<p>Contains information on where an authoritative response may be
+retrieved.</p>
+</dd>
+
+
+
+
+
+<dt>
+<b>Additional</b>
+</dt>
+<dd>
+<p>Contains any information the server wishes to return in addition to
+the direct answer to a query.</p>
+</dd>
+
+</dl>
+
+
+
+
+
+<p>
+<a name="INDEX-511"></a>Our
+program will concern itself strictly with the first three of these.
+We'll be using a set of <tt class="literal">pack( )</tt> commands
+to create the necessary data structure for a DNS packet header and
+packet contents. We pass this data structure to the
+<tt class="literal">IO::Socket</tt> module that handles sending this data
+out as a packet. The same module will also listen for a response on
+our behalf and return data for us to parse (using <tt class="literal">unpack(
+)</tt>). Conceptually, this process is not very difficult.</p>
+
+
+
+
+
+<p>There's one twist to this process that should be noted before
+we look at the code. RFC1035 (Section 4.1.4) defines two ways of
+representing domain names in DNS packets: uncompressed and
+compressed. The uncompressed representation places the full domain
+name (for example, <em class="emphasis">host.oog.org</em>) in the packet, and is
+nothing special. But, if the same domain name is found more than once
+in a packet, it is likely a compressed representation will be used
+for everything but the first mention. A compressed representation
+replaces the domain information or part of it with a two-byte pointer
+back to the first uncompressed representation. This allows a packet
+to mention <em class="emphasis">host1</em>,
+<em class="emphasis">host2</em>, and <em class="emphasis">host3</em> in <em class="emphasis">longsubdomain.longsubdomain.oog.org</em>,
+without having to include the bytes for <em class="emphasis">longsubdomain.longsubdomain.oog.org</em> each
+time. We have to handle both representations in our code, hence the
+<tt class="literal">&amp;decompress</tt> routine below. Without further
+fanfare, here's the code:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use IO::Socket;
+$hostname = $ARGV[0];
+$defdomain = ".oog.org"; # default domain if not present
+
+@servers = qw(nameserver1 nameserver2 nameserver3); # name of the name servers
+foreach $server (@servers) {
+    &amp;lookupaddress($hostname,$server);              # populates %results
+}
+%inv = reverse %results;        # invert the result hash
+if (scalar(keys %inv) &gt; 1) {    # see how many elements it has
+    print "There is a discrepancy between DNS servers:\n";
+    use Data::Dumper;
+    print Data::Dumper-&gt;Dump([\%results],["results"]),"\n";
+}
+
+sub lookupaddress{
+    my($hostname,$server) = @_;
+
+    my($qname,$rname,$header,$question,$lformat,@labels,$count);
+    local($position,$buf);
+
+    ###
+    ### Construct the packet header
+    ###
+    $header = pack("n C2 n4", 
+		   ++$id,  # query id
+		   1,  # qr, opcode, aa, tc, rd fields (only rd set)
+		   0,  # rd, ra
+		   1,  # one question (qdcount)
+		   0,  # no answers (ancount)
+		   0,  # no ns records in authority section (nscount)
+		   0); # no addtl rr's (arcount)
+
+    # if we do not have any separators in the name of the host, 
+    # append the default domain
+    if (index($hostname,'.') == -1) {
+	    $hostname .= $defdomain;
+    }
+    
+    # construct the qname section of a packet (domain name in question) 
+    for (split(/\./,$hostname)) {
+	    $lformat .= "C a* ";
+	    $labels[$count++]=length;
+	    $labels[$count++]=$_;
+    }
+    
+    ###
+    ### construct the packet question section
+    ###
+    $question = pack($lformat."C n2",
+		     @labels,
+		         0,  # end of labels
+		         1,  # qtype of A 
+		         1); # qclass of IN
+    
+    ###
+    ### send the packet to the server and read the response
+    ###
+    $sock = new IO::Socket::INET(PeerAddr =&gt; $server,
+                                 PeerPort =&gt; "domain",
+                                 Proto    =&gt; "udp");
+    
+    $sock-&gt;send($header.$question);
+    # we're using UDP, so we know the max packet size
+    $sock-&gt;recv($buf,512); 
+    close($sock);
+    
+    # get the size of the response, since we're going to have to keep 
+    # track of where we are in the packet as we parse it (via $position)
+    $respsize = length($buf);
+    
+    ### 
+    ### unpack the header section
+    ###
+    ($id,
+     $qr_opcode_aa_tc_rd,
+     $rd_ra,
+     $qdcount,
+     $ancount,
+     $nscount,
+     $arcount) = unpack("n C2 n4",$buf);
+    
+    if (!$ancount) {
+	    warn "Unable to lookup data for $hostname from $server!\n";
+	    return;
+    }
+
+    ###
+    ### unpack the question section
+    ###
+    # question section starts 12 bytes in
+    ($position,$qname) = &amp;decompress(12); 
+    ($qtype,$qclass)=unpack('@'.$position.'n2',$buf);
+    # move us forward in the packet to end of question section
+    $position += 4; 
+    
+    ###
+    ### unpack all of the resource record sections
+    ###
+    for ( ;$ancount;$ancount--){
+	    ($position,$rname) = &amp;decompress($position);
+	    ($rtype,$rclass,$rttl,$rdlength)=
+             unpack('@'.$position.'n2 N n',$buf);
+	    $position +=10;
+        # this next line could be changed to use a more sophisticated 
+        # data structure, it currently picks the last rr returned            
+        $results{$server}=
+           join('.',unpack('@'.$position.'C'.$rdlength,$buf));
+	    $position +=$rdlength;
+    }
+}    
+
+# handle domain information that is "compressed" as per RFC1035
+# we take in the starting position of our packet parse and return
+# the name we found (after dealing with the compressed format pointer)
+# and the place we left off in the packet at the end of the name we found
+sub decompress { 
+    my($start) = $_[0];
+    my($domain,$i,$lenoct);
+    
+    for ($i=$start;$i&lt;=$respsize;) { 
+	    $lenoct=unpack('@'.$i.'C', $buf); # get the length of label
+
+	    if (!$lenoct){        # 0 signals we are done with this section
+	        $i++;
+	        last;
+	    }
+
+	    if ($lenoct == 192) { # we've been handed a pointer, so recurse
+	        $domain.=(&amp;decompress((unpack('@'.$i.'n',$buf) &amp; 1023)))[1];
+	        $i+=2;
+	        last
+	    }
+	    else {                # otherwise, we have a plain label
+	        $domain.=unpack('@'.++$i.'a'.$lenoct,$buf).'.';
+	        $i += $lenoct;
+	    }
+    }
+    return($i,$domain);
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Note that this code is not precisely equivalent to that from the
+previous example because we're not trying to emulate all of the
+nuances of <tt class="command">nslookup</tt>'s behavior (timeouts,
+retries, searchlists, etc.). When looking at the three approaches
+here, be sure to keep a critical eye out for these subtle
+differences.</p>
+
+
+
+
+
+<p>The benefits of this approach are:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>It isn't dependent on any other programs. You don't need
+to know the particulars of another programmer's work.</p>
+</li>
+<li>
+<p>It may be as fast or faster than calling an external program.</p>
+</li>
+<li>
+<p>It is easier to tweak the parameters of the situation (timeouts,
+etc.).</p>
+</li>
+</ul>
+<p>The drawbacks of this approach are:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>It's likely to take longer to write and is more complex than
+the previous approach.</p>
+</li>
+<li>
+<p>It requires more knowledge external to the direct problem at hand
+(i.e., you may have to learn how to put DNS packets together by hand,
+something we did not need to know when we called
+<tt class="command">nslookup</tt>).</p>
+</li>
+<li>
+<p>You may have to handle OS-specific issues yourself (hidden in the
+previous approach by the work already done by the external
+program's author).</p>
+</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+<a name="ch05-13-fm2xml"></a>
+<h3 class="sect3">5.3.2.3. Using Net::DNS</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-512"></a><a name="INDEX-513"></a><a name="INDEX-514"></a><a name="INDEX-515"></a>As
+mentioned in <a href="ch01_01.htm">Chapter 1, "Introduction"</a>, one of Perl's real
+strengths is the support of a large community of developers who churn
+out code for others to reuse. If there's something you need to
+do in Perl that seems universal, chances are good that someone else
+has already written a module to handle it. In our case, we can make
+use of Michael Fuhr's excellent <tt class="literal">Net::DNS</tt>
+module to make our job simpler. For our task, we simply have to
+create a new DNS resolver object, configure it with the name of the
+DNS server we wish to use, ask it to send a query, and then use the
+supplied methods to parse the response:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Net::DNS;
+
+@servers = qw(nameserver1 nameserver2 nameserver3); # name of the name servers
+foreach $server (@servers) {
+    &amp;lookupaddress($hostname,$server);              # populates %results
+}
+%inv = reverse %results;        # invert the result hash
+if (scalar(keys %inv) &gt; 1) {   # see how many elements it has
+    print "There is a discrepency between DNS servers:\n";
+    use Data::Dumper;
+    print Data::Dumper-&gt;Dump([\%results],["results"]),"\n";
+}
+
+# only slightly modified from example in the Net::DNS manpage
+sub lookupaddress{
+    my($hostname,$server) = @_;
+
+    $res = new Net::DNS::Resolver;
+
+    $res-&gt;nameservers($server);
+
+    $packet = $res-&gt;query($hostname);
+
+    if (!$packet) {
+	    warn "Unable to lookup data for $hostname from $server!\n";
+	    return;
+    }
+    # stores the last RR we receive
+    foreach $rr ($packet-&gt;answer) {
+	    $results{$server}=$rr-&gt;address;
+    }
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>The benefits of this approach are:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>The code is legible again.</p>
+</li>
+<li>
+<p>It is often faster to write.</p>
+</li>
+<li>
+<p>Depending on how the module you use is implemented (is it pure Perl
+or is it glue to a set of C or C++ library calls?) the code you write
+using this module may be just as fast as calling an external compiled
+program.</p>
+</li>
+<li>
+<p>It is potentially portable, depending on how much work the author of
+the module has done for you. Any place this module can be installed,
+your program can run.</p>
+</li>
+<li>
+<p>As in the first approach we looked at, writing code can be quick and
+easy if someone else has done the behind-the-scenes work for you. You
+don't have to know how the module works; you just need to know
+how to use it.</p>
+</li>
+<li>
+<p>Code re-use. You are not reinventing the wheel each time.</p>
+</li>
+</ul>
+<p>The drawbacks of this approach are:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>You are back in the dependency game. This time you need to make sure
+this module is available for your program to run. You need to trust
+that the module writer has done a decent job.</p>
+</li>
+<li>
+<p>There may not be a module to do what you need, or it may not run on
+the operating system of choice.</p>
+</li>
+</ul>
+<p>More often than not, a pre-written module is my preferred approach.
+However, any of these approaches will get the job done. TMTOWTDI, so
+go forth and do it!<a name="INDEX-516"></a><a name="INDEX-517"></a><a name="INDEX-518"></a><a name="INDEX-519"></a><a name="INDEX-520"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch05_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch05_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">5.2. NIS, NIS+, and WINS</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">5.4. Module Information for This Chapter</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

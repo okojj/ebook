@@ -1,0 +1,113 @@
+<html><head>
+<title>[Chapter 17] 17.5 Variable-Length ( Text) Databases</TITLE>
+<meta name="DC.title" content="Learning Perl on Win32 Systems"><meta name="DC.creator" content="Randal L. Schwartz, Erik Olson &amp; Tom Christiansen"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:36:36Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-324-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch17_01.htm" title="17. Database Manipulation"><link rel="prev" href="ch17_04.htm" title="17.4 Fixed-Length Random-Access Databases"><link rel="next" href="ch17_06.htm" title="17.6 Win32 Database Interfaces"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Learning Perl on Win32 Systems" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Learning Perl on Win32 Systems"><area shape="RECT" coords="467,0,514,18" href="../search/wsrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_04.htm" title="17.4 Fixed-Length Random-Access Databases"><img src="../gifs/txtpreva.gif" alt="Previous: 17.4 Fixed-Length Random-Access Databases" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch17_01.htm" title="17. Database Manipulation">Chapter 17<br>Database Manipulation</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_06.htm" title="17.6 Win32 Database Interfaces"><img src="../gifs/txtnexta.gif" alt="Next: 17.6 Win32 Database Interfaces" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch17-30926">17.5 Variable-Length ( Text) Databases</A
+></H2
+><p class="para">Some system databases (and quite a few user-created databases) are a series of <a class="indexterm" name="ch17-idx-86107-0"></A
+><a class="indexterm" name="ch17-idx-86107-1"></A
+>human-readable text lines, with one record per line. For example, the TCP/IP hosts file contains one line per hostname.</P
+><p class="para">Most often, these databases are updated with simple <a class="indexterm" name="ch17-idx-86108-0"></A
+><a class="indexterm" name="ch17-idx-86108-1"></A
+>text editors. Updating such a database consists of reading it all into a temporary area (either memory or another disk file), making the necessary changes, and then either writing the result back to the original file or creating a new file with the same name (after deleting or renaming the old version). You can think of this process as a <a class="indexterm" name="ch17-idx-86109-0"></A
+><em class="emphasis">copy pass</EM
+>: the data is copied from the original database to a new version of the database, and changes are made during the copy.</P
+><p class="para">Perl supports a copy-pass-style edit on line-oriented databases using <a class="indexterm" name="ch17-idx-86110-0"></A
+><em class="emphasis">inplace editing</EM
+>. Inplace editing is a modification of the way the <a class="indexterm" name="ch17-idx-86111-0"></A
+>diamond operator (<a class="indexterm" name="ch17-idx-86112-0"></A
+><code class="literal">&lt;&gt;</CODE
+>) reads data from the list of files specified on the command line. Most often, this editing mode is accessed by setting the <code class="literal">-i </CODE
+><a class="indexterm" name="ch17-idx-86113-0"></A
+>command-line argument, but we can also trigger inplace editing mode from within a program, as shown in the examples that follow.</P
+><p class="para">To trigger the inplace editing mode, set a value into the <a class="indexterm" name="ch17-idx-86114-0"></A
+><code class="literal">$^I</CODE
+> scalar variable. The value of this variable is important and will be discussed in a moment.</P
+><p class="para">When the <code class="literal">&lt;&gt;</CODE
+> construct is used and <code class="literal">$^I</CODE
+> has a value other than <a class="indexterm" name="ch17-idx-86115-0"></A
+><code class="literal">undef</CODE
+>, the steps marked <code class="literal">##INPLACE##</CODE
+> in the following code are added to the list of implicit actions the diamond operator takes:</P
+><pre class="programlisting">$ARGV = shift @ARGV;
+open(ARGV,&quot;&lt;$ARGV&quot;);
+rename($ARGV,&quot;$ARGV$^I&quot;); ## INPLACE ##
+unlink($ARGV);            ## INPLACE ##
+open(ARGVOUT,&quot;&gt;$ARGV&quot;);   ## INPLACE ##
+select(ARGVOUT);          ## INPLACE ##</PRE
+><p class="para">The effect is that reads from the diamond operator come from the old file, and writes to the default filehandle go to a new copy of the file. The old file remains in a backup file, which is the filename with a suffix equal to the value of the <code class="literal">$^I</CODE
+> variable. (A bit of magic is also used to copy the attributes from the old file to the new file.) These steps are repeated each time a new file is taken from the <code class="literal">@ARGV</CODE
+> array.</P
+><p class="para">Typical values for <code class="literal">$^I</CODE
+> are things like <code class="literal">.bak</CODE
+> or <code class="literal">~</CODE
+>, to create <a class="indexterm" name="ch17-idx-86116-0"></A
+>backup files much like the editor creates. A strange and useful value for <code class="literal">$^I</CODE
+> is the empty string, <code class="literal">""</CODE
+>, which causes the old file to be neatly eliminated after the edit is complete. Unfortunately, if the system or program crashes during the execution of your program, you lose all of your old data, so this method is recommended only for brave, foolish, or trusting souls.</P
+><p class="para">Here's a way to change everyone's login name to lowercase in some file that contains a list of user logins, one per line:</P
+><pre class="programlisting">@ARGV = (&quot;userlist.txt&quot;); # prime the diamond operator
+$^I = &quot;.bak&quot;;             # write userlist.bak for safety
+while (&lt;&gt;) {              # main loop, once for each line
+         tr/A-Z/a-z/;     # change everything to lower case
+         print;           # send output to ARGVOUT: the new userlist.txt
+}</PRE
+><p class="para">As you can see, this program is pretty simple. In fact, the same program can be generated entirely with a few command-line arguments:</P
+><pre class="programlisting">perl -p -i.bak -e 'tr/A-Z/a-z/' userlist.txt</PRE
+><p class="para">The <a class="indexterm" name="ch17-idx-86070-0"></A
+><code class="literal">-p</CODE
+> switch brackets your program with a <code class="literal">while</CODE
+> loop that includes a <code class="literal">print</CODE
+> statement. The <a class="indexterm" name="ch17-idx-86071-0"></A
+><code class="literal">-i</CODE
+> switch sets a value into the <code class="literal">$^I</CODE
+> variable. The <a class="indexterm" name="ch17-idx-86072-0"></A
+><code class="literal">-e</CODE
+> switch defines the following argument as a piece of Perl code for the loop body. The final argument gives an initial value to <code class="literal">@ARGV</CODE
+>.</P
+><p class="para"><a class="indexterm" name="ch17-idx-86073-0"></A
+>Command-line arguments are discussed in greater detail in <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+><a class="indexterm" name="ch17-idx-86074-0"></A
+> or the <em class="emphasis">perlrun</EM
+> documentation.</P
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_04.htm" title="17.4 Fixed-Length Random-Access Databases"><img src="../gifs/txtpreva.gif" alt="Previous: 17.4 Fixed-Length Random-Access Databases" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Learning Perl on Win32 Systems"><img src="../gifs/txthome.gif" alt="Learning Perl on Win32 Systems" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_06.htm" title="17.6 Win32 Database Interfaces"><img src="../gifs/txtnexta.gif" alt="Next: 17.6 Win32 Database Interfaces" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">17.4 Fixed-Length Random-Access Databases</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">17.6 Win32 Database Interfaces</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

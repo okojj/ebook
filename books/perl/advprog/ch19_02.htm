@@ -1,0 +1,194 @@
+<html><head>
+<title>[Chapter 19] 19.2 Embedding Overview</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:40:34Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch19_01.htm" title="19. Embedding Perl:The Easy Way"><link rel="prev" href="ch19_01.htm" title="19.1 Why Embed?"><link rel="next" href="ch19_03.htm" title="19.3 Examples"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch19_01.htm" title="19.1 Why Embed?"><img src="../gifs/txtpreva.gif" alt="Previous: 19.1 Why Embed?" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch19_01.htm" title="19. Embedding Perl:The Easy Way">Chapter 19<br>Embedding Perl:The Easy Way</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch19_03.htm" title="19.3 Examples"><img src="../gifs/txtnexta.gif" alt="Next: 19.3 Examples" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch19-29287">19.2 Embedding Overview</A
+></H2
+><p class="para">Strange as it may seem, there are no tools to automate the task of embedding Perl as there are for extending Perl. Why is that? After all, extensions also have to account for translating data from Perl to C and back (input and output parameters). The reason is that when Perl drives C code, it specifies precisely how and when a C extension is loaded. As an extension writer, you have the job of simply writing XSUBs in a callback style, providing some initializations; the XSUBs will be called when the script invokes the appropriate corresponding functions. In contrast, since there is no standard way to write a C application, you have to decide when to initialize an embedded Perl interpreter and how to give control over to a Perl script. </P
+><p class="para"><a class="indexterm" name="ch19-idx-969749-0"></A
+><a class="indexterm" name="ch19-idx-969749-1"></A
+>To simplify embedding, this chapter shows you an easy-to-use veneer over Perl's internal API. These routines have been developed for this book to save you the bother of assimilating over 50 pages of internal documentation. But if you are the type who thrives on such details, <a class="xref" href="ch20_01.htm" title="Perl Internals">Chapter 20, <cite class="chapter">Perl Internals</CITE
+></A
+>, should provide the needed fix. It also explains the code for these convenience routines.</P
+><p class="para">It so happens that the Perl executable is made up of two parts: a library of core Perl routines[<a class="footnote" href="#ch19-pgfId-967061">2</A
+>] (<em class="emphasis">libperl.a</EM
+> on Unix systems and <em class="emphasis">perl.lib</EM
+> on Microsoft Windows systems, or dynamically loadable equivalents of the same) and a simple driver file, <i class="filename">perlmain.c</I
+>, containing <kbd class="command">main()</KBD
+>, which, shorn of all its portability aspects, looks like this:<pre class="programlisting"> #include &lt;EXTERN.h&gt; 
+ #include &lt;perl.h&gt; 
+ static PerlInterpreter *my_perl;  
+ int main(int argc, char **argv, char **env)
+ {
+     my_perl = perl_alloc();                        #
+     perl_construct(my_perl);                       # Initialize
+
+     perl_parse(my_perl, xs_init, argc, argv, env); #
+     perl_run(my_perl);                             # Run
+
+     perl_destruct(my_perl);                        # Shut down
+     perl_free(my_perl);
+ }</PRE
+></P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch19-pgfId-967061">[2]</A
+> Not to be confused with the <i class="filename">lib</I
+> directory in a Perl distribution.</P
+></DIV
+></BLOCKQUOTE
+><p class="para"><kbd class="command">perl_alloc</KBD
+><a class="indexterm" name="ch19-idx-969780-0"></A
+> and <kbd class="command">perl_construct</KBD
+><a class="indexterm" name="ch19-idx-969781-0"></A
+> create an interpreter object. <kbd class="command">perl_parse</KBD
+><a class="indexterm" name="ch19-idx-969782-0"></A
+> does some more initializations, parses the command-line parameters provided to it via <kbd class="command">argc</KBD
+> and <kbd class="command">argv</KBD
+>, calls an initialization routine, <kbd class="command">xs_init</KBD
+>, to load other extensions (or to at least initialize the dynamic loader), and finally parses the script provided as part of the command line. <kbd class="command">perl_run</KBD
+> executes the script. Finally, <kbd class="command">perl_destruct</KBD
+> and <kbd class="command">perl_free</KBD
+> shut down and deallocate the interpreter.</P
+><p class="para">To take advantage of the power of Perl, all you need to do is link the Perl library to your application and essentially clone the code in <i class="filename">perlmain.c</I
+>. We will talk about <kbd class="command">xs_init</KBD
+> in the section <a class="xref" href="ch19_04.htm" title="Adding Extensions">"Adding Extensions</A
+>" later in this chapter; until then, we will assume that we don't need any extensions and pass <kbd class="command">NULL</KBD
+> to <code class="literal">perl_parse</CODE
+> instead of <code class="literal">xs_init</CODE
+>. The interpreter is fully primed once <kbd class="command">perl_parse</KBD
+> is done, after which you can call all functions exported by the Perl library. In this chapter, however, we will restrict ourselves to a few high-level calls, listed in <a class="xref" href="#ch19-38103" title="Perl API Calls for Easy Embedding">Table 19.1</A
+>.</P
+><br><table class="table" border="1" cellpadding="3"><caption class="table"><a class="title" name="ch19-38103">Table 19.1: Perl API Calls for Easy Embedding</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Function Name</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Description</P
+></TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting"><a class="indexterm" name="ch19-idx-969775-0"></A
+>perl_call_argv(
+    char *sub,
+    I32  flags,
+    char **argv);</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">This call is available in the standard Perl distribution. It calls a subroutine with an array of string arguments terminated by NULL. Unfortunately, it doesn't return results in a convenient way. For this reason, the only flag we will use in this chapter is G_DISCARD, to tell Perl to silently discard all returned results.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting"><a class="indexterm" name="ch19-idx-969776-0"></A
+>perl_call_va (
+    char *sub,
+    [char *type, arg,]*
+    [&quot;OUT&quot;,]
+    [char *type, arg,]*
+    NULL
+);</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">This provides a convenient interface for passing a null-terminated list of typed parameters to a Perl subroutine and to collect the returned results into a list of parameters (similar to <kbd class="command">printf</KBD
+> and <kbd class="command">scanf</KBD
+>). The <code class="literal">type</CODE
+> argument can be <kbd class="command">i</KBD
+>, <kbd class="command">s</KBD
+>, or <kbd class="command">d</KBD
+> (integer, string, double). The string <kbd class="command">OUT</KBD
+> begins a list of return parameters, which are pairs of type specifiers and appropriately typed pointers. String output parameters are copied into the buffers supplied, which consequently should have enough space to absorb the returned strings.</P
+><p class="para">The parameter list must always be NULL-terminated.</P
+><p class="para">The function returns -1 on failure and the number of parameters returned by the procedure, if successful.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">int <a class="indexterm" name="ch19-idx-969777-0"></A
+>perl_eval_va(
+      char *str,
+      [char *type,
+            *arg],
+      NULL);</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Evaluates an arbitrary string, not just a subroutine. The string can be followed by any number of out parameters in the style discussed above. It does not need input parameters because they are already encoded in the string. <kbd class="command">perl_eval_va</KBD
+> returns -1 on failure, or the number of result parameters returned by the evaluation.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">set_int(char *var,
+        int  value);
+int get_int(
+        char *var,
+        int *pvalue);</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Gets or sets a globally accessible, integer-valued scalar. <code class="literal">var</CODE
+> can contain ordinary scalar variable names or array and hash indices as follows: <kbd class="command">foo</KBD
+>, <kbd class="command">foo[10]</KBD
+>, or <kbd class="command">foo{hello}</KBD
+>. </P
+><p class="para"><kbd class="command">get_int</KBD
+> takes a pointer to an integer and returns 1 if successful (or 0 on failure).</P
+><p class="para"><kbd class="command">set_int</KBD
+> creates a variable if it doesn't already exist.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">set_double(char *var,
+           double 
+           value);
+int get_double(
+          char *var, 
+          double
+          *pvalue);</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Similar to above.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">set_str(char *var,
+        char *value);
+int get_str(char *var,
+        char **value);</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para"><kbd class="command">get_str</KBD
+> returns the address of the string. You are expected to copy it into your own buffer.</P
+></TD
+></TR
+></TBODY
+></TABLE
+><p class="para">The <kbd class="command">get_*</KBD
+> and <kbd class="command">set_*</KBD
+> functions can be used only to manipulate a scalar at a time. The reason I allowed this limitation is that Perl already provides a nice chunk of functions that can slice, dice, and iterate through arrays and hashes; we'll take a detailed look at them in <a class="xref" href="ch20_01.htm" title="Perl Internals">Chapter 20</A
+>. These functions, while faster and more fine-grained, are tied to internals-related details (memory management, temporary variables, and so on); hence any discussion of them necessitates discussing these other aspects too. The <kbd class="command">get_*</KBD
+> and <kbd class="command">set_*</KBD
+> functions are simpler.<a class="indexterm" name="ch19-idx-969757-0"></A
+></P
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch19_01.htm" title="19.1 Why Embed?"><img src="../gifs/txtpreva.gif" alt="Previous: 19.1 Why Embed?" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch19_03.htm" title="19.3 Examples"><img src="../gifs/txtnexta.gif" alt="Next: 19.3 Examples" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">19.1 Why Embed?</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">19.3 Examples</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

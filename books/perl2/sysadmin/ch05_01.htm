@@ -1,0 +1,2003 @@
+<html>
+<head>
+<title>TCP/IP Name Services  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="TCP/IP Name Services">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch04_06.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm">Perl for System Administration</a></td><td align="right" valign="top" width="172"><a href="ch05_02.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+
+<h1 class="chapter">Chapter 5.  TCP/IP Name Services</h1>
+<div class="htmltoc">
+<h4 class="tochead">Contents:</h4>
+<p>
+<a href="ch05_01.htm">Host Files</a>
+<br>
+<a href="ch05_02.htm">NIS, NIS+, and WINS</a>
+<br>
+<a href="ch05_03.htm">Domain Name Service (DNS)</a>
+<br>
+<a href="ch05_04.htm">Module Information for This Chapter</a>
+<br>
+<a href="ch05_05.htm">References for More Information</a>
+<br>
+</p>
+</div>
+
+
+
+
+
+
+
+
+
+
+<p>
+<a name="INDEX-397"></a><a name="INDEX-398"></a><a name="INDEX-399"></a><a name="INDEX-400"></a><a name="INDEX-401"></a><a name="INDEX-402"></a><a name="INDEX-403"></a>The
+majority of the conversations between computers these days take place
+using a protocol called <em class="emphasis">Transmission Control
+Protocol</em> running over a lower layer called
+<em class="emphasis">Internet Protocol</em>.<em class="emphasis"><a href="#FOOTNOTE-1">[1]</a></em> These two protocols are
+commonly lumped together into the acronym TCP/IP. Every machine that
+participates on a TCP/IP network must be assigned at least one unique
+numeric identifier, called an <em class="emphasis">IP address</em>. IP
+addresses are usually written using the form
+<em class="emphasis">NNN.NNN.N.N</em>, e.g., 192.168.1.9.</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-1"></a>
+<p>[1]This chapter will be discussing IPv4, the current (deployed)
+standard. IPv6 (the next generation of IP) will probably replace it
+in due course.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<p>While machines are content to call each other by strings of
+dot-separated numbers, most people are less enamored by this idea.
+TCP/IP would have fallen flat on its face as a protocol if users had
+to remember a unique 12-digit sequence for every machine they wanted
+to contact. Mechanisms had to be invented to manage and distribute an
+IP address to human-friendly name mappings.</p>
+
+
+
+
+
+<p>This chapter describes the evolution of the network name services
+that allow us to access data at <em class="emphasis">www.oog.org</em> instead of at 192.168.1.9,
+and what takes place behind the scenes. Along the way we combine a
+dash of history with a healthy serving of practical advice on how
+Perl can help to manage this crucial part of any networking
+infrastructure.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h2 class="sect1">5.1. Host Files</h2>
+
+
+
+
+
+<p>
+<a name="INDEX-404"></a><a name="INDEX-405"></a><a name="INDEX-406"></a><a name="INDEX-407"></a><a name="INDEX-408"></a><a name="INDEX-409"></a><a name="INDEX-410"></a>The first approach
+used to solve the problem of mapping IP addresses to names was the
+most obvious and simple one: a standard file was created to hold a
+table of IP addresses and their corresponding computer names. This
+file can be found as <em class="filename">/etc/hosts</em> on Unix systems,
+<em class="filename">Macintosh HD:System Folder:Preferences:hosts</em> on
+Macs, and
+<em class="filename">\$systemroot$\System32\Drivers\Etc\hosts</em> on
+NT/2000 machines. On NT/2000 there is also an
+<em class="filename">lmhosts</em> file that serves a slightly different
+purpose, which we'll talk about later. Here's an example
+Unix-style host file:<a name="INDEX-411"></a><a name="INDEX-412"></a><a name="INDEX-413"></a><a name="INDEX-414"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">127.0.0.1     localhost       
+192.168.1.1   everest.oog.org     everest
+192.168.1.2   rivendell.oog.org   rivendell</pre>
+</blockquote>
+
+
+
+
+
+<p>The limitations of this approach become clear very quickly. If
+<em class="emphasis">oog.org </em>'s network manager has two
+machines on a TCP/IP network that communicate with each other, and
+she wants to add a third which will be addressed by name, she's
+got to edit the correct file on all of her machines. If <em class="emphasis">oog.org</em> buys yet another machine, there
+are now four separate host files to be maintained (one on each
+machine).</p>
+
+
+
+
+
+<p>
+<a name="INDEX-415"></a><a name="INDEX-416"></a>As untenable as this may
+seem, this is what actually happened during the early days of the
+Internet/ARPAnet. As new sites were connected, every site on the net
+that wished to talk with the new site needed to update their host
+files. The central host repository, known as the Network Information
+Center (NIC) (or more precisely the SRI-NIC, since it was housed at
+SRI at the time), updated and published a host file for the entire
+network called <em class="filename">HOSTS.TXT</em>. System administrators
+would anonymously FTP this file from SRI-NIC's NETINFO
+directory on a regular basis.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-417"></a>Host files are still in use today, despite
+their limitations and the replacements we'll be talking about
+later in this chapter. There are some situations where host files are
+even mandatory. For example, under SunOS, a machine consults its
+<em class="filename">/etc/hosts</em> file to determine its own IP address.
+Host files also solve the "chicken and egg" problem
+encountered while a machine boots. If the network name servers that
+machine will be using are specified by name, there must be some way
+to determine their IP addresses. But if the network name service
+isn't operational yet, there's no way (unless it
+broadcasts for help) to receive this information. The usual solution
+is to place a stub file (with just a few hosts) in place for booting
+purposes.<a name="INDEX-418"></a>
+</p>
+
+
+
+
+
+<p>On a small network, having an up-to-date host file that includes all
+of the hosts on that network is useful. It doesn't even have to
+reside on each machine in that network to be helpful (since the other
+mechanisms we'll describe later do a much better job of
+distributing this information). Just having one around that can be
+consulted is handy for quick manual lookups and address allocation
+purposes.</p>
+
+
+
+
+
+<p>Since these files are still a part of everyday administration,
+let's look at better ways to manage them. Perl and host files
+are a natural match, given Perl's predilection for text file
+processing. Given their affinity for each other, we're going to
+use the simple host file as a springboard for a number of different
+explorations.</p>
+
+
+
+
+
+<p>Let's look at the parsing of host files. Parsing a host file
+can be a simple as this:<a name="INDEX-419"></a><a name="INDEX-420"></a><a name="INDEX-421"></a><a name="INDEX-422"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">open(HOSTS, "/etc/hosts") or die "Unable to open host file:$!\n";
+while (defined ($_ = &lt;HOSTS&gt;)) {
+    next if /^#/;  # skip comments lines
+    next if /^$/;  # skip empty lines
+    s/\s*#.*$//;  # delete in-line comments and preceding whitespace
+    ($ip, @names) = split;
+    die "The IP address $ip already seen!\n" if (exists $addrs{$ip});
+    $addrs{$ip} = [@names];
+    for (@names){
+	    die "The host name $_ already seen!\n" if (exists $names{$_});
+	    $names{$_} = $ip;
+    }
+}
+close(HOSTS);</pre>
+</blockquote>
+
+
+
+
+
+<p>The previous code walks through an <em class="filename">/etc/hosts</em>
+file (skipping blank lines and comments), creating two data
+structures for later use. The first data structure is a hash of lists
+of hostnames keyed by the IP address. For the host file above, the
+data structure created would look like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$addrs{'127.0.0.1'} = ['localhost'];
+$addrs{'192.168.1.2'} = ['rivendell.oog.org','rivendell'];
+$addrs{'192.168.1.1'} = ['everest.oog.org','everest'];</pre>
+</blockquote>
+
+
+
+
+
+<p>The second is a hash table of host names, keyed by the name. For the
+same file, the <tt class="literal">%names</tt> hash would look like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$names{'localhost'}='127.0.0.1'
+$names{'everest'}='192.168.1.1'
+$names{'everest.oog.org'}='192.168.1.1'
+$names{'rivendell'}='192.168.1.2'
+$names{'rivendell.oog.org'}='192.168.1.2'</pre>
+</blockquote>
+
+
+
+
+
+<p>Note that in the simple process of parsing this file, we've
+also added some additional functionality. Our code checks for
+duplicate host names and IP addresses (both bad news on a TCP/IP
+network). When dealing with network-related data, use every
+opportunity possible to check for errors and bad information. It is
+always better to catch problems early in the game than to be bitten
+by them once the data has been propagated to your entire network.
+Because it is so important, I'll return to this topic later in
+the chapter</p>
+
+
+
+
+
+<a name="ch05-51074"></a>
+<h3 class="sect2">5.1.1. Generating Host Files</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-423"></a><a name="INDEX-424"></a><a name="INDEX-425"></a><a name="INDEX-426"></a>Now we turn to the more interesting
+topic of generating host files. Let's assume we have the
+following host database file for the hosts on our network:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">name: shimmer
+address: 192.168.1.11
+aliases: shim shimmy shimmydoodles
+owner: David Davis
+department: software
+building: main
+room: 909
+manufacturer: Sun
+model: Ultra60
+-=-
+name: bendir
+address: 192.168.1.3
+aliases: ben bendoodles
+owner: Cindy Coltrane
+department: IT
+building: west
+room: 143
+manufacturer: Apple
+model: 7500/100
+-=-
+name: sulawesi
+address: 192.168.1.12
+aliases: sula su-lee
+owner: Ellen Monk
+department: design
+building: main
+room: 1116
+manufacturer: Apple
+model: 7500/100
+-=-
+name: sander
+address: 192.168.1.55
+aliases: sandy micky mickydoo
+owner: Alex Rollins
+department: IT
+building: main
+room: 1101
+manufacturer: Intergraph
+model: TD-325
+-=-</pre>
+</blockquote>
+
+
+
+
+
+<p>The format is simple: <em class="replaceable">fieldname: value</em>
+with <tt class="literal">-=-</tt> used as a separator between records. You
+might find you need other fields than those listed above, or have too
+many records to make it practical to keep in a single flat file.
+Though we are using a single flat file, the concepts we'll show
+in this chapter are not backend-specific.</p>
+
+
+
+
+
+<p>Here's some code that will parse a file like this to generate a
+host file:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$datafile ="./database";
+$recordsep = "-=-\n";
+
+open(DATA,$datafile) or die "Unable to open datafile:$!\n";
+
+$/=$recordsep; # prepare to read in database file one record at a time
+
+print "#\n\# host file - GENERATED BY $0\n# DO NOT EDIT BY HAND!\n#\n";
+while (&lt;DATA&gt;) {
+    chomp;                           # remove the record separator
+    # split into key1,value1,...bingo, hash of record
+    %record = split /:\s*|\n/m; 
+    print "$record{address}\t$record{name} $record{aliases}\n";
+}
+close(DATA);</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's the output:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">#
+# host file - GENERATED BY createhosts
+# DO NOT EDIT BY HAND!
+#
+192.168.1.11    shimmer shim shimmy shimmydoodles
+192.168.1.3     bendir ben bendoodles
+192.168.1.12    sulawesi sula su-lee
+192.168.1.55    sander sandy micky mickydoo.</pre>
+</blockquote>
+
+
+
+
+
+<a name="ch05-2-fm2xml"></a>
+<div class="sidebar">
+<h4 class="objtitle">Got "System Administration Database" Religion Yet?</h4>
+
+
+
+
+
+<p>In <a href="ch03_01.htm">Chapter 3, "User Accounts"</a>, I made an impassioned plea for
+the use of a separate administrative database to track account
+information. The same arguments are doubly true for network host
+data. In this chapter we're going to demonstrate how even a
+simple flat-file host database can be manipulated to produce
+impressive output that drives each of the services we'll be
+discussing. For larger sites, a "real" database would
+serve well. If you'd like to see an example of this output,
+take a quick glance ahead at the output at the end of the <a href="ch05_01.htm#ch05-53944">Section 5.1.3, "Improving the Host File Output"</a> section, later in this
+chapter.<a name="INDEX-427"></a><a name="INDEX-428"></a>
+</p>
+
+
+
+
+<p>The host database
+approach is beautiful for a number of reasons. Changes need to be
+made only to a single file or data source. Make the changes, run some
+scripts, and <em class="emphasis">presto!</em>, we've generated the
+configuration files needed for a number of services. These
+configuration files are significantly less likely to contain small
+syntax errors (like missing semicolons or comment characters) because
+they won't be touched by human hands. If we write our code
+correctly, we can catch most of the other possible errors during the
+parse stage.</p>
+
+
+
+
+<p>If you haven't seen the wisdom of
+this "best practice" yet, you will by the end of the
+chapter.</p>
+
+
+
+
+</div>
+
+<p>Let's look at a few of the more interesting Perl techniques in
+this small code sample. The first unusual thing we do is set
+<tt class="literal">$/</tt>. From that point on, Perl treats chunks of text
+that end in <tt class="literal">-=-\n</tt> as a single record. This means
+the <tt class="literal">while</tt> statement will read in an entire
+record at a time and assign it to <tt class="literal">$_</tt>.</p>
+
+
+
+
+
+<p>The second interesting tidbit is the <tt class="literal">split</tt>
+assign technique. Our goal is to get each record into a hash with a
+key as the field name and its value as the field value. You'll
+see why we go to this trouble later as we develop this example
+further. The first step is to break <tt class="literal">$_</tt> into
+component parts using <tt class="literal">split( )</tt>. The array we get
+back from <tt class="literal">split( )</tt> is shown in <a href="ch05_01.htm#ch05-10756">Table 5-1</a>.<a name="INDEX-429"></a><a name="INDEX-430"></a>
+</p>
+
+
+
+
+
+<a name="ch05-10756"></a>
+<h4 class="objtitle">Table 5.1. The Array Returned by split()</h4>
+<table border="1">
+
+
+
+<tr>
+<th>
+<p>Element</p>
+</th>
+<th>
+<p>Value</p>
+</th>
+</tr>
+
+
+
+
+
+
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[0]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">name</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[1]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">shimmer</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[2]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">address</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[3]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">192.168.1.11</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[4]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">aliases</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[5]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">shim shimmy shimmydoodles</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[6]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">owner</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[7]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">David Davis</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[8]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">department</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[9]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">software</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[10]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">building</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[11]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">main</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[12]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">room</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[13]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">909</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[14]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">manufacturer</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[15]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">Sun</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[16]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">model</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">$record[17]</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">Ultra60</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+
+</table>
+
+
+
+
+
+<p>Now take a good look at the contents of the list. Starting at
+<tt class="literal">$record[0]</tt>, we have a key-value pair list (i.e.,
+key=<tt class="literal">Name</tt>, value=<tt class="literal">shimmer\n</tt>,
+key=<tt class="literal">Address</tt>,
+value=<tt class="literal">192.168.1.11\n</tt>...) which we can just assign
+to populate a hash. Once this hash is created, we can print the parts
+we need.<a name="INDEX-431"></a><a name="INDEX-432"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch05-83522"></a>
+<h3 class="sect2">5.1.2. Error Checking the Host File Generation Process</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-433"></a><a name="INDEX-434"></a>Printing the parts we need is just the
+beginning of what we can do. One very large benefit of using a
+separate database that gets converted into another form is the
+ability to insert error checking into the conversion process. As we
+mentioned before, this can prevent simple typos from becoming a
+problem <em class="emphasis">before</em> they get a chance to propagate or
+be put into production use. Here's the previous code with some
+simple additions to check for typos:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$datafile ="./database";
+$recordsep = "-=-\n";
+
+open(DATA,$datafile) or die "Unable to open datafile:$!\n";
+
+$/=$recordsep; # prepare to read in database file one record at a time
+
+print "#\n\# host file - GENERATED BY $0\n# DO NOT EDIT BY HAND!\n#\n";
+while (&lt;DATA&gt;) {
+    chomp;  # remove the record separator
+    # split into key1,value1,...bingo, hash of record
+    %record = split /:\s*|\n/m;</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># check for bad hostnames</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">if ($record{name} =~ /[^-.a-zA-Z0-9]/) {</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">warn "!!!! $record{name} has illegal host name characters,</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">skipping...\n";</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">next;</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">}</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">
+</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># check for bad aliases</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">if ($record{aliases} =~ /[^-.a-zA-Z0-9\s]/) {</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">warn "!!!! $record{name} has illegal alias name characters,</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">skipping...\n";</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">next;</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">}</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">
+</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># check for missing address</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">if (!$record{address}) {</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">warn "!!!! $record{name} does not have an IP address,</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">skipping...\n";</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">next;</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">}</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">
+</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># check for duplicate address</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">if (defined $addrs{$record{address}}) {</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">warn "!!!! Duplicate IP addr: $record{name} &amp;</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$addrs{$record{address}}, skipping...\n";</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">next;</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">}</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">else {</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$addrs{$record{address}} = $record{name};</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">}
+
+    print "$record{address}\t$record{name} $record{aliases}\n";
+}
+close(DATA);</pre>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch05-53944"></a>
+<h3 class="sect2">5.1.3. Improving the Host File Output</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-435"></a><a name="INDEX-436"></a>Let's borrow from <a href="ch09_01.htm">Chapter 9, "Log Files"</a>, and add some analysis to the conversion
+process. We can automatically add useful headers, comments, and
+separators to the data. Here's an example output using the
+exact same database:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">#
+# host file - GENERATED BY createhosts3
+# DO NOT EDIT BY HAND!
+#
+# Converted by David N. Blank-Edelman (dnb) on Sun Jun  7 00:43:24 1998
+#
+# number of hosts in the design department: 1.
+# number of hosts in the software department: 1.
+# number of hosts in the IT department: 2.
+# total number of hosts: 4
+#
+
+# Owned by Cindy Coltrane (IT): west/143
+192.168.1.3     bendir ben bendoodles
+
+# Owned by Alex Rollins (IT): main/1101
+192.168.1.55    sander sandy micky mickydoo
+
+# Owned by Ellen Monk (design): main/1116
+192.168.1.12    sulawesi sula su-lee
+
+# Owned by David Davis (software): main/909
+192.168.1.11    shimmer shim shimmy shimmydoodles</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's the code that produced that output, followed by some
+commentary:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$datafile ="./database";
+
+# get username on either WinNT/2000 or Unix
+$user = ($^O eq "MSWin32")? $ENV{USERNAME} :
+                            (getpwuid($&lt;))[6]." (".(getpwuid($&lt;))[0].")";
+
+open(DATA,$datafile) or die "Unable to open datafile:$!\n";
+
+$/=$recordsep; # read in database file one record at a time
+
+while (&lt;DATA&gt;) {
+    chomp;                           # remove the record separator
+    # split into key1,value1
+    @record = split /:\s*|\n/m; 
+
+    $record ={};                     # create a reference to empty hash
+    %{$record} = @record;            # populate that hash with @record
+
+    # check for bad hostname
+    if ($record-&gt;{name} =~ /[^-.a-zA-Z0-9]/) {
+	    warn "!!!! ".$record-&gt;{name} .
+             " has illegal host name characters, skipping...\n";
+	    next;
+    }
+
+    # check for bad aliases
+    if ($record-&gt;{aliases} =~ /[^-.a-zA-Z0-9\s]/) {
+	    warn "!!!! ".$record-&gt;{name} .
+             " has illegal alias name characters, skipping...\n";
+	    next;
+    }
+
+    # check for missing address
+    if (!$record-&gt;{address}) {
+	    warn "!!!! ".$record-&gt;{name} .
+             " does not have an IP address, skipping...\n";
+	    next;
+    }
+
+    # check for duplicate address
+    if (defined $addrs{$record-&gt;{address}}) {
+	    warn "!!!! Duplicate IP addr:".$record-&gt;{name}.
+             " &amp; ".$addrs{$record-&gt;{address}}.", skipping...\n";
+	    next;
+    }
+    else {
+	    $addrs{$record-&gt;{address}} = $record-&gt;{name};
+    }
+
+    $entries{$record-&gt;{name}} = $record; # add this to a hash of hashes
+}
+close(DATA);
+
+# print a nice header
+print "#\n\# host file - GENERATED BY $0\n# DO NOT EDIT BY HAND!\n#\n";
+print "# Converted by $user on ".scalar(localtime)."\n#\n";
+
+# count the number of entries in each department and then report on it
+foreach my $entry (keys %entries){
+    $depts{$entries{$entry}-&gt;{department}}++;
+}
+foreach my $dept (keys %depts) {
+    print "# number of hosts in the $dept department: $depts{$dept}.\n";
+}
+print "# total number of hosts: ".scalar(keys %entries)."\n#\n\n";
+
+# iterate through the hosts, printing a nice comment and the entry itself
+foreach my $entry (keys %entries) {
+    print "# Owned by ",$entries{$entry}-&gt;{owner}," (",
+          $entries{$entry}-&gt;{department},"): ",
+          $entries{$entry}-&gt;{building},"/",
+          $entries{$entry}-&gt;{room},"\n";
+    print $entries{$entry}-&gt;{address},"\t",
+          $entries{$entry}-&gt;{name}," ",
+          $entries{$entry}-&gt;{aliases},"\n\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>The most significant difference between this code example and the
+previous one is the data representation. Because there was no need in
+the previous example to retain the information from a record after it
+had been printed, we could use the single hash
+<tt class="literal">%record</tt>. But for this code, we chose to read the
+file into a slightly more complex data structure (a hash of hashes)
+so we could do some simple analysis of the data before printing it.</p>
+
+
+
+
+
+<p>We could have kept a separate hash table for each field (similar to
+our <em class="filename">needspace</em> example in <a href="ch02_01.htm">Chapter 2, "Filesystems"</a>), but the beauty of this approach is its
+maintainability. If we decide later on to add a
+<tt class="literal">serial_number</tt> field to the database, we do not
+need to change our program's parsing code; it will just
+magically appear as <tt class="literal">$record-&gt;{serial_number}</tt>.
+The downside is that Perl's syntax probably makes our code look
+more complex than it is.</p>
+
+
+
+
+
+<p>Here's an easy way to look at it: we're parsing the file
+in precisely the same way we did in the last example. The difference
+is this time we are storing each record in a newly-created anonymous
+hash. Anonymous hashes are just like normal hash variables except
+they are accessed through a reference, instead of a name.</p>
+
+
+
+
+
+<p>To create our larger data structure (a hash of hashes), we link this
+new anonymous hash back into the main hash table
+<tt class="literal">%entries</tt>. We created a key with an associated
+value that is the reference to the anonymous hash we've just
+populated. Once we are done, <tt class="literal">%entries</tt> has a key
+for each machine's name and a value that is a reference to a
+hash table containing all of the fields associated with that machine
+name (IP address, room, etc.).</p>
+
+
+
+
+
+<p>Perhaps you'd prefer to see the output sorted by IP address? No
+problem, just include a custom sort routine by changing:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">foreach my $entry (keys %entries) {</pre>
+</blockquote>
+
+
+
+
+
+<p>to:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">foreach my $entry (sort byaddress keys %entries) {</pre>
+</blockquote>
+
+
+
+
+
+<p>and adding:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub byaddress {
+   @a = split(/\./,$entries{$a}-&gt;{address});
+   @b = split(/\./,$entries{$b}-&gt;{address});
+   ($a[0]&lt;=&gt;$b[0]) ||
+   ($a[1]&lt;=&gt;$b[1]) ||
+   ($a[2]&lt;=&gt;$b[2]) ||
+   ($a[3]&lt;=&gt;$b[3]);
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's the relevant portion of the output, now nicely sorted:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># Owned by Cindy Coltrane (IT): west/143
+192.168.1.3     bendir ben bendoodles
+
+# Owned by David Davis (software): main/909
+192.168.1.11    shimmer shim shimmy shimmydoodles
+
+# Owned by Ellen Monk (design): main/1116
+192.168.1.12    sulawesi sula su-lee
+
+# Owned by Alex Rollins (IT): main/1101
+192.168.1.55    sander sandy micky mickydoo</pre>
+</blockquote>
+
+
+
+
+
+<p>Make the output look good to you. Let Perl support your professional
+<em class="emphasis">and</em> aesthetic endeavors.<a name="INDEX-437"></a><a name="INDEX-438"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch05-3-fm2xml"></a>
+<h3 class="sect2">5.1.4. Incorporating a Source Code Control System</h3>
+
+
+
+
+
+<p>In a moment we're going to move on to the next approach to the
+IP Address-to-Name mapping problem. Before we do, we'll want to
+add another twist to our host file creation process, because a single
+file suddenly takes on network-wide importance. A mistake in this
+file will affect an entire network of machines. To give us a safety
+net, we'll want a way to back out of bad changes, essentially
+going back in time to a prior configuration state.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-439"></a><a name="INDEX-440"></a><a name="INDEX-441"></a>The most elegant way to build a time
+machine like this is to add a source control system to the process.
+Source control systems are typically used by developers to:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>Keep a record of all changes to important files</p>
+</li>
+<li>
+<p>Prevent multiple people from changing the same file at the same time,
+inadvertently undoing each other's efforts</p>
+</li>
+<li>
+<p>Allow them to revert back to a previous version of a file, thus
+backing out of problems</p>
+</li>
+</ul>
+<p>This functionality is extremely useful to a system administrator. The
+error-checking code we added to the conversion process earlier, in
+<a href="ch05_01.htm#ch05-83522">Section 5.1.2, "Error Checking the Host File Generation Process"</a>, can help with certain kinds of
+typo and syntax errors, but it does not offer any protection against
+semantic errors (e.g., deleting an important hostname, assigning the
+wrong IP address to a host, misspelling a hostname). You could add
+semantic error checks into the conversion process, but you probably
+won't catch all of the possible errors. As we've quoted
+before, nothing is foolproof, since fools are so ingenious.</p>
+
+
+
+
+
+<p>You might think it would be better to apply source control system
+functionality to the initial database editing process, but there are
+two good reasons why it is also important to apply it to the
+resultant output:</p>
+
+
+
+
+
+<dl>
+<dt>
+<b>Time</b>
+</dt>
+<dd>
+<p>For large data sets, the conversion process might take some time. If
+your network is flaking out and you need to revert to a previous
+revision, it's discouraging to have to stare at a Perl process
+chugging away to generate the file you need (presuming you can get at
+Perl in the first place at that point).</p>
+</dd>
+
+
+
+
+
+<dt>
+<b>Database</b>
+</dt>
+<dd>
+<p>If you choose to use a real database engine for your data storage
+(and often this is the right choice), there may not be a convenient
+way to apply a source control mechanism like this. You'll
+probably have to write your own change control mechanisms for the
+database editing process.</p>
+</dd>
+
+</dl>
+
+
+
+
+
+<p>
+<a name="INDEX-442"></a><a name="INDEX-443"></a>My source control
+system of choice is the Revision Control System (RCS). RCS has some
+Perl- and system administration-friendly
+features:<a name="INDEX-444"></a>
+</p>
+
+
+
+
+
+<ul>
+<li>
+<p>It is multiplatform. There are ports of GNU RCS 5.7 to most Unix
+systems, Windows NT, MacOS, etc.<a name="INDEX-445"></a><a name="INDEX-446"></a>
+</p>
+</li>
+<li>
+<p>It has a well-defined command-line interface. All functions can be
+performed from the command line, even on GUI-heavy operating systems</p>
+</li>
+<li>
+<p>It is easy to use. There's a small command set for basic
+operations that can be learned in five minutes (see <a href="appa_01.htm">Appendix A, "The Five-Minute RCS Tutorial"</a> ).</p>
+</li>
+<li>
+<p>It has keywords. Magic strin gs can be embedded in the text of files
+under RCS that are automatically expanded. For instance, any
+occurrence of <tt class="literal">$ Date:$</tt> in a file will be replaced
+with the date the file was last entered into the RCS
+system.<a name="INDEX-447"></a>
+</p>
+</li>
+<li>
+<p>It's free. The source code for the GNU version of RCS is freely
+redistributable, and binaries for most systems are also available. A
+copy of the source can be found at ftp://ftp.gnu.org/gnu/rcs.</p>
+</li>
+</ul>
+<p>If you've never dealt with RCS before, please take a moment to
+read <a href="appa_01.htm">Appendix A, "The Five-Minute RCS Tutorial"</a>. The rest of this section assumes a
+cursory knowledge of the RCS command set.</p>
+
+
+
+
+
+<p>Craig Freter has written an object-oriented module called
+<tt class="literal">Rcs</tt> which makes using RCS from Perl easy. The
+steps are:<a name="INDEX-448"></a>
+</p>
+
+
+
+
+
+<ol>
+<li>
+<p>Load the module.</p>
+</li>
+<li>
+<p>Tell the module where your RCS command-line binaries are located.</p>
+</li>
+<li>
+<p>Create a new <tt class="literal">Rcs</tt> object; configure it with the
+name of the file you are using.</p>
+</li>
+<li>
+<p>Call the necessary object methods (named after their corresponding
+RCS commands).</p>
+</li>
+</ol>
+<p>Let's add this to our host file generation code so you can see
+how the module works. Besides the <tt class="literal">Rcs</tt> module code,
+we've also changed things so the output is sent to a specific
+file and not <tt class="literal">STDOUT</tt> as in our previous versions.
+Only the code that has changed is shown. Refer to the previous
+example for the omitted lines represented by "...":</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$outputfile="hosts.$$"; # temporary output file
+$target="hosts";        # where we want the converted data stored
+...
+open(OUTPUT,"&gt; $outputfile") or 
+  die "Unable to write to $outputfile:$!\n";
+
+print OUTPUT "#\n\# host file - GENERATED BY $0\n
+              # DO NOT EDIT BY HAND!\n#\n";
+print OUTPUT "# Converted by $user on ".scalar(localtime)."\n#\n";
+
+...
+foreach my $dept (keys %depts) {
+    print OUTPUT "# number of hosts in the $dept department:
+                  $depts{$dept}.\n";
+}
+print OUTPUT "# total number of hosts: ".scalar(keys %entries)."\n#\n\n";
+# iterate through the hosts, printing a nice comment and the entry
+foreach my $entry (sort byaddress keys %entries) {
+    print OUTPUT 
+          "# Owned by ",$entries{$entry}-&gt;{owner}," (",
+          $entries{$entry}-&gt;{department},"): ",
+          $entries{$entry}-&gt;{building},"/",
+          $entries{$entry}-&gt;{room},"\n";
+    print OUTPUT 
+          $entries{$entry}-&gt;{address},"\t",
+          $entries{$entry}-&gt;{name}," ",
+          $entries{$entry}-&gt;{aliases},"\n\n";
+}
+
+close(OUTPUT);</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Rcs;</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># where our RCS binaries are stored</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Rcs-&gt;bindir('/usr/local/bin');</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># create a new RCS object</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">my $rcsobj = Rcs-&gt;new;</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># configure it with the name of our target file</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$rcsobj-&gt;file($target);</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># check it out of RCS (must be checked in already)</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$rcsobj-&gt;co('-l');</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># rename our newly created file into place</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">rename($outputfile,$target) or</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">die "Unable to rename $outputfile to $target:$!\n";</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># check it in</pre>
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$rcsobj-&gt;ci("-u","-m"."Converted by $user on ".scalar(localtime));</pre>
+</blockquote>
+
+
+
+
+
+<p>This code assumes the target file has been checked in at least once
+already.</p>
+
+
+
+
+
+<p>To see the effect of this code addition, we can look at three entries
+excerpted from the output of <tt class="command">rlog</tt><em class="emphasis">hosts</em>:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">revision 1.5
+date: 1998/05/19 23:34:16;  author: dnb;  state: Exp;  lines: +1 -1
+Converted by David N. Blank-Edelman (dnb) on Tue May 19 19:34:16 1998
+----------------------------
+revision 1.4
+date: 1998/05/19 23:34:05;  author: eviltwin;  state: Exp;  lines: +1 -1
+Converted by Divad Knalb-Namlede (eviltwin) on Tue May 19 19:34:05 1998
+----------------------------
+revision 1.3
+date: 1998/05/19 23:33:35;  author: dnb;  state: Exp;  lines: +20 -0
+Converted by David N. Blank-Edelman (dnb) on Tue May 19 19:33:16 1998</pre>
+</blockquote>
+
+
+
+
+
+<p>The previous example doesn't show much of a difference between
+file versions (see the <tt class="literal">lines:</tt> part of the
+entries), but you can see that we are tracking the changes every time
+the file gets created. If we needed to, we could use the
+<tt class="command">rcsdiff</tt> command to see exactly what changed. Under
+dire circumstances, we would be able to revert to previous versions
+if one of these changes had wreaked unexpected havoc on the
+network.<a name="INDEX-449"></a><a name="INDEX-450"></a><a name="INDEX-451"></a><a name="INDEX-452"></a><a name="INDEX-453"></a><a name="INDEX-454"></a><a name="INDEX-455"></a><a name="INDEX-456"></a><a name="INDEX-457"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch04_06.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch05_02.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">4.6. References for More Information</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">5.2. NIS, NIS+, and WINS</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

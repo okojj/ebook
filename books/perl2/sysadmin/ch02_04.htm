@@ -1,0 +1,1054 @@
+<html>
+<head>
+<title>Walking the Filesystem Using the File::Find Module  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Walking the Filesystem Using the File::Find Module">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch02_03.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch02_01.htm">Chapter 2: Filesystems</a></td><td align="right" valign="top" width="172"><a href="ch02_05.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">2.4. Walking the Filesystem Using the File::Find Module</h2>
+
+
+
+
+
+<p>
+<a name="INDEX-86"></a><a name="INDEX-87"></a><a name="INDEX-88"></a>Now
+that we've seen the basics of filesystem walking, here's
+a faster and spiffier way to do it. Perl comes with a module called
+<tt class="literal">File::Find</tt> that allows Perl to emulate the Unix
+<tt class="command">find</tt> command. The easiest way to begin using this
+module is to use the <tt class="command">find2perl</tt> command to generate
+prototypical Perl code for you. <a name="INDEX-89"></a><a name="INDEX-90"></a>
+</p>
+
+
+
+
+
+<a name="ch02-9-fm2xml"></a>
+<blockquote class="note">
+<h4 class="objtitle">TIP</h4>
+<p>
+<tt class="command"> find2perl </tt>is not always easy to use on non-Unix
+Perl ports. For example, MacOS users either will need Macintosh
+Programmer's Workshop (MPW) to run it, or should modify the
+code to take <tt class="literal">@ARGV</tt> from a dialog box. Here's
+a code snippet from Chris Nandor, co-author of <em class="emphasis">MacPerl:
+Power and Ease</em>, to do this: <a name="INDEX-91"></a><a name="INDEX-92"></a>
+</p>
+
+
+
+
+
+<p>
+<tt class="literal">@ARGV = @ARGV ? @ARGV : split "\s",
+MacPerl::Ask("Arguments?");</tt>
+</p>
+
+
+
+
+
+<p>All ports do have the <tt class="literal">File::Find</tt><tt class="literal"></tt>module that <tt class="command">find2perl </tt>and
+<em class="emphasis">find.pl</em> use, so this should not be a real
+problem. We'll show you how to call it directly later in this
+chapter.</p>
+
+
+
+
+</blockquote>
+
+<p>For instance, let's say you need some code to search the
+<em class="filename">/home</em> directory for files named
+<em class="filename">beesknees</em>. The command line that uses the Unix
+<tt class="command">find</tt> command is:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">
+<tt class="userinput"><b>% find /home -name beesknees -print</b></tt>
+</pre>
+</blockquote>
+
+
+
+
+
+<p>Feed the same options to <tt class="command">find2perl</tt>:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">
+<tt class="userinput"><b>% find2perl /home -name beesknees -print</b></tt>
+</pre>
+</blockquote>
+
+
+
+
+
+<p>and it produces:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">#!/usr/bin/perl
+    eval 'exec /usr/bin/perl -S $0 ${1+"$@"}'
+        if $running_under_some_shell;
+
+require "find.pl";
+
+# Traverse desired filesystems
+
+&amp;find('/home');
+
+exit;
+
+sub wanted {
+    /^beesknees$/ &amp;&amp; print("$name\n");
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>The <tt class="command">find2perl</tt>-generated code is fairly
+straightforward. It loads in the necessary
+<em class="filename">find.pl</em> library with a
+<tt class="literal">require</tt> statement, then calls the subroutine
+<tt class="literal">&amp;find( )</tt> with the name of the starting
+directory. We'll discuss the purpose of the
+<tt class="literal">&amp;wanted( )</tt> subroutine in a moment, since
+that's where all of the interesting modifications we're
+about to explore will live.</p>
+
+
+
+
+
+<p>Before we begin our modifications of this code, it's important
+to note a few things that may not be obvious just by looking at the
+sample output above:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>The folks who have worked on the <tt class="literal">File::Find</tt> module
+have gone to considerable trouble to make this module portable across
+platforms. <tt class="literal">File::Find</tt>'s internal routines
+work behind the scenes so the same Perl code for filesystem walking
+works for Unix, MacOS, NT, VMS, and so on.</p>
+</li>
+<li>
+<p>Though the code <tt class="command">find2perl</tt> generates looks like
+Perl Version 4 code on the surface (for example, it uses
+<tt class="literal">require</tt> to load a <em class="filename">.pl</em>
+file), <em class="filename">find.pl</em> actually sets up some Perl
+Version 5 aliases for the user. In general, it is useful to look
+under the hood whenever you use a module in your code. If you need to
+find the Perl source for a module already installed on your system,
+running either <tt class="command">perl -V</tt> or the following code will
+show you the standard library directories for your installation:</p>
+</li>
+</ul>
+<blockquote>
+<pre class="programlisting">%<tt class="userinput"><b>perl -e 'print join("\n",@INC,"")'</b></tt>
+</pre>
+</blockquote>
+
+
+
+
+
+<p>Let's talk about the <tt class="literal">&amp;wanted( )</tt>
+subroutine that we will modify for our own purposes. The<tt class="literal">
+&amp;wanted( )</tt> subroutine gets called with the current
+file or directory name by <tt class="literal">&amp;find( )</tt>
+(<tt class="literal">&amp;File::Find::find( )</tt> to be precise) once
+for every file or directory encountered during its filesystem walk.
+It's up to the code in <tt class="literal">&amp;wanted( )</tt> to
+select the "interesting" files or directories and operate
+on them accordingly. In the sample output above, it first checks to
+see if the file or directory name matches the string
+<tt class="literal">beesknees</tt>. If it matches, the
+<tt class="literal">&amp;&amp;</tt> operator causes Perl to execute the
+<tt class="literal">print</tt> statement to print the name of the file that
+was found.</p>
+
+
+
+
+
+<p>We'll have to address two practical concerns when we create our
+own <tt class="literal">&amp;wanted( )</tt> subroutines. Since
+<tt class="literal">&amp;wanted( )</tt> is called once per file or
+directory name, it is important to make the code in this subroutine
+short and sweet. The sooner we can exit the <tt class="literal">&amp;wanted(
+)</tt> subroutine, the faster the <tt class="literal">find</tt>
+routine can proceed with the next file or directory, and the speedier
+the overall program will run. It is also important to keep in mind
+the behind-the-scenes portability concerns we mentioned a moment ago.
+It would be a shame to have a portable <tt class="literal">&amp;find(
+)</tt> call an OS-specific <tt class="literal">&amp;wanted( )</tt>
+subroutine unless this is unavoidable. Looking at the source code for
+the <tt class="literal">File::Find</tt> module may offer some hints on how
+to avoid this situation.</p>
+
+
+
+
+
+<p>For our first use of <tt class="literal">File::Find</tt>, let's
+rewrite our previous core-destroyer example and then extend it a bit.
+First we type:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">%<tt class="userinput"><b> find2perl -name core -print</b></tt>
+</pre>
+</blockquote>
+
+
+
+
+
+<p>which gives us:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">require "find.pl";
+
+# Traverse desired filesystems
+
+&amp;find('.');
+
+exit;
+
+sub wanted {
+    /^core$/ &amp;&amp; print("$name\n");
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Then we add <tt class="command">-s</tt> to the Perl invocation line and
+modify the <tt class="literal">&amp;wanted( )</tt> subroutine:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub wanted {
+   /^core$/ &amp;&amp; print("$name\n") &amp;&amp; defined $r &amp;&amp; unlink($name);
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>This gives us the desired deletion functionality when the user
+invokes the program with <tt class="command">-r.</tt> Here's a tweak
+that adds another measure of protection to our potentially
+destructive code:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub wanted {
+   /^core$/ &amp;&amp; -s $name &amp;&amp; print("$name\n") &amp;&amp; 
+               defined $r &amp;&amp; unlink($name);
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>It checks any file called <em class="filename">core</em> to see if it is a
+non-zero length file before printing the name or contemplating
+deletion. Sophisticated users sometimes create a link to
+<em class="filename">/dev/null</em> named <em class="filename">core</em> in
+their home directory to prevent inadvertent core dumps from being
+stored in that directory. The <em class="emphasis">-s</em> test makes sure
+we don't delete links or zero-length files by mistake. If we
+wanted to be even more diligent, we should probably make two
+additional checks:</p>
+
+
+
+
+
+<ol>
+<li>
+<p>Open and examine the file to confirm that it is an actual core file,
+either from within Perl or by calling the Unix
+<tt class="command">file</tt> command<em class="emphasis">.</em> Determining
+whether a file is an authentic core dump file can be tricky when you
+have filesystems remotely mounted over a network by machines of
+different architectures, all with different core file formats.</p>
+</li>
+<li>
+<p>Look at the modification date of the file. If someone is actively
+debugging a program that has core dumped, she may not be happy if you
+delete the core file out from under her.<a name="INDEX-93"></a>
+</p>
+</li>
+</ol>
+<p>
+<a name="INDEX-94"></a>Let's take a break
+from the Unix world for a bit and look at Mac- and NT/2000-specific
+examples. Earlier in this chapter I mentioned that every file in a
+MacOS HFS filesystem has two attributes, <em class="emphasis">creator</em>
+and <em class="emphasis">type,</em> that allow the OS to determine which
+application created it and what kind of file it is. These attributes
+are stored as four-character strings. For instance, a text document
+created by SimpleText would be listed with creator
+<tt class="literal">ttxt</tt> and type <tt class="literal">TEXT</tt>. From Perl
+(MacPerl only) we can get at this information through the
+<tt class="literal">MacPerl::GetFileInfo( )</tt> function. The syntax
+is:<a name="INDEX-95"></a><a name="INDEX-96"></a><a name="INDEX-97"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$type = MacPerl::GetFileInfo(filename);</pre>
+</blockquote>
+
+
+
+
+
+<p>or:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">($creator,$type) = MacPerl::GetFileInfo(filename);</pre>
+</blockquote>
+
+
+
+
+
+<p>To find all of the text files in a MacOS filesystem, we can do the
+following:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use File::Find;
+
+&amp;File::Find::find(\&amp;wanted,"Macintosh HD:");
+
+sub wanted{
+  -f $_ &amp;&amp; MacPerl::GetFileInfo($_) eq "TEXT" &amp;&amp; 
+           print "$Find::File::name\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>You might notice it looks a little different from our previous
+examples. However, it is functionally equivalent. We're just
+calling the <tt class="literal">File::Find</tt> routines directly without
+the <em class="filename">find.pl</em> shim. We're also using the
+variable <tt class="literal">$name</tt> defined in the
+<tt class="literal">File::Find</tt> namespace to print the absolute path of
+the file, rather than just printing the filename itself. <a href="ch02_04.htm#ch02-78209">Table 2-2</a> shows the complete list of variables defined
+by <tt class="literal">File::Find</tt> as it walks a filesystem.</p>
+
+
+
+
+
+<a name="ch02-78209"></a>
+<h4 class="objtitle">Table 2.2. File::Find Variables</h4>
+<table border="1">
+
+
+
+<tr>
+<th>
+<p>Variable Name</p>
+</th>
+<th>
+<p>Meaning</p>
+</th>
+</tr>
+
+
+
+
+
+
+
+
+
+
+<tr>
+<td>
+<blockquote>
+<pre class="programlisting">$_</pre>
+</blockquote>
+</td>
+<td>
+<p>Current filename</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<blockquote>
+<pre class="programlisting">$File::Find::dir</pre>
+</blockquote>
+</td>
+<td>
+<p>Current directory name</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<blockquote>
+<pre class="programlisting">$File::Find::name</pre>
+</blockquote>
+</td>
+<td>
+<p>Full path of current filename (i.e.,
+<tt class="literal">$File::Find::dir/$_)</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+
+</table>
+
+
+
+
+
+<p>Here's a similar NT/2000-specific example:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use File::Find;
+use Win32::File;
+
+&amp;File::Find::find(\&amp;wanted,"\\");
+
+sub wanted{
+  -f $_ &amp;&amp; 
+    # attr will be populated by Win32::File::GetAttributes function
+    (Win32::File::GetAttributes($_,$attr)) &amp;&amp;      
+    ($attr &amp; HIDDEN) &amp;&amp; 
+     print "$File::Find::name\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<a name="INDEX-98"></a><a name="INDEX-99"></a>This example searches the entire
+filesystem of the current drive for hidden files (i.e., those with
+the <tt class="literal">HIDDEN</tt> attribute set). This example works on
+both NTFS and FAT filesystems.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-100"></a>Here's an
+NTFS-specific example that will look for all files that have Full
+Access enabled for the special group <tt class="literal">Everyone</tt> and
+print their names:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use File::Find;
+use Win32::FileSecurity;
+
+# determine the DACL mask for Full Access
+$fullmask = Win32::FileSecurity::MakeMask(FULL);
+
+&amp;find(\&amp;wanted,"\\");
+
+sub wanted {
+    # Win32::FileSecurity::Get does not like the paging file, skip it
+    next if ($_ eq "pagefile.sys"); 
+    (-f $_) &amp;&amp; 
+        Win32::FileSecurity::Get($_, \%users) &amp;&amp; 
+        (defined $users{"Everyone"}) &amp;&amp;           
+        ($users{"Everyone"} == $fullmask) &amp;&amp;
+	     print "$File::Find::name\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>In the above code, we query the Access Control List for all files
+(except for the Windows NT paging file). We then check if that list
+includes an entry for the group <tt class="literal">Everyone</tt>. If it
+does, we compare the <tt class="literal">Everyone</tt> entry to the value
+for Full Access (computed by <tt class="literal">MakeMask( )</tt>),
+printing the absolute path of the file when we find a match.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-101"></a>Here is another real life example of how
+useful even simple code can be. I recently attempted to defragment
+the (newly rebuilt) NT partition on my laptop when the software
+reported <tt class="literal">Metadata Corruption Error</tt>. Perusing the
+web site of the vendor who makes the defragmentation software, I
+encountered a tech support note that suggested, "This situation
+can be caused by a long filename which contains more characters than
+is legal under Windows NT." It then suggested locating this
+file by copying each folder to a new location, comparing the number
+of files in the copy to the original, and if the copied folder has
+fewer files, then identifying which file in the original folder did
+not get copied to the new location.</p>
+
+
+
+
+
+<p>This seemed like a ridiculous suggestion given the number of folders
+on my NT partition and the amount of time it would take. Instead, I
+whipped up the following in about a minute using the methods
+we've been discussing:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">require "find.pl";
+
+# Traverse desired filesystems
+
+&amp;find('.');
+print "max:$max\n";
+
+exit;
+
+sub wanted {
+    return unless -f $_;
+    if (length($_) &gt; $maxlength){
+        $max = $name;
+        $maxlength = length($_);
+    }
+    if (length($name) &gt; 200) { print $name,"\n";}
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>This printed out the name of all the files with names larger than 200
+characters, followed by the name of the largest file found. Job done,
+thanks to Perl.</p>
+
+
+
+
+
+<a name="ch02-10-fm2xml"></a>
+<div class="sidebar">
+<h4 class="objtitle">When Not to Use the File::Find Module</h4>
+
+
+
+
+
+<p>
+<a name="INDEX-102"></a>When is the <tt class="literal">File::Find</tt>
+method we've been discussing <em class="emphasis">not</em>
+appropriate? Four situations come to mind:</p>
+
+
+
+
+
+
+<ol>
+<li>
+<p>If the filesystem you are traversing does not follow the normal
+semantics, you can't use it. For instance, in the bouncing
+laptop scenario which began the chapter, the Linux NTFS filesystem
+driver I was using had the strange property of not listing
+"." or ".." in empty directories. This broke
+<tt class="literal">File::Find</tt> badly.</p>
+</li>
+<li>
+<p>If you need to change the names of the directories in the filesystem
+you are traversing <em class="emphasis">while you are traversing it</em>,
+<tt class="literal">File::Find</tt> gets very unhappy and behaves in an
+unpredictable way.</p>
+</li>
+<li>
+<p>If you need your (Unix-based) code to chase symbolic links to
+directories, <tt class="literal">File::Find</tt> will skip them.</p>
+</li>
+<li>
+<p>If you need to walk a non-native filesystem mounted on your machine
+(for example, an NFS mount of a Unix filesystem on a Win32 machine),
+<tt class="literal">File::Find</tt> will attempt to use the native
+operating systems's filesystem semantics.</p>
+</li>
+</ol>
+<p>It is unlikely that you'll encounter these situations,
+but if you do, see the first filesystem-walking section of this
+chapter for information on how to traverse filesystems by hand.</p>
+
+
+
+
+</div>
+
+<p>Let's return to Unix to close this section with a moderately
+complex example. One idea that seems to get short shrift in many
+systems administration contexts, but can yield tremendous benefit in
+the end, is the notion of empowering the user. If your users can fix
+their own problems with tools you provide, everybody wins.</p>
+
+
+
+
+
+<p>Much of this chapter is devoted to dealing with problems that arise
+from filesystems being filled. Often this occurs because users do not
+know enough about their environment, or because it is too cumbersome
+to perform any basic disk space management. Many a support request
+starts with "I'm out of disk space in my home directory
+and I don't know why." Here's a bare-bones version
+of a script called <tt class="command">needspace</tt> that can help users
+with this problem. A user simply types <tt class="command">needspace</tt>
+and the script attempts to locate items in the user's home
+directory that could be deleted. It looks for two kinds of files:
+known backup files and those that can be recreated automatically.
+Let's dive into the code<a name="INDEX-103"></a><a name="INDEX-104"></a><a name="INDEX-105"></a>:<a name="INDEX-106"></a><a name="INDEX-107"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use File::Find;
+use File::Basename;
+
+# array of fname extensions and the extensions they can be derived from
+% derivations = (".dvi" =&gt; ".tex",
+                ".aux" =&gt; ".tex",
+                ".toc" =&gt; ".tex",
+                ".o"   =&gt; ".c",
+	            );</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<a name="INDEX-108"></a>We start by loading the libraries we
+need: our friend <tt class="literal">File::Find</tt> and another useful
+library called <tt class="literal">File::Basename</tt>.
+<tt class="literal">File::Basename</tt> will come in handy for parsing
+pathnames. We then initialize a hash table with known derivations;
+for instance, we know that running the command <tt class="command">TeX</tt>
+or <tt class="command">LaTeX</tt> on the file
+<em class="filename">happy.tex</em> can generate the file
+<em class="filename">happy.dvi,</em> and that <em class="filename">happy.o</em>
+could possibly be created by running a C compiler on
+<em class="filename">happy.c</em>. The word "possibly" is used
+because sometimes multiple source files are needed to generate a
+single derived file. We can only make simple guesses based on file
+extensions. Generalized dependency analysis is a complex problem we
+won't attempt to touch here.</p>
+
+
+
+
+
+<p>Next we locate the user's home directory by finding the user ID
+of the person running the script (<tt class="literal">$&lt;</tt>) and
+feeding it to <tt class="literal">getpwuid( )</tt>. <tt class="literal">getpwuid(
+)</tt> returns password information in list form (more on this
+in the next chapter), from which an array index
+(<tt class="literal">[7]</tt>) selects the home directory element. There
+are shell-specific ways to retrieve this information (e.g., querying
+the <tt class="literal">$HOME</tt> environment variable), but the code as
+written is more portable.</p>
+
+
+
+
+
+<p>Once we have the home directory, we enter it and begin scanning using
+a <tt class="literal">&amp;find( )</tt> call just like the ones
+we've seen before:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$homedir=(getpwuid($&lt;))[7]; # find the user's home directory
+
+chdir($homedir) or 
+  die "Unable to change to your homedir $homedir:$!\n";
+
+$|=1; # print to STDOUT in an unbuffered way
+print "Scanning";
+find(\&amp;wanted, "."); # chew through dirs, &amp;wanted does the work</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's the <tt class="literal">&amp;wanted( )</tt> subroutine we
+call. It starts by looking for <em class="filename">core</em> files and
+<tt class="command">emacs</tt> backup and autosave files. We assume these
+files can be deleted without checking for their source file (perhaps
+not a safe assumption). If one of these files is found, its size and
+location is stored in a hash whose key is the path to the file and
+whose value is the size of that file.</p>
+
+
+
+
+
+<p>The remaining checks for derivable files are very similar. They call
+a routine <tt class="literal">&amp;BaseFileExists( )</tt> to check if a
+particular file can be derived from another file in that directory.
+If this routine returns true, we store filename and size info for
+later retrieval:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub wanted {
+    # print a dot for every dir so the user knows we're doing something
+    print "." if (-d $_); 
+
+    # we're only checking files 
+    return unless (-f $_);  
+
+    # check for core files, store them in the %core table, then return
+    $_ eq "core" &amp;&amp; ($core{$File::Find::name} = (stat(_))[7]) &amp;&amp; return;
+
+    # check for emacs backup and autosave files
+    (/^#.*#$/ || /~$/) &amp;&amp; 
+      ($emacs{$File::Find::name}=(stat(_))[7]) &amp;&amp; 
+      return;
+    
+    # check for derivable tex files
+     (/\.dvi$/ || /\.aux$/ || /\.toc$/) &amp;&amp;
+       &amp;BaseFileExists($File::Find::name) &amp;&amp; 
+       ($tex{$File::Find::name} = (stat(_))[7]) &amp;&amp; 
+       return;
+
+    # check for derivable .o files
+     /\.o$/ &amp;&amp;
+       &amp;BaseFileExists($File::Find::name) &amp;&amp; 
+       ($doto{$File::Find::name} = (stat(_))[7]) &amp;&amp; 
+       return;
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's the routine which checks if a particular file can be
+derived from another "base" file in the same directory
+(i.e., does <em class="filename">happy.o</em> exist if we find
+<em class="filename">happy.c</em>):</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub BaseFileExists {
+    my($name,$path,$suffix) =
+     &amp;File::Basename::fileparse($_[0],'\..*');
+    
+    # if we don't know how to derive this type of file
+    return 0 unless (defined $derivations{$suffix}); 
+
+    # easy, we've seen the base file before
+    return 1 if (defined $baseseen{$path.$name.$derivations{$suffix}});
+
+    # if file (or file link points to) exists and has non-zero size
+    return 1 if (-s $name.$derivations{$suffix} &amp;&amp; 
+                  ++$baseseen{$path.$name.$derivations{$suffix}});
+}    
+
+print "done.\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's how this code works:</p>
+
+
+
+
+
+<ol>
+<li>
+<p>
+<tt class="literal">&amp;File::Basename::fileparse( )</tt> is used to
+separate the path into a filename, its leading path, and its suffix
+(e.g., <em class="filename">resume.dvi</em>,
+<em class="filename">/home/cindy/docs/</em>, <em class="filename">.dvi </em>).</p>
+</li>
+<li>
+<p>This file's suffix is checked to determine if it is one we
+recognize as being derivable. If not, we return
+(false in a scalar context).</p>
+</li>
+<li>
+<p>We check if we've already seen a "base file" for
+this particular file, and if so return <tt class="literal">true</tt>. In
+some situations (<tt class="command">TeX</tt>/<tt class="command">LaTeX</tt> in
+particular), a single base file can yield many derived files. This
+check speeds things up considerably because it saves us a trip to the
+filesystem.</p>
+</li>
+<li>
+<p>If we haven't seen a base file for this file before, we check
+to see if one exists and that it is non-zero length. If so, we cache
+the base file information and return 1 (true in a scalar context).</p>
+</li>
+</ol>
+<p>All that's left for us to do now is to print out the
+information we gathered as we walked the filesystem:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">foreach my $path (keys %core){
+    print "Found a core file taking up ".&amp;BytesToMeg($core{$path}).
+          "MB in ".&amp;File::Basename::dirname($path).".\n";
+}
+
+if (keys %emacs){
+    print "The following are most likely emacs backup files:\n";
+
+    foreach my $path (keys %emacs){
+        $tempsize += $emacs{$path};
+        $path =~ s/^$homedir/~/;     # change the path for prettier output
+        print "$path ($emacs{$path} bytes)\n";
+    }
+    print "\nThese files take up ".&amp;BytesToMeg($tempsize)."MB total.\n";
+    $tempsize=0;
+}
+
+if (keys %tex){
+    print "The following are most likely files that can be recreated by                      
+           running La/TeX:\n";
+    foreach my $path (keys %tex){
+        $tempsize += $tex{$path};
+        $path =~ s/^$homedir/~/;     # change the path for prettier output
+        print "$path ($tex{$path} bytes)\n";
+    }
+    print "\nThese files take up ".&amp;BytesToMeg($tempsize)."MB total.\n";
+    $tempsize=0;
+}
+
+if (keys %doto){
+    print "The following are most likely files that can be recreated by
+           recompiling source:\n";
+    foreach my $path (keys %doto){
+        $tempsize += $doto{$path};
+        $path =~ s/^$homedir/~/;     # change the path for prettier output
+        print "$path ($doto{$path} bytes)\n";
+    }
+    print "\nThese files take up ".&amp;BytesToMeg($tempsize)."MB total.\n";
+    $tempsize=0;
+}
+
+sub BytesToMeg{ # convert bytes to X.XXMB
+    return sprintf("%.2f",($_[0]/1024000));
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Before we close this section, it should be noted that the previous
+example could be extended in many ways. The sky's really the
+limit on this sort of program. Here are a few ideas:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>Use a more complex data structure to hold derivations and found
+files. The above code was written to be easy to read without much
+knowledge of Perl data structures. It repeats itself in several
+places and is harder to extend than it needs to be. Ideally,
+you'd like a way to represent all of the derivations without
+having special case hashes (e.g., <tt class="literal">%tex</tt>) in the
+code.</p>
+</li>
+<li>
+<p>Search for web browser cache directories (a common source of missing
+disk space).</p>
+</li>
+<li>
+<p>Offer to delete files that are found. The operator <tt class="literal">unlink(
+)</tt> and the subroutine <tt class="literal">rmpath</tt> from the
+<tt class="literal">File::Path</tt> module would be used to perform the
+deletion step.</p>
+</li>
+<li>
+<p>Perform more analysis on files instead of making guesses based on
+filenames.<a name="INDEX-109"></a><a name="INDEX-110"></a><a name="INDEX-111"></a><a name="INDEX-112"></a><a name="INDEX-113"></a><a name="INDEX-114"></a>
+</p>
+</li>
+</ul>
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch02_03.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch02_05.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">2.3. Walking or Traversing the Filesystem</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">2.5. Manipulating Disk Quotas</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

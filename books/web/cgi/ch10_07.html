@@ -1,0 +1,934 @@
+<!doctype html public "-//ORA//DTD CD HTML 3.2//EN">
+<html>
+<head>
+<title>[Chapter 10] 10.7 Network News on the Web</TITLE>
+<meta name="author" content="Shishir Gundavaram">
+<meta name="date" content="Tue Aug 26 16:41:57 1997">
+<meta name="form" content="html">
+<meta name="metadata" content="dublincore.0.1">
+<meta name="objecttype" content="book part">
+<meta name="otheragent" content="gmat dbtohtml">
+<meta name="publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="source" content="SGML">
+<meta name="subject" content="cgi programming">
+<meta name="title" content="CGI Programming on the World Wide Web">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+</HEAD>
+<body bgcolor="#FFFFFF">
+
+<div class=htmlnav>
+<h1><a href='index.html'><img src="gifs/smbanner.gif" alt="CGI Programming on the World Wide Web" border=0></a></H1>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch10_06.html"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 10<br>Gateways to Internet Information Servers</FONT></B></TD>
+<td width=172 align=right valign=top><a href="http://n0rp.chemlab.org/books/web/cgi/ch10_08.html"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+</table>
+
+&nbsp;
+<hr align=left width=515>
+</DIV>
+<div class=sect1>
+<h2 class=sect1><a class="TITLE" name="CGI-CHP-10-SECT-7">10.7 Network News on the Web</A></h2>
+
+<p class=para>
+NNTP
+(Network News Transfer Protocol) is the most popular software used
+to transmit Usenet news over the Internet. It lets the receiving
+(client) system tell the sending (server) system which newsgroups
+to send, and which articles from each group. NNTP
+accepts commands in a fairly simple format. It sends back a stream
+of text consisting of the articles posted and occasional status
+information.
+
+<p class=para>
+This CGI gateway communicates with an NTTP
+server directly by using socket I/O. The program displays lists
+of newsgroups and articles for the user to choose from. You will
+be able to read news from the specified newsgroups in a threaded
+fashion (all the replies to each article are grouped together).
+
+<div class=screen>
+<p>
+<pre>
+#!/usr/local/bin/perl
+require "sockets.pl";
+$webmaster = "Shishir Gundavaram (shishir\@bu\.edu)";
+$error = "CGI NNTP Gateway Error";
+%groups = ( 'cgi',     'comp.infosystems.www.authoring.cgi',
+            'html',    'comp.infosystems.www.authoring.html',
+            'images',  'comp.infosystems.www.authoring.images',
+            'misc',    'comp.infosystems.www.authoring.misc',
+            'perl',    'comp.lang.perl.misc' );
+</PRE>
+</DIV>
+
+<p class=para>
+The <i class=emphasis>groups</I> associative array contains
+a list of the newsgroups that will be displayed when the form is
+dynamically created.
+
+<div class=screen>
+<p>
+<pre>
+$all_groups = '(cgi|html|images|misc|perl)';
+</PRE>
+</DIV>
+
+<p class=para>
+The <i class=emphasis>all_groups</I> variable contains a regular
+expression listing all of the keys of the <i class=emphasis>groups</I>
+associative array. This will be used to ensure that a valid newsgroup
+is specified by the user.
+
+<div class=screen>
+<p>
+<pre>
+$nntp_server = "nntp.bu.edu";
+</PRE>
+</DIV>
+
+<p class=para>
+The NNTP server is set to "nntp.bu.edu".
+If you do not want users from domains other than "bu.edu" to access
+this form, you can set up a simple authentication scheme like this:
+
+<div class=screen>
+<p>
+<pre>
+$allowed_domain = "bu.edu";
+$remote_host = $ENV{'REMOTE_HOST'};
+($remote_domain) = ($remote_host =~ /([^.]+\.[^.]+)$/);
+if ($remote_domain ne $allowed_domain) {
+    &amp;return_error (500, $error, "Sorry! You are not allowed to read news!");
+}
+</PRE>
+</DIV>
+
+<p class=para>
+The regular expression used above extracts the domain name
+from an IP name or address.
+
+
+<p>
+<img align=middle src="figs/exp1003.gif" alt="[Graphic: Figure from the text]" width=502 height=213 border=0>
+
+<p class=para>
+Or, you can allow multiple domains like this:
+
+<div class=screen>
+<p>
+<pre>
+$allowed_domains = "(bu.edu|mit.edu|perl.com)";
+$remote_host = $ENV{'REMOTE_HOST'};
+if ($remote_host !~ /$allowed_domains$/o) {
+    &amp;return_error (500, $error, "Sorry! You are not allowed to read news!");
+}
+</PRE>
+</DIV>
+
+<p class=para>
+To continue with the program:
+
+<div class=screen>
+<p>
+<pre>
+&amp;parse_form_data (*NEWS);
+$group_name = $NEWS{'group'};
+$article_number = $NEWS{'article'};
+</PRE>
+</DIV>
+
+<p class=para>
+There is no form front end to this CGI gateway. Instead, all
+parameters are passed as query information (GET
+method). If you access this application without a query, a document
+listing all the newsgroups is listed. Once you select a newsgroup
+from this list, the program is invoked again, this time with a query
+that specifies the newsgroup you want. For instance, if you want
+the newsgroup whose key is "images", this query is passed to the
+program:
+
+<div class=screen>
+<p>
+<pre>
+http://some.machine/cgi-bin/nntp.pl?group=images
+</PRE>
+</DIV>
+
+<p class=para>
+The <i class=emphasis>groups</I> associative array associates
+the string "images" with the actual newsgroup name. This is a more
+secure way of handling things--much like the way the Archie server
+names were passed instead of the actual IP names in the previous
+example. If the program receives a query like the one above, it
+displays a list of the articles in the newsgroup. When the user
+chooses an article, the query information will look like this:
+
+<div class=screen>
+<p>
+<pre>
+http://some.machine/cgi-bin/nntp.pl?group=images&amp;article=18721
+</PRE>
+</DIV>
+
+<p class=para>
+This program will then display the article.
+
+<div class=screen>
+<p>
+<pre>
+if ($group_name =~ /\b$all_groups\b/o) {
+   $selected_group = $groups{$group_name};
+</PRE>
+</DIV>
+
+<p class=para>
+This block of code will be executed only if the <i class=emphasis>group</I>
+field consists of a valid newsgroup name, as stored in <i class=emphasis>all_groups</I>.
+The actual newsgroup name is stored in the <i class=emphasis>selected_group</I>
+variable.
+
+<div class=screen>
+<p>
+<pre>
+    &amp;open_connection (NNTP, $nntp_server, "nntp") ||
+          &amp;return_error (500, $error, "Could not connect to NNTP server.");
+    &amp;check_nntp ();
+</PRE>
+</DIV>
+
+<p class=para>
+A socket is opened to the NNTP server.
+The server usually runs on port 119. The <i class=emphasis>check_nntp</I>
+subroutine checks the header information that is output by the server
+upon connection. If the server issues any error messages, the script
+terminates.
+
+<div class=screen>
+<p>
+<pre>
+    ($first, $last) = &amp;set_newsgroup ($selected_group);
+</PRE>
+</DIV>
+
+<p class=para>
+The NNTP server keeps track of all the
+articles in a newsgroup by numbering them in ascending order, starting
+at some arbitrary number. The <i class=emphasis>set_newsgroup</I>
+subroutine returns the identification number for the first and last
+articles.
+
+<div class=screen>
+<p>
+<pre>
+    if ($article_number) {
+        if (($article_number &lt; $first) || ($article_number &gt; $last)) {
+            &amp;return_error (500, $error,
+                 "The article number you specified is not valid.");
+        } else {
+            &amp;show_article ($selected_group, $article_number);
+        }
+</PRE>
+</DIV>
+
+<p class=para>
+If the user selected an article from the list that was dynamically
+generated when a newsgroup is selected, this branch of code is executed.
+The article number is checked to make sure that it lies within the
+valid range. You might wonder why we need to check this, since the
+list that is presented to the user is based on the range generated
+by the <i class=emphasis>set_newsgroup</I> subroutine. The reason
+for this is that the NNTP server lets articles
+expire periodically, and articles are sometimes deleted by their
+author. If sufficient time passes between the time the list is displayed
+and the time the user makes a selection, the specified article number
+could be invalid. In addition, I like to handle the possibility
+that a user hardcoded a query.
+
+<div class=screen>
+<p>
+<pre>
+    } else {
+        &amp;show_all_articles ($group_name, $selected_group, $first, $last);
+    }
+</PRE>
+</DIV>
+
+<p class=para>
+If no article is specified, which happens when the user selects
+a newsgroup from the main HTML document, the
+<i class=emphasis>show_all_articles</I> subroutine is called to display
+a list of all the articles for the selected newsgroup.
+
+<div class=screen>
+<p>
+<pre>
+    print NNTP "quit", "\n";
+    &amp;close_connection (NNTP);
+</PRE>
+</DIV>
+
+<p class=para>
+Finally, the <i class=emphasis>quit</I> command is sent to
+the NNTP server, and the socket is closed.
+
+<div class=screen>
+<p>
+<pre>
+} else {
+    &amp;display_newsgroups ();
+}
+exit (0);
+</PRE>
+</DIV>
+
+<p class=para>
+If this program is accessed without any query information,
+or if the specified newsgroup is not among the list stored in the
+<i class=emphasis>groups</I> associative array, the
+ <i class=emphasis>display_newsgroups</I>
+subroutine is called to output the valid newsgroups.
+
+<p class=para>
+The following <i class=emphasis>print_header</I> subroutine displays a MIME
+header, and some HTML to display the title and
+the header.
+
+<div class=screen>
+<p>
+<pre>
+sub print_header
+{
+    local ($title) = @_;
+    print "Content-type: text/html", "\n\n";
+        print "&lt;HTML&gt;", "\n";
+    print "&lt;HEAD&gt;&lt;TITLE&gt;", $title, "&lt;/TITLE&gt;&lt;/HEAD&gt;", "\n";
+        print "&lt;BODY&gt;", "\n";
+    print "&lt;H1&gt;", $title, "&lt;/H1&gt;", "\n";
+    print "&lt;HR&gt;", "&lt;BR&gt;", "\n";
+}
+</PRE>
+</DIV>
+
+<p class=para>
+The print_footer subroutine outputs the webmaster's address.
+
+<div class=screen>
+<p>
+<pre>
+sub print_footer
+{
+    print "&lt;HR&gt;", "\n";
+    print "&lt;ADDRESS&gt;", $webmaster, "&lt;/ADDRESS&gt;", "\n";
+        print "&lt;/BODY&gt;&lt;/HTML&gt;", "\n";
+}
+</PRE>
+</DIV>
+
+<p class=para>
+The <i class=emphasis>escape</I> subroutine "escapes" all characters except for
+alphanumeric characters and whitespace. The main reason for this
+is so that "special" characters are displayed properly.
+
+<div class=screen>
+<p>
+<pre>
+sub escape
+{
+    local ($string) = @_;
+    $string =~ s/([^\w\s])/sprintf ("&amp;#%d;", ord ($1))/ge;
+    return ($string);
+}
+</PRE>
+</DIV>
+
+<p class=para>
+For example, if an article in a newsgroup contains:
+
+<div class=screen>
+<p>
+<pre>
+From: joe@test.net (Joe Test)
+Subject: I can't get the &lt;H1&gt; headers to display correctly
+</PRE>
+</DIV>
+
+<p class=para>
+The browser will actually interpret the "&lt;H1&gt;", and the
+rest of the document will be messed up. This subroutine escapes
+the text so that it looks like this:
+
+<div class=screen>
+<p>
+<pre>
+From&amp;#58; joe&amp;#64;test&amp;#46;net &amp;#40;Joe Test&amp;#41;
+Subject&amp;#58; I can&amp;#39;t get the &amp;#60;H1&amp;#62; headers to display correctly
+</PRE>
+</DIV>
+
+<p class=para>
+A web client can interpret any string in the form &amp;#n,
+where n is the ASCII code of the character. This
+might slow down the display slightly, but it is much safer than
+escaping specific characters only.
+
+<p class=para>
+The
+<i class=emphasis>check_nntp</I> subroutine continuously reads the output from the NNTP
+server until the return status is either a success (200 or 201)
+or a failure (4xx or 5xx). You might have noticed that these status
+codes are very similar to the HTTP status code.
+In fact, most Internet servers that follow a standard use these
+codes.
+
+<div class=screen>
+<p>
+<pre>
+sub check_nntp
+{
+    while (&lt;NNTP&gt;) {
+        if (/^(200|201)/) {
+            last;
+        } elsif (/^4|5\d+/) {
+            &amp;return_error (500, $error, "The NNTP server returned an error.");
+        }
+    }
+}
+</PRE>
+</DIV>
+
+<p class=para>
+The set_newsgroup subroutine returns the first and last article
+numbers for the newsgroup.
+
+<div class=screen>
+<p>
+<pre>
+sub set_newsgroup
+{
+    local ($group) = @_;
+    local ($group_info, $status, $first_post, $last_post);
+    print NNTP "group ", $group, "\n";
+</PRE>
+</DIV>
+
+<p class=para>
+The <i class=emphasis>group</I>
+command is sent to the NNTP server. In response
+to this, the server sets its current newsgroup to the one specified,
+and outputs information in the following format:
+
+<div class=screen>
+<p>
+<pre>
+group comp.infosystems.www.authoring.cgi
+211 1289 4776 14059 comp.infosystems.www.authoring.cgi
+</PRE>
+</DIV>
+
+<p class=para>
+The first column indicates the status of the operation (
+211 being a success). The total number
+of articles, the first and last articles, and the newsgroup name
+constitute the rest of the line, respectively. As you can see, the
+number of articles is not equal to the numerical difference of the
+first and last articles. This is due to article expiration and deletion
+(as mentioned above).
+
+<div class=screen>
+<p>
+<pre>
+    $group_info = &lt;NNTP&gt;;
+    ($status, $first_post, $last_post) = (split (/\s+/, $group_info))[0, 2, 3];
+</PRE>
+</DIV>
+
+<p class=para>
+The server output is split on whitespace, and the first, third,
+and fourth elements are stored in <i class=emphasis>status</I>, 
+<i class=emphasis>first_post</I>,
+and <i class=emphasis><i class=emphasis>last_post</I></I>, respectively.
+Remember, arrays are zero based; the first element is zero, not
+one.
+
+<div class=screen>
+<p>
+<pre>
+    if ($status != 211) {
+        &amp;return_error (500, $error,
+                            "Could not get group information for $group.");
+    } else {
+        return ($first_post, $last_post);
+    }
+}
+</PRE>
+</DIV>
+
+<p class=para>
+If the status is not 211, an error message is displayed. Otherwise,
+the first and last article numbers are returned.
+
+<p class=para>
+In the <i class=emphasis>show_article subroutine</I>, the actual news article is
+retrieved and printed.
+
+<div class=screen>
+<p>
+<pre>
+sub show_article
+{
+    local ($group, $number) = @_;
+    local ($useful_headers, $header_line);
+    
+    $useful_headers = '(From:|Subject:|Date:|Organization:)';
+    print NNTP "head $number", "\n";
+    $header_line = &lt;NNTP&gt;;
+</PRE>
+</DIV>
+
+<p class=para>
+The <i class=emphasis>head</I> command displays the headers
+for the specified article. Here is the format of the NNTP
+output:
+
+<div class=screen>
+<p>
+<pre>
+221 14059 &lt;47hh6767ghe1$d09@nntp.test.net&gt; head
+Path: news.bu.edu!decwrl!nntp.test.net!usenet
+From: joe@test.net (Joe Test)
+Newsgroups: comp.infosystems.www.authoring.cgi
+Subject: I can't get the &lt;H1&gt; headers to display correctly
+Date: Thu, 05 Oct 1995 05:19:03 GMT
+Organization: Joe's Test Net
+Lines: 17
+Message-ID: &lt;47hh6767ghe1$d09@nntp.test.net&gt;
+Reply-To: joe@test.net
+NNTP-Posting-Host: my.news.test.net
+X-Newsreader: Joe Windows Reader v1.28
+.
+</PRE>
+</DIV>
+
+<p class=para>
+The first line contains the status, the article number, the
+article identification, and the NNTP command,
+respectively. The status of 
+221
+indicates success. All of the other lines constitute the various
+article headers, and are based on how and where the article was
+posted. The header body ends with the "." character.
+
+<div class=screen>
+<p>
+<pre>
+    if ($header_line =~ /^221/) {
+        &amp;print_header ($group);
+        print "&lt;PRE&gt;", "\n";
+</PRE>
+</DIV>
+
+<p class=para>
+If the server returns a success status of 221, the <i class=emphasis>print_header</I>
+subroutine is called to display the MIME header,
+followed by the usual HTML.
+
+<div class=screen>
+<p>
+<pre>
+        while (&lt;NNTP&gt;) {
+            if (/^$useful_headers/) {
+                $_ = &amp;escape ($_);
+                print "&lt;B&gt;", $_, "&lt;/B&gt;";
+            } elsif (/^\.\s*$/) {    
+                last;
+            }
+        }
+</PRE>
+</DIV>
+
+<p class=para>
+This loop iterates through the header body, and escapes and
+displays the From, Subject, Date, and Organization headers.
+
+<div class=screen>
+<p>
+<pre>
+        print "\n";
+        print NNTP "body $number", "\n";
+        &lt;NNTP&gt;;
+</PRE>
+</DIV>
+
+<p class=para>
+If everything is successful up to this point, the <i class=emphasis>body</I>
+command is sent to the server. In response, the server outputs the
+body of the article in the following format:
+
+<div class=screen>
+<p>
+<pre>
+body 14059
+222 14059 &lt;47hh6767ghe1$d09@nntp.test.net&gt; body
+I am trying to display headers using the &lt;H1&gt; tag, but it does not
+seem to be working. What should I do? Please help.
+Thanks in advance,
+-Joe
+.
+</PRE>
+</DIV>
+
+<p class=para>
+There is no need to check the status of this command, if the
+<i class=emphasis>head</I> command executed successfully. The server
+returns a status of 
+222
+to indicate success.
+
+<div class=screen>
+<p>
+<pre>
+        while (&lt;NNTP&gt;) {    
+            last if (/^\.\s*$/);
+            $_ = &amp;escape ($_);
+            print;
+        }
+</PRE>
+</DIV>
+
+<p class=para>
+The <i class=emphasis>while</I> loop iterates through the body, escapes all the
+lines, and displays them. If the line starts with a period and contains
+nothing else but whitespace, the loop terminates.
+
+<div class=screen>
+<p>
+<pre>
+        print "&lt;/PRE&gt;", "\n";
+        &amp;print_footer ();
+    } else {
+        &amp;return_error (500, $error,
+            "Article number $number could not be retrieved.");
+    }
+}
+</PRE>
+</DIV>
+
+<p class=para>
+If the specified article is not found, an error message is
+displayed.
+
+<p class=para>
+The following subroutine reads all of the articles for a particular
+group into memory, threads them--all replies to a specific article
+are grouped together for reading convenience--and displays the article
+numbers and subject lines.
+
+<div class=screen>
+<p>
+<pre>
+sub show_all_articles
+{
+    local ($id, $group, $first_article, $last_article) = @_;
+    local ($this_script, %all, $count, @numbers, $article,
+           $subject, @threads, $query);
+    $this_script = $ENV{'SCRIPT_NAME'};
+    $count = 0;
+</PRE>
+</DIV>
+
+<p class=para>
+This is the most complicated (but the most interesting) part
+of the program. Before your eyes, you will see a nice web interface
+grow from some fairly primitive output from the NNTP
+server.
+
+<div class=screen>
+<p>
+<pre>
+    print NNTP "xhdr subject $first_article-$last_article", "\n";
+    &lt;NNTP&gt;;
+</PRE>
+</DIV>
+
+<p class=para>
+The xhdr subject lists all the articles in the specified range
+in the following format:
+
+<div class=screen>
+<p>
+<pre>
+xhdr subject 4776-14059
+221 subject fields follow
+4776 Re: CGI Scripts (guestbook ie)
+4831 Re: Access counter for CERN server
+12769 Re: Problems using sendmail from Perl script
+12770 File upload, Frames and BSCW
+-
+- (More Articles)
+-
+.
+</PRE>
+</DIV>
+
+<p class=para>
+The first line contains the status. Again, there is no need
+to check this, as we know the newsgroup exists. Each article is
+listed with its number and subject.
+
+<div class=screen>
+<p>
+<pre>
+    &amp;print_header ("Newsgroup: $group");
+    print "&lt;UL&gt;", "\n";
+    while (&lt;NNTP&gt;) {
+        last if (/^\.\s*$/);
+        $_ = &amp;escape ($_);
+        ($article, $subject) = split (/\s+/, $_, 2);
+        $subject =~ s/^\s*(.*)\b\s*/$1/;
+        $subject =~ s/^[Rr][Ee]:\s*//;
+</PRE>
+</DIV>
+
+<p class=para>
+The loop iterates through all of the subjects. The <i class=emphasis>split</I>
+command separates each entry into the article number and subject.
+Leading and trailing spaces, as well as "Re:" at the beginning of
+the line are removed from the subject. This is for sorting purposes.
+
+<div class=screen>
+<p>
+<pre>
+        if (defined ($all{$subject})) {
+            $all{$subject} = join ("-", $all{$subject}, $article);
+        } else {
+            $count++;
+            $all{$subject} = join ("\0", $count, $article); 
+        }
+    }
+</PRE>
+</DIV>
+
+<p class=para>
+This is responsible for threading the articles. Each new subject
+is stored in an associative array, <i class=emphasis>$all</I>, keyed
+by the subject itself. The <i class=emphasis>$count</I> variable
+gives a unique number to start each value in the array. If the article
+already exists, the article number is simply appended to the end
+to the element with the same subject. For example, if the subjects
+look like this:
+
+<div class=screen>
+<p>
+<pre>
+2020 What is CGI?
+2026 How do you create counters?
+2027 Please help with file locking!!!
+2029 Re: What is CGI?
+2030 Re: What is CGI?
+2047 Re: How do you create counters?
+.
+.
+.
+</PRE>
+</DIV>
+
+<p class=para>
+Then this is how the associative array will look:
+
+<div class=screen>
+<p>
+<pre>
+$all{'What is CGI?'} = "1\02020-2029-2030";
+$all{'How do you create counters?'} = "2\02026-2047";
+$all{'Please help with file locking!!!'} = "3\02027";
+</PRE>
+</DIV>
+
+<p class=para>
+Note that we assigned a <i class=emphasis>$count</I> of 1 to
+the first thread we see ("What's CGI?"), 2 to the second thread,
+and so on. Later we sort by these numbers, so the user will see
+threads in the order that they came in to the newsgroup.
+
+<div class=screen>
+<p>
+<pre>
+    @numbers = sort by_article_number keys (%all);
+</PRE>
+</DIV>
+
+<p class=para>
+What you see here
+is a common Perl technique for sorting. The <i class=emphasis>sort</I> command invokes
+a subroutine repeatedly (in this case, one that I wrote called <i class=emphasis>by_article_number</I>).
+Using a fast algorithm, it passes pairs of elements from the <i class=emphasis>$all</I>
+array to the subroutine.
+
+<div class=screen>
+<p>
+<pre>
+    foreach $subject (@numbers) {
+        $article = (split("\0", $all{$subject}))[1];
+</PRE>
+</DIV>
+
+<p class=para>
+The loop iterates through all of the subjects. The list of
+article numbers for each subject is stored in <i class=emphasis>article</I>.
+Thus, the <i class=emphasis>$article</I> variable for "What is CGI?"
+would be:
+
+<div class=screen>
+<p>
+<pre>
+2020-2029-2030
+</PRE>
+</DIV>
+
+<p class=para>
+Now, we work on the string of articles.
+
+<div class=screen>
+<p>
+<pre>
+        @threads = split (/-/, $article);
+</PRE>
+</DIV>
+
+<p class=para>
+The string containing all of the articles for a particular
+subject are split on the "-" delimiter and stored in the <i class=emphasis>threads</I>
+array.
+
+<div class=screen>
+<p>
+<pre>
+        foreach (@threads) {        
+            $query = join ("", $this_script, "?", "group=", $id, 
+                       "&amp;", "article=", $_);
+            print qq|&lt;LI&gt;&lt;A HREF="$query"&gt;$subject&lt;/A&gt;|, "\n";
+        }
+    }
+    print "&lt;/UL&gt;", "\n";
+    &amp;print_footer ();
+}
+</PRE>
+</DIV>
+
+<p class=para>
+The loop iterates through each article number (or thread),
+and builds a hypertext link containing the newsgroup name and the
+article number (see <a href="#CGI-CHP-10-FIG-3">Figure 10.3</A>).
+
+<div class=figure>
+<h4 class=figure><a class="TITLE" name="CGI-CHP-10-FIG-3">Figure 10.3: News articles</A></h4>
+
+
+<p>
+<img align=middle src="figs/cgi1003.gif" alt="[Graphic: Figure 10-3]" width=450 height=367 border=0>
+
+</DIV>
+
+<p class=para>
+The following is a simple subroutine that compares two values
+of an associative array.
+
+<div class=screen>
+<p>
+<pre>
+sub by_article_number
+{
+    $all{$a} &lt;=&gt; $all{$b};
+}
+</PRE>
+</DIV>
+
+<p class=para>
+This statement is identical to the following:
+
+<div class=screen>
+<p>
+<pre>
+if ($all{$a} &lt; $all{$b}) {
+    return (-1);
+} elsif ($all{$a} == $all{$b}) {
+    return (0);
+} elsif ($all{$a} &gt; $all{$b}) {
+    return (1);
+}
+</PRE>
+</DIV>
+
+<p class=para>
+The <i class=emphasis>$a</I> and <i class=emphasis>$b</I> constitute
+two values in the associative array. In this case, Perl uses this
+logic to compare all of the values in the associative array.
+
+<p class=para>
+The <i class=emphasis>display_newsgroups</I> subroutine creates a dynamic HTML
+document that lists all the newsgroups contained in the <i class=emphasis>groups</I>
+associative array.
+
+<div class=screen>
+<p>
+<pre>
+sub display_newsgroups
+{
+    local ($script_name, $keyword, $newsgroup, $query);
+    &amp;print_header ("CGI NNTP Gateway");
+    $script_name = $ENV{'SCRIPT_NAME'};
+    print "&lt;UL&gt;", "\n";
+    foreach $keyword (keys %groups) {
+        $newsgroup = $groups{$keyword};
+        $query = join ("", $script_name, "?", "group=", $keyword);
+        print qq|&lt;LI&gt;&lt;A HREF="$query"&gt;$newsgroup&lt;/A&gt;|, "\n";
+    }
+    print "&lt;/UL&gt;";
+    &amp;print_footer ();
+}
+</PRE>
+</DIV>
+
+<p class=para>
+Each newsgroup is listed as an unordered list, with the query
+consisting of the specific key from the associative array. Remember,
+the qq|...| notation is exactly like the "..." notation, except
+for the fact that "|" is the delimiter, instead of the double quotation
+marks. 
+
+</DIV>
+
+
+<div class=htmlnav>
+
+<p>
+<hr align=left width=515>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch10_06.html"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><a href="index.html"><img src='gifs/txthome.gif' border=0 alt='Home'></a></td>
+<td width=172 align=right valign=top><a href="http://n0rp.chemlab.org/books/web/cgi/ch10_08.html"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+<tr>
+<td width=172 align=left valign=top>Archie</td>
+<td width=171 align=center valign=top><a href="index/idx_0.html"><img src='gifs/index.gif' alt='Book Index' border=0></a></td>
+<td width=172 align=right valign=top>Magic Cookies</td>
+</tr>
+</table>
+<hr align=left width=515>
+
+<img src="gifs/smnavbar.gif" usemap="#map" border=0> 
+<map name="map"> 
+<area shape="Rect" coords="0,0,45,20" href="../html/index.html" alt="HTML: The Definitive Guide">
+<area shape="Rect" coords="46,0,164,37" href="index.html" alt="CGI Programming">
+<area shape="Rect" coords="163,0,248,32" href="../jscript/index.html" alt="JavaScript: The Definitive Guide">
+<area shape="Rect" coords="247,0,371,44" href="../perl/index.html" alt="Programming Perl">
+<area shape="Rect" coords="371,0,524,46" href="../webnut/index.html" alt="WebMaster in a Nutshell">
+</MAP>
+</DIV>
+
+</BODY>
+</HTML>

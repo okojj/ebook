@@ -1,0 +1,1351 @@
+<html><head>
+<title>[Chapter 9] 9.2 A Korn Shell Debugger</TITLE>
+<meta name="DC.title" content="Learning the Korn Shell"><meta name="DC.creator" content="Bill Rosenblatt"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1998-08-03T21:16:38Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-054-6" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch09_01.htm" webstripperlinkwas="ch09_01.htm" title="9. Debugging Shell Programs"><link rel="prev" href="ch09_01.htm" webstripperlinkwas="ch09_01.htm" title="9.1 Basic Debugging Aids"><link rel="next" href="ch10_01.htm" webstripperlinkwas="ch10_01.htm" title="10. Korn Shell Administration"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" alt="Learning the Korn Shell" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,66" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/ksh/index.htm" alt="Learning the Korn Shell"><area shape="RECT" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="jobjects/fsearch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch09_01.htm" webstripperlinkwas="ch09_01.htm" title="9.1 Basic Debugging Aids"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous: 9.1 Basic Debugging Aids" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 9<br>Debugging Shell Programs</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="CHAPTER" href="ch10_01.htm" webstripperlinkwas="ch10_01.htm" title="10. Korn Shell Administration"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next: 10. Korn Shell Administration" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="KSH-CH-9-SECT-2">9.2 A Korn Shell Debugger</A
+></H2
+><p class="para"><a class="indexterm" name="AUTOID-15367"></A
+>Commercially available debuggers give you much more functionality
+than the shell's <b class="emphasis.bold">set</B
+> options and fake signals. The most 
+advanced have fabulous graphical user interfaces, 
+incremental compilers, symbolic evaluators, and other such 
+amenities. But just about all modern debuggers-even the
+more modest ones-have features that enable you to
+&quot;peek&quot; into a program while it's running, to examine 
+it in detail and in terms of its source language.  <a class="indexterm" name="AUTOID-15373"></A
+>
+Specifically, most debuggers let you do these things:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para">Specify points at which the program stops execution and enters the
+debugger. These are called <em class="emphasis">breakpoints</EM
+>.</P
+></LI
+><li class="listitem"><p class="para">Execute only a bit of the program at a time, usually measured in 
+source code statements. This ability is often called <em class="emphasis">stepping</EM
+>.</P
+></LI
+><li class="listitem"><p class="para">Examine and possibly change the state of the program (e.g., values
+of variables) in the middle of a run, i.e., when stopped at a breakpoint
+or after stepping.</P
+></LI
+><li class="listitem"><p class="para">Do all of the above without having to change the source code.</P
+></LI
+></UL
+><p class="para"><a class="indexterm" name="KSH-CH-9-IX-KSHDB"></A
+>Our debugger, called <em class="emphasis">kshdb</EM
+>, has these features and a few more.
+Although it's a basic tool, 
+without too many &quot;bells and whistles&quot;, it is real.
+[3]<a class="indexterm" name="AUTOID-15394"></A
+><a class="indexterm" name="AUTOID-15398"></A
+><a class="indexterm" name="AUTOID-15400"></A
+>
+The code is available from an anonymous FTP archive, 
+as described in <a class="xref" href="appc_01.htm" webstripperlinkwas="appc_01.htm" title="Obtaining Sample Programs">Appendix C, Obtaining Sample Programs</A
+>; if you don't have access to the Internet,
+you can type or scan the code in. Either way, you can use
+<em class="emphasis">kshdb</EM
+> to debug your own shell scripts, and you should feel free to 
+enhance it. We'll suggest some enhancements at the end of this chapter.</P
+><blockquote class="footnote"><p class="para">[3] Unfortunately, <em class="emphasis">kshdb</EM
+> won't work completely on SunOS versions
+4.1.x and older.</P
+></BLOCKQUOTE
+><div class="sect2"><h3 class="sect2"><a class="title" name="KSH-CH-9-SECT-2.1">9.2.1 Structure of the Debugger</A
+></H3
+><p class="para"><a class="indexterm" name="KSH-CH-9-IX-KSHDB-SOURCE-STRUCTURE"></A
+>The code for <em class="emphasis">kshdb</EM
+> has several features worth explaining in
+some detail. The most important is the basic principle on which
+it works: it turns a shell script into
+a debugger for itself, by prepending debugger functionality
+to it; then it runs the new script.</P
+><div class="sect3"><h4 class="sect3"><a class="title" name="KSH-CH-9-SECT-2.1.1">9.2.1.1 The driver script</A
+></H4
+><p class="para">Therefore the code has two parts: the part that implements the
+debugger's functionality, and the part that installs that
+functionality into the script being debugged. The second part,
+which we'll see first, is the script called <em class="emphasis">kshdb</EM
+>.
+It's very simple:<a class="indexterm" name="AUTOID-15416"></A
+></P
+><p class="para"><blockquote class="screen"><pre class="screen"># kshdb -- Korn Shell debugger
+# Main driver: constructs full script (with preamble) and runs it
+
+print 'Korn Shell Debugger version 1.0\n'
+_guineapig=$1
+if [[ ! -r $1 ]]; then		# file not found or readable
+    print &quot;Cannot read $_guineapig.&quot; &gt;&amp;2
+    exit 1
+fi
+shift
+
+_tmpdir=/tmp
+_libdir=.
+_dbgfile=$_tmpdir/kshdb$$	# temp file for script being debugged (copy)
+cat $_libdir/kshdb.pre $_guineapig &gt; $_dbgfile
+exec ksh $_dbgfile $_guineapig $_tmpdir $_libdir &quot;$@&quot;</PRE
+></BLOCKQUOTE
+></P
+><p class="para"><em class="emphasis">kshdb</EM
+> takes as argument the name of the script being
+debugged, which for the sake of brevity we'll call the guinea pig.
+Any additional arguments will be passed to the guinea pig as its
+positional parameters.  </P
+><p class="para">If the argument is invalid (the file isn't readable), <em class="emphasis">kshdb</EM
+> exits
+with error status. Otherwise,
+after an introductory message, it constructs 
+a temporary filename in the way we saw in the last chapter.<a class="indexterm" name="AUTOID-15426"></A
+>
+If you don't have (or don't have access to) <em class="emphasis">/tmp</EM
+>
+on your system, then you can
+substitute a different directory for <b class="emphasis.bold">_tmpdir</B
+>.  
+[4]
+Also, make sure that <b class="emphasis.bold">_libdir</B
+> is set to the directory where
+the <em class="emphasis">kshdb.pre</EM
+> and <em class="emphasis">kshdb.fns</EM
+> files (which we'll see soon)
+reside.  <a class="indexterm" name="AUTOID-15436"></A
+>
+<em class="emphasis">/usr/lib</EM
+> is a good choice if you have access to it.</P
+><blockquote class="footnote"><p class="para">[4] All function names and variables (except those local to functions)
+in <em class="emphasis">kshdb</EM
+> have names beginning with an underscore (_), to minimize
+the possibility of clashes with names in the guinea pig.</P
+></BLOCKQUOTE
+><p class="para"><a class="indexterm" name="AUTOID-15440"></A
+>The <em class="emphasis">cat</EM
+> statement builds the temp file: it consists of
+a file we'll see soon called <em class="emphasis">kshdb.pre</EM
+>, which contains
+the actual debugger code, followed immediately
+by a copy of the guinea pig. Therefore
+the temp file contains a shell script that has been turned into
+a debugger for itself.<a class="indexterm" name="AUTOID-15444"></A
+></P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="KSH-CH-9-SECT-2.1.2">9.2.1.2 exec</A
+></H4
+><p class="para"><a class="indexterm" name="AUTOID-15448"></A
+>The last line runs this script with <b class="emphasis.bold">exec</B
+>, a statement
+we haven't seen yet. We've chosen to wait until now to introduce
+it because-as we think you'll agree-it can be dangerous.
+<b class="emphasis.bold">exec</B
+> takes its arguments as a command line and runs the
+command in place of the current program, in the same 
+process. In other words,
+the shell running the above script will <em class="emphasis">terminate immediately</EM
+>
+and be replaced by <b class="emphasis.bold">exec</B
+>'s arguments. The situations in
+which you would want to use <b class="emphasis.bold">exec</B
+> are few, far between,
+and quite arcane-though this is one of them.
+[5]</P
+><blockquote class="footnote"><p class="para">[5] <a class="indexterm" name="AUTOID-15457"></A
+><a class="indexterm" name="AUTOID-15460"></A
+><b class="emphasis.bold">exec</B
+> can also be used with an I/O redirector only; this causes
+the redirector to take effect for the remainder of the script
+or login session.
+For example, the line 
+<b class="emphasis.bold">exec 2&gt;errlog</B
+> at the top of a script
+directs standard error to the file <em class="emphasis">errlog</EM
+> for the entire script.</P
+></BLOCKQUOTE
+><p class="para">In this case, <b class="emphasis.bold">exec</B
+> just runs the newly-constructed shell
+script, i.e., the guinea pig with its debugger,
+in another Korn shell. It passes
+the new script three arguments-the names of the original 
+guinea pig (<b class="emphasis.bold">$_guineapig</B
+>),
+the temp directory (<b class="emphasis.bold">$_tmpdir</B
+>), and the directory where 
+<em class="emphasis">kshdb.pre</EM
+> and <em class="emphasis">kshdb.fns</EM
+> are kept-followed
+by the user's positional parameters, if any.</P
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="KSH-CH-9-SECT-2.2">9.2.2 The Preamble</A
+></H3
+><p class="para">Now we'll see the code that gets prepended to the script
+being debugged; we call this the <em class="emphasis">preamble</EM
+>. It's
+kept in the following file <em class="emphasis">kshdb.pre</EM
+>, which is also fairly simple.<a class="indexterm" name="AUTOID-15478"></A
+></P
+><p class="para"><blockquote class="screen"><pre class="screen"># kshdb preamble
+# prepended to shell script being debugged
+# arguments: 
+# $1 = name of original guinea-pig script
+# $2 = directory where temp files are stored
+# $3 = directory where kshdb.pre and kshdb.fns are stored
+
+_dbgfile=$0
+_guineapig=$1
+_tmpdir=$2
+_libdir=$3
+shift 3				# move user's args into place
+
+. $_libdir/kshdb.fns		# read in the debugging functions
+_linebp=
+_stringbp=
+let _trace=0			# initialize execution trace to off
+let _i=1			      # read guinea-pig file into lines array
+while read -r _lines[$_i]; do
+    let _i=$_i+1
+done &lt; $_guineapig
+
+trap _cleanup EXIT		# erase files before exiting
+let _steps=1			# no. of stmts to run after trap is set
+LINENO=-1
+trap '_steptrap $LINENO' DEBUG
+:</PRE
+></BLOCKQUOTE
+></P
+><p class="para"><a class="indexterm" name="AUTOID-15485"></A
+>The first few lines save the three fixed arguments in variables
+and shift them out of the way, so that the positional parameters
+(if any) are those that the user supplied on the command line
+as arguments to the guinea pig.
+Then, the preamble reads in another file, <em class="emphasis">kshdb.fns</EM
+>, 
+that contains the &quot;meat&quot; of the debugger as function definitions.  
+We put this code in a separate file to minimize the size of the temp file.
+We'll examine <em class="emphasis">kshdb.fns</EM
+> shortly.</P
+><p class="para">Next, <em class="emphasis">kshdb.pre</EM
+> initializes the two breakpoint lists
+to empty and execution tracing to off (see below), then 
+reads the guinea pig
+into an array of lines. We do the latter so that
+the debugger can access lines in the script when performing
+certain checks, and so that the execution trace feature can
+print lines of code as they execute. </P
+><p class="para">The real fun begins in the last group of code lines, where 
+we set up the debugger to start working.  <a class="indexterm" name="AUTOID-15492"></A
+><a class="indexterm" name="AUTOID-15495"></A
+>
+We use two <b class="emphasis.bold">trap</B
+>
+commands with fake signals. The first sets up a cleanup routine
+(which just erases the temporary file) to be called on EXIT, 
+i.e., when the script terminates for any reason. The second,
+and more important, sets up the function <b class="emphasis.bold">_steptrap</B
+> to be
+called after every statement.  </P
+><p class="para"><a class="indexterm" name="AUTOID-15501"></A
+><a class="indexterm" name="AUTOID-15503"></A
+><b class="emphasis.bold">_steptrap</B
+> gets an argument that evaluates to the number of the
+line in the guinea pig that just ran. We use the same technique
+with the built-in variable <b class="emphasis.bold">LINENO</B
+> that we saw earlier in the
+chapter, but with an added twist: if you assign a value
+to <b class="emphasis.bold">LINENO</B
+>, it uses that as the next line number and increments
+from there. The statement <b class="emphasis.bold">LINENO=</B
+>-1 re-starts line
+numbering so that the first line in the guinea pig is line 1.</P
+><p class="para">After the DEBUG trap is set, the preamble ends
+with a &quot;do-nothing&quot; statement (<code class="literal">:</CODE
+>).
+The shell executes this statement and enters <b class="emphasis.bold">_steptrap</B
+>
+for the first time. The variable <b class="emphasis.bold">_steps</B
+> is set up so that
+<b class="emphasis.bold">_steptrap</B
+> executes its last <b class="emphasis.bold">elif</B
+> clause, as you'll
+see shortly, and enters the debugger. As a result, execution 
+halts just before the first statement of the guinea pig is run,
+and the user sees a <b class="emphasis.bold">kshdb&gt;</B
+> prompt; the debugger is
+now in full operation.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="KSH-CH-9-SECT-2.3">9.2.3 Debugger Functions</A
+></H3
+><p class="para">The function <b class="emphasis.bold">_steptrap</B
+> is the entry point into the debugger;
+it is defined in the file <em class="emphasis">kshdb.fns</EM
+>, which is given in its
+entirety at the end of this chapter. Here is <b class="emphasis.bold">_steptrap</B
+>:</P
+><p class="para"><blockquote class="screen"><pre class="screen"># Here after each statement in script being debugged.
+# Handle single-step and breakpoints.
+function _steptrap {
+    _curline=$1                       # arg is no. of line that just ran
+
+    (( $_trace )) &amp;&amp; _msg &quot;$PS4 line $_curline: ${_lines[$_curline]}&quot;
+
+    if (( $_steps &gt;= 0 )); then       # if in step mode
+        let _steps=&quot;$_steps - 1&quot;      # decrement counter 
+    fi
+
+    # first check if line num or string breakpoint reached
+    if _at_linenumbp || _at_stringbp; then
+        _msg &quot;Reached breakpoint at line $_curline&quot;
+        _cmdloop                       # breakpoint, enter debugger
+                                        
+    # if not, check whether break condition exists and is true
+    elif [[ -n $_brcond ]] &amp;&amp; eval $_brcond; then
+        _msg &quot;Break condition $_brcond true at line $_curline&quot;
+        _cmdloop
+
+    # next, check if step mode and number of steps is up
+    elif (( $_steps == 0 )); then      # if step mode and time to stop
+        _msg &quot;Stopped at line $_curline&quot;
+        _cmdloop                       # enter debugger
+
+    fi
+}</PRE
+></BLOCKQUOTE
+></P
+><p class="para"><b class="emphasis.bold">_steptrap</B
+> starts by setting <b class="emphasis.bold">_curline</B
+> to the number of the 
+guinea pig line that just ran.  <a class="indexterm" name="AUTOID-15528"></A
+><a class="indexterm" name="AUTOID-15531"></A
+>
+If execution tracing is turned on, 
+it prints the <b class="emphasis.bold">PS4</B
+> execution trace prompt (a la <b class="emphasis.bold">xtrace</B
+> 
+mode), the line number, and the line of code itself.</P
+><p class="para">Then it does one of two things: enter the debugger, the heart of
+which is the function <b class="emphasis.bold">_cmdloop</B
+>, or just return so that the
+shell can execute the next statement. It chooses the former if
+a <em class="emphasis">breakpoint</EM
+> or <em class="emphasis">break condition</EM
+> (see below)
+has been reached, or if the user stepped
+into this statement.</P
+><div class="sect3"><h4 class="sect3"><a class="title" name="KSH-CH-9-SECT-2.3.1">9.2.3.1 Commands</A
+></H4
+><p class="para">We'll explain shortly how <b class="emphasis.bold">_steptrap</B
+> determines these things;
+now we'll look at <b class="emphasis.bold">_cmdloop</B
+>.  <a class="indexterm" name="AUTOID-15546"></A
+>
+It's a typical command loop,
+resembling a combination of the <b class="emphasis.bold">case</B
+> statements we saw in
+<a class="xref" href="ch05_01.htm" webstripperlinkwas="ch05_01.htm" title="Flow Control">Chapter 5</A
+> and the calculator loop we saw in the previous chapter.</P
+><p class="para"><blockquote class="screen"><pre class="screen"># Debugger command loop.
+# Here at start of debugger session, when breakpoint reached,
+# or after single-step.
+function _cmdloop {
+    typeset cmd args
+
+    while read -s cmd&quot;?kshdb&gt; &quot; args; do
+        case $cmd in
+            \*bp ) _setbp $args ;;  # set breakpoint at line num or string.
+
+            \*bc ) _setbc $args ;;  # set break condition.
+
+            \*cb ) _clearbp ;;      # clear all breakpoints.
+
+            \*g  ) return ;;        # start/resume execution
+
+            \*s  ) let _steps=${args:-1} # single-step N times (default 1) return ;;
+
+            \*x  ) _xtrace ;;        # toggle execution trace
+
+            \*\? | /*h ) _menu ;;    # print command menu        
+
+            \*q  ) exit ;;           # quit
+
+            \**  ) _msg &quot;Invalid command: $cmd&quot; ;; 
+
+            *  ) eval $cmd $args ;;  # otherwise, run shell command
+
+        esac
+    done
+}</PRE
+></BLOCKQUOTE
+></P
+><p class="para">At each iteration, <b class="emphasis.bold">cmdloop</B
+> prints a prompt, reads a command,
+and processes it.  <a class="indexterm" name="AUTOID-15554"></A
+>
+We use <b class="emphasis.bold">read -s</B
+> so that the user
+can take advantage of command-line editing within <em class="emphasis">kshdb</EM
+>.
+All <em class="emphasis">kshdb</EM
+> commands start with <code class="literal">*</CODE
+> to prevent confusion 
+with shell commands. Anything that isn't a <em class="emphasis">kshdb</EM
+> command
+(and doesn't start with <code class="literal">*</CODE
+>) is passed off to the shell for execution.
+<a class="xref" href="#KSH-CH-9-TAB-2" title="kshdb Commands">Table 9.3</A
+> summarizes the debugger commmands.<a class="indexterm" name="AUTOID-15565"></A
+></P
+><table class="table"><caption class="table"><a class="title" name="KSH-CH-9-TAB-2">Table 9.3: kshdb Commands</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1">Command</TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1">Action</TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">*</CODE
+><b class="emphasis.bold">bp</B
+> <em class="emphasis">N</EM
+></TD
+><td class="entry" rowspan="1" colspan="1">Set breakpoint at line <em class="emphasis">N</EM
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">*</CODE
+><b class="emphasis.bold">bp</B
+> <em class="emphasis">str</EM
+></TD
+><td class="entry" rowspan="1" colspan="1">Set breakpoint at next line containing <em class="emphasis">str</EM
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">*</CODE
+><b class="emphasis.bold">bp</B
+></TD
+><td class="entry" rowspan="1" colspan="1">List breakpoints and break condition</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">*</CODE
+><b class="emphasis.bold">bc</B
+> <em class="emphasis">str</EM
+></TD
+><td class="entry" rowspan="1" colspan="1">Set break condition to <em class="emphasis">str</EM
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">*</CODE
+><b class="emphasis.bold">bc</B
+></TD
+><td class="entry" rowspan="1" colspan="1">Clear break condition</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">*</CODE
+><b class="emphasis.bold">cb</B
+></TD
+><td class="entry" rowspan="1" colspan="1">Clear all breakpoints</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">*</CODE
+><b class="emphasis.bold">g</B
+></TD
+><td class="entry" rowspan="1" colspan="1">Start or resume execution</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">*</CODE
+><b class="emphasis.bold">s</B
+> [<em class="emphasis">N</EM
+>]</TD
+><td class="entry" rowspan="1" colspan="1">Step through <em class="emphasis">N</EM
+> statements (default 1)</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">*</CODE
+><b class="emphasis.bold">x</B
+></TD
+><td class="entry" rowspan="1" colspan="1">Toggle execution tracing</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">*</CODE
+><b class="emphasis.bold">h</B
+>, <code class="literal">*?</CODE
+></TD
+><td class="entry" rowspan="1" colspan="1">Print a help menu</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><code class="literal">*</CODE
+><b class="emphasis.bold">q</B
+></TD
+><td class="entry" rowspan="1" colspan="1">Quit</TD
+></TR
+></TBODY
+></TABLE
+><p class="para">Before we look at the individual commands, it is important that
+you understand how control passes through <b class="emphasis.bold">_steptrap</B
+>, the
+command loop, and the guinea pig.  </P
+><p class="para"><a class="indexterm" name="AUTOID-15643"></A
+><a class="indexterm" name="AUTOID-15646"></A
+><b class="emphasis.bold">_steptrap</B
+> runs after every statement in the guinea pig
+as a result of the <b class="emphasis.bold">trap ... DEBUG</B
+> statement in the preamble.
+If a breakpoint has been reached or the user
+previously typed in a step command (<code class="literal">*</CODE
+><b class="emphasis.bold">s</B
+>), 
+<b class="emphasis.bold">_steptrap</B
+> calls the command loop. In doing so,
+it effectively &quot;interrupts&quot; the shell that is
+running the guinea pig to hand control over to the user.
+[6]</P
+><blockquote class="footnote"><p class="para">[6] In fact, low-level systems programmers can think of the entire
+<b class="emphasis.bold">trap</B
+> mechanism as quite similar to an interrupt-handling scheme.</P
+></BLOCKQUOTE
+><p class="para">The user can invoke debugger commands as well as shell commands
+that run in the same shell as the guinea pig.
+This means that you can use shell commands to check values
+of variables, signal traps, and any other information local to 
+the script being debugged.  </P
+><p class="para">The command loop runs, and the user stays in control,
+until the user types <code class="literal">*</CODE
+><b class="emphasis.bold">g</B
+>, <code class="literal">*</CODE
+><b class="emphasis.bold">s</B
+>,
+or <code class="literal">*</CODE
+><b class="emphasis.bold">q</B
+>. Let's look in detail at what happens in each of
+these cases.</P
+><p class="para"><a class="indexterm" name="AUTOID-15666"></A
+><code class="literal">*</CODE
+><b class="emphasis.bold">g</B
+> has the effect of running
+the guinea pig uninterrupted until it finishes or hits a breakpoint.
+But actually, it simply exits the command loop and returns to 
+<b class="emphasis.bold">_steptrap</B
+>, which exits as well. The shell takes control
+back; it runs the next statement in the guinea pig script and calls
+<b class="emphasis.bold">_steptrap</B
+> again. Assuming there is no breakpoint, this time
+<b class="emphasis.bold">_steptrap</B
+> will just exit again, and the process will repeat until there
+is a breakpoint or the guinea pig is done.</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="KSH-CH-9-SECT-2.3.2">9.2.3.2 Stepping</A
+></H4
+><p class="para"><a class="indexterm" name="KSH-CH-9-IX-KSHDB-COMMANDS-S"></A
+>When the user types <code class="literal">*</CODE
+><b class="emphasis.bold">s</B
+>, the command loop code sets the variable
+<b class="emphasis.bold">_steps</B
+> to the number of steps the user wants to execute, i.e.,
+to the argument given. Assume at first that the user omits the argument,
+meaning that <b class="emphasis.bold">_steps</B
+> is set to 1. Then the command
+loop exits and returns control to <b class="emphasis.bold">_steptrap</B
+>, which (as above)
+exits and hands control back to the shell. The shell runs the next
+statement and returns to <b class="emphasis.bold">_steptrap</B
+>, which sees that <b class="emphasis.bold">_steps</B
+>
+is 1 and decrements it to 0. Then the second <b class="emphasis.bold">elif</B
+> conditional
+sees that <b class="emphasis.bold">_steps</B
+> is 0, so
+it prints a &quot;stopped&quot; message and calls the command loop.</P
+><p class="para">Now assume that the user supplies an argument to <code class="literal">*</CODE
+><b class="emphasis.bold">s</B
+>, say 3.
+<b class="emphasis.bold">_steps</B
+> is set to 3. Then the following happens:<a class="indexterm" name="AUTOID-15695"></A
+></P
+><ol class="orderedlist"><li class="listitem"><p class="para">After the next statement runs, <b class="emphasis.bold">_steptrap</B
+>
+is called again. It enters the first <b class="emphasis.bold">if</B
+>
+clause, since <b class="emphasis.bold">_steps</B
+> is greater than 0. <b class="emphasis.bold">_steptrap</B
+>
+decrements <b class="emphasis.bold">_steps</B
+> to 2 and exits, returning control to
+the shell.  </P
+></LI
+><li class="listitem"><p class="para">This process repeats, another step in the guinea pig
+is run, and <b class="emphasis.bold">_steps</B
+> becomes 1.  </P
+></LI
+><li class="listitem"><p class="para">A third statement is run
+and we're back in <b class="emphasis.bold">_steptrap</B
+>. <b class="emphasis.bold">_steps</B
+> is decremented to 0,
+the second <b class="emphasis.bold">elif</B
+> clause is run, and
+<b class="emphasis.bold">_steptrap</B
+> breaks out to the command loop again.  </P
+></LI
+></OL
+><p class="para">The overall
+effect is that three steps run and then the debugger takes over again.<a class="indexterm" name="AUTOID-15715"></A
+></P
+><p class="para"><a class="indexterm" name="AUTOID-15717"></A
+>Finally, the <code class="literal">*</CODE
+><b class="emphasis.bold">q</B
+> command calls the function <b class="emphasis.bold">_cleanup</B
+>, which
+just erases the temp file and exits the entire program.</P
+><p class="para">All other debugger commands (<code class="literal">*</CODE
+><b class="emphasis.bold">bp</B
+>, <code class="literal">*</CODE
+><b class="emphasis.bold">bc</B
+>, <code class="literal">*</CODE
+><b class="emphasis.bold">cb</B
+>, <code class="literal">*</CODE
+><b class="emphasis.bold">x</B
+>
+and shell commands) cause the shell to stay in the command loop, 
+meaning that the user prolongs the &quot;interruption&quot; of the shell.</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="KSH-CH-9-SECT-2.3.3">9.2.3.3 Breakpoints</A
+></H4
+><p class="para">Now we'll examine the breakpoint-related commands and the breakpoint
+mechanism in general.<a class="indexterm" name="KSH-CH-9-IX-KSHDB-COMMANDS-BP"></A
+>
+The <code class="literal">*</CODE
+><b class="emphasis.bold">bp</B
+> command calls the function <b class="emphasis.bold">_setbp</B
+>, which can
+set two kinds of breakpoints, depending on
+the type of argument given. If it is a number, it's
+treated as a line number; otherwise it's interpreted as a string
+that the breakpoint line should contain.  </P
+><p class="para">For example, the command
+<code class="literal">*</CODE
+><b class="emphasis.bold">bp 15</B
+> sets a breakpoint at line 15,
+and <code class="literal">*</CODE
+><b class="emphasis.bold">bp grep</B
+> sets a breakpoint at the next line
+that contains the string <b class="emphasis.bold">grep</B
+>-whatever number that turns
+out to be. Although
+you can always look at a numbered listing of a file,
+[7]
+string arguments to <code class="literal">*</CODE
+><b class="emphasis.bold">bp</B
+> can make that unnecessary.<a class="indexterm" name="AUTOID-15777"></A
+></P
+><blockquote class="footnote"><p class="para">[7] <a class="indexterm" name="AUTOID-15751"></A
+><a class="indexterm" name="AUTOID-15753"></A
+><a class="indexterm" name="AUTOID-15757"></A
+><a class="indexterm" name="AUTOID-15761"></A
+><b class="emphasis.bold">pr -n</B
+> <em class="emphasis">filename</EM
+> prints a numbered listing 
+to standard output on System V-derived versions of UNIX.  
+Some older BSD-derived systems don't support it.
+If this doesn't work on your system, 
+try <b class="emphasis.bold">cat -n</B
+> <em class="emphasis">filename</EM
+>, or if that doesn't work, create a
+shell script with this single line:<a class="indexterm" name="AUTOID-15767"></A
+><a class="indexterm" name="AUTOID-15770"></A
+></P
+><p class="para"><blockquote class="screen"><pre class="screen">awk '{ print NR, &quot;\t&quot;, $0 }' $1</PRE
+></BLOCKQUOTE
+></P
+></BLOCKQUOTE
+><p class="para">Here is the code for <b class="emphasis.bold">_setbp</B
+>:</P
+><p class="para"><blockquote class="screen"><pre class="screen"># Set breakpoint(s) at given line numbers and/or strings
+# by appending lines to breakpoint file
+function _setbp {
+    if [[ -z $1 ]]; then
+        _listbp
+    elif [[ $1 = +([0-9]) ]]; then  # number, set bp at that line
+        _linebp=&quot;${_linebp}$1|&quot;
+        _msg &quot;Breakpoint at line &quot; $1
+    else                            # string, set bp at next line w/string
+        _stringbp=&quot;${_stringbp}$@|&quot;
+        _msg &quot;Breakpoint at next line containing $@.&quot;
+    fi
+}</PRE
+></BLOCKQUOTE
+></P
+><p class="para"><b class="emphasis.bold">_setbp</B
+> sets the breakpoints by storing them
+in the variables <b class="emphasis.bold">_linebp</B
+> (line number breakpoints) and
+<b class="emphasis.bold">_stringbp</B
+> (string breakpoints). Both have breakpoints separated by
+pipe character delimiters, for reasons that will become clear
+shortly. This implies that breakpoints are cumulative; setting new 
+breakpoints does not erase the old ones.  </P
+><p class="para"><a class="indexterm" name="AUTOID-15787"></A
+>The only way to remove breakpoints is with the command
+<code class="literal">*</CODE
+><b class="emphasis.bold">cb</B
+>, which (in function <b class="emphasis.bold">_clearbp</B
+>) clears all 
+of them at once by simply resetting the two variables to null.<a class="indexterm" name="AUTOID-15794"></A
+>
+If you don't remember what breakpoints you have set,
+the command <code class="literal">*</CODE
+><b class="emphasis.bold">bp</B
+> without arguments lists them.</P
+><p class="para">The functions <b class="emphasis.bold">_at_linenumbp</B
+> and <b class="emphasis.bold">_at_stringbp</B
+> are called
+by <b class="emphasis.bold">_steptrap</B
+> after every statement; they check whether the
+shell has arrived at a line number or string breakpoint, respectively.</P
+><p class="para">Here is <b class="emphasis.bold">_at_linenumbp</B
+>:</P
+><p class="para"><blockquote class="screen"><pre class="screen"># See if next line no. is a breakpoint.
+function _at_linenumbp {
+    [[ $_curline = @(${_linebp%\|}) ]]
+}</PRE
+></BLOCKQUOTE
+></P
+><p class="para"><a class="indexterm" name="AUTOID-15809"></A
+><b class="emphasis.bold">_at_linenumbp</B
+> takes advantage of the pipe character as the
+separator between line numbers: it constructs a regular expression
+of the form <b class="emphasis.bold">@(</B
+><em class="emphasis">N1</EM
+><b class="emphasis.bold">|</B
+><em class="emphasis">N2</EM
+><b class="emphasis.bold">|</B
+>...<b class="emphasis.bold">)</B
+> by taking
+the list of line numbers <b class="emphasis.bold">_linebp</B
+>, removing the trailing <b class="emphasis.bold">|</B
+>,
+and surrounding it with <b class="emphasis.bold">@(</B
+> and <b class="emphasis.bold">)</B
+>. For example, if
+<b class="emphasis.bold">$_linebp</B
+> is <b class="emphasis.bold">3|15|19|</B
+>, then the resulting expression is
+<b class="emphasis.bold">@(3|15|19)</B
+>.  </P
+><p class="para"><a class="indexterm" name="AUTOID-15827"></A
+>If the current line is any of these numbers, then the conditional 
+becomes true, and <b class="emphasis.bold">_at_linenumbp</B
+> also returns a &quot;true&quot;
+(0) exit status.</P
+><p class="para">The check for a string breakpoint works on the same principle,
+but it's slightly more complicated; here is <b class="emphasis.bold">_at_stringbp</B
+>:</P
+><p class="para"><blockquote class="screen"><pre class="screen"># Search string breakpoints to see if next line in script matches.
+function _at_stringbp {
+    [[ -n $_stringbp &amp;&amp; ${_lines[$_curline]} = *@(${_stringbp%\|})* ]]
+}</PRE
+></BLOCKQUOTE
+></P
+><p class="para">The conditional first checks if <b class="emphasis.bold">$_stringbp</B
+> is non-null
+(meaning that string breakpoints have been defined).
+If not, the conditional evaluates to false, but if so, its
+value depends on the pattern match after the <b class="emphasis.bold">&amp;&amp;</B
+>-which
+tests the current line to see if it contains any of the
+breakpoint strings.</P
+><p class="para"><a class="indexterm" name="AUTOID-15840"></A
+><a class="indexterm" name="AUTOID-15843"></A
+>The expression on the right side of the equal sign is similar
+to the one in <b class="emphasis.bold">_at_linenumbp</B
+> above, except that it has
+<code class="literal">*</CODE
+> before and after it. This gives expressions of the form
+<code class="literal">*</CODE
+><b class="emphasis.bold">@(</B
+><em class="emphasis">S1</EM
+><b class="emphasis.bold">|</B
+><em class="emphasis">S2</EM
+><b class="emphasis.bold">|...)</B
+><code class="literal">*</CODE
+>, where the <em class="emphasis">S</EM
+>s
+are the string breakpoints. This expression matches any line
+that contains any one of the possibilities in the parenthesis.</P
+><p class="para"><a class="indexterm" name="AUTOID-15857"></A
+>The left side of the equal sign is the text of the current line
+in the guinea pig. So, if this text matches the regular
+expression, then we've reached a string breakpoint; accordingly,
+the conditional expression and <b class="emphasis.bold">_at_stringbp</B
+> return exit
+status 0.</P
+><p class="para"><a class="indexterm" name="AUTOID-15863"></A
+><b class="emphasis.bold">_steptrap</B
+> uses the <b class="emphasis.bold">||</B
+> (&quot;or&quot;) construct in its
+<b class="emphasis.bold">if</B
+> statement, which evaluates to true if either
+type of breakpoint occurred. If so, it calls the main command loop.</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="KSH-CH-9-SECT-2.3.4">9.2.3.4 Break conditions</A
+></H4
+><p class="para"><em class="emphasis">kshdb</EM
+> has another feature related to breakpoints: the
+<em class="emphasis">break condition</EM
+>.  <a class="indexterm" name="AUTOID-15874"></A
+>
+This is a string that the user can specify
+that is evaluated as a command; if it is true 
+(i.e., returns exit status 0), the debugger enters the command loop.
+Since the break condition can be
+any line of shell code, there's lots of flexibility in
+what can be tested. For example, you can break when a variable 
+reaches a certain value (e.g., <b class="emphasis.bold">(( $</B
+><b class="emphasis.bold">x &lt; 0 ))</B
+>) or when a particular
+piece of text has been written to a file (<b class="emphasis.bold">grep</B
+> <em class="emphasis">string file</EM
+>).
+You will probably think of all kinds of uses for this feature.
+[8]<a class="indexterm" name="AUTOID-15886"></A
+>
+To set a break condition, type
+<code class="literal">*</CODE
+><b class="emphasis.bold">bc</B
+> <em class="emphasis">string</EM
+>. To remove it, type <code class="literal">*</CODE
+><b class="emphasis.bold">bc</B
+> without
+arguments-this installs the null string, which is ignored.<a class="indexterm" name="AUTOID-15895"></A
+><a class="indexterm" name="AUTOID-15898"></A
+>
+<b class="emphasis.bold">_steptrap</B
+> evaluates the break condition <b class="emphasis.bold">$</B
+><b class="emphasis.bold">_brcond</B
+>
+only if it's non-null.<a class="indexterm" name="AUTOID-15904"></A
+>
+If the break condition evaluates to 0, then the <b class="emphasis.bold">if</B
+> clause
+is true and, once again, <b class="emphasis.bold">_steptrap</B
+> calls the command loop.</P
+><blockquote class="footnote"><p class="para">[8] <a class="indexterm" name="AUTOID-15882"></A
+>Bear in mind that if your break condition produces any standard output
+(or standard error), you will see it after every statement.
+Also, make sure your break condition
+doesn't take a long time to run; otherwise your script will run
+very, very slowly.</P
+></BLOCKQUOTE
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="KSH-CH-9-SECT-2.3.5">9.2.3.5 Execution tracing</A
+></H4
+><p class="para"><a class="indexterm" name="AUTOID-15911"></A
+>The final feature is execution tracing, available through the <code class="literal">*</CODE
+><b class="emphasis.bold">x</B
+>
+command. This feature is meant to overcome the fact that a
+<em class="emphasis">kshdb</EM
+> user can't use <b class="emphasis.bold">set -o xtrace</B
+> while debugging
+(by entering it as a shell command), because its scope is limited
+to the <b class="emphasis.bold">_cmdloop</B
+> function.</P
+><p class="para"><a class="indexterm" name="AUTOID-15921"></A
+>The function <b class="emphasis.bold">_xtrace</B
+> &quot;toggles&quot; execution tracing by simply
+assigning to the variable <b class="emphasis.bold">_trace</B
+>
+the logical &quot;not&quot; of its current value, so that it alternates
+between 0 (off) and 1 (on). The preamble initializes it to 0.</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="KSH-CH-9-SECT-2.3.6">9.2.3.6 Limitations</A
+></H4
+><p class="para"><a class="indexterm" name="KSH-CH-9-IX-KSHDB-LIMITATIONS"></A
+><em class="emphasis">kshdb</EM
+> was not designed to push the state of the debugger
+art forward or to have an overabundance of features. It has the
+most useful basic features, its implementation is compact and
+(we hope) comprehensible, and it does have some important limitations.
+The ones we know of are described in the list that follows.</P
+><ol class="orderedlist"><li class="listitem"><p class="para">The shell should really have the ability to trap before
+each statement, not after. This is the way most commercial
+source-code debuggers work.  
+[9]
+At the 
+very least, the shell should
+provide a variable that contains 
+the number of the line about
+to run instead of (or in addition to) the number of the line
+that just ran.</P
+><blockquote class="footnote"><p class="para">[9] This kind of functionality is expected to be added in the next
+Korn shell release.</P
+></BLOCKQUOTE
+></LI
+><li class="listitem"><p class="para">String breakpoints cannot begin with digits or
+contain pipe characters (<b class="emphasis.bold">|</B
+>) unless they are properly escaped.</P
+></LI
+><li class="listitem"><p class="para">You can only set breakpoints-whether line number or string-on lines
+in the guinea pig that contain what the shell's documentation calls
+<em class="emphasis">simple commands</EM
+>, i.e., actual UNIX commands, shell built-ins,
+function calls, or aliases. If you
+set a breakpoint on a line that contains only whitespace or a comment,
+the shell will always skip over that breakpoint. More importantly,
+control keywords like <b class="emphasis.bold">while</B
+>, <b class="emphasis.bold">if</B
+>, <b class="emphasis.bold">for</B
+>, <b class="emphasis.bold">do</B
+>,
+<b class="emphasis.bold">done</B
+>, and even conditionals (<b class="emphasis.bold">[[</B
+>...<b class="emphasis.bold">]]</B
+>
+and <b class="emphasis.bold">((</B
+>...<b class="emphasis.bold">))</B
+>) won't work
+either, unless a simple command is on the same line. </P
+></LI
+><li class="listitem"><p class="para"><b class="emphasis.bold">kshdb</B
+> will not &quot;step down&quot; into shell scripts that are called from 
+the guinea pig. To do this, you have to edit your guinea
+pig and change a call to <em class="emphasis">scriptname</EM
+> to <b class="emphasis.bold">kshdb</B
+> <em class="emphasis">scriptname</EM
+>.</P
+></LI
+><li class="listitem"><p class="para"><a class="indexterm" name="AUTOID-15962"></A
+>Similarly, nested subshells are treated as one gigantic statement;
+you cannot step down into them at all.</P
+></LI
+><li class="listitem"><p class="para"><a class="indexterm" name="AUTOID-15967"></A
+><a class="indexterm" name="AUTOID-15970"></A
+><a class="indexterm" name="AUTOID-15973"></A
+>The guinea pig should not trap on the fake signals DEBUG or EXIT;
+otherwise the debugger won't work.</P
+></LI
+><li class="listitem"><p class="para"><a class="indexterm" name="AUTOID-15978"></A
+>Variables that are <b class="emphasis.bold">typeset</B
+> (see <a class="xref" href="ch04_01.htm" webstripperlinkwas="ch04_01.htm" title="Basic Shell Programming">Chapter 4, Basic Shell Programming</A
+>)
+are not accessible in break conditions.  <a class="indexterm" name="AUTOID-15983"></A
+>
+However, you can use
+the shell command <b class="emphasis.bold">print</B
+> to check their values.</P
+></LI
+><li class="listitem"><p class="para">Command error handling is weak. For example,
+a non-numeric argument to <code class="literal">*</CODE
+><b class="emphasis.bold">s</B
+> will cause it to bomb. </P
+></LI
+></OL
+><p class="para">Many of these are not insurmountable; see the exercises.<a class="indexterm" name="AUTOID-15991"></A
+></P
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="KSH-CH-9-SECT-2.4">9.2.4 Sample kshdb Session</A
+></H3
+><p class="para"><a class="indexterm" name="KSH-CH-9-IX-KSHDB-SAMPLE-SESSION"></A
+>Now we'll show a transcript of an actual session with <em class="emphasis">kshdb</EM
+>,
+in which the guinea pig is the solution to Task 6-2.
+For convenience, here is a numbered listing of the script, 
+which we'll call <em class="emphasis">lscol</EM
+>.</P
+><p class="para"><blockquote class="screen"><pre class="screen">1 	 set -A filenames $(ls $1)
+2 	 typeset -L14 fname
+3 	 let count=0
+4 	 let numcols=5
+5 	 
+6 	 while [[ $count -lt ${#filenames[*]} ]]; do
+7 	     fname=${filenames[$count]}
+8 	     print -n &quot;$fname  &quot; 
+9 	     let count=&quot;count + 1&quot;
+10 	     if [[ $((count % numcols)) = 0 ]]; then
+11 	         print            # NEWLINE
+12 	     fi
+13 	 done
+14 	 
+15 	 if [[ $((count % numcols)) != 0 ]]; then
+16 	     print
+17 	 fi</PRE
+></BLOCKQUOTE
+></P
+><p class="para">Here is the <em class="emphasis">kshdb</EM
+> session transcript:</P
+><p class="para"><blockquote class="screen"><pre class="screen">$ <b class="emphasis.bold">kshdb lscol /usr/spool</B
+>
+Korn shell Debugger version 1.0
+
+Stopped at line 0
+kshdb&gt; <b class="emphasis.bold">*bp 4</B
+>
+Breakpoint at line 4
+kshdb&gt; <b class="emphasis.bold">*g</B
+>
+Reached breakpoint at line 4
+kshdb&gt; <b class="emphasis.bold">print $count $numcols</B
+>
+0 5
+kshdb&gt; <b class="emphasis.bold">*bc [[ $count -eq 10 ]]</B
+>
+Break when true: [[ $count -eq 10 ]]
+kshdb&gt; <b class="emphasis.bold">*g</B
+>
+bwnfs           cron            locks           lpd             lpd.lock 
+mail            mqueue          rwho            secretmail      uucp
+Break condition [[ $count -eq 10 ]] true at line 9
+kshdb&gt; <b class="emphasis.bold">*bc</B
+>
+Break condition cleared.
+kshdb&gt; <b class="emphasis.bold">*bp NEWLINE</B
+>
+Breakpoint at next line containing &quot;NEWLINE&quot;.
+kshdb&gt; <b class="emphasis.bold">*g</B
+>
+
+Reached breakpoint at line 11
+kshdb&gt; <b class="emphasis.bold">print $count</B
+>
+10
+kshdb&gt; <b class="emphasis.bold">let count=9</B
+>
+kshdb&gt; <b class="emphasis.bold">*g</B
+>
+uucp            
+Reached breakpoint at line 11
+kshdb&gt; <b class="emphasis.bold">*bp</B
+> 
+Breakpoints at lines:
+ 4 
+Breakpoints at strings:
+NEWLINE 
+No break condition.
+kshdb&gt; <b class="emphasis.bold">*g</B
+> 
+uucppublic      
+$</PRE
+></BLOCKQUOTE
+></P
+><p class="para">First, notice that we gave the guinea pig script the argument
+<b class="emphasis.bold">/usr/spool</B
+>, meaning that we want to list the files in that 
+directory. We begin by setting a simple breakpoint at line 4
+and starting the script. It stops after executing line 4
+(<b class="emphasis.bold">let numcols=5</B
+>). Then we issue a shell <b class="emphasis.bold">print</B
+> command
+to 
+show that the variables <b class="emphasis.bold">count</B
+> and <b class="emphasis.bold">numcols</B
+> are
+indeed set correctly.</P
+><p class="para">Next, we set a break condition, telling the debugger to kick in 
+when <b class="emphasis.bold">$count</B
+> is 10, and we resume execution. Sure enough,
+the guinea pig prints 10 filenames and stops at line 9, on which
+<b class="emphasis.bold">$count</B
+> is incremented. We clear the break condition by
+typing <code class="literal">*</CODE
+><b class="emphasis.bold">bc</B
+> without an argument, since otherwise the shell would
+stop after every statement until the condition becomes false.</P
+><p class="para">The next command shows how the string breakpoint mechanism works.
+We tell the debugger to break when it hits a line that contains
+the string NEWLINE.  This string is in a comment on line 11.
+Notice that it doesn't matter that the string is in a 
+comment-just that the line it's on contain an actual command.
+We resume execution, and the debugger hits the breakpoint at line 11.</P
+><p class="para">After that, we show how we can use the debugger to change the
+guinea pig's state while running. We see that <b class="emphasis.bold">$count</B
+> is
+still 10; we change it to 9. In the next iteration
+of the <b class="emphasis.bold">while</B
+> loop, the script accesses the same filename
+that it just did (<em class="emphasis">uucp</EM
+>), increments <b class="emphasis.bold">count</B
+> back to 10,
+and hits the breakpoint again. Finally, we list breakpoints and
+let the script execute to its end; it prints out
+one last filename and exits.<a class="indexterm" name="AUTOID-16037"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="KSH-CH-9-SECT-2.5">9.2.5 Exercises</A
+></H3
+><p class="para">We'll conclude this chapter with a few exercises, which are 
+suggested enhancements to <em class="emphasis">kshdb</EM
+>.</P
+><ol class="orderedlist"><li class="listitem"><p class="para">Improve command error handling in these ways:
+<ol class="orderedlist"><li class="listitem"><p class="para">For numeric arguments to <code class="literal">*</CODE
+><b class="emphasis.bold">bp</B
+>, check that they are
+valid line numbers for the particular guinea pig.</P
+></LI
+><li class="listitem"><p class="para">Check that arguments to <code class="literal">*</CODE
+><b class="emphasis.bold">s</B
+> are valid numbers.</P
+></LI
+><li class="listitem"><p class="para">Any other error handling you can think of.</P
+></LI
+></OL
+>&#13;</P
+></LI
+><li class="listitem"><p class="para">Enhance the <code class="literal">*</CODE
+><b class="emphasis.bold">cb</B
+> command so that the user can delete
+specific breakpoints (by string or line number).</P
+></LI
+><li class="listitem"><p class="para">Remove the major limitation in the breakpoint mechanism:
+<ol class="orderedlist"><li class="listitem"><p class="para">Improve it so that if the line number selected
+does not contain an actual UNIX command, the next closest line
+above it is used as the breakpoint instead.</P
+></LI
+><li class="listitem"><p class="para">Do the same thing for string breakpoints. (Hint: first translate
+each string breakpoint command into one or more line-number
+breakpoint commands.)</P
+></LI
+></OL
+></P
+></LI
+><li class="listitem"><p class="para">Implement an option that causes a break into the debugger
+whenever a command exits with non-0 status:
+<ol class="orderedlist"><li class="listitem"><p class="para">Implement it as the command-line option <b class="emphasis.bold">-e</B
+>.</P
+></LI
+><li class="listitem"><p class="para">Implement it as the debugger commands <code class="literal">*</CODE
+><b class="emphasis.bold">be</B
+> (to turn the option
+on) and <code class="literal">*</CODE
+><b class="emphasis.bold">ne</B
+> (to turn it off).  <a class="indexterm" name="AUTOID-16079"></A
+><a class="indexterm" name="AUTOID-16082"></A
+><a class="indexterm" name="AUTOID-16085"></A
+>
+(Hint: you won't be able to use
+the ERR trap, but bear in mind that when you enter <b class="emphasis.bold">_steptrap</B
+>, 
+<b class="emphasis.bold">$</B
+><code class="literal">?</CODE
+> is still the exit status of the last command that ran.)  </P
+></LI
+></OL
+></P
+></LI
+><li class="listitem"><p class="para">Add the ability to &quot;step down&quot; into scripts that the guinea pig calls
+(i.e., non-nested subshells) as the command-line option <b class="emphasis.bold">-s</B
+>.
+One way of implementing this is to change the <em class="emphasis">kshdb</EM
+> script 
+so that it &quot;plants&quot; recursive calls to <em class="emphasis">kshdb</EM
+> in the guinea pig.<a class="indexterm" name="AUTOID-16095"></A
+><a class="indexterm" name="AUTOID-16098"></A
+>
+You can do this by filtering the guinea pig through a loop that
+reads each line and determines, with the <b class="emphasis.bold">whence -v</B
+> 
+and <em class="emphasis">file(1)</EM
+> (see the man page) commands, if the line
+is a call to another shell script.[10]  
+If it is, prepend <em class="emphasis">kshdb</EM
+> -<b class="emphasis.bold">s</B
+>
+to the line and write it to the new file; 
+if not, just pass it through as is.  </P
+><blockquote class="footnote"><p class="para">[10] Notice that this method should catch most nested shell scripts
+but not all of them.  <a class="indexterm" name="AUTOID-16104"></A
+>
+For example, it won't catch shell
+scripts that follow semicolons (e.g., <b class="emphasis.bold">cmd1; cmd2</B
+>).</P
+></BLOCKQUOTE
+></LI
+><li class="listitem"><p class="para">Add support for multiple break conditions, so that <em class="emphasis">kshdb</EM
+> stops
+execution when any one of them becomes true and prints a message
+that says which one is true. Do this by storing the break conditions
+in a colon-separated list or an array. Try to make this as efficient
+as possible, since the checking will take place after every statement.</P
+></LI
+><li class="listitem"><p class="para">Add any other features you can think of.</P
+></LI
+></OL
+><p class="para"><a class="indexterm" name="AUTOID-16116"></A
+>If you add significant functionality to <em class="emphasis"> kshdb</EM
+>, we invite
+you to send your version to the author, care of
+O'Reilly and Associates, at <a class="email" href="mailto:billr@ora.com" title="billr@ora.com">billr@ora.com</A
+> on the Internet
+or, via US Mail, at:
+<blockquote class="literallayout"><p class="literallayout">O'Reilly &amp; Associates, Inc.<br>103 Morris St., Suite A<br>Sebastopol, CA  95472</P
+></BLOCKQUOTE
+>
+We'll select the best one
+and publish it in the next revision of our <em class="emphasis">UNIX Power Tools</EM
+> CD-ROM.
+Remember: there is no &quot;official&quot; Korn shell debugger, and as
+more and more programmers realize how powerful the Korn shell is
+as a programming environment, a debugger will become more and more
+necessary. We've made the initial effort, 
+and we leave it up to
+you to finish the job!</P
+><p class="para">Finally, here is the complete source code for the debugger function
+file <em class="emphasis">kshdb.fns</EM
+>:<a class="indexterm" name="KSH-CH-9-IX-KSHDB-SOURCE-DEBUGGING-FUNCTIONS"></A
+></P
+><p class="para"><blockquote class="screen"><pre class="screen"># Here after each statement in script being debugged.
+# Handle single-step and breakpoints.
+function _steptrap {
+    _curline=$1                       # arg is no. of line that just ran
+    (( $_trace )) &amp;&amp; _msg &quot;$PS4 line $_curline: ${_lines[$_curline]}&quot;
+    if (( $_steps &gt;= 0 )); then       # if in step mode
+        let _steps=&quot;$_steps - 1&quot;      # decrement counter 
+    fi
+    # first check if line num or string breakpoint reached
+    if _at_linenumbp || _at_stringbp; then
+        _msg &quot;Reached breakpoint at line $_curline&quot;
+        _cmdloop                      # breakpoint, enter debugger
+                                        
+    # if not, check whether break condition exists and is true
+    elif [[ -n $_brcond ]] &amp;&amp; eval $_brcond; then
+        _msg &quot;Break condition $_brcond true at line $_curline&quot;
+        _cmdloop
+    # next, check if step mode and number of steps is up
+    elif (( $_steps == 0 )); then     # if step mode and time to stop
+        _msg &quot;Stopped at line $_curline&quot;
+        _cmdloop                      # enter debugger
+    fi
+}
+
+# Debugger command loop.
+# Here at start of debugger session, when breakpoint reached,
+# or after single-step.
+function _cmdloop {
+    typeset cmd args
+
+    while read -s cmd&quot;?kshdb&gt; &quot; args; do
+        case $cmd in
+            \*bp ) _setbp $args ;;    # set breakpoint at line num or string.
+            \*bc ) _setbc $args ;;    # set break condition.
+            \*cb ) _clearbp ;;        # clear all breakpoints.
+            \*g  ) return ;;            # start/resume execution
+            \*s  ) let _steps=${args:-1} # single-step N times (default 1)
+                   return ;;
+        
+            \*x  ) _xtrace ;;           # toggle execution trace
+            \*\? | \*h ) _menu ;;       # print command menu        
+            \*q  ) exit ;;              # quit
+            \**  ) _msg &quot;Invalid command: $cmd&quot; ;; 
+            *  ) eval $cmd $args ;;     # otherwise, run shell command
+        esac
+    done
+}
+ 
+# See if next line no. is a breakpoint.
+function _at_linenumbp {
+    [[ $_curline = @(${_linebp%\|}) ]]
+}
+
+# Search string breakpoints to see if next line in script matches.
+function _at_stringbp {
+    [[ -n $_stringbp &amp;&amp; ${_lines[$_curline]} = *@(${_stringbp%\|})* ]]
+}
+
+# Print the given message to standard error.
+function _msg {
+    print &quot;$@&quot; &gt;&amp;2
+}
+
+# Set breakpoint(s) at given line numbers and/or strings
+# by appending lines to breakpoint file
+function _setbp {
+    if [[ -z $1 ]]; then
+        _listbp
+    elif [[ $1 = +([0-9]) ]]; then  # number, set bp at that line
+        _linebp=&quot;${_linebp}$1|&quot;
+        _msg &quot;Breakpoint at line &quot; $1
+    else                            # string, set bp at next line w/string
+        _stringbp=&quot;${_stringbp}$@|&quot;
+        _msg &quot;Breakpoint at next line containing $@.&quot;
+    fi
+}
+
+# List breakpoints and break condition.
+function _listbp {
+    _msg &quot;Breakpoints at lines:&quot;
+    _msg &quot;$(print $_linebp | tr '|' ' ')&quot; 
+    _msg &quot;Breakpoints at strings:&quot;
+    _msg &quot;$(print $_stringbp | tr '|' ' ')&quot;
+    _msg &quot;Break on condition:&quot;
+    _msg &quot;$_brcond&quot;
+}
+
+# Set or clear break condition
+function _setbc {
+    if [[ -n &quot;$@&quot; ]]; then
+        _brcond=$args   
+        _msg &quot;Break when true: $_brcond&quot;
+    else
+        _brcond=
+        _msg &quot;Break condition cleared.&quot;
+    fi
+}
+
+# Clear all breakpoints.
+function _clearbp {
+    _linebp=
+    _stringbp=
+    _msg &quot;All breakpoints cleared.&quot;
+}
+
+# Toggle execution trace feature on/off
+function _xtrace {
+    let _trace=&quot;! $_trace&quot;
+    _msg &quot;Execution trace \c&quot;
+    if (( $_trace )); then
+        _msg &quot;on.&quot;
+    else
+        _msg &quot;off.&quot;
+    fi
+}
+
+# Print command menu
+function _menu {
+    _msg 'kshdb commands: 
+         *bp N               set breakpoint at line N
+         *bp str             set breakpoint at next line containing str
+         *bp                 list breakpoints and break condition 
+         *bc str             set break condition to str 
+         *bc                 clear break condition 
+         *cb                 clear all breakpoints 
+         *g                  start/resume execution 
+         *s [N]              execute N statements (default 1)
+         *x                  toggle execution trace on/off 
+         *h, *?              print this menu 
+         *q                  quit'
+}
+
+# Erase temp files before exiting.
+function _cleanup {
+    rm $_dbgfile 2&gt;/dev/null
+}</PRE
+></BLOCKQUOTE
+></P
+><a class="indexterm" name="AUTOID-16131"></A
+><a class="indexterm" name="AUTOID-16132"></A
+><a class="indexterm" name="AUTOID-16133"></A
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch09_01.htm" webstripperlinkwas="ch09_01.htm" title="9.1 Basic Debugging Aids"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous: 9.1 Basic Debugging Aids" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/ksh/index.htm" title="Learning the Korn Shell"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Learning the Korn Shell" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="CHAPTER" href="ch10_01.htm" webstripperlinkwas="ch10_01.htm" title="10. Korn Shell Administration"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next: 10. Korn Shell Administration" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">9.1 Basic Debugging Aids</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" webstripperlinkwas="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">10. Korn Shell Administration</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#map" border="0" alt="The UNIX CD Bookshelf Navigation"><map name="map"><area shape="RECT" coords="0,0,73,21" href="../index.html" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/index.html" alt="The UNIX CD Bookshelf"><area shape="RECT" coords="74,0,163,21" href="../upt/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/upt/index.htm" alt="UNIX Power Tools"><area shape="RECT" coords="164,0,257,21" href="../unixnut/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/unixnut/index.htm" alt="UNIX in a Nutshell"><area shape="RECT" coords="258,0,321,21" href="../vi/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/vi/index.htm" alt="Learning the vi Editor"><area shape="RECT" coords="322,0,378,21" href="../sedawk/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/sedawk/index.htm" alt="sed &amp; awk"><area shape="RECT" coords="379,0,438,21" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/ksh/index.htm" alt="Learning the Korn Shell"><area shape="RECT" coords="439,0,514,21" href="../lrnunix/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/lrnunix/index.htm" alt="Learning the UNIX Operating System"></MAP
+></DIV
+></BODY
+></HTML
+>

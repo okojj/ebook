@@ -1,0 +1,121 @@
+<html><head>
+<title>[Chapter 12] 12.4 The Resolver Search Algorithm and Negative Caching</TITLE>
+<meta name="DC.title" content="DNS &amp; BIND"><meta name="DC.creator" content="Cricket Liu &amp; Paul Albitz"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-01-06T18:38:37Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-512-2" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch12_01.htm" title="12. Reading BIND Debugging Output"><link rel="prev" href="ch12_03.htm" title="12.3 Reading Debugging Output"><link rel="next" href="ch12_05.htm" title="12.5 Tools"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="DNS &amp; BIND" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="DNS &amp; BIND"><area shape="RECT" coords="467,0,514,18" href="../search/dsrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch12_03.htm" title="12.3 Reading Debugging Output"><img src="../gifs/txtpreva.gif" alt="Previous: 12.3 Reading Debugging Output" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 12<br>Reading <span class="acronym">BIND</SPAN
+> Debugging Output</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch12_05.htm" title="12.5 Tools"><img src="../gifs/txtnexta.gif" alt="Next: 12.5 Tools" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="AUTOID-13256">12.4 The Resolver Search Algorithm and Negative Caching</A
+></H2
+><p class="para"><a class="indexterm" name="DNS3-IDX-12-CACHING-NEGATIVE"></A
+><a class="indexterm" name="DNS3-IDX-12-NEGATIVE-CACHING"></A
+><a class="indexterm" name="DNS3-IDX-12-RESOLVERS-SEARCH-ALGORITHM"></A
+><a class="indexterm" name="DNS3-IDX-12-SEARCH-ALGORITHM-RESOLVER"></A
+>In this trace, we'll show you the <span class="acronym">BIND</SPAN
+> 4.9 and
+<span class="acronym">BIND</SPAN
+> 8 search algorithm and the impact of negative
+caching. We could look up <i class="systemitem.sitename">galt.cs.purdue.edu</I
+> like the last trace,
+but it wouldn't show you the search algorithm. Instead, we will look
+up <i class="systemitem.sitename">foo.bar</I
+>, a name that
+doesn't exist. In fact, we will look it up twice:</P
+><blockquote class="screen"><pre class="screen">1)  datagram from cujo.horror.movie.edu 1109, fd 6, len 25
+2)  req: nlookup(foo.bar) id 19220 type=1 class=1
+3)  req: found 'foo.bar' as '' (cname=0)
+4)  forw: forw -&gt; D.ROOT-SERVERS.NET 53 ds=7 nsid=2532 id=19220
+                                             0ms retry 4sec
+5)
+6)  datagram from D.ROOT-SERVERS.NET 53, fd 5, len 25
+7)  ncache: dname foo.bar, type 1, class 1
+8)  send_msg -&gt; cujo.horror.movie.edu 1109 (UDP 6) id=19220
+9)
+10) datagram from cujo.horror.movie.edu 1110, fd 6, len 42
+11) req: nlookup(foo.bar.horror.movie.edu) id 19221 type=1 class=1
+12) req: found 'foo.bar.horror.movie.edu' as 'horror.movie.edu'
+                                             (cname=0)
+13) forw: forw -&gt; carrie.horror.movie.edu 53 ds=7 nsid=2533
+                                      id=19221 0ms retry 4sec
+
+14) datagram from carrie.horror.movie.edu 53, fd 5, len 42
+15) ncache: dname foo.bar.horror.movie.edu, type 1, class 1
+16) send_msg -&gt; cujo.horror.movie.edu 1110 (UDP 6) id=19221</PRE
+></BLOCKQUOTE
+><p class="para">Look up <i class="systemitem.sitename">foo.bar</I
+>
+again:</P
+><blockquote class="screen"><pre class="screen">17) datagram from cujo.horror.movie.edu 1111, fd 6, len 25
+18) req: nlookup(foo.bar) id 15541 type=1 class=1
+19) req: found 'foo.bar' as 'foo.bar' (cname=0)
+20) ns_req: answer -&gt; cujo.horror.movie.edu 1111 fd=6 id=15541
+                                                size=25 Local
+21)
+22) datagram from cujo.horror.movie.edu 1112, fd 6, len 42
+23) req: nlookup(foo.bar.horror.movie.edu) id 15542 type=1 class=1
+24) req: found 'foo.bar.horror.movie.edu' as
+                           'foo.bar.horror.movie.edu' (cname=0)
+25) ns_req: answer -&gt; cujo.horror.movie.edu 1112 fd=6 id=15542
+                                                  size=42 Local</PRE
+></BLOCKQUOTE
+><p class="para">Let's look at the resolver search algorithm.  The first name
+looked up (line 2) is exactly the name we typed in. Since the name had
+at least one dot, it is looked up without modification.  When that
+name lookup failed, <i class="systemitem.sitename">horror.movie.edu</I
+> was appended to the name
+and looked up.  (Resolvers before <span class="acronym">BIND</SPAN
+> 4.9 would
+try appending both <i class="systemitem.sitename">horror.movie.edu</I
+> and <i class="systemitem.sitename">movie.edu</I
+>.)</P
+><p class="para">Line 7 shows caching the <em class="emphasis">negative</EM
+> answer
+(<code class="literal">ncache</CODE
+>). If the same name is looked up again in
+the next few minutes (line 19), the name server still has the negative
+response in its cache, so the server can answer immediately that the
+name doesn't exist. (If you don't believe this hand waving, compare
+lines 3 and 19. On line 3, nothing was found for <i class="systemitem.sitename">foo.bar</I
+>, but line 19 shows the whole name
+being found.)<a class="indexterm" name="AUTOID-13286"></A
+><a class="indexterm" name="AUTOID-13287"></A
+><a class="indexterm" name="AUTOID-13288"></A
+><a class="indexterm" name="AUTOID-13289"></A
+></P
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch12_03.htm" title="12.3 Reading Debugging Output"><img src="../gifs/txtpreva.gif" alt="Previous: 12.3 Reading Debugging Output" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="DNS &amp; BIND"><img src="../gifs/txthome.gif" alt="DNS &amp; BIND" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch12_05.htm" title="12.5 Tools"><img src="../gifs/txtnexta.gif" alt="Next: 12.5 Tools" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">12.3 Reading Debugging Output</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">12.5 Tools</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.htm" title="The Networking CD Bookshelf">Library Home</A
+> | <a href="index.htm" title="DNS &amp; BIND">DNS &amp; BIND</A
+> | <a href="../tcpip/index.htm" title="TCP/IP Network Administration">TCP/IP</A
+> | <a href="../sendmail/index.htm" title="sendmail">sendmail</A
+> | <a href="../smdref/index.htm" title="sendmail Desktop Reference">sendmail Reference</A
+> | <a href="../firewall/index.htm" title="Building Internet Firewalls">Firewalls</A
+> | <a href="../puis/index.htm" title="Practical UNIX &amp; Internet Security">Practical Security</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

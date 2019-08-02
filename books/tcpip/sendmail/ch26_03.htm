@@ -1,0 +1,366 @@
+<html><head>
+<title>[Chapter 26] 26.3 Signaling the Daemon</TITLE>
+<meta name="DC.title" content="sendmail"><meta name="DC.creator" content="Bryan Costales &amp; Eric Allman"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-01-06T19:41:06Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-222-0" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch26_01.htm" title="26. Logging and Statistics"><link rel="prev" href="ch26_02.htm" title="26.2 Statistics"><link rel="next" href="ch26_04.htm" title="26.4 Log Transactions with -X"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="sendmail" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="sendmail"><area shape="RECT" coords="467,0,514,18" href="../search/ssrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch26_02.htm" title="26.2 Statistics"><img src="../gifs/txtpreva.gif" alt="Previous: 26.2 Statistics" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 26<br>Logging and Statistics</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch26_04.htm" title="26.4 Log Transactions with -X"><img src="../gifs/txtnexta.gif" alt="Next: 26.4 Log Transactions with -X" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="SML2-CH-26-SECT-3">26.3 Signaling the Daemon</A
+></H2
+><p class="para"><a class="indexterm" name="SML2-CH-26-IX-SIGNALS"></A
+><a class="indexterm" name="SML2-CH-26-IX-DAEMON-SIGNALS"></A
+>The <em class="emphasis">sendmail</EM
+> program recognizes three signals that cause it to 
+perform certain actions. SIGINT causes <em class="emphasis">sendmail</EM
+> to
+clean up after itself and exit. Beginning with V8.7, 
+SIGHUP causes <em class="emphasis">sendmail</EM
+> to
+re-execute itself (thus restarting and reading its configuration
+file anew). Also beginning with V8.7,
+SIGUSR1 causes <em class="emphasis">sendmail</EM
+> to log its file
+descriptors and other information.&#13;</P
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-26-SECT-3-1">26.3.1 SIGINT  Cleanup and Exit</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-25256"></A
+>Whenever <em class="emphasis">sendmail</EM
+>
+gets a SIGINT signal (as would be the case if the system
+were being shut down), it tries to exit cleanly.</P
+><p class="para">First it unlocks any queued file it is processing. This has the
+effect of canceling delivery so that the message will be tried
+again when the system comes back up. Then <em class="emphasis">sendmail</EM
+> resets its
+identity to the identity it originally ran under.
+This causes accounting records to correctly show that the
+same user <em class="emphasis">sendmail</EM
+> started as has exited. Finally,
+<em class="emphasis">sendmail</EM
+> exits with EX_OK, no matter what,
+so that errors will not be produced during shutdown.</P
+><p class="para">As a final note, beginning with V8.7,
+SIGINT is ignored when <em class="emphasis">sendmail</EM
+> is running
+in rule-testing mode with <code class="literal">-bt</CODE
+>.&#13;</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-26-SECT-3-2">26.3.2 SIGHUP  Restart</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-25269"></A
+>Beginning with V8.7, a SIGHUP signal will
+cause <em class="emphasis">sendmail</EM
+> to re-execute itself with its original
+command line. This works only if it is running in daemon mode
+(with <code class="literal">-bd</CODE
+>; see <a class="xref" href="ch36_07.htm#SML2-CH-36-SECT-7-5" title="">Section 36.7.5, -bd</A
+>). For example,
+consider initially running <em class="emphasis">sendmail</EM
+> like this:</P
+><p class="para"><blockquote class="screen"><pre class="screen"># <code class="userinput"><b>/usr/lib/sendmail -bd -q1h</B
+></CODE
+></PRE
+></BLOCKQUOTE
+></P
+><p class="para">&#13;Then imagine that you changed something in the configuration file
+and wanted the running daemon to reread that file. You could
+cause that to happen by killing the currently running daemon with
+a SIGHUP signal:</P
+><p class="para"><blockquote class="screen"><pre class="screen"># <code class="userinput"><b>kill -HUP `head -1 /etc/sendmail.pid`</B
+></CODE
+></PRE
+></BLOCKQUOTE
+></P
+><p class="para">This will cause <em class="emphasis">sendmail</EM
+> to execute the command</P
+><p class="para"><blockquote class="screen"><pre class="screen">/usr/lib/sendmail -bd -q1h</PRE
+></BLOCKQUOTE
+></P
+><p class="para">The original daemon exits, and the newly executed daemon
+replaces it.</P
+><p class="para">Be aware that this works only if you run <em class="emphasis">sendmail</EM
+>
+using a full pathname. If you use a relative path, an attempt
+to restart <em class="emphasis">sendmail</EM
+> with SIGHUP will fail, and the following warning
+will be logged at LOG_ALERT:<a class="indexterm" name="AUTOID-25290"></A
+></P
+><p class="para"><blockquote class="screen"><pre class="screen">could not exec <i class="lineannotation">bad command line here</I
+>: <i class="lineannotation">reason</I
+></PRE
+></BLOCKQUOTE
+></P
+><p class="para">This is a very serious situation because it means that your
+original daemon has exited and no new daemon ran to replace it.&#13;</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-26-SECT-3-3">26.3.3 SIGUSR1  Dump States</A
+></H3
+><p class="para"><a class="indexterm" name="SML2-CH-26-IX-DUMPING-STATE"></A
+>Beginning with V8.6.5, <em class="emphasis">sendmail</EM
+> responds to a
+SIGUSR1 signal. This signal
+causes <em class="emphasis">sendmail</EM
+> to <em class="emphasis">syslog</EM
+>
+at LOG_DEBUG the several items that define its state.
+[2]
+That <em class="emphasis">syslog</EM
+> output begins with a line that looks like this:</P
+><blockquote class="footnote"><p class="para">[2] This same information is <em class="emphasis">syslog</EM
+>'d if the daemon looses
+track of <code class="literal">$j</CODE
+> in <code class="literal">$=w</CODE
+>
+and if <code class="literal">$j</CODE
+> becomes or is not fully qualified.</P
+></BLOCKQUOTE
+><p class="para"><blockquote class="screen"><pre class="screen">-- dumping state on <code class="replaceable"><i>reason</I
+></CODE
+>: $j = <code class="replaceable"><i>val</I
+></CODE
+> --</PRE
+></BLOCKQUOTE
+></P
+><p class="para">where <code class="replaceable"><i>reason</I
+></CODE
+> can be any one of the following:
+<code class="literal">siguser1</CODE
+> 
+The information has been logged because <em class="emphasis">sendmail</EM
+> received
+a SIGUSR1 signal. In this instance the daemon logs
+the information and continues to run.</P
+><dl class="variablelist"><dt class="term"><code class="literal">daemon&nbsp;lost&nbsp;$j</CODE
+></DT
+><dd class="listitem"><p class="para">The information has been logged because a running daemon 
+discovered that the value in <code class="literal">$j</CODE
+> (the canonical name
+of this host; see <a class="xref" href="ch31_10.htm#SML2-CH-31-SECT-10-20" title="">Section 31.10.20, $j</A
+>)
+disappeared from the class <code class="literal">$=w</CODE
+> (the list of all names
+by which the local host is known; see <a class="xref" href="ch32_05.htm#SML2-CH-32-SECT-5-8" title="">Section 32.5.8, $=w</A
+>).
+This test is made and this information is logged only if <em class="emphasis">sendmail</EM
+> was compiled with XDEBUG defined
+(see <a class="xref" href="ch18_08.htm#SML2-CH-18-SECT-8-57" title="">Section 18.8.57, XDEBUG</A
+>).
+In this instance the daemon logs the information and aborts.</P
+></DD
+><dt class="term"><code class="literal">daemon&nbsp;$j&nbsp;lost&nbsp;dot</CODE
+></DT
+><dd class="listitem"><p class="para">The information has been logged because a running daemon 
+discovered that the value in <code class="literal">$j</CODE
+> (the canonical name
+of this host; see <a class="xref" href="ch31_10.htm#SML2-CH-31-SECT-10-20" title="">Section 31.10.20</A
+>) was no longer
+canonical (no longer contained a dot inside it).
+This test is made and this information is logged only
+if <em class="emphasis">sendmail</EM
+> was compiled with XDEBUG defined
+(see <a class="xref" href="ch18_08.htm#SML2-CH-18-SECT-8-57" title="">Section 18.8.57</A
+>).
+In this instance the daemon logs the information and aborts.</P
+></DD
+></DL
+><p class="para">Whichever the reason, the information that is logged for each looks pretty much
+the same; for example,</P
+><p class="para"><blockquote class="screen"><pre class="screen">-- dumping state on <code class="replaceable"><i>when</I
+></CODE
+>: $j = <code class="replaceable"><i>val</I
+></CODE
+> --
+ CurChildren =<code class="replaceable"><i>num</I
+></CODE
+>
+ -- open file descriptors: --
+                                    <i class="lineannotation"><img src="../chars/larr.gif" alt="&lt;-"> output of dumpfd() here</I
+>
+ -- connection cache: --
+                                    <i class="lineannotation"><img src="../chars/larr.gif" alt="&lt;-"> output of mci_dump() here</I
+>
+ -- ruleset debug_dumpstate returns stat <code class="replaceable"><i>ret</I
+></CODE
+>, pv: -- 
+                                    <i class="lineannotation"><img src="../chars/larr.gif" alt="&lt;-"> output of rule set debug_dumpstate here</I
+>
+ -- end of state dump --</PRE
+></BLOCKQUOTE
+></P
+><p class="para">We have described the first line already. If for some reason <code class="literal">$j</CODE
+>
+is missing from <code class="literal">$=w</CODE
+>, that line will be followed by</P
+><p class="para"><blockquote class="screen"><pre class="screen">*** $j not in $=w ***</PRE
+></BLOCKQUOTE
+></P
+><p class="para">The second line simply shows the number
+of children the daemon has forked and currently has out doing
+other work in parallel with itself. That line is followed by three
+sections of information. The first two sections are always output;
+the third is output only if rule set <code class="literal">debug_dumpstate</CODE
+> exists.&#13;</P
+><div class="sect3"><h4 class="sect3"><a class="title" name="SML2-CH-26-SECT-3-3-1">26.3.3.1 -- open file descriptors: --</A
+></H4
+><p class="para"><a class="indexterm" name="AUTOID-25361"></A
+>Each open file descriptor is displayed along with its current properties.
+These lines of output can be numerous. In general form, they
+look like this:</P
+><p class="para"><blockquote class="screen"><pre class="screen"><code class="replaceable"><i>num</I
+></CODE
+>: fl=<code class="replaceable"><i>flags</I
+></CODE
+> mode=<code class="replaceable"><i>mode type stats</I
+></CODE
+></PRE
+></BLOCKQUOTE
+></P
+><p class="para">Here, the <code class="replaceable"><i>num</I
+></CODE
+> is the number of the open file descriptor.
+The other information in this line is described in detail in our
+discussion of the <code class="literal">-d2.9</CODE
+> debugging switch (see <a class="xref" href="ch37_05.htm#SML2-CH-37-SECT-5-13" title="">Section 37.5.13, -d2.9</A
+>).&#13;</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="SML2-CH-26-SECT-3-3-2">26.3.3.2 -- connection cache: --</A
+></H4
+><p class="para"><a class="indexterm" name="AUTOID-25375"></A
+>When sending mail, outgoing connections are maintained for efficiency,
+and information about those connections is cached. 
+Before connecting to a remote host, for example, <em class="emphasis">sendmail</EM
+> checks its
+cache to see whether that host is down. If it is, it skips
+connecting to that host.</P
+><p class="para">This output is highly detailed and very complicated. See the
+<code class="literal">-d11.1</CODE
+> debugging switch (<a class="xref" href="ch37_05.htm#SML2-CH-37-SECT-5-44" title="">Section 37.5.44, -d11.1</A
+>)
+for a full description.&#13;</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="SML2-CH-26-SECT-3-3-3">26.3.3.3 -- ruleset debug_dumpstate returns stat ..., pv: --</A
+></H4
+><p class="para"><a class="indexterm" name="AUTOID-25384"></A
+><a class="indexterm" name="AUTOID-25386"></A
+>If rule set <code class="literal">debug_dumpstate</CODE
+>
+[3]
+is defined in your configuration file, it will
+be called here, and the above line of output will be printed. The <code class="literal">stat</CODE
+>
+is the numeric representation of the code returned by
+<em class="emphasis">sendmail</EM
+>'s internal <em class="emphasis">rewrite</EM
+>() routine. That code will be
+either EX_OK (0) if there were no parsing errors, 
+EX_CONFIG (78) if there were, or EX_DATAERR (65)
+if there was a fatal error (such as too much recursion or a replacement
+was out of bounds). Text describing the error is also logged and
+will appear in this output.</P
+><blockquote class="footnote"><p class="para">[3] In V8.7 <em class="emphasis">sendmail</EM
+> this is rule set 89. Beginning with
+V8.8 <em class="emphasis">sendmail</EM
+>, rule sets 80 through 89 are reserved
+for use by vendors, such as Sun Microsystems.</P
+></BLOCKQUOTE
+><p class="para">Rule set <code class="literal">debug_dumpstate</CODE
+>
+is called with an empty workspace. After rule set <code class="literal">debug_dumpstate</CODE
+> is
+done, each token in the resulting new workspace is printed one per
+line. This gives you a hook into the internals of <em class="emphasis">sendmail</EM
+>,
+enabling you to display information that might otherwise be invisible.
+For example, consider the desire to display <em class="emphasis">identd</EM
+> information,
+the current sender's address, and the current queue identifier:</P
+><p class="para"><blockquote class="screen"><pre class="screen">Sdebug_dumpstate
+R$*     $@ $&amp;_ $&amp;s $&amp;i</PRE
+></BLOCKQUOTE
+></P
+><p class="para">Here, the <code class="literal">$*</CODE
+> in the LHS matches the zero tokens passed
+to rule set <code class="literal">debug_dumpstate</CODE
+>. The <code class="literal">$@</CODE
+> prefix in the RHS suppresses
+recursion.  Each of the three macros that follows is stated with
+a <code class="literal">$&amp;</CODE
+> prefix (see <a class="xref" href="ch31_05.htm#SML2-CH-31-SECT-5-3" title="Use Value as Is with $&amp;">Section 31.5.3, "Use Value as Is with $&amp;"</A
+>) that prevents
+each from being prematurely expanded when the configuration file is first read.</P
+><p class="para">Another example might involve the need to look up the current recipient's host
+with DNS:</P
+><p class="para"><blockquote class="screen"><pre class="screen">Sdebug_dumpstate
+R$*     $@ $[ $&amp;h $]</PRE
+></BLOCKQUOTE
+></P
+><p class="para">The <code class="literal">$[</CODE
+> and <code class="literal">$]</CODE
+> operators (see <a class="xref" href="ch28_06.htm#SML2-CH-28-SECT-6-6" title="Canonicalize Hostname: $[ and $]">Section 28.6.6, "Canonicalize Hostname: $[ and $]"</A
+>)
+cause the hostname appearing between them to be looked up with
+DNS and replaced with its full canonical name. Again, the
+macro <code class="literal">h</CODE
+> is prefixed with <code class="literal">$&amp;</CODE
+> to prevent premature
+expansion.</P
+><p class="para">In general, rule set <code class="literal">debug_dumpstate</CODE
+>
+should be excluded from your configuration file.
+When a problem does appear, you can define it, restart the daemon, and
+then wait for the problem to reoccur. When it does, kill <em class="emphasis">sendmail</EM
+>
+with a SIG_USR1 and examine the <em class="emphasis">syslog</EM
+> result.</P
+><p class="para">Do not be tempted to use rule set <code class="literal">debug_dumpstate</CODE
+>
+for routine logging of specialty
+information. Forcing rules to be processed with a signal is fraught with danger.
+The current active rule set can, for example,
+be clobbered in possibly unrecoverable ways. Use this
+
+rule set <code class="literal">debug_dumpstate</CODE
+>
+technique only to solve specific problems, then erase
+it when the problem is solved.<a class="indexterm" name="AUTOID-25426"></A
+><a class="indexterm" name="AUTOID-25427"></A
+><a class="indexterm" name="AUTOID-25428"></A
+>&#13;</P
+></DIV
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch26_02.htm" title="26.2 Statistics"><img src="../gifs/txtpreva.gif" alt="Previous: 26.2 Statistics" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="sendmail"><img src="../gifs/txthome.gif" alt="sendmail" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch26_04.htm" title="26.4 Log Transactions with -X"><img src="../gifs/txtnexta.gif" alt="Next: 26.4 Log Transactions with -X" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">26.2 Statistics</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">26.4 Log Transactions with -X</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.htm" title="The Networking CD Bookshelf">Library Home</A
+> | <a href="../dnsbind/index.htm" title="DNS &amp; BIND">DNS &amp; BIND</A
+> | <a href="../tcpip/index.htm" title="TCP/IP Network Administration">TCP/IP</A
+> | <a href="index.htm" title="sendmail">sendmail</A
+> | <a href="../smdref/index.htm" title="sendmail Desktop Reference">sendmail Reference</A
+> | <a href="../firewall/index.htm" title="Building Internet Firewalls">Firewalls</A
+> | <a href="../puis/index.htm" title="Practical UNIX &amp; Internet Security">Practical Security</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

@@ -1,0 +1,381 @@
+<html><head>
+<title>[Chapter 16] 16.2 Implementation</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:39:32Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch16_01.htm" title="16. GUI Example: Man Page Viewer"><link rel="prev" href="ch16_01.htm" title="16.1 man and perlman"><link rel="next" href="ch16_03.htm" title="16.3 Resources"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_01.htm" title="16.1 man and perlman"><img src="../gifs/txtpreva.gif" alt="Previous: 16.1 man and perlman" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch16_01.htm" title="16. GUI Example: Man Page Viewer">Chapter 16<br>GUI Example: Man Page Viewer</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch16_03.htm" title="16.3 Resources"><img src="../gifs/txtnexta.gif" alt="Next: 16.3 Resources" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch16-38847">16.2 Implementation</A
+></H2
+><p class="para"><em class="emphasis">perlman</EM
+>'s implementation can be logically divided into four chunks: </P
+><ul class="itemizedlist"><li class="listitem"><p class="para"><a class="listitem" name="ch16-pgfId-992003"></A
+>Formatting and displaying man pages in the text widget: the routines <kbd class="command">show_man</KBD
+> and <kbd class="command">get_command_line</KBD
+>.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch16-pgfId-993815"></A
+>Search facility: <kbd class="command">search</KBD
+>.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch16-pgfId-993816"></A
+>Screen layout: <kbd class="command">create_ui</KBD
+>.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch16-pgfId-993817"></A
+>Displaying the list of help topics available in every section. We will not look at this particular piece of functionality, because it does not have much user interface code.</P
+></LI
+></UL
+><p class="para">Before we barrel into each of the subroutines mentioned above, let us briefly study all the capabilities of the text widget used by <em class="emphasis">perlman</EM
+>:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para"><a class="listitem" name="ch16-pgfId-993145"></A
+>Inserting text at end, and marking it with a tag ("section"):</P
+><pre class="programlisting">$text-&gt;insert('end', 'sample text', 'section');</PRE
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch16-pgfId-993248"></A
+>Retrieving a stretch of text between two indices:</P
+><pre class="programlisting">$line = $text-&gt;get($start_index, $end_index);</PRE
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch16-pgfId-993365"></A
+>Ensuring that a particular index is visible:</P
+><pre class="programlisting">$text-&gt;see($index)</PRE
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch16-pgfId-993144"></A
+>Deleting entire contents:</P
+><pre class="programlisting">$text-&gt;delete('1.0', 'end'); # From line 1, column 0, to end</PRE
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch16-pgfId-993840"></A
+>Creating and configuring a tag:</P
+><pre class="programlisting">$text-&gt;tagConfigure('search',  
+                    'foreground' =&gt; yellow, 'background' =&gt; 'red');</PRE
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch16-pgfId-993843"></A
+>Deleting a tag:</P
+><pre class="programlisting">$text-&gt;tagDelete('search');</PRE
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch16-pgfId-993845"></A
+>Applying a tag to a range of text, given an index position and number of characters:</P
+><pre class="programlisting">$text-&gt;tagAdd('search', $current, &quot;$current + $length char&quot;);</PRE
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch16-pgfId-993063"></A
+>Listing all mark names and deleting each of them:</P
+><pre class="programlisting">foreach $mark ( $text-&gt;markNames() ) { $text-&gt;markUnset($mark); }</PRE
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch16-pgfId-993067"></A
+>Getting the line and column number (the index) from logical positions:</P
+><pre class="programlisting"># row and col of current end position
+$index = $text-&gt;index('end'); 
+
+# go to current insert position, then to the beginning of the word
+# and report the line and column
+$start_index = $text-&gt;index('insert wordstart'); 
+
+# Go to 10th row, column 3, advance 5 chars, and report the new
+# row and column
+$i = $text-&gt;index(&quot;10.3 + 5 char&quot;);</PRE
+><p class="para">Note that the <kbd class="command">index</KBD
+> method does not change the state of the widget.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch16-pgfId-993285"></A
+>Doing an exact or regular expression search, specifying where to start and where to end: </P
+><pre class="programlisting">$current = $text-&gt;search('-count' =&gt; \$length,     
+                         '-regex', '-nocase','--', # search options
+                         $search_pattern,   
+                         $current, 'end');         # from , to </PRE
+><p class="para">The <kbd class="command">search</KBD
+> method returns the index of the text at which the search succeeds and sets the variable associated with the <kbd class="command">-count</KBD
+> property. It returns <kbd class="command">undef</KBD
+> if the search failed.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch16-pgfId-993217"></A
+>Binding a mouse double-click to a subroutine:</P
+><pre class="programlisting">$text-&gt;bind('&lt;Double-1&gt;', \&amp;pick_word);</PRE
+></LI
+></UL
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-992024">16.2.1 Showing Man Pages</A
+></H3
+><p class="para">Let us dive into the meat of the application, the procedure <kbd class="command">show_man</KBD
+>. As can be seen in <a class="xref" href="ch16_01.htm#ch16-28790" title="perlman screen">Figure 16.1</A
+>, an entry widget labeled "Show:" accepts a topic name. When the user types text into this widget, <kbd class="command">$show</KBD
+>, and hits the Return key, <kbd class="command">show_man</KBD
+> is called. This procedure fetches the string from <kbd class="command">$show</KBD
+> and calls <kbd class="command">get_command_line</KBD
+> to construct a command pipeline to read from <kbd class="command">man</KBD
+> (for <kbd class="command">open</KBD
+>'s purposes). It then reads this pipe a line at a time and examines the line to see whether it is a likely heading (such as "NAME" or "DESCRIPTION"). Headings in man pages are typically in all caps and start from the first column. If a line looks like a heading, <kbd class="command">show_man</KBD
+> inserts the line with a tag called "section"; otherwise, it inserts it as regular untagged text. The "section" tag is preconfigured with a larger size font. In addition, <kbd class="command">show_man</KBD
+> appends a new entry to the "Headings" menu and arranges the callback associated with this entry to scroll the text widget to the line containing that section header.</P
+><pre class="programlisting">sub show_man {
+    my $entry = $show-&gt;get();   # get entry from $show
+    # $entry can be something like 'csh', or 'csh(1)'
+    my ($man, $section) = ($entry =~ /^(\w+)(\(.*\))?/);
+    if ($section &amp;&amp; (!is_valid_section($section))) {
+        undef $section ;
+    }
+    my $cmd_line = get_command_line($man, $section); # used by open
+
+    # Erase everything to do with current page (contents, menus, marks)
+    $text-&gt;delete('1.0', 'end');  # erase current page
+    # Insert 'working' message; use the 'section' tag because
+    # it has nice large fonts.
+    $text-&gt;insert('end', 
+                  &quot;Formatting \&quot;$man\&quot; .. please wait&quot;, 'section');
+    $text-&gt;update();  # Flush changes to text widget
+    $menu_headings-&gt;menu()-&gt;delete(0,'end'); # Delete current headings
+    my $mark;
+    foreach $mark ($text-&gt;markNames) {  # remove all marks 
+        $text-&gt;markUnset($mark);
+    }
+
+    # UI is clean now. Open the file
+    if (!open (F, $cmd_line)) {
+        # Use the text widget for error messages 
+        $text-&gt;insert('end', &quot;\nError in running man or rman&quot;);
+        $text-&gt;update();
+        return;
+    }
+    # Erase the &quot;Formatting $man ...&quot; message
+    $text-&gt;delete('1.0', 'end');
+    my $lines_added = 0; my $line;
+    
+    while (defined($line = &lt;F&gt;)) {
+        $lines_added = 1;
+        # If first character is a capital letter, it's likely a section
+        if ($line =~ /^[A-Z]/) {  
+            # Likely a section heading
+            ($mark = $line) =~ s/\s.*$//g;  # $mark has section title
+            my $index = $text-&gt;index('end');# note current end location
+            # Give 'section' tag to the section title
+            $text-&gt;insert('end', &quot;$mark\n\n&quot;, 'section');
+            # Create a section heading menu entry. Have callback
+            # invoke text widget's 'see' method to go to the index
+            # noted above
+            $menu_headings-&gt;command(
+                    '-label' =&gt; $mark,
+                    '-command' =&gt; [sub {$text-&gt;see($_[0])},$index])
+        } else {
+            $text-&gt;insert('end', $line); # Ordinary text. Just insert.
+        }
+    }
+    if ( ! $lines_added ) {
+        $text-&gt;insert('end', &quot;Sorry. No information found on $man&quot;);
+    }
+    close(F);
+}</PRE
+><p class="para"><kbd class="command">get_command_line</KBD
+> takes the name of a man page and an optional section and returns an appropriate command line that can be used for the <kbd class="command">open</KBD
+> command. Different systems might need different command lines, and the following listing  shows the command line for Solaris. Since <em class="emphasis">man</EM
+> (actually, <em class="emphasis">nroff</EM
+>  ) formats the page for a terminal (inserting escape sequences to show words in bold and headers and footers for every page), we use a freely available utility called <em class="emphasis">rman</EM
+> ("RosettaMan"; see the <a class="xref" href="ch16_03.htm" title="Resources">Section 16.3</A
+>" section at the end of this chapter) to filter out this noise.</P
+><pre class="programlisting">sub get_command_line {
+    my ($man, $section) = @_; 
+    if ($section) {
+        $section =~ s/[()]//g; # remove parens
+        return &quot;man -s $section $man 2&gt; /dev/null | rman |&quot;;
+    } else {
+        return &quot;man $man 2&gt; /dev/null | rman |&quot;;
+    }
+}</PRE
+><p class="para">The <kbd class="command">pick_word</KBD
+> procedure is called when you double-click on the text widget. It uses the <kbd class="command">index</KBD
+> method to compute the index of the beginning of the word clicked on, and that of the end of the line, and extracts this range of text. <kbd class="command">pick_word</KBD
+> then looks for an ordinary string (the topic), followed by an optional string within parentheses (the section). Before invoking <kbd class="command">show_man</KBD
+>, it inserts this string into the entry widget, <kbd class="command">$show</KBD
+>, thus pretending to be a user who has typed in that text.</P
+><pre class="programlisting">sub pick_word {
+    my $start_index = $text-&gt;index('insert wordstart');
+    my $end_index = $text-&gt;index('insert lineend');
+    my $line = $text-&gt;get($start_index, $end_index);
+    my ($page, $section) = ($line =~ /^(\w+)(\(.*?\))?/); 
+    return unless $page;
+    $show-&gt;delete('0', 'end');
+    if ($section &amp;&amp; is_valid_section($section)) {
+        $show-&gt;insert('end', &quot;$page${section}&quot;);
+    } else {
+        $show-&gt;insert('end', $page);
+    }
+    show_man();
+}</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-993436">16.2.2 Searching for Text</A
+></H3
+><p class="para"><a class="indexterm" name="ch16-idx-996433-0"></A
+>The menu bar contains a search menu exactly as described in the example under "Menus" in <a class="xref" href="ch14_01.htm#ch14-14115" title="Introduction to GUIs, Tk, and Perl/Tk">Section 14.1, "Introduction to GUIs, Tk, and Perl/Tk"</A
+>. When the "Find" menu item is selected, the subroutine <kbd class="command">search</KBD
+> is called. It first calls <kbd class="command">tagDelete</KBD
+> to remove all highlights (which may be present from a previous search). Then it starts from the top (line 1, column 0) and invokes the widget's <kbd class="command">search</KBD
+> method to find the first piece of matching text. When a match is found, this method updates the variable supplied to the <kbd class="command">-count</KBD
+> parameter with the length of the matched text. This stretch of text is then highlighted using a tag called "search." The cursor is advanced beyond the matching text, and the search is resumed.</P
+><pre class="programlisting">sub search {
+    my $search_pattern = $search-&gt;get();
+    $text-&gt;tagDelete('search');  # Removing the tag restores the 
+                                 # associated regions of text to their
+                                 # default style
+    $text-&gt;tagConfigure('search', 
+                        '-background' =&gt; 'yellow',
+                        '-foreground' =&gt; 'red');
+
+    my $current = '1.0';# Start at line 1, column 0 (beginning of file)
+    my $length = '0';
+    while (1) {
+        if ($ignore_case) {
+            $current = $text-&gt;search('-count' =&gt; \$length,
+                                     $match_type, '-nocase','--',
+                                     $search_pattern,
+                                     $current,  
+                                     'end');
+        } else {
+            $current = $text-&gt;search('-count' =&gt; \$length,
+                                     $match_type, '--',
+                                     $search_pattern,
+                                     $current,
+                                     'end');
+        }
+        last if (!$current);
+        # Tag the matching text range with the tag name 'search'
+        $text-&gt;tagAdd('search', $current, &quot;$current + $length char&quot;);
+        # Move the cursor ahead, and continue searching
+        $current = $text-&gt;index(&quot;$current + $length char&quot;);
+    }
+}</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-993545">16.2.3 Screen Layout</A
+></H3
+><p class="para"><kbd class="command">create_ui</KBD
+> sets up the simple user interface. Pay particular attention to the padding options given to <kbd class="command">pack</KBD
+> and the event bindings set up on the text and entry widgets. </P
+><pre class="programlisting">sub create_ui {
+    my $top = MainWindow-&gt;new();
+    #-----------------------------------------------------------------
+    # Create menus
+    #-----------------------------------------------------------------
+    # Menu bar
+    my $menu_bar = $top-&gt;Frame()-&gt;pack('-side' =&gt; 'top', 
+                                       '-fill' =&gt; 'x');
+
+    #----------- File menu ------------------------
+    my $menu_file = $menu_bar-&gt;Menubutton('-text' =&gt; 'File',
+                                          '-relief' =&gt; 'raised',
+                                          '-borderwidth' =&gt; 2,
+                                          )-&gt;pack('-side' =&gt; 'left',
+                                                  '-padx' =&gt; 2,
+                                                  );
+    $menu_file-&gt;separator();
+    $menu_file-&gt;command('-label' =&gt; 'Quit', 
+                        '-command' =&gt; sub {exit(0)});
+
+    #----------- Sections Menu ------------------------
+    $menu_headings = $menu_bar-&gt;Menubutton('-text' =&gt; 'Headings',
+                                           '-relief' =&gt; 'raised',
+                                           '-borderwidth' =&gt; 2,
+                                           )-&gt;pack('-side' =&gt; 'left',
+                                                   '-padx' =&gt; 2,
+                                                   );
+    $menu_headings-&gt;separator();
+
+    #----------- Search Menu ------------------------
+    my $search_mb = $menu_bar-&gt;Menubutton('-text'         =&gt; 'Search',
+                                          '-relief'       =&gt; 'raised',
+                                          '-borderwidth'  =&gt; 2,
+                                          )-&gt;pack('-side' =&gt; 'left',
+                                                  '-padx' =&gt; 2
+                                               );
+    $match_type = &quot;-regexp&quot;; $ignore_case = 1;
+    $search_mb-&gt;separator();
+
+    # Regexp match
+    $search_mb-&gt;radiobutton('-label'    =&gt; 'Regexp match',
+                            '-value'    =&gt; '-regexp',
+                            '-variable' =&gt; \$match_type);
+    # Exact match
+    $search_mb-&gt;radiobutton('-label'    =&gt; 'Exact match',
+                            '-value'    =&gt; '-exact',
+                            '-variable' =&gt; \$match_type);
+    $search_mb-&gt;separator();
+    # Ignore case
+    $search_mb-&gt;checkbutton('-label'    =&gt; 'Ignore case?',
+                            '-variable' =&gt; \$ignore_case);
+    #----------- Sections Menu ------------------------
+    my $menu_sections = $menu_bar-&gt;Menubutton('-text' =&gt; 'Sections',
+                                              '-relief' =&gt; 'raised',
+                                              '-borderwidth' =&gt; 2,
+                                             )-&gt;pack('-side' =&gt; 'left',
+                                                     '-padx' =&gt; 2,
+                                                      );
+    # Populate sections menu with keys of %sections
+    my $section_name;
+    foreach $section_name (sort keys %sections) {
+        $menu_sections-&gt;command (
+               '-label' =&gt; &quot;($section_name)&quot;,
+               '-command' =&gt; [\&amp;show_section_contents, $section_name]);
+    }
+    
+    #-----------------------------------------------------------------
+    # Create and configure text, and show and search entry widgets
+    #-----------------------------------------------------------------
+    $text = $top-&gt;Text ('-width' =&gt;  80, 
+                        '-height' =&gt; 40)-&gt;pack();
+    $text-&gt;tagConfigure('section', 
+                        '-font' =&gt; 
+    '-adobe-helvetica-bold-r-normal--14-140-75-75-p-82-iso8859-1'); 
+    # Used xlsfonts(1) for this font spec.
+    $text-&gt;bind('&lt;Double-1&gt;', \&amp;pick_word);
+    $top-&gt;Label('-text' =&gt; 'Show:')-&gt;pack('-side' =&gt; 'left');
+
+    $show = $top-&gt;Entry ('-width'   =&gt;  20,
+                         )-&gt;pack('-side' =&gt; 'left');
+    $show-&gt;bind('&lt;KeyPress-Return&gt;', \&amp;show_man);
+
+    $top-&gt;Label('-text' =&gt; 'Search:'
+                )-&gt;pack('-side' =&gt; 'left', '-padx' =&gt; 10);
+    $search = $top-&gt;Entry ('-width' =&gt; 20,
+                           )-&gt;pack('-side' =&gt; 'left');
+    $search-&gt;bind('&lt;KeyPress-Return&gt;', \&amp;search);
+}</PRE
+><p class="para">Please take a look at the file <i class="filename">perlman.pl</I
+>, packaged with the rest of this book's software and available from O'Reilly's FTP site. You can, if you wish, make a few valuable (and simple) additions to this utility: Add caching of formatted manual pages and the ability to show all man pages for a given topic name (not just the first one in MANPATH).<em class="emphasis"></EM
+><a class="indexterm" name="ch16-idx-996421-0"></A
+><a class="indexterm" name="ch16-idx-996421-1"></A
+><a class="indexterm" name="ch16-idx-996421-2"></A
+><a class="indexterm" name="ch16-idx-996421-3"></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_01.htm" title="16.1 man and perlman"><img src="../gifs/txtpreva.gif" alt="Previous: 16.1 man and perlman" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch16_03.htm" title="16.3 Resources"><img src="../gifs/txtnexta.gif" alt="Next: 16.3 Resources" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">16.1 man and perlman</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">16.3 Resources</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

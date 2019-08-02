@@ -1,0 +1,236 @@
+<html><head>
+<title>Recipe 6.10. Speeding Up Interpolated Matches</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:34:24Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch06_01.htm" title="6. Pattern Matching"><link rel="prev" href="ch06_10.htm" title="6.9. Matching Shell Globs as Regular Expressions"><link rel="next" href="ch06_12.htm" title="6.11. Testing for a Valid Pattern"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch06_10.htm" title="6.9. Matching Shell Globs as Regular Expressions"><img src="../gifs/txtpreva.gif" alt="Previous: 6.9. Matching Shell Globs as Regular Expressions" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch06_01.htm" title="6. Pattern Matching">Chapter 6<br>Pattern Matching</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch06_12.htm" title="6.11. Testing for a Valid Pattern"><img src="../gifs/txtnexta.gif" alt="Next: 6.11. Testing for a Valid Pattern" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch06-42168">6.10. Speeding Up Interpolated Matches</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch06-pgfId-1139">Problem<a class="indexterm" name="ch06-idx-1000007620-0"></A
+></A
+></H3
+><p class="para">You want your function or program to take one or more regular expressions as arguments, but doing so seems to run slower than using literals.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch06-pgfId-1145">Solution</A
+></H3
+><p class="para"><a class="indexterm" name="ch06-idx-1000007622-0"></A
+>To overcome this bottleneck, if you have only one pattern whose value won't change during the entire run of a program, store it in a string and use <code class="literal">/$pattern/o</CODE
+>.</P
+><pre class="programlisting">while ($line = &lt;&gt;) {
+    if ($line =~ /$pattern/o) {
+        # do something
+    }
+}</PRE
+><p class="para">If you have more than one pattern, however, that won't work. Use one of the three techniques outlined in the Discussion for a speed-up of an order of magnitude or so.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch06-pgfId-1163">Discussion</A
+></H3
+><p class="para">When Perl compiles a program, it converts patterns into an internal form. This conversion occurs at compile time for patterns without variables in them, but at run time for those that do contain variables. That means that interpolating variables into patterns, as in <code class="literal">/$pattern/</CODE
+>, can slow your program down. This is particularly noticeable when <code class="literal">$pattern</CODE
+> changes often.</P
+><p class="para">The <code class="literal">/o</CODE
+> modifier is a promise from the script's author that the values of any variables interpolated into that pattern will not change &nbsp;-  or that if they do, Perl should disregard any such changes. Given such a promise, Perl need only interpolate the variable and compile the pattern the first time it encounters the match. But if the interpolated variable were to change, Perl wouldn't notice. Make sure to use it only on unchanging variables, or else wrong answers will result.</P
+><p class="para">Using <code class="literal">/o</CODE
+> on patterns without interpolated variables does not speed anything up. The <code class="literal">/o</CODE
+> modifier is also of no help when you have an unknown number of regular expressions and need to check one or more strings against all of these patterns. Nor is it of any use when the interpolated variable is a function argument, since each call of the function gives the variable a new value.</P
+><p class="para"><a class="xref" href="#ch06-22028" title="popgrep1">Example 6.4</A
+> is an example of the slow but straightforward technique for matching many patterns against many lines. The array <code class="literal">@popstates</CODE
+> contains the standard two-letter abbreviations for some of the places in the heartland of North America where we normally refer to soft drinks as <i class="firstterm">pop</I
+> (<i class="firstterm">soda</I
+> to us means either plain soda water or else handmade delicacies from the soda fountain at the corner drugstore, preferably with ice cream). The goal is to print out any line of input that contains any of those places, matching them at word boundaries only. It doesn't use <code class="literal">/o</CODE
+> because the variable that holds the pattern keeps changing.</P
+><div class="example"><h4 class="example"><a class="title" name="ch06-22028">Example 6.4: popgrep1</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl
+# <a class="indexterm" name="ch06-idx-1000008674-0"></A
+>popgrep1 - grep for abbreviations of places that say &quot;pop&quot;
+# version 1: slow but obvious way
+@popstates = qw(CO ON MI WI MN);
+LINE: while (defined($line = &lt;&gt;)) {
+    for $state (@popstates) {
+        if ($line =~ /\b$state\b/) {
+            print; next LINE;
+       }
+    }
+}</PRE
+></DIV
+><p class="para">Such a direct, obvious, brute-force approach is also horribly slow because it has to recompile all patterns with each line of input. Three different ways of addressing this are described in this section. One builds a string of Perl code and <code class="literal">eval</CODE
+>s it; one caches the internal representations of regular expressions in closures; and one uses the Regexp module from CPAN to hold compiled regular expressions.</P
+><p class="para">The traditional way to get Perl to speed up a multiple match is to build up a string containing the code and <code class="literal">eval</CODE
+> <code class="literal">&quot;$code&quot;</CODE
+> it. <a class="xref" href="#ch06-36871" title="popgrep2">Example 6.5</A
+> contains a version that uses this technique.</P
+><div class="example"><h4 class="example"><a class="title" name="ch06-36871">Example 6.5: popgrep2</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl
+# <a class="indexterm" name="ch06-idx-1000007797-0"></A
+>popgrep2 - grep for abbreviations of places that say &quot;pop&quot;
+# version 2: eval strings; fast but hard to quote
+@popstates = qw(CO ON MI WI MN);
+$code = 'while (defined($line = &lt;&gt;)) {';
+for $state (@popstates) {
+    $code .= &quot;\tif (\$line =~ /\\b$state\\b/) { print \$line; next; }\n&quot;;
+}
+$code .= '}';
+print &quot;CODE IS\n----\n$code\n----\n&quot; if 0;  # turn on to debug
+eval $code;
+die if $@;</PRE
+></DIV
+><p class="para">The <code class="literal">popgrep2</CODE
+> program builds strings like this:</P
+><pre class="programlisting">while (defined($line = &lt;&gt;)) {
+     if ($line =~ /\bCO\b/) { print $line; next; }
+     if ($line =~ /\bON\b/) { print $line; next; }
+     if ($line =~ /\bMI\b/) { print $line; next; }
+     if ($line =~ /\bWI\b/) { print $line; next; }
+     if ($line =~ /\bMN\b/) { print $line; next; }
+}</PRE
+><p class="para">As you see, those end up looking like constant strings to <code class="literal">eval</CODE
+>. We put the entire loop and pattern match in the <code class="literal">eval</CODE
+> text, too, which makes it run faster.</P
+><p class="para">The worst thing about this <code class="literal">eval</CODE
+> <code class="literal">&quot;STRING&quot;</CODE
+> approach is that it's difficult to get the quoting and escaping right. The <code class="literal">dequote</CODE
+> function from <a class="xref" href="ch01_12.htm" title="Indenting Here Documents">Recipe 1.11</A
+> can make it easier to read, but escaping variables whose use is delayed will still be an issue. Also, none of the strings can contain a slash, since that's what we're using as a delimiter for the <code class="literal">m//</CODE
+> operator.</P
+><p class="para">A solution to these problems is a subtle technique first developed by Jeffrey <a class="indexterm" name="ch06-idx-1000007631-0"></A
+>Friedl. The key here is building an anonymous subroutine that caches the compiled patterns in the closure it creates. To do this, we <code class="literal">eval</CODE
+> a string containing the definition of an anonymous subroutine to match any of the supplied patterns. Perl compiles the pattern once, when the subroutine is defined. The string is evaluated to give you comparatively quick matching ability. An explanation of the algorithm can be found at the end of the section "Regex Compilation, the /o Modifier, and Efficiency" in Chapter 7 of <em class="emphasis">Mastering Regular Expressions</EM
+>.</P
+><p class="para"><a class="xref" href="#ch06-35632" title="popgrep3">Example 6.6</A
+> is a version of our pop grepper that uses that technique.</P
+><div class="example"><h4 class="example"><a class="title" name="ch06-35632">Example 6.6: popgrep3</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl
+# <a class="indexterm" name="ch06-idx-1000007799-0"></A
+>popgrep3 - grep for abbreviations of places that say &quot;pop&quot;
+# version 3: use build_match_func algorithm
+@popstates = qw(CO ON MI WI MN);
+    $expr = join('||', map { &quot;m/\\b\$popstates[$_]\\b/o&quot; } 0..$#popstates);
+$match_any = eval &quot;sub { $expr }&quot;;
+die if $@;
+while (&lt;&gt;) {
+    print if &amp;$match_any;
+}</PRE
+></DIV
+><p class="para">The string that gets evaluated ends up looking like this, modulo formatting:</P
+><pre class="programlisting">sub {
+      m/\b$popstates[0]\b/o || m/\b$popstates[1]\b/o ||
+      m/\b$popstates[2]\b/o || m/\b$popstates[3]\b/o ||
+      m/\b$popstates[4]\b/o
+  }</PRE
+><p class="para">The reference to the <code class="literal">@popstates</CODE
+> array is locked up inside the closure. Each one is different, so the <code class="literal">/o</CODE
+> is safe here.</P
+><p class="para"><a class="xref" href="#ch06-40846" title="grepauth">Example 6.7</A
+> is a generalized form of this technique showing how to create functions that return true if any of the patterns match or if all match.</P
+><div class="example"><h4 class="example"><a class="title" name="ch06-40846">Example 6.7: grepauth</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl
+# <a class="indexterm" name="ch06-idx-1000007801-0"></A
+>grepauth - print lines that mention both Tom and Nat
+
+$multimatch = build_match_all(q/Tom/, q/Nat/);
+while (&lt;&gt;) {
+    print if &amp;$multimatch;
+}
+exit;
+
+sub build_match_any { build_match_func('||', @_) }
+sub build_match_all { build_match_func('&amp;&amp;', @_) }
+sub build_match_func {
+    my $condition = shift;
+    my @pattern = @_;  # must be lexical variable, not dynamic one
+    my $expr = join $condition =&gt; map { &quot;m/\$pattern[$_]/o&quot; } (0..$#pattern);
+    my $match_func = eval &quot;sub { local \$_ = shift if \@_; $expr }&quot;;
+    die if $@;  # propagate $@; this shouldn't happen!
+    return $match_func;
+}</PRE
+></DIV
+><p class="para">Using <code class="literal">eval</CODE
+> <code class="literal">&quot;STRING&quot;</CODE
+> on interpolated strings as we did in <em class="emphasis">popgrep2</EM
+> is a hack that happens to work. Using lexical variables that get bound up in a closure as in <em class="emphasis">popgrep3</EM
+> and the <code class="literal">build_match_*</CODE
+> functions is deep enough magic that even Perl wizards stare at it a while before they believe in it. Of course, it still works whether they believe in it or not.</P
+><p class="para">What you really need is some way to get Perl to compile each pattern once and let you directly refer to the compiled form later on. Such functionality is directly supported in the 5.005 release in the form of a <code class="literal">qr//</CODE
+><a class="indexterm" name="ch06-idx-1000008349-0"></A
+> regular-expression quoting operator. For prior releases, that's exactly what the experimental Regexp module from CPAN was designed for. Objects created by this module represent compiled regular expression patterns. Using the <code class="literal">match</CODE
+> method on these objects matches the pattern against the string argument. Methods in the class exist for extracting backreferences, determining where pattern matched, and passing flags corresponding to modifiers like <code class="literal">/i</CODE
+>.</P
+><p class="para"><a class="xref" href="#ch06-36674" title="popgrep4">Example 6.8</A
+> is a version of our program that demonstrates a simple use of this module.</P
+><div class="example"><h4 class="example"><a class="title" name="ch06-36674">Example 6.8: popgrep4</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl
+# <a class="indexterm" name="ch06-idx-1000007803-0"></A
+>popgrep4 - grep for abbreviations of places that say &quot;pop&quot;
+# version 4: use Regexp module
+use Regexp;
+@popstates = qw(CO ON MI WI MN);
+@poppats   = map { Regexp-&gt;new( '\b' . $_ . '\b') } @popstates;
+while (defined($line = &lt;&gt;)) {
+    for $patobj (@poppats) {
+        print $line if $patobj-&gt;match($line);
+    }
+}</PRE
+></DIV
+><p class="para">You might wonder about the comparative speeds of these approaches. When run against the 22,000 line text file (the Jargon File, to be exact), version 1 ran in 7.92 seconds, version 2 in merely 0.53 seconds, version 3 in 0.79 seconds, and version 4 in 1.74 seconds. The last technique is a lot easier to understand than the others, although it does run slightly slower than they do. It's also more flexible. <a class="indexterm" name="ch06-idx-1000007627-0"></A
+><a class="indexterm" name="ch06-idx-1000007627-1"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch06-pgfId-1353">See Also</A
+></H3
+><p class="para">Interpolation is explained in the "Scalar Value Constructors" section of <i class="filename">perldata</I
+> (1), and in the <a class="olink" href="../prog/ch02_03.htm#PERL2-CH-2-SECT-3.2.2">"String literals"</A
+> section of <a class="olink" href="../prog/ch02_01.htm">Chapter 2</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; the <code class="literal">/o</CODE
+> modifier in <i class="filename">perlre </I
+>(1) and the <a class="olink" href="../prog/ch02_04.htm">"Pattern Matching"</A
+> section of <a class="olink" href="../prog/ch02_01.htm">Chapter 2</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; the "Regex Compilation, the /o Modifier, and Efficiency" section of Chapter 7 of <cite class="citetitle">Mastering Regular Expressions</CITE
+>; the documentation with the CPAN module Regexp</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch06_10.htm" title="6.9. Matching Shell Globs as Regular Expressions"><img src="../gifs/txtpreva.gif" alt="Previous: 6.9. Matching Shell Globs as Regular Expressions" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch06_12.htm" title="6.11. Testing for a Valid Pattern"><img src="../gifs/txtnexta.gif" alt="Next: 6.11. Testing for a Valid Pattern" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">6.9. Matching Shell Globs as Regular Expressions</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">6.11. Testing for a Valid Pattern</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

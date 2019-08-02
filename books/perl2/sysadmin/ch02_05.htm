@@ -1,0 +1,583 @@
+<html>
+<head>
+<title>Manipulating Disk Quotas  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Manipulating Disk Quotas">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch02_04.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch02_01.htm">Chapter 2: Filesystems</a></td><td align="right" valign="top" width="172"><a href="ch02_06.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">2.5. Manipulating Disk Quotas</h2>
+
+
+
+
+
+<p>Perl scripts like our core-killers from the last section can offer a
+way to deal with junk files that cause unnecessary disk full
+situations. But even when run on a regular basis, they are still a
+reactive approach; the administrator deals with these files only
+after they've come into existence and cluttered the filesystem.</p>
+
+
+
+
+
+<p>There's another, more proactive approach: filesystem quotas.
+Filesystem quotas, operating system permitting, allow you to
+constrain the amount of disk space a particular user can consume on a
+filesystem. Windows 2000 and all modern Unix variants offer quotas.
+NT4 requires a third-party product, and MacOS users are S.O.L.
+(Simply or Sore Out of Luck).</p>
+
+
+
+
+
+<p>Though proactive, this approach is considerably more heavy-handed
+than cleanup scripts because it applies to all files, not just
+spurious ones like core dumps. Most system administrators find using
+a combination of the automated cleanup scripts and quotas to be the
+best strategy. The former helps prevent the latter from being
+necessary.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-115"></a><a name="INDEX-116"></a>In this section,
+we'll deal with manipulating Unix quotas from Perl. Before we
+get to that subject, we should take a moment to understand how quotas
+are set and queried "by hand." To enable quotas on a
+filesystem, a Unix system administrator usually adds an entry to the
+filesystem mount table (e.g., <em class="filename">/etc/fstab</em> or
+<em class="filename">/etc/vfstab</em>) and then reboots the system or
+manually invokes the quota enable command (usually
+<tt class="command">quotaon</tt>). Here's an example
+<em class="filename">/etc/vfstab</em> from a Solaris box:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">#device            device              mount  FS    fsck    mount     mount
+#to mount          to fsck             point  type  pass    at boot   options
+/dev/dsk/c0t0d0s7 /dev/dsk/c0d0t0d0s7  /home  ufs   2       yes       rq</pre>
+</blockquote>
+
+
+
+
+
+<p>The <tt class="command">rq</tt> option in the last column enables quotas on
+this filesystem. They are stored on a per-user basis. To view the
+quota entries for a user on all of the mounted filesystems that have
+quotas enabled, one can invoke the <tt class="command">quota</tt> command
+like so:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$ <b class="emphasis-bold">quota -v sabrams</b>
+</pre>
+</blockquote>
+
+
+
+
+
+<p>to produce output similar to this:<a name="INDEX-117"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Disk quotas for sabrams (uid 670):
+Filesystem   usage  quota    limit    timeleft  files  quota  limit timeleft
+/home/users  228731 250000  253000                  0      0      0</pre>
+</blockquote>
+
+
+
+
+
+<p>For our next few examples, we're only interested in the first
+three columns of this output. The first number is the current amount
+of disk space being used by the user <em class="emphasis">sabrams</em> on
+the filesystem mounted at<b class="emphasis-bold"></b><em class="filename">/home/users</em>. The second is that user's "soft
+quota." The soft quota is the amount after which the OS begins
+complaining for a set period of time, but does not restrict space
+allocation. The final number is the "hard quota," the
+absolute upper bound for this user's space usage. If a program
+attempts to request more storage space on behalf of the user after
+this limit has been reached, the OS will deny this request and return
+an error message like <tt class="literal">disk quota exceeded</tt>.</p>
+
+
+
+
+
+<p>If we wanted to change these quota limits by hand, we'd use the
+<tt class="command">edquota</tt> command. <tt class="command">edquota</tt> pops
+you into your editor of choice preloaded with a small temporary text
+file that contains the pertinent quota information. Setting the
+EDITOR environment variable in your shell specifies the editor.
+Here's an example buffer that shows a user's limits on
+each of the four quota-enabled filesystems. This user most likely has
+her home directory on <em class="filename">/exprt/server2</em> since
+that's the only filesystem where she has quotas in place:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">fs /exprt/server1 blocks (soft = 0, hard = 0) inodes (soft = 0, hard = 0)
+fs /exprt/server2 blocks (soft = 250000, hard = 253000) inodes (soft = 0, hard = 0)
+fs /exprt/server3 blocks (soft = 0, hard = 0) inodes (soft = 0, hard = 0)
+fs /exprt/server4 blocks (soft = 0, hard = 0) inodes (soft = 0, hard = 0)</pre>
+</blockquote>
+
+
+
+
+
+<p>Using <tt class="command">edquota</tt> by hand may be a comfy way to edit a
+single user's quota limits, but it is not a viable way to deal
+with tens, hundreds, or thousands of user accounts. One of
+Unix's flaws is its lack of command-line tools for editing
+quota entries. Most Unix variants have C library routines for this
+task, but no command- line tools that allow for higher-level
+scripting. True to the Perl motto "There's More Than One
+Way To Do It" (TMTOWTDI, pronounced "tim-toady"),
+we are going to look at two very different ways of setting quotas
+from Perl.</p>
+
+
+
+
+
+<a name="ch02-11-fm2xml"></a>
+<h3 class="sect2">2.5.1. Editing Quotas with edquota Trickery</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-118"></a><a name="INDEX-119"></a><a name="INDEX-120"></a>The first method involves a
+little trickery on our part. A moment ago we mentioned the process
+for manually setting a user's quota: <tt class="command">edquota</tt>
+invokes an editor to allow a user to edit a small text file and then
+uses any changes to update the quota entries. There's nothing
+in this scenario mandating that an actual human has to type at a
+keyboard to make changes in the editor invoked by
+<tt class="command">edquota</tt>. In fact, there's not even a
+constraint on which editor has to be used. All
+<tt class="command">edquota</tt> needs is a program it can launch that will
+properly change a small text file. Any valid path (as specified in
+the EDITOR environment variable) to such a program will do. Why not
+point <tt class="command">edquota</tt> at a Perl script? Let's look
+at just such a script for our next example.</p>
+
+
+
+
+
+<p>Our example script will need to do double duty: first, it has to get
+some command-line arguments from the user, set EDITOR appropriately,
+and call <tt class="command">edquota</tt>. <tt class="command">edquota</tt> will
+then run another copy of our program to do the real work of editing
+this temporary file. <a href="ch02_05.htm#ch02-55606">Figure 2-1</a> shows a diagram of
+the action.</p>
+
+
+
+
+
+<a name="ch02-55606"></a>
+<div class="figure">
+<img alt="figure" src="figs/psa_0201.gif"></div>
+<h4 class="objtitle">Figure 2.1. Changing quotas using a "sleight-of-hand" approach</h4>
+
+<p>The second copy must be told what to change by the initial program
+invocation. How it gets this information from the copy that called
+<tt class="command">edquota</tt> is less straightforward than one might
+hope. The manual page for <tt class="command">edquota</tt> says: "The
+editor invoked is <em class="emphasis">vi(1)</em> unless the EDITOR
+environment variable specifies otherwise." The idea of passing
+command-line arguments via EDITOR or another environment variable is
+a dicey prospect at best because we don't know how
+<tt class="command">edquota</tt> will react. Instead, we'll have to
+rely on one of the other types of interprocess communication methods
+available from Perl. For instance, the two processes could:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>Pass a temporary file between them</p>
+</li>
+<li>
+<p>Create a named pipe and talk over that</p>
+</li>
+<li>
+<p>Pass AppleEvents (under MacOS)</p>
+</li>
+<li>
+<p>Use mutexes or mutually agreed upon registry keys (under NT/2000)</p>
+</li>
+<li>
+<p>Rendezvous at network socket</p>
+</li>
+<li>
+<p>Use a shared memory section</p>
+</li>
+</ul>
+<p>And so on. It's up to you as the programmer to choose the
+appropriate communication method, though often the data will dictate
+this for you. When looking at this data, you'll want to
+consider:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>Direction of communication (one- or two-way?)</p>
+</li>
+<li>
+<p>Frequency of communication (is this a single message or are there
+multiple chunks of information that need to be passed?)</p>
+</li>
+<li>
+<p>Size of data (is it a 10MB file or 20 characters?)</p>
+</li>
+<li>
+<p>Format of data (is it a binary file or just text characters, fixed
+width, or character separated?)</p>
+</li>
+</ul>
+<p>Finally, be conscious of how complicated you want to make your script.</p>
+
+
+
+
+
+<p>In our case, we're going to choose a simple but powerful method
+to exchange information. Since the first process only has to provide
+the second one with a single set of change instructions (what quotas
+need to be changed and their new values), we're going to set up
+a standard Unix pipe between the two of them.<a href="#FOOTNOTE-1">[1]</a>
+The first process will print a change request to its output and the
+copy spawned by <tt class="command">edquota</tt> will read this info as its
+standard input.</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-1"></a>
+<p>[1]Actually, the pipe will be to the <tt class="command">edquota
+</tt>program, which is kind enough to hook up its input and
+output streams to the Perl script being spawned.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<p>Let's write the program. The first thing the program has to do
+when it starts up is decide what role it's been asked to play.
+We can assume that the first invocation receives several command-line
+arguments (i.e., what to change) while the second, called by
+<tt class="command">edquota</tt>, receives only one (i.e., the name of the
+temporary file). The program forces a set of command flags to be
+present if it is called with more than one argument, so we're
+pretty safe in using this assumption as the basis of our role
+selection. Here's the role selection code:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$edquota = "/usr/etc/edquota";     # edquota path
+$autoedq = "/usr/adm/autoedquota"; # full path for this script
+
+# are we the first or second invocation?
+
+# if there is more than one argument, we're the first invocation
+if ($#ARGV &gt; 0) { 
+    &amp;ParseArgs;
+    &amp;CallEdquota;
+}
+# else - we're the second invocation and will have to perform the edits
+else {
+    &amp;EdQuota(  );
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Let's look at the code called by the first invocation to parse
+arguments and call <tt class="command">edquota</tt> over a pipe:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub ParseArgs{
+    use Getopt::Std; # for switch processing<a name="INDEX-121"></a>
+	
+    # This sets $opt_u to the user ID, $opt_f to the filesystem name, 
+    # $opt_s to the soft quota amount, and $opt_h to the hard quota 
+    # amount
+    getopt("u:f:s:h:"); # colon (:) means this flag takes an argument
+    die "USAGE: $0 -u uid -f &lt;fsystem&gt; -s &lt;softq&gt; -h &lt;hardq&gt;\n"
+      if (!$opt_u || !$opt_f || !$opt_s || !$opt_h);
+}
+
+sub CallEdquota{
+    $ENV{"EDITOR"} = $autoedq; # set the EDITOR variable to point to us
+
+    open(EPROCESS, "|$edquota $opt_u") or 
+      die "Unable to start edquota:$!\n";
+
+    # send the changes line to the second script invocation
+    print EPROCESS "$opt_f|$opt_s|$opt_h\n";
+	
+    close(EPROCESS);
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's the second part of the action:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub EdQuota {
+    $tfile = $ARGV[0]; # get the name of edquota's temp file
+	
+    open(TEMPFILE, $tfile) or
+      die "Unable to open temp file $tfile:$!\n";
+	
+    # open a scratch file, could use IO::File <img alt="figure" src="figs/U2192.gif"> new_tmpfile( ) instead
+    open(NEWTEMP, "&gt;$tfile.$$") or 
+      die "Unable to open scratch file $tfile.$$:$!\n";
+
+    # receive line of input from first invocation and lop off the newline
+    chomp($change = &lt;STDIN&gt;); 
+    my($fs,$soft,$hard) = split(/\|/,$change); # parse the communique
+	
+    # read in a line from the temp file.  If it contains the
+    # filesystem we wish to modify, change its values. Write the input
+    # line (possibly changed) to the scratch file.
+    while (&lt;TEMPFILE&gt;){
+      if (/^fs $fs\s+/){
+	     s/(soft\s*=\s*)\d+(, hard\s*=\s*)\d+/$1$soft$2$hard/;
+	      print NEWTEMP;
+	   }
+    }
+    close(TEMPFILE);
+    close(NEWTEMP);
+	
+    # overwrite the temp file with our modified scratch file so 
+    # edquota will get the changes
+    rename("$tfile.$$",$tfile)
+      or die "Unable to rename $tfile.$$ to $tfile:$!\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>The above code is bare bones, but it still offers a way to make
+automated quota changes. If you've ever had to change many
+quotas by hand, this should be good news. Before putting something
+like this into production, considerable error checking and a
+mechanism that prevents multiple concurrent changes should be added.
+In any case, you may find this sort of sleight-of-hand technique
+useful in other situations besides quota manipulation.<a name="INDEX-122"></a><a name="INDEX-123"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch02-12-fm2xml"></a>
+<h3 class="sect2">2.5.2. Editing Quotas Using the Quota Module </h3>
+
+
+
+
+
+<p>Once upon a time, the previous method (or, to be honest, the previous
+hack) was the only way to automate quota changes unless you wanted to
+get into the gnarly business of hacking the C quota library routine
+calls into the Perl interpreter itself. Now that Perl's
+extension mechanism makes gluing library calls into Perl much easier,
+it was only an amount of time before someone produced a
+<tt class="literal">Quota</tt> module for Perl. Thanks to Tom Zoerner and
+some other porting help, setting quotas from Perl is now much more
+straightforward if this module supports your variant of Unix. If it
+doesn't, the previous method should work fine.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-124"></a><a name="INDEX-125"></a>Here's some sample code that takes
+the same arguments as our last quota-editing example:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Getopt::Std;
+use Quota:;
+
+getopt("u:f:s:h:"); 
+die "USAGE: $0 -u uid -f &lt;filesystem&gt; -s &lt;softquota&gt; -h &lt;hard quota&gt;\n"
+	 if (!$opt_u || !$opt_f || !$opt_s || !$opt_h);
+
+$dev = Quota::getcarg($opt_f) or die "Unable to translate path $opt_f:$!\n";
+
+($curblock,$soft,$hard,$curinode,$btimeout,$curinode,$isoft,$ihard,$itimeout)=
+	 Quota::query($dev,$uid) or die "Unable to query quota for $uid:$!\n";
+
+Quota::setqlim($dev,$opt_u,$opt_s,$opt_h,$isoft,$ihard,1) or 
+	 die "Unable to set quotas:$!\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>After we parse the arguments, there are three simple steps: first, we
+use <tt class="literal">Quota::getcarg( )</tt> to get the correct device
+identifier to feed to the other quota routines. Next, we feed this
+identifier and the user ID to <tt class="literal">Quota::query( )</tt> to
+get the current quota settings. We need these settings to avoid
+perturbing the quota limits we are not interested in changing (like
+number of files). Finally, we set the quota. That's all it
+takes, three lines of Perl code.</p>
+
+
+
+
+
+<p>Remember, the Perl slogan TMTOWTDI means "there's more
+than one way to do it," not necessarily "several equally
+good ways."<a name="INDEX-126"></a><a name="INDEX-127"></a><a name="INDEX-128"></a>
+</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch02_04.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch02_06.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">2.4. Walking the Filesystem Using the File::Find Module</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">2.6. Querying Filesystem Usage</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

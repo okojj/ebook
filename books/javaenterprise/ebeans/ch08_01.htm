@@ -1,0 +1,533 @@
+<html>
+<head>
+<title>Transactions (Enterprise JavaBeans)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Richard Monson-Haefel">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-869-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Transactions">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm" alt="Enterprise JavaBeans"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch07_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch07_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm">Enterprise JavaBeans</a></td><td align="right" valign="top" width="172"><a href="ch08_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_02.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+
+<h1 class="chapter">Chapter 8.  Transactions</h1>
+<div class="htmltoc">
+<h4 class="tochead">Contents:</h4>
+<p>
+<a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_01.htm">ACID Transactions</a>
+<br>
+<a href="ch08_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_02.htm">Declarative Transaction Management</a>
+<br>
+<a href="ch08_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_03.htm">Isolation and Database Locking</a>
+<br>
+<a href="ch08_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_04.htm">Non-Transactional Beans</a>
+<br>
+<a href="ch08_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_05.htm">Explicit Transaction Management</a>
+<br>
+<a href="ch08_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_06.htm">EJB 1.1: Exceptions and Transactions</a>
+<br>
+<a href="ch08_07.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_07.htm">EJB 1.0: Exceptions and Transactions</a>
+<br>
+<a href="ch08_08.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_08.htm">Transactional Stateful Session Beans</a>
+<br>
+</p>
+</div>
+
+
+<h2 class="sect1">8.1. ACID Transactions</h2>
+
+<p>
+<a name="INDEX-1557"></a>
+To understand how <a name="INDEX-1558"></a>transactions work, <a name="INDEX-1559"></a>we will revisit the
+TravelAgent bean, a stateful session bean that encapsulates the
+process of making a cruise reservation for a customer. Here is the
+TravelAgent's <tt class="literal">bookPassage()</tt> method:
+</p>
+
+<blockquote>
+<pre class="programlisting">public Ticket bookPassage(CreditCard card, double price)
+    throws IncompleteConversationalState {
+    // EJB 1.0: also throws RemoteException
+                
+    if (customer == null || cruise == null || cabin == null){
+        throw new IncompleteConversationalState();
+    }
+    try {
+        ReservationHome resHome =
+            (ReservationHome) getHome("ReservationHome",ReservationHome.class);
+        Reservation reservation =
+        resHome.create(customer, cruise, cabin, price);
+        ProcessPaymentHome ppHome = (ProcessPaymentHome)
+            getHome("ProcessPaymentHome",ProcessPaymentHome.class);
+        ProcessPayment process = ppHome.create();
+        process.byCredit(customer, card, price);
+
+        Ticket ticket = new Ticket(customer,cruise,cabin,price);
+        return ticket;
+    } catch(Exception e) {
+        // EJB 1.0: throw new RemoteException("",e);
+        throw new EJBException(e);
+    }
+}</pre>
+</blockquote>
+
+<p>
+<a name="INDEX-1560"></a><a name="INDEX-1561"></a>The TravelAgent bean is a fairly simple
+session bean, and its use of other beans is a typical example of
+business object design and workflow. Unfortunately, good business
+object design is not enough to make these beans useful in an
+industrial-strength application. The problem is not with the
+definition of the beans or the workflow; the problem is that a good
+design doesn't, in and of itself, guarantee that the
+TravelAgent's <tt class="literal">bookPassage()</tt> method
+represents a good <em class="emphasis">transaction</em>. To understand
+why, we will take a closer look at what a transaction means and what
+criteria a transaction must meet to be considered reliable.
+</p>
+
+<p>
+<a name="INDEX-1562"></a>In business, a transaction usually
+involves an exchange between two parties. When you purchase an ice
+cream cone, you exchange money for food; when you work for a company,
+you exchange skill and time for money (which you use to buy more ice
+cream). When you are involved in these exchanges, you monitor the
+outcome to ensure that you don't get "ripped off."
+If you give the ice cream vendor a $20 bill, you don't want him
+to drive off without giving you your change; you want to make sure
+that your paycheck reflects all the hours that you worked. By
+monitoring these commercial exchanges, you are attempting to ensure
+the reliability of the transactions; you are making sure that the
+transaction meets everyone's expectations.
+</p>
+
+<p>In business software, a transaction embodies the concept of a
+commercial exchange. A <a name="INDEX-1563"></a>business
+system transaction (transaction for short) is the execution of a
+<em class="emphasis">unit-of-work</em><a name="INDEX-1564"></a>that accesses one or more shared
+resources, usually databases. A unit-of-work is a set of activities
+that relate to each other and must be completed together. The
+reservation process is a unit-of-work made up of several activities:
+recording a reservation, debiting a credit card, and generating a
+ticket together make up a unit-of-work.
+</p>
+
+<p>Transactions are part of many different types of systems. In each
+transaction, the objective is the same: to execute a unit-of-work
+that results in a reliable exchange. Here are some examples of other
+types of business systems that employ transactions:
+</p>
+
+<dl>
+<dt>
+<b>ATM</b>
+</dt>
+<dd>
+<p>The <a name="INDEX-1565"></a>ATM (automatic teller machine) you
+use to deposit, withdraw, and transfer funds, executes these
+units-of-work as transactions. In an ATM withdrawal, for example, the
+ATM checks to make sure you don't overdraw and then debits your
+account and spits out some money.
+</p>
+</dd>
+
+<dt>
+<b>
+<a name="INDEX-1566"></a>
+<a name="INDEX-1567"></a>
+Online book order</b>
+</dt>
+<dd>
+<p>You've probably purchased many of your Java books from an
+online bookseller--maybe even this book. This type of purchase
+is also a unit-of-work that takes place as a transaction. In an
+online book purchase, you submit your credit card number, it is
+validated, and then a charge is made for price of the book, and an
+order to ship you the book is sent to the bookseller's
+warehouse.
+</p>
+</dd>
+
+<dt>
+<b>
+<a name="INDEX-1568"></a>
+Medical system</b>
+</dt>
+<dd>
+<p>In a medical system, important data--some of it
+critical--is recorded about patients every day, including
+information about clinical visits, medical procedures, prescriptions,
+and drug allergies. The doctor prescribes the drug, then the system
+checks for allergies, contraindications, and appropriate dosages. If
+all tests pass, then the drug can be administered. The tasks just
+described make up a unit-of-work in a medical system. A unit-of-work
+in a medical system may not be financial, but it's just as
+important. A failure to identify a drug allergy in a patient could be
+fatal.
+</p>
+</dd>
+
+</dl>
+
+<p>
+<a name="INDEX-1569"></a><a name="INDEX-1570"></a>As you can see, transactions are
+often complex and usually involve the manipulation of a lot of data.
+Mistakes in data can cost money, or even a life. Transactions must
+therefore preserve data integrity, which means that the transaction
+must work perfectly every time or not be executed at all. This is a
+pretty tall order, especially for complex systems. As difficult as
+this requirement is, however, when it comes to commerce there is no
+room for error. Units-of-work that involve money, or anything of
+value, always require the utmost reliability because errors impact
+the revenues and the well-being of the parties involved.
+</p>
+
+<p>To give you an idea of the accuracy required by transactions, think
+about what would happen if a transactional system suffered from
+seemingly infrequent errors. ATMs provide customers with convenient
+access to their bank accounts and represent a significant percentage
+of the total transactions in personal banking. The number of
+transactions handled by ATMs are simple but numerous, providing us
+with a great example of why transactions must be error proof.
+Let's say that a bank has 100 ATMs in a metropolitan area, and
+each ATM processes 300 transactions (deposits, withdrawals, or
+transfers) a day for a total of 30,000 transactions per day. If each
+transaction, on average, involves the deposit, withdrawal, or
+transfer of about $100, about three million dollars would move
+through the ATM system per day. In the course of a year, that's
+a little over a billion dollars:
+</p>
+
+<blockquote class="simplelist">
+
+<p>(365 days) &times; (100 ATMs) &times; (300 transactions) &times; ($100.00) = $1,095,000,000.00</p>
+
+</blockquote>
+
+<p>How well do the ATMs have to perform in order for them to be
+considered reliable? For the sake of argument, let's say that
+ATMs execute transactions correctly 99.99% of the time. This seems to
+be more than adequate: after all, only one out of every ten thousand
+transactions executes incorrectly. But over the course of a year, if
+you do the math, that could result in over $100,000 in errors!
+</p>
+
+<blockquote class="simplelist">
+
+<p>$1,095,000,000.00 &times; .01% = $109,500.00</p>
+
+</blockquote>
+
+<p>Obviously, this is an oversimplification of the problem, but it
+illustrates that even a small percentage of errors is unacceptable in
+high-volume or mission-critical systems. For this reason, experts in
+the field of transaction services have identified four
+characteristics of a transaction that must be followed in order to
+say that a system is safe. Transactions must be atomic, consistent,
+isolated, and durable (ACID)--the four horsemen of transaction
+services. Here's what each term means:
+</p>
+
+<dl>
+<dt>
+<b>Atomic</b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1571"></a><a name="INDEX-1572"></a>To be atomic, a transaction
+must execute completely or not at all. This means that every task
+within a unit-of-work must execute without error. If any of the tasks
+fails, the entire unit-of-work or transaction is
+<em class="emphasis">aborted</em>, meaning that changes to the data are
+undone. If all the tasks execute successfully, the transaction is
+<em class="emphasis">committed</em>, which means that the changes to the
+data are made permanent or durable.
+</p>
+</dd>
+
+<dt>
+<b>Consistent</b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1573"></a><a name="INDEX-1574"></a>
+Consistency is a transactional characteristic that must be enforced
+by both the transactional system and the application developer.
+Consistency refers to the integrity of the underlying data store. The
+transactional system fulfills its obligation in consistency by
+ensuring that a transaction is atomic, isolated, and durable. The
+application developer must ensure that the database has appropriate
+constraints (primary keys, referential integrity, and so forth) and
+that the unit-of-work, the business logic, doesn't result in
+inconsistent data (data that is not in harmony with the real world it
+represents). In an account transfer, for example, a debit to one
+account must equal the credit to the other account.
+</p>
+</dd>
+
+<dt>
+<b>Isolated</b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1575"></a><a name="INDEX-1576"></a>A transaction must be allowed
+to execute without interference from other processes or transactions.
+In other words, the data that a transaction accesses cannot be
+affected by any other part of the system until the transaction or
+unit-of-work is completed.
+</p>
+</dd>
+
+<dt>
+<b>Durable</b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1577"></a><a name="INDEX-1578"></a>Durability means that all the
+data changes made during the course of a transaction must be written
+to some type of physical storage before the transaction is
+successfully completed. This ensures that the changes are not lost if
+the system crashes.
+</p>
+</dd>
+
+</dl>
+
+<p>To get a better idea of what these principles mean, we will examine
+the TravelAgent bean in terms of the four ACID properties.
+</p>
+
+<a name="JBEANS-CH-8-SECT-1.1"></a>
+<h3 class="sect2">8.1.1. Is the TravelAgent Bean Atomic?</h3>
+
+<p>
+<a name="INDEX-1579"></a><a name="INDEX-1580"></a>Our first measure of the
+TravelAgent bean's reliability is its atomicity: does it ensure
+that the transaction executes completely or not at all? What we are
+really concerned with are the critical tasks that change or create
+information. In the <tt class="literal">bookPassage()</tt> method, a
+Reservation bean is created, the ProcessPayment bean debits a credit
+card, and a <tt class="literal">Ticket</tt> object is created. All of these
+tasks must be successful for the entire transaction to be successful.
+</p>
+
+<p>To understand the importance of the atomic characteristic, you have
+to imagine what would happen if even one of the subtasks failed to
+execute. If, for example, the creation of a
+<tt class="literal">Reservation</tt> failed but all other tasks succeeded,
+your customer would probably end up getting bumped from the cruise or
+sharing the cabin with a stranger. As far as the travel agent is
+concerned, the <tt class="literal">bookPassage()</tt> method executed
+successfully because a <tt class="literal">Ticket</tt> was generated. If a
+ticket is generated without the creation of a reservation, the state
+of the business system becomes inconsistent with reality because the
+customer paid for a ticket but the reservation was not recorded.
+Likewise, if the ProcessPayment bean fails to charge the
+customer's credit card, the customer gets a free cruise. He may
+be happy, but management isn't. Finally, if the
+<tt class="literal">Ticket</tt> is never created, the customer would have
+no record of the transaction and probably wouldn't be allowed
+onto the ship.
+</p>
+
+<p>So the only way <tt class="literal">bookPassage()</tt> can be completed is
+if all the critical tasks execute successfully. If something goes
+wrong, the entire process must be aborted. Aborting a transaction
+requires more than simply not finishing the tasks; in addition, all
+the tasks that did execute within the transaction must be undone. If,
+for example, the creation of the Reservation bean and
+<tt class="literal">ProcessPayment.byCredit()</tt> method succeeded but the
+creation of the <tt class="literal">Ticket</tt> failed, then the
+<tt class="literal">Reservation</tt> record and payment records must not be
+added to the database.
+</p>
+
+
+<a name="JBEANS-CH-8-SECT-1.2"></a>
+<h3 class="sect2">8.1.2. Is the TravelAgent Bean Consistent?</h3>
+
+<p>
+<a name="INDEX-1581"></a><a name="INDEX-1582"></a>In order for a transaction to
+be consistent, the state of the business system must make sense after
+the transaction has completed. In other words, the
+<em class="emphasis">state</em> of the business system must be consistent
+with the reality of the business. This requires that the transaction
+enforce the atomic, isolated, and durable characteristics of the
+transaction, and it also requires diligent enforcement of integrity
+constraints by the application developer. If, for example, the
+application developer fails to include the credit card charge
+operation in the <tt class="literal">bookPassage()</tt> method, the
+customer would be issued a ticket but would never be charged. The
+data would be inconsistent with the expectation of the
+business--a customer should be charged for passage. In addition,
+the database must be set up to enforce integrity constraints. For
+example, it should not be possible for a record to be added to the
+<tt class="literal">RESERVATION</tt> table unless the
+<tt class="literal">CABIN_ID</tt>, <tt class="literal">CRUISE_ID</tt>, and
+<tt class="literal">CUSTOMER_ID</tt> foreign keys map to corresponding
+records in the <tt class="literal">CABIN</tt>, <tt class="literal">CRUISE</tt>,
+and <tt class="literal">CUSTOMER</tt> tables, respectively. If a
+<tt class="literal">CUSTOMER_ID</tt> is used that doesn't map to a
+<tt class="literal">CUSTOMER</tt> record, referential integrity should
+cause the database to throw an error message.
+</p>
+
+
+<a name="JBEANS-CH-8-SECT-1.3"></a>
+<h3 class="sect2">8.1.3. Is the TravelAgent Bean Isolated?</h3>
+
+<p>
+<a name="INDEX-1583"></a><a name="INDEX-1584"></a>If you are familiar with the
+concept of thread synchronization in Java or row-locking schemes in
+relational databases, isolation will be a familiar concept. To be
+isolated, a transaction must protect the data that it is accessing
+from other transactions. This is necessary to prevent other
+transactions from interacting with data that is in transition. In the
+TravelAgent bean, the transaction is isolated to prevent other
+transactions from modifying the beans that are being updated. Imagine
+the problems that would arise if separate transactions were allowed
+to change any entity bean at any time--transactions would walk
+all over each other. You could easily have several customers book the
+same cabin because their travel agents happened to make their
+reservations at the same time.
+</p>
+
+<p>The isolation of data accessed by beans doesn't mean that the
+entire application shuts down during a transaction. Only those entity
+beans and data directly affected by the transaction are isolated. In
+the TravelAgent bean, for example, the transaction isolates only the
+Reservation bean created. There can be many Reservation beans in
+existence; there's no reason these other beans can't be
+accessed by other transactions.
+</p>
+
+
+<a name="JBEANS-CH-8-SECT-1.4"></a>
+<h3 class="sect2">8.1.4. Is the TravelAgent Bean Durable?</h3>
+
+<p>
+<a name="INDEX-1585"></a><a name="INDEX-1586"></a>To be durable, the funds
+transfer must write all changes and new data to a permanent data
+store before it can be considered successful. While this may seem
+like a no-brainer, often it isn't what happens in real life. In
+the name of efficiency, changes are often maintained in memory for
+long periods of time before being saved on a disk drive. The idea is
+to reduce disk accesses--which slow systems down--and only
+periodically write the cumulative effect of data changes. While this
+approach is great for performance, it is also dangerous because data
+can be lost when the system goes down and memory is wiped out.
+Durability requires the system to save all updates made within a
+transaction as the transaction successfully completes, thus
+protecting the integrity of the data.
+</p>
+
+<p>In the TravelAgent bean, this means that the new
+<tt class="literal">RESERVATION</tt> and <tt class="literal">PAYMENT</tt> records
+inserted are made persistent before the transaction can complete
+successfully. Only when the data is made durable are those specific
+records accessible through their respective beans from other
+transactions. Hence, durability also plays a role in isolation. A
+transaction isn't finished until the data is successfully
+recorded.
+</p>
+
+<p>Ensuring that transactions adhere to the ACID principles requires
+careful design. The system has to monitor the progress of a
+transaction to ensure that it does all its work, that the data is
+changed correctly, that transactions don't interfere with each
+other, and that the changes can survive a system crash. Engineering
+all this functionality into a system is a lot of work, and not
+something you would want to reinvent for every business system you
+worked on. Fortunately, EJB is specifically designed to support
+transactions automatically, making the development of transactional
+systems easier. The rest of this chapter examines how EJB supports
+transactions implicitly (through declarative transaction attributes)
+and <a name="INDEX-1587"></a>
+explicitly (through the Java <a name="INDEX-1588"></a><a name="INDEX-1589"></a>Transaction API). <a name="INDEX-1590"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch07_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch07_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch08_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_02.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">7.4. The Life Cycle of a Stateful Session Bean</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">8.2. Declarative Transaction Management</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

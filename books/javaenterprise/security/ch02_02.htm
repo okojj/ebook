@@ -1,0 +1,568 @@
+<html>
+<head>
+<title>Enforcement of the Java Language Rules (Java Security)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Scott Oaks">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-403-7E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Enforcement of the Java Language Rules">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm" alt="Java Security"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch02_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch02_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch02_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch02_01.htm">Chapter 2: Java Language Security</a></td><td align="right" valign="top" width="172"><a href="ch02_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch02_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">2.2. Enforcement of the Java Language Rules</h2>
+
+<p>
+<a name="INDEX-145"></a><a name="INDEX-146"></a><a name="INDEX-147"></a><a name="INDEX-148"></a>The list of rules we outlined
+above are fine in theory, but they must be enforced somehow.
+We've always been taught that overwriting the end of an array
+in C code is a bad thing, but I somehow still manage to do it
+accidentally all the time. There are also those who willfully attempt
+to overwrite the ends of arrays in an attempt to breach the security
+of a system. Without mechanisms to enforce these memory rules, they
+become simply guidelines and provide no sort of security at all.
+</p>
+
+<p>This necessary enforcement happens at three different times in the
+development and deployment of a Java program: at compile time, at
+link time (that is, when a class is loaded into the virtual machine),
+and at runtime. Not all rules can be checked at each of these points,
+but certain checks are necessary at each point in order to ensure the
+memory security that we're after. As we'll see,
+enforcement of these rules (which is really the construction of this
+part of the Java sandbox) varies depending on the origin of the class
+in question.
+</p>
+
+<a name="SEC-CH-2-SECT-2.1"></a>
+<h3 class="sect2">2.2.1. Compiler Enforcement</h3>
+
+<p>
+<a name="INDEX-149"></a><a name="INDEX-150"></a><a name="INDEX-151"></a>
+The Java compiler is the first thing that is tasked with the job of
+enforcing Java's language rules. In particular, the compiler is
+responsible for enforcing all of the rules we outlined above except
+for the last two: the compiler cannot enforce array bound checking
+nor can it enforce all cases of illegal object casts.
+</p>
+
+<p>
+<a name="INDEX-152"></a><a name="INDEX-153"></a><a name="INDEX-154"></a>The compiler does enforce certain
+cases of illegal object casts--namely, casts between objects
+that are known to be unrelated, such as the following code:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">Vector v = new Vector();
+String s = (String) v;</pre>
+</blockquote>
+
+<p>But the validity of a cast between an object of type
+<tt class="literal">X</tt> to type <tt class="literal">Y</tt> where
+<tt class="literal">Y</tt> is a subclass of <tt class="literal">X</tt> cannot
+be known at compile time, so the compiler must let such a construct
+pass.
+</p>
+
+
+<a name="SEC-CH-2-SECT-2.2"></a>
+<h3 class="sect2">2.2.2. The Bytecode Verifier</h3>
+
+<p>
+<a name="INDEX-155"></a><a name="INDEX-156"></a>Okay, the compiler has produced
+a Java program for us, and we're about to run the Java bytecode
+of that program. But if the program came from an unknown source, how
+do we know that the bytecodes we've received are actually
+legal?
+</p>
+
+<div class="sidebar">
+<h4 class="objtitle">Bytecode Verification of Other Languages</h4>
+
+<p>
+<a name="INDEX-157"></a>Throughout this
+section, we're discussing the bytecode verifier as if it were
+tied to the Java language. This is somewhat imprecise: the bytecode
+verifier is actually independent of the original source language of
+the program. If we had a C++ compiler that generated Java bytecodes
+from C++ source, the bytecode verifier would still be able to verify
+(or not) the bytecodes.
+</p>
+
+<p>However, the verification of the bytecodes would still depend upon
+the semantics of the Java language, and not the semantics of C++;
+just because the bytecodes in question originated from C++ code is no
+reason that they should suddenly be allowed to cast an arbitrary
+memory location into an object.
+</p>
+
+<p>For this reason, I prefer to think of the bytecodes in terms of the
+Java language itself. There are tools to produce Java bytecodes from
+other languages (like Scheme), but in general, producing Java
+bytecodes from another language severely limits the constructs that
+can be written in that other language.
+</p>
+</div>
+
+<p>This brings us to the need for the bytecode verifier--the second
+link in the chain of responsibility of enforcing the rules of the
+Java language. Normally when the need for the bytecode verifier is
+discussed, it's in terms of an evil compiler--that is, a
+<a name="INDEX-158"></a><a name="INDEX-159"></a><a name="INDEX-160"></a>compiler that someone
+has written in such a way that the code produced by the compiler is
+not legal Java code. The theory is that code from such a compiler
+could be constructed in order to create and exploit a security hole
+by ignoring a rule in the Java language. Such an attack might seem to
+be difficult to achieve, in that it would require some detailed
+knowledge of the Java compiler.<a name="INDEX-161"></a><a name="INDEX-162"></a>
+</p>
+
+<p>It turns out that the evil compiler issue is a red herring--it
+doesn't really matter whether such an attack is likely or not,
+because it's trivial to create non-conforming Java code with
+any standard Java compiler. Assume that we have these classes:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class CreditCard {
+	public String acctNo = "0001 0002 0003 0004";
+}
+
+public class Test {
+	public static void main(String args[]) {
+		CreditCard cc = new CreditCard();
+		System.out.println("Your account number is " + cc.acctNo);
+	}
+}</pre>
+</blockquote>
+
+<p>If we run this code, we'll create a
+<tt class="literal">CreditCard</tt> object and print out its account
+number. Now say that we realize the account number should really have
+been private, so we go back and change the definition of
+<tt class="literal">acctNo</tt> to be private and recompile only the
+<tt class="literal">CreditCard</tt> class. We then have two class files,
+and the <tt class="literal">Test</tt> class file contains Java code that
+illegally accesses the private instance variable
+<tt class="literal">acctNo</tt> of the <tt class="literal">CreditCard</tt>
+class.
+</p>
+
+<p>
+<a name="INDEX-163"></a><a name="INDEX-164"></a><a name="INDEX-165"></a>The
+above example shows an innocent mistake, but a malicious programmer
+could use just this technique to produce illegal Java bytecodes. In
+order to modify the contents of a string, for example, all we need to
+do is:
+</p>
+
+<ol>
+<li>
+<p>Copy the <tt class="literal">java.lang.String</tt> source file into our
+<tt class="literal">CLASSPATH</tt>.
+</p>
+</li>
+<li>
+<p>In the copy of the file, modify the definition of
+<tt class="literal">value</tt>--the private array that holds the
+actual characters of the string--to be public.
+</p>
+</li>
+<li>
+<p>Compile this modified class, and replace the
+<em class="filename">String.class</em> file in the JDK.
+</p>
+</li>
+<li>
+<p>Compile some new code against this modified version of the
+<tt class="literal">String</tt> class. The new code could include
+something like this:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class CorruptString {
+	public static void modifyString(String src, String dst) {
+		for (int i = 0; i &lt; src.length; i++) {
+				if (i == dst.length)
+						return;
+				src.value[i] = dst.value[i];
+		}
+	}
+}</pre>
+</blockquote>
+
+<p>Now any time you want to modify a string in place, simply call this
+<tt class="literal">modifyString()</tt> method with the string you want
+to corrupt (<tt class="literal">src</tt>) and the new string you want it
+to have (<tt class="literal">dst</tt>).
+</p>
+</li>
+<li>
+<p>Remove the modified version of the <tt class="literal">String</tt> class.</p>
+</li>
+</ol>
+
+<p>Now the <tt class="literal">CorruptString</tt> class can be referenced by
+a Java program, which can use it to attempt to corrupt any string
+that it has a reference to. Even though the program will run with the
+original version of the <tt class="literal">String</tt> class, the
+<tt class="literal">CorruptString</tt> class will be able to access the
+private value array within the <tt class="literal">String</tt>
+class--unless the bytecode verifier rejects the
+<tt class="literal">CorruptString</tt> class.
+</p>
+
+<a name="SEC-CH-2-SECT-2.2.1"></a>
+<h3 class="sect3">2.2.2.1. Inside the bytecode verifier</h3>
+
+<p>The <a name="INDEX-166"></a>
+bytecode verifier is an internal part of the Java virtual machine and
+has no interface: programmers cannot access it and users cannot
+interact with it. The verifier automatically examines most bytecodes
+as they are built into class objects by the class loader of the
+virtual machine (see <a href="#SEC-CH-2-FIG-3">Figure 2-1</a>). We'll give
+just a brief overview of how the bytecode verifier actually works.
+</p>
+
+<a name="SEC-CH-2-FIG-3"></a>
+<div class="figure">
+<img alt="figure" src="figs/JSEC_0201.gif" webstripperlinkwas="figs/JSEC_0201.gif"></div>
+<h4 class="objtitle">Figure 2-1. The bytecode verifier</h4>
+
+<p>The verifier is often referred to as a mini-theorem prover (a term
+first used in several documents from Sun). This sounds somewhat more
+impressive than it is; it's not a generic, all-purpose theorem
+prover by any means. Instead, it's a piece of code that can
+prove one (and only one) thing--that a given series of (Java)
+bytecodes represents a legal set of (Java) instructions.
+</p>
+
+<p>Specifically, the bytecode verifier can prove the following:</p>
+
+<ul>
+<li>
+<p>The class file has the correct format. The full definition of the
+class file format may be found in the Java virtual machine
+specification; the bytecode verifier is responsible for making sure
+that the class file has the right length, the correct magic numbers
+in the correct places, and so on.
+</p>
+</li>
+<li>
+<p>Final classes are not subclassed, and final methods are not
+overridden.
+</p>
+</li>
+<li>
+<p>Every class (except for <tt class="literal">java.lang.Object</tt>) has a
+single superclass.
+</p>
+</li>
+<li>
+<p>There is no illegal data conversion of primitive data types (e.g.,
+<tt class="literal">int</tt> to <tt class="literal">Object</tt>).
+</p>
+
+</li>
+<li>
+<p>No illegal data conversion of objects occurs. Because the casting of
+a superclass to its subclass may be a valid operation (depending on
+the actual type of the object being cast), the verifier cannot ensure
+that such casting is not attempted--it can only ensure that
+before each such attempt is made, the legality of the cast is tested.
+</p>
+
+</li>
+<li>
+<p>There are no operand stack overflows or underflows.</p>
+<p>In Java, there are two stacks for each thread. One stack holds a
+series of method frames, where each method frame holds the local
+variables and other storage for a particular method invocation. This
+stack is known as the data stack and is what we normally think of as
+the stack within a traditional program. The bytecode verifier cannot
+prevent overflow of this stack--an infinitely recursive method
+call will cause this stack to overflow. However, each method
+invocation requires a second stack (which itself is allocated on the
+data stack) that is referred to as the operand stack; the operand
+stack holds the values that the Java bytecodes operate on. This
+secondary stack is the stack that the bytecode verifier can ensure
+will not overflow or underflow.
+</p>
+</li>
+</ul>
+
+<p>Hence, when the bytecode verifier has completed its task, we know
+that the code in question follows many of the constraints of the Java
+language--including most of the rules that the compiler was also
+responsible for ensuring. The remaining rules are verified during the
+actual running of the program.<a name="INDEX-167"></a>
+</p>
+
+
+
+<a name="SEC-CH-2-SECT-2.2.2"></a>
+<h3 class="sect3">2.2.2.2. Delayed bytecode verification</h3>
+
+<p>
+<a name="INDEX-168"></a><a name="INDEX-169"></a><a name="INDEX-170"></a><a name="INDEX-171"></a>When we began this
+section, we said that the bytecode verifier is responsible for
+<em class="emphasis">examining</em> all the bytecodes of the
+class--we explicitly did not say that the verifier is
+responsible for <em class="emphasis">verifying</em> all the bytecodes.
+This is because the bytecode verifier may delay some of the checks it
+is responsible for, as long as those checks are performed before the
+code is actually executed. In typical verifier implementations, the
+bytecode verifier does not immediately test to see if all field and
+method accesses are legal according to the access modifiers
+associated with that field or method.
+</p>
+
+<p>This is driven by a desire to be efficient--our
+<tt class="literal">Test</tt> class may reference the
+<tt class="literal">acctNo</tt> field of our
+<tt class="literal">CreditCard</tt> class, but it may do so only if a
+particular branch in the code is taken. In the following code,
+there's no need to verify that the access to
+<tt class="literal">acctNo</tt> is legal unless an
+<tt class="literal">IllegalArgumentException</tt> has been generated:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">CreditCard cc = getCreditCard();
+try {
+	Wallet.makePurchase(cc);
+} catch (IllegalArgumentException iae) {
+	System.out.println("Can't process for account " + cc.acctNo);
+}</pre>
+</blockquote>
+
+<p>Hence, the bytecode verifier delays all tests for field and method
+access until the code is actually executed. The process by which this
+happens is implementation independent; one technique that is often
+used is to ensure during verification that all accesses test the
+validity of the field access. If the access is valid, the standard
+bytecodes are then replaced during execution with a special bytecode
+indicating that the test has been performed and access to the field
+in question no longer needs to be tested. On the other hand, if the
+validity test fails, the virtual machine throws an
+<tt class="literal">IllegalAccessException</tt>.
+</p>
+
+<p>This gives us the best of both worlds--verification of the
+access is performed during the actual running of the program (after
+traditional bytecode verification has occurred), but the verification
+is still only performed once (unlike the runtime verification
+we'll examine later).<a name="INDEX-172"></a><a name="INDEX-173"></a><a name="INDEX-174"></a><a name="INDEX-175"></a>
+</p>
+
+
+
+<a name="SEC-CH-2-SECT-2.2.3"></a>
+<h3 class="sect3">2.2.2.3. Controlling bytecode verification</h3>
+
+<p>
+<a name="INDEX-176"></a><a name="INDEX-177"></a><a name="INDEX-178"></a><a name="INDEX-179"></a>Bytecode verification seems like a
+great thing: not only can it help to prevent malicious attacks from
+violating rules of the Java language, it can also help detect simple
+programmer errors--such as when we changed the access modifier
+of <tt class="literal">acctNo</tt> in our <tt class="literal">CreditCard</tt>
+class, but forgot to recompile our <tt class="literal">Test</tt> class.
+</p>
+
+<p>Nonetheless, bytecode verification is not used on all classes. Like
+many security-related features of Java, bytecode verification only
+applies to certain classes. In Java 1.1 and earlier, classes that are
+loaded from the <tt class="literal">CLASSPATH</tt> are deemed to be
+trusted and are not subject to bytecode verification, whereas classes
+that are loaded from another location (e.g., a file- or HTTP-based
+URL) are not deemed to be trusted and must be verified. In Java
+1.2,<a href="#FOOTNOTE-3">[3]</a> this
+policy has changed and all classes except those in the core Java API
+are verified. This difference really reflects the class loader that
+is used to load the class, as we'll see in the next chapter.
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-3"></a>
+<p>[3]1.2 is now Java 2.</p> </blockquote>
+
+<p>In typical usage, this is a workable policy. Browsers always ensure
+that the code imported to run an applet is verified, and Java
+applications are typically not verified. Of course, this may or may
+not be the perfect solution:
+</p>
+
+<ul>
+<li>
+<p>If a remote site can talk an end user into installing a local class
+into the browser's <tt class="literal">CLASSPATH</tt>, the local
+class will not be verified and may violate the rules we've
+discussed here. In 1.2, this is much harder, since the class must be
+added to the JAR file containing the core API classes.
+</p>
+</li>
+<li>
+<p>You may implicitly rely upon the verifier to help you keep files in
+sync so that when one is changed, other files are verified against
+it.
+</p>
+</li>
+</ul>
+
+<p>As a user, you (theoretically) have limited control over the
+verifier--though such control depends on the browser you are
+using. If you are running a Java application, you can run
+<tt class="literal">java</tt> with the
+<tt class="literal">-verify</tt><a name="INDEX-180"></a> option, which will
+verify all classes. Similarly, if you are using a browser written in
+Java--including the <tt class="literal">appletviewer</tt>--you
+can arrange for the <tt class="literal">java</tt> command to run with the
+<tt class="literal">-noverify</tt> option, which turns verification off
+for all classes. Occasionally, a browser not written in Java will
+allow the user to disable bytecode verification as well--e.g.,
+Internet Explorer<sup class="superscript">TM</sup> 3.0 for the Mac had
+this capability, although it was present only because the bytecode
+verifier could not run in certain limited memory configurations.
+</p>
+
+<p>However, although these options to the virtual machine are
+well-documented, they are not implemented on all platforms. One way
+to ensure that application code is run through the bytecode verifier
+is to use the final version of the <tt class="literal">JavaRunner</tt>
+program (once we add a class loader to it in the next chapter) or the
+<tt class="literal">Launcher</tt> in Java 1.2.<a name="INDEX-181"></a><a name="INDEX-182"></a><a name="INDEX-183"></a><a name="INDEX-184"></a>
+</p>
+
+
+
+<a name="SEC-CH-2-SECT-2.3"></a>
+<h3 class="sect2">2.2.3. Runtime Enforcement</h3>
+
+<p>
+<a name="INDEX-185"></a><a name="INDEX-186"></a><a name="INDEX-187"></a>Like the compiler, the bytecode
+verifier cannot completely guarantee that the bytecodes follow all of
+the rules we outlined earlier in this chapter: it can only ensure
+that the first four of them are followed. The virtual machine must
+still take responsibility for ultimately determining that the Java
+bytecodes provide the security we expect them to.
+</p>
+
+<p>The remaining security protections of the Java language must be
+enforced at runtime by the virtual machine.
+</p>
+
+<dl>
+<dt>
+<b>Array bounds checking</b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-188"></a><a name="INDEX-189"></a>In theory, the bytecode verifier can
+detect certain cases of array bounds checking, but in general, this
+check must take place at runtime. Consider the following code:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">void initArray(int a[], int nItems) {
+	for (int i = 0; i &lt; nItems; i++) {
+		a[i] = 0;
+	}
+}</pre>
+</blockquote>
+
+<p>Since <tt class="literal">nItems</tt> and <tt class="literal">a</tt> are
+parameters, the bytecode verifier has no way of determining whether
+this code is legal. Hence, array bounds checking is always done at
+runtime. Failure to meet this rule results in an
+<tt class="literal">ArrayIndexOutOfBoundsException</tt>.
+</p>
+</dd>
+
+
+<dt>
+<b>Object casting</b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-190"></a><a name="INDEX-191"></a><a name="INDEX-192"></a><a name="INDEX-193"></a>The verifier can and will detect
+the legality of certain types of casts, specifically, whenever
+unrelated classes are cast to each other. The virtual machine must
+monitor when a superclass is cast into a subclass and test that
+cast's validity; failure to execute a legal cast results in a
+<tt class="literal">ClassCastException</tt>. This holds for casts
+involving interfaces as well, since objects that are defined as an
+interface type (rather than a class type) are considered by the
+verifier to be of type <a name="INDEX-194"></a><a name="INDEX-195"></a><tt class="literal">Object</tt>.<a name="INDEX-196"></a><a name="INDEX-197"></a><a name="INDEX-198"></a><a name="INDEX-199"></a>
+</p>
+</dd>
+
+</dl>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch02_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch02_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch02_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch02_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">2.1. Java Language Security Constructs</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">2.3. Summary</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

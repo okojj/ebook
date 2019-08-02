@@ -1,0 +1,752 @@
+<html>
+<head>
+<title>Binary Log Files  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Binary Log Files">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch09_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch09_01.htm">Chapter 9: Log Files</a></td><td align="right" valign="top" width="172"><a href="ch09_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">9.2. Binary Log Files</h2>
+
+
+
+
+
+<p>
+<a name="INDEX-893"></a>Sometimes
+it's not that easy writing programs to deal with log files.
+Instead of nice, easily parseable text lines, some logging mechanisms
+produce nasty, gnarly binary files with proprietary formats that
+can't be parsed with a single line of Perl. Luckily, Perl
+isn't afraid of these miscreants. Let's look at a few
+approaches we can take when dealing with these files. We're
+going to look at two different examples of binary logs: Unix's
+<em class="filename">wtmp</em> file and NT/2000's event logs.</p>
+
+
+
+
+
+<p>Back in <a href="ch03_01.htm">Chapter 3, "User Accounts"</a>, we touched briefly on the
+notion of logging in and logging out of a Unix host. Login and logout
+activity is tracked in a file called <em class="filename">wtmp</em> on
+most Unix variants. It is common to check this file whenever there is
+a question about a user's connection habits (e.g., from what
+hosts does this person usually log in?). <a name="INDEX-894"></a><a name="INDEX-895"></a>
+</p>
+
+
+
+
+
+<p>
+<a name="INDEX-896"></a>On
+NT/2000, the event logs play a more generalized role. They are used
+as a central clearinghouse for logging practically all activity that
+takes place on these machines including login and logout activity, OS
+messages, security events, etc. Their role is analogous to the Unix
+<tt class="command">syslog</tt> service we mentioned earlier.</p>
+
+
+
+
+
+<a name="ch09-2-fm2xml"></a>
+<h3 class="sect2">9.2.1. Using unpack(  )</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-897"></a><a name="INDEX-898"></a>Perl
+has a function called <tt class="literal">unpack( )</tt> especially
+designed to parse binary and structured data. Let's take a look
+at how we might use it to deal with the <em class="filename">wtmp</em>
+files. The format of <em class="filename">wtmp</em> differs from Unix
+variant to Unix variant. For this specific example we'll look
+at the <em class="filename">wtmp</em> files found on SunOS 4.1.4 and
+Digital Unix 4.0 because they are pretty simple. Here's a plain
+text translation of the first three records in a SunOS 4.1.4
+<em class="filename">wtmp</em>
+file:<a name="INDEX-899"></a><a name="INDEX-900"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">0000000    ~  \0  \0  \0  \0  \0  \0  \0   r   e   b   o   o   t  \0  \0
+0000020   \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+0000040    ,   /   ;   4   c   o   n   s   o   l   e  \0   r   o   o   t
+0000060   \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+0000100   \0  \0  \0  \0   ,   /   ; 203   c   o   n   s   o   l   e  \0
+0000120   \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+0000140   \0  \0  \0  \0  \0  \0  \0  \0   ,   /   &lt; 230</pre>
+</blockquote>
+
+
+
+
+
+<p>Unless you are already familiar with the structure of this file, that
+"ASCII dump" (as it is called) of the data looks like
+line noise or some other kind of semi-random garbage. So how do we
+become acquainted with this file's structure?</p>
+
+
+
+
+
+<p>The easiest way to understand the format of this file is to look at
+the source code for programs that read and write to it. If you are
+not literate in the C language, this may seem like a daunting task.
+Luckily, we don't actually have to understand or even look at
+most of the source code; we can just examine the portion that defines
+the file format.</p>
+
+
+
+
+
+<p>All of the operating system programs that read and write to the
+<em class="filename">wtmp</em> file get their file definition from a
+single, short C include file, which is very likely to be found at
+<em class="filename">/usr/include/utmp.h</em>. The part of the file we
+need to look at begins with a definition of the C data structure that
+will be used to hold the information. If you search for
+<tt class="literal">struct</tt><tt class="literal">utmp</tt><tt class="literal">{</tt> you'll find the portion we need. The next
+lines after <tt class="literal">struct utmp</tt><tt class="literal">{</tt>
+define each of the fields in this structure. These lines should be
+each be commented using the <tt class="literal">/* text */</tt> C comment
+convention.</p>
+
+
+
+
+
+<p>Just to give you an idea of how different two versions of
+<em class="filename">wtmp</em> can be, compare the relevant excerpts from
+<em class="filename">utmp.h</em> on these two operating systems.</p>
+
+
+
+
+
+<p>SunOS 4.1.4:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">struct utmp {
+        char    ut_line[8];   /* tty name */
+        char    ut_name[8];   /* user id */
+        char    ut_host[16];  /* host name, if remote */
+        long    ut_time;      /* time on */
+};</pre>
+</blockquote>
+
+
+
+
+
+<p>Digital Unix 4.0:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">struct utmp {
+        char    ut_user[32];  /* User login name */
+        char    ut_id[14];    /* /etc/inittab id- IDENT_LEN in init */
+        char    ut_line[32];  /* device name (console, lnxx) */
+        short   ut_type;      /* type of entry */
+        pid_t   ut_pid;       /* process id */
+        struct exit_status {
+            short e_termination; /* Process termination status */
+            short e_exit;        /* Process exit status */
+        } ut_exit;               /* The exit status of a process
+                               * marked as DEAD_PROCESS.
+                                */
+        time_t  ut_time;         /* time entry was made */
+        char    ut_host[64];     /* host name same as MAXHOSTNAMELEN */
+};</pre>
+</blockquote>
+
+
+
+
+
+<p>These files provide all of the clues we need to compose the necessary
+<tt class="literal">unpack( )</tt> statement. <tt class="literal">unpack(
+)</tt> takes a data format template as its first argument. It
+uses this template to determine how to disassemble the (usually)
+binary data it receives in its second argument. <tt class="literal">unpack(
+)</tt> will take apart the data as instructed, returning a list
+where each element of the list corresponds to an element of your
+template.</p>
+
+
+
+
+
+<p>Let's construct our template piece by piece based on the C
+structure from the SunOS <em class="filename">utmp.h</em> include file
+above. There are many possible template letters we can use.
+I've translated the ones we'll use below, but you should
+check the <tt class="literal">pack( )</tt> section of the
+<em class="citetitle">perlfunc</em> manual page for more information.
+Constructing these templates is not always straightforward; C
+compilers occasionally pad values out to satisfy alignment
+constraints. The command <tt class="command">pstruct</tt> that ships with
+Perl can often help with quirks likes these.</p>
+
+
+
+
+
+<p>We do not have any of these complications with our data format. <a href="ch09_02.htm#ch09-53640">Table 9-1</a> gives the <em class="filename">utmp.h</em>
+breakdown.</p>
+
+
+
+
+
+<a name="ch09-53640"></a>
+<h4 class="objtitle">Table 9.1. Translating the utmp.h C Code to an unpack() Template</h4>
+<table border="1">
+
+
+
+
+<tr>
+<th>
+<p>C Code</p>
+</th>
+<th>
+<p>unpack(  ) Template</p>
+</th>
+<th>
+<p>Template Letter/Repeat # Translation</p>
+</th>
+</tr>
+
+
+
+
+
+
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">char ut_line[8];</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">A8</tt>
+</p>
+</td>
+<td>
+<p>ASCII string (space padded), 8 bytes long</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">char ut_name[8];</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">A8</tt>
+</p>
+</td>
+<td>
+<p>ASCII string (space padded), 8 bytes long</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">char ut_host[16];</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">A16</tt>
+</p>
+</td>
+<td>
+<p>ASCII string (space padded), 16 bytes long</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">long ut_time;</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">l</tt>
+</p>
+</td>
+<td>
+<p>A signed "long" value (may not be the same as the size of
+a "long" value on a particular machine)</p>
+</td>
+</tr>
+
+
+
+
+
+</table>
+
+
+
+
+
+<p>Having constructed our template, let's use it in a real piece
+of code:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># this is the template we're going to feed to unpack(  )
+$template = "A8 A8 A16 l";
+# this uses pack(  ) to help us determine the size (in bytes)
+# of a single record
+$recordsize = length(pack($template,(  )));
+
+# open the file
+open(WTMP,"/var/adm/wtmp") or die "Unable to open wtmp:$!\n";
+
+# read it in one record at a time
+while (read(WTMP,$record,$recordsize)) {
+     # unpack it, using our template
+    ($tty,$name,$host,$time)=unpack($template,$record);
+    # handle the records with a null character specially 
+    # (see below)
+    if ($name and substr($name,0,1) ne "\0"){
+        print "$tty:$name:$host:" ,
+               scalar localtime($time),"\n"; 
+    }
+    else {
+        print "$tty:(logout):(logout):",
+               scalar localtime($time),"\n"; 
+    }   
+}
+
+# close the file
+close(WTMP);</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's the output of this little program:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">~:reboot::Mon Nov 17 15:24:30 1997
+:0:dnb::0:Mon Nov 17 15:35:08 1997
+ttyp8:user:host.mcs.anl.go:Mon Nov 17 18:09:49 1997
+ttyp6:dnb:limbo-114.ccs.ne:Mon Nov 17 19:03:44 1997
+ttyp6:(logout):(logout):Mon Nov 17 19:26:26 1997
+ttyp1:dnb:traal-22.ccs.neu:Mon Nov 17 23:47:18 1997
+ttyp1:(logout):(logout):Tue Nov 18 00:39:51 1997</pre>
+</blockquote>
+
+
+
+
+
+<p>Here are two small comments on the code:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>Under SunOS, logouts from a particular tty are marked with a null
+character in the first position, hence:</p>
+</li>
+</ul>
+<blockquote>
+<pre class="programlisting">if ($name and substr($name,1,1) ne "\0"){</pre>
+</blockquote>
+
+
+
+
+
+<ul>
+<li>
+<p>
+<tt class="literal">read( )</tt> takes a number of bytes to read as its
+third argument. Rather than hardcode in a record size like
+"32", we use a handy property of the <tt class="literal">pack(
+)</tt> function. When handed an empty list, <tt class="literal">pack(
+)</tt> returns a null or space-padded string the size of a
+record. This allows us to feed <tt class="literal">pack( )</tt> an
+arbitrary record template and have it tell us how big a record is:</p>
+</li>
+</ul>
+<blockquote>
+<pre class="programlisting">$recordsize = length(pack($template,(  )));<a name="INDEX-901"></a>
+<a name="INDEX-902"></a>
+</pre>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch09-3-fm2xml"></a>
+<h3 class="sect2">9.2.2. Calling an OS (or Someone Else's) Binary</h3>
+
+
+
+
+
+<p>Groveling through <em class="filename">wtmp</em> files on systems is such
+a common task that Unix systems ship a command for printing a human
+readable dump of the binary file called <tt class="command">last</tt>.
+Here's some sample output showing approximately the same data
+as the output of our previous example:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">dnb       ttyp6    traal-22.ccs.neu Mon Nov 17 23:47 - 00:39  (00:52)
+dnb       ttyp1    traal-22.ccs.neu Mon Nov 17 23:47 - 00:39  (00:52)
+dnb       ttyp6    limbo-114.ccs.ne Mon Nov 17 19:03 - 19:26  (00:22)
+user      ttyp8    host.mcs.anl.go Mon Nov 17 18:09 - crash (27+11:50)
+dnb       :0       :0               Mon Nov 17 15:35 - 17:35 (4+02:00)
+reboot    ~                         Mon Nov 17 15:24</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<a name="INDEX-903"></a>We can
+easily call binaries like <tt class="command">last</tt> from Perl. This
+code will show all of the unique user names found in our current
+<em class="filename">wtmp</em> file:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># location of the last command binary
+$lastexec = "/usr/ucb/last";
+
+open(LAST,"$lastexec|") or die "Unable to run $lastexec:$!\n";
+while(&lt;LAST&gt;){
+    $user = (split)[0];
+    print "$user","\n" unless exists $seen{$user};
+    $seen{$user}='';
+}
+close(LAST) or die "Unable to properly close pipe:$!\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>So why use this method when <tt class="literal">unpack( )</tt> looks like
+it can serve all of your needs? Portability. As we've shown,
+the format of the <em class="filename">wtmp</em> file differs from Unix
+variant to Unix variant. On top of this, a vendor can change the
+format of <em class="filename">wtmp</em> between OS releases, rendering
+your perfectly good <tt class="literal">unpack( )</tt> template invalid.</p>
+
+
+
+
+
+<p>However, one thing you <em class="emphasis">can</em> reasonably depend on
+is the continued presence of a <tt class="command">last</tt> command that
+will read this format, independent of any underlying format changes.
+If you use the <tt class="literal">unpack( )</tt> method, you have to
+create and maintain separate template strings for each different
+<em class="filename">wtmp</em> format you plan to parse.<a href="#FOOTNOTE-1">[1]</a>
+</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-1"></a>
+<p>[1]There's a bit of handwaving here, since you still have to
+track where the <tt class="command">last </tt>executable is found in each
+Unix environment and compensate for any differences in the format of
+each program's output.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<p>The biggest disadvantage of using this method over <tt class="literal">unpack(
+)</tt> is the increased sophistication of the field parsing you
+need to do in the program. With <tt class="literal">unpack( )</tt>, all
+of the fields are automatically extracted from the data for you.
+Using our <tt class="command">last</tt> example, you may find yourself with
+<tt class="literal">split( )</tt> or regular-expression-resistant output
+like this, all in the same output:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">user   console                       Wed Oct 14 20:35 - 20:37  (00:01)
+user   pts/12       208.243.191.21   Wed Oct 14 09:19 - 18:12  (08:53)
+user   pts/17       208.243.191.21   Tue Oct 13 13:36 - 17:09  (03:33)
+reboot system boot                   Tue Oct  6 14:13</pre>
+</blockquote>
+
+
+
+
+
+<p>Your eye has little trouble picking out the columns, but any program
+that parses this output will have to deal with the missing
+information in lines one and four. <tt class="literal">unpack( )</tt> can
+still be used to tease apart this output because it has fixed field
+widths, but that's not always possible.<a name="INDEX-904"></a><a name="INDEX-905"></a><a name="INDEX-906"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch09-47266"></a>
+<h3 class="sect2">9.2.3. Using the OS's Logging API</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-907"></a><a name="INDEX-908"></a><a name="INDEX-909"></a><a name="INDEX-910"></a>For this approach, let's switch
+our focus to Windows NT/2000's Event Log Service. As we
+mentioned before, it unfortunately does not log to plain text files.
+The best, and only, supported way to get to the data is through a set
+of special API calls. Most users rely on the <tt class="command">Event
+Viewer</tt> program, shown in <a href="ch09_02.htm#ch09-10470">Figure 9-1</a>, to
+retrieve this data for them.</p>
+
+
+
+
+
+<a name="ch09-10470"></a>
+<div class="figure">
+<img alt="figure" src="figs/psa_0901.gif"></div>
+<h4 class="objtitle">Figure 9.1. The NT4 Event Viewer</h4>
+
+<p>Luckily, there is a Perl module written by Jesse Dougherty (updated
+by Martin Pauley and Bret Giddings) that allows easy access to the
+Event Log API calls.<a href="#FOOTNOTE-2">[2]</a> Here's a simple
+program that just dumps a listing of events in the
+<em class="emphasis">System</em> event log in a
+<tt class="command">syslog</tt>-like format. We'll walk through a
+more complex version of this program later in this
+chapter.<a name="INDEX-912"></a><a name="INDEX-913"></a>
+</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-2"></a>
+<p>[2]Log information in Windows 2000
+can also be retrieved using the Window Management Instrumentation
+(WMI) framework we touched on in <a href="ch04_01.htm">Chapter 4, "User Activity"</a>.
+<tt class="literal">Win32::EventLog</tt> is easier to
+use and understand.<a name="INDEX-911"></a>
+</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::EventLog;
+# each event has a type, this is a translation of the common types
+%type = (1  =&gt; "ERROR",
+         2  =&gt; "WARNING",
+         4  =&gt; "INFORMATION",
+         8  =&gt; "AUDIT_SUCCESS",
+         16 =&gt; "AUDIT_FAILURE");
+
+# if this is set, we also retrieve the full text of every 
+# message on each Read(  )
+$Win32::EventLog::GetMessageText = 1; 
+
+# open the System event log
+$log = new Win32::EventLog("System") 
+  or die "Unable to open system log:$^E\n";
+
+# read through it one record at a time, starting with the first entry
+while ($log-&gt;Read((EVENTLOG_SEQUENTIAL_READ|EVENTLOG_FORWARDS_READ),
+             1,$entry)){
+    print scalar localtime($entry-&gt;{TimeGenerated})." ";
+    print $entry-&gt;{Computer}."[".($entry-&gt;{EventID} &amp;
+          0xffff)."] ";
+    print $entry-&gt;{Source}.":".$type{$entry-&gt;{EventType}};
+    print $entry-&gt;{Message};
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Command-line utilities like <tt class="command">last</tt> that dump event
+logs into plain ASCII format also exist for NT/2000. We'll see
+one of these utilities in action later in this chapter.<a name="INDEX-914"></a>
+</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch09_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch09_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">9.1. Text Logs</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">9.3. Stateful and Stateless Data</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

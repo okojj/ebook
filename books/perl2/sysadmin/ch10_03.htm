@@ -1,0 +1,822 @@
+<html>
+<head>
+<title>SNMP  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="SNMP">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch10_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch10_01.htm">Chapter 10: Security and Network Monitoring</a></td><td align="right" valign="top" width="172"><a href="ch10_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">10.3. SNMP</h2>
+
+
+
+
+
+<p>Let's move away from security and towards more general
+monitoring topics. In the previous section we looked at a method for
+monitoring a specific network service. The Simple Network Management
+Protocol (SNMP) takes a quantum leap forward by offering a general
+way to remotely monitor and configure network devices and networked
+computers. Once you master the basics of SNMP, you can use it to keep
+tabs on (and often configure) practically every device on your
+network.</p>
+
+
+
+
+
+<p>Truth be told, the <em class="emphasis">Simple</em> Network Management
+Protocol isn't particularly simple. There's a respectable
+learning curve associated with this subject. If you aren't
+already familiar with SNMP, see <a href="appe_01.htm">Appendix E, "The Twenty-Minute SNMP Tutorial"</a>, for a
+tutorial on it.</p>
+
+
+
+
+
+<a name="ch10-7-fm2xml"></a>
+<h3 class="sect2">10.3.1. Using SNMP from Perl</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-1026"></a><a name="INDEX-1027"></a>One way we could use SNMP from Perl is to
+call command-line programs like the UCD-SNMP ones used for
+demonstration purposes in <a href="appe_01.htm">Appendix E, "The Twenty-Minute SNMP Tutorial"</a>. It would be a
+straightforward process, no different any of the examples of calling
+external programs we've seen earlier in this book. Since
+there's nothing new to learn there, we won't spend any
+time with this technique. I will offer one caveat: if you are using
+SNMPv1 or SNMPv2C, chances are you'll have to put the community
+name on the command line. If this program runs on a multiuser box,
+anyone who can list the process table may be able to see this
+community name and steal the keys to the kingdom. This threat is
+present in our command-line examples in <a href="appe_01.htm">Appendix E, "The Twenty-Minute SNMP Tutorial"</a>,
+but it becomes more acute with automated programs that repeatedly
+make external program calls like this. For demonstration purposes
+only, the following examples also take the target hostname and
+community name string on the command line. You should change that for
+production code.<a name="INDEX-1028"></a><a name="INDEX-1029"></a>
+</p>
+
+
+
+
+
+<p>
+<a name="INDEX-1030"></a><a name="INDEX-1031"></a><a name="INDEX-1032"></a>If
+we don't call an external program to perform SNMP operations
+from Perl, our other choice is to use a Perl SNMP module. There are
+at least three separate but similar modules available:
+<tt class="literal">Net::SNMP</tt> by David M. Town,
+<em class="emphasis">SNMP_Session.pm</em> written by Simon Leinen, and the
+"SNMP Extension Module v3.1.0 for the UCD SNMPv3 Library"
+(which we'll call just call <tt class="literal">SNMP</tt> because of
+the way it is loaded) by G.S. Marzot. All of these modules implement
+SNMPv1. <tt class="literal">Net::SNMP</tt> and <tt class="literal">SNMP</tt>
+offer some SNMPv2 support. Only <tt class="literal">SNMP</tt> offers any
+SNMPv3 support.<a name="INDEX-1033"></a><a name="INDEX-1034"></a>
+</p>
+
+
+
+
+
+<p>
+<a name="INDEX-1035"></a><a name="INDEX-1036"></a>The most
+significant difference between these three modules besides their
+level of SNMP support is their reliance on libraries external to the
+core Perl distribution. The first two (<tt class="literal">Net::SNMP</tt>
+and <em class="emphasis">SNMP_Session.pm</em>) are implemented in Perl
+alone, while <tt class="literal">SNMP</tt> needs to be linked against a
+separate pre-built UCD-SNMP library. The main drawback to using
+<tt class="literal">SNMP</tt> is this added dependency and build step
+(presuming you can build the UCD-SNMP library on your
+platform).<a name="INDEX-1037"></a>
+</p>
+
+
+
+
+
+<p>The plus side of depending on the UCD-SNMP library is the extra power
+it provides to the module. For instance, <tt class="literal">SNMP</tt> can
+parse Management Information Base (MIB) description files and print
+raw SNMP packet dumps for debugging, two functions the other modules
+do not provide. There are other modules that can help reduce this
+disparity in functionality (for instance,
+<tt class="literal">SNMP::MIB::Compiler</tt> by Fabien Tassin can handle
+MIB parsing tasks), but if you are looking for one module to do the
+whole job, <tt class="literal">SNMP</tt> is your best
+bet.<a name="INDEX-1038"></a>
+</p>
+
+
+
+
+
+<p>Let's start with a small Perl example. If we need to know the
+number of interfaces a particular device has, we could query the
+<tt class="literal">interfaces.ifNumber</tt> variable. Using
+<tt class="literal">Net::SNMP</tt>, it is this easy:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Net::SNMP;
+
+# requires a hostname and a community string as its arguments
+($session,$error) = Net::SNMP-&gt;session(Hostname =&gt; $ARGV[0],
+                                       Community =&gt; $ARGV[1]);
+
+die "session error: $error" unless ($session);
+
+# iso.org.dod.internet.mgmt.mib-2.interfaces.ifNumber.0 = 
+#   1.3.6.1.2.1.2.1.0
+$result = $session-&gt;get_request("1.3.6.1.2.1.2.1.0");
+
+die "request error: ".$session-&gt;error unless (defined $result);
+
+$session-&gt;close;
+
+print "Number of interfaces: ".$result-&gt;{"1.3.6.1.2.1.2.1.0"}."\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>When pointed at a workstation with an Ethernet and a loopback
+interface, it will print <tt class="literal">Number</tt><tt class="literal">of</tt><tt class="literal">interfaces:</tt><tt class="literal">2</tt>; a laptop with Ethernet, loopback, and PPP
+interfaces returns <tt class="literal">Number of interfaces: 3;</tt> and a
+small router returns <tt class="literal">Number of interfaces: 7</tt>.</p>
+
+
+
+
+
+<p>One key thing to notice is the use of Object Identifiers (OIDs)
+instead of variable names. Both <tt class="literal">Net::SNMP</tt> and
+<em class="emphasis">SNMP_Session.pm</em> handle SNMP protocol
+interactions only. They make no pretense of handling the peripheral
+SNMP-related tasks like parsing SNMP MIB descriptions. For this
+functionality you will have to look to other modules such as
+<tt class="literal">SNMP::MIB::Compiler</tt> or
+<em class="emphasis">SNMP_util.pm</em> by Mike Mitchell for use with
+<tt class="literal">SNMP_Session.pm</tt> (not to be confused with
+<tt class="literal">SNMP::Util</tt> by Wayne Marquette, for use with the
+<tt class="literal">SNMP</tt> module).<a name="INDEX-1039"></a>
+</p>
+
+
+
+
+
+<p>If you want to use textual identifiers instead of numeric OIDs
+without coding in the mapping yourself or using an additional module,
+your only choice is to use the <tt class="literal">SNMP</tt> module, which
+has a built-in MIB parser. Let's do a table walk of the Address
+Resolution Protocol (ARP) table of a machine using this
+module:<a name="INDEX-1040"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use SNMP;
+
+# requires a hostname and a community string as its arguments
+$session = new SNMP::Session(DestHost =&gt; $ARGV[0], Community =&gt; $ARGV[1],
+                             UseSprintValue =&gt; 1);
+
+die "session creation error: $SNMP::Session::ErrorStr" unless 
+  (defined $session);
+
+# set up the data structure for the getnext command
+$vars = new SNMP::VarList(['ipNetToMediaNetAddress'],
+                          ['ipNetToMediaPhysAddress']);
+
+# get first row
+($ip,$mac) = $session-&gt;getnext($vars);
+die $session-&gt;{ErrorStr} if ($session-&gt;{ErrorStr});
+
+# and all subsequent rows
+while (!$session-&gt;{ErrorStr} and 
+       $$vars[0]-&gt;tag eq "ipNetToMediaNetAddress"){
+    print "$ip -&gt; $mac\n";
+    ($ip,$mac) = $session-&gt;getnext($vars);
+};</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's an example of the output this produces:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">192.168.1.70 -&gt; 8:0:20:21:40:51
+192.168.1.74 -&gt; 8:0:20:76:7c:85
+192.168.1.98 -&gt; 0:c0:95:e0:5c:1c</pre>
+</blockquote>
+
+
+
+
+
+<p>This code looks similar to the previous <tt class="literal">Net::SNMP</tt>
+example. We'll walk through it to highlight the differences:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use SNMP;
+
+$session = new SNMP::Session(DestHost =&gt; $ARGV[0], Community =&gt; $ARGV[1],
+                             UseSprintValue =&gt; 1);</pre>
+</blockquote>
+
+
+
+
+
+<p>After loading the <tt class="literal">SNMP</tt> module, we create a session
+object just like we did in the <tt class="literal">Net::SNMP</tt> example.
+The additional <tt class="literal">UseSprintValue =&gt; 1</tt> argument
+just tells the <tt class="literal">SNMP</tt> module to pretty-print the
+return values. If we didn't do this, the Ethernet addresses
+listed above would be printed in an encoded form.</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># set up the data structure for the getnext command
+$vars = new SNMP::VarList(['ipNetToMediaNetAddress'],
+                          ['ipNetToMediaPhysAddress']);</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">SNMP</tt> is willing to use simple strings like
+<tt class="literal">sysDescr.0</tt> with its commands, but it prefers to
+use a special object it calls a "Varbind." It uses these
+objects to store return values from queries. For example, the code
+we're looking at calls the <tt class="literal">getnext( )</tt>
+method to send a <tt class="literal">get-next-request</tt>, just like in
+the IP route table example in <a href="appe_01.htm">Appendix E, "The Twenty-Minute SNMP Tutorial"</a>. Except
+this time, <tt class="literal">SNMP</tt> will store the returned indices in
+a Varbind for us so we don't have to keep track of them by
+hand. With this module, you can just hand the Varbind back to the
+<tt class="literal">getnext</tt> method each time you want the next
+value.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-1041"></a>Varbinds are
+simply anonymous Perl arrays with four elements:
+<tt class="literal">obj</tt>, <tt class="literal">iid </tt>,
+<tt class="literal">val</tt>, and <tt class="literal">type</tt>. For our
+purposes, we only need to worry about <tt class="literal">obj</tt> and
+<tt class="literal">iid</tt>. The first element, <tt class="literal">obj</tt>,
+is the object you are querying. <tt class="literal">obj</tt> can be
+specified in one of several formats. In this case, we are using a
+<em class="emphasis">leaf identifier</em> format, i.e., specifying the
+leaf of the tree we are concerned with.
+<tt class="literal">IpNetToMediaNetAddress</tt> is the leaf of the tree:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">.iso.org.dod.internet.mgmt.mib-2.ip.ipNetToMediaTable.ipNetToMediaEntry.ipNetToMediaNetAddress</pre>
+</blockquote>
+
+
+
+
+
+<p>The second element in a Varbind is the <tt class="literal">iid</tt>, or
+instance identifier. In our previous discussions, we've always
+used a <tt class="literal">0</tt> here (e.g.,
+<tt class="literal">system.sysDescr.0</tt>), because we've only seen
+objects that have a single instance. Shortly we'll see examples
+where the <tt class="literal">iid</tt> can be something other than
+<tt class="literal">0</tt>. For instance, later on we'll want to
+refer to a particular network interface on a multi-interface Ethernet
+switch. <tt class="literal">obj</tt> and <tt class="literal">iid</tt> are the
+only two parts of a Varbind you need to specify for a
+<tt class="literal">get</tt>. <tt class="literal">getnext</tt> does not need
+an <tt class="literal">iid</tt> since it will return the next instance by
+default.</p>
+
+
+
+
+
+<p>The line of code above uses <tt class="literal">VarList( ),</tt> which
+creates a list of two Varbinds, each with just the
+<tt class="literal">obj</tt> element filled in. We feed this list to the
+<tt class="literal">getnext( )</tt> method:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># get first row
+($ip,$mac) = $session-&gt;getnext($vars);
+die $session-&gt;{ErrorStr} if ($session-&gt;{ErrorStr});</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">getnext( )</tt> returns the values it received back
+from our request and updates the Varbind data structures accordingly.
+Now it is just a matter of calling <tt class="literal">getnext( )</tt>
+until we fall off the end of the table:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">while (!$session-&gt;{ErrorStr} and 
+       $$vars[0]-&gt;tag eq "ipNetToMediaNetAddress"){
+        print "$ip -&gt; $mac\n";
+       ($ip,$mac) = $session-&gt;getnext($vars);
+};</pre>
+</blockquote>
+
+
+
+
+
+<p>For our final SNMP example, let's return to the world of
+security. We'll pick a task that would be tricky, or at least
+annoying, to do well with the command-line SNMP utilities.</p>
+
+
+
+
+
+<p>Here's the scenario: you've been asked to track down a
+misbehaving user on your switched Ethernet network. The only info you
+have is the Ethernet address of the machine that user is on.
+It's not an Ethernet address you have on file (which could be
+kept in our host database from <a href="ch05_01.htm">Chapter 5, "TCP/IP Name Services"</a> if we
+extended it), and you can't sniff your switched net, so you are
+going to have to be a little bit clever about tracking this machine
+down. Your best bet in this case may be to ask one or all of your
+Ethernet switches if they've seen that address on one of their
+ports.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-1042"></a>Just to make this example more concrete so
+we can point at specific MIB variables, we'll say that your
+network consists of several Cisco Catalyst 5500 switches. The basic
+methodology we're going to use to solve this problem will apply
+to other products and other vendors as well. Any switch or
+vendor-specific information will be noted as we go along. Let's
+walk through this problem step by step.</p>
+
+
+
+
+
+<p>As before, first we have to go search through the correct MIB module
+files. With a little jumpstart from Cisco's tech support, we
+realize we'll need to access four separate objects:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>The <tt class="literal">vlanTable</tt>, found at
+<tt class="literal">enterprises.cisco.workgroup.ciscoStackMIB.vlanGrp</tt>
+in the <em class="filename">CISCO-STACK-MIB</em> description.</p>
+</li>
+<li>
+<p>The <tt class="literal">dot1dTpFdbTable</tt> (transparent port forwarding
+table), found at <tt class="literal">dot1dBridge.dot1dTp</tt> in the
+RFC1493 <em class="emphasis">BRIDGE-MIB</em> description.</p>
+</li>
+<li>
+<p>The <tt class="literal">dot1dBasePortTable</tt>, found at
+<tt class="literal">dot1dBridge.dot1dBase</tt> in the same RFC.</p>
+</li>
+<li>
+<p>The <tt class="literal">ifXTable</tt>, found in the RFC1573
+<em class="emphasis">IF-MIB</em> (Interfaces) description.</p>
+</li>
+</ul>
+<p>Why four different tables? Each table has a piece to contribute to
+the answer, but no one table has the specific information we seek.
+The first table provides us with a list of the VLANS (Virtual Local
+Area Networks), or virtual "network segments," on the
+switch. Cisco has chosen to keep separate tables for each VLAN on a
+switch, so we will need to query for information one VLAN at a time.
+More on this in a moment.</p>
+
+
+
+
+
+<p>The second table provides us with a list of Ethernet addresses and
+the number of the switch's <em class="emphasis">bridge port</em> on
+which each address was last seen. Unfortunately, a bridge port number
+is an internal reckoning for the switch; it does not correspond to
+the name of a physical port on that switch. We need to know the
+physical port name, i.e., from which card and port the machine with
+that Ethernet address last spoke, so we have to dig further.</p>
+
+
+
+
+
+<p>There is no table that maps bridge port to physical port name (that
+would be too easy), but the <tt class="literal">dot1dBasePortTable</tt> can
+provide a bridge port to interface number mapping. Once we have the
+interface number, we can look it up in <tt class="literal">ifXTable</tt>
+and retrieve the port name.</p>
+
+
+
+
+
+<p>
+<a href="ch10_03.htm#ch10-46717">Figure 10-1</a> shows a picture of the four-layer
+deference necessary to perform our desired task.</p>
+
+
+
+
+
+<a name="ch10-46717"></a>
+<div class="figure">
+<img alt="figure" src="figs/psa_1001.gif"></div>
+<h4 class="objtitle">Figure 10.1. The set of SNMP queries needed to find the port name on a Cisco 5000 </h4>
+
+<p>Here's the code to put these four tables together to dump the
+information we need:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use SNMP;
+
+# These are the extra MIB module files we need, found in the same 
+# directory as this script
+$ENV{'MIBFILES'}=
+  "CISCO-SMI.my:FDDI-SMT73-MIB.my:CISCO-STACK-MIB.my:BRIDGE-MIB.my";
+
+# Connect and get the list of VLANs on this switch
+$session = new SNMP::Session(DestHost =&gt; $ARGV[0], 
+                             Community =&gt; $ARGV[1]);
+die "session creation error: $SNMP::Session::ErrorStr" unless 
+  (defined $session);
+
+# enterprises.cisco.workgroup.ciscoStackMIB.vlanGrp.vlanTable.vlanEntry 
+# in CISCO-STACK-MIB
+$vars = new SNMP::VarList(['vlanIndex']);
+                          
+$vlan = $session-&gt;getnext($vars);
+die $session-&gt;{ErrorStr} if ($session-&gt;{ErrorStr});
+
+while (!$session-&gt;{ErrorStr} and $$vars[0]-&gt;tag eq "vlanIndex"){
+
+    # VLANS 1000 and over are not "real" ON A CISCO CATALYST 5XXX
+    # (this limit is likely to be different on different switches)
+    push(@vlans,$vlan) if $vlan &lt; 1000;
+
+    $vlan = $session-&gt;getnext($vars);
+};
+
+undef $session,$vars;
+
+# for each VLAN, query for the bridge port, the interface number 
+# associated with that port, and then the interface name for that 
+# port number
+foreach $vlan (@vlans){
+    # note our use of "community string indexing" as part 
+    # of the session setup
+    $session = new SNMP::Session(DestHost =&gt; $ARGV[0], 
+                                 Community =&gt; $ARGV[1]."@".$vlan,
+                                 UseSprintValue =&gt; 1);
+
+    die "session creation error: $SNMP::Session::ErrorStr" 
+      unless (defined $session);
+  
+    # from transparent forwarding port table at 
+    # dot1dBridge.dot1dTp.dot1dTpFdbTable.dot1dTpFdbEntry 
+    # in RFC1493 BRIDGE-MIB
+    $vars = new SNMP::VarList(['dot1dTpFdbAddress'],['dot1dTpFdbPort']);
+
+    ($macaddr,$portnum) = $session-&gt;getnext($vars);
+    die $session-&gt;{ErrorStr} if ($session-&gt;{ErrorStr});
+
+    while (!$session-&gt;{ErrorStr} and 
+           $$vars[0]-&gt;tag eq "dot1dTpFdbAddress"){
+
+        # dot1dBridge.dot1dBase.dot1dBasePortTable.dot1dBasePortEntry
+        # in RFC1493 BRIDGE-MIB
+        $ifnum = 
+          (exists $ifnum{$portnum}) ? $ifnum{$portnum} :
+            ($ifnum{$portnum} = 
+               $session-&gt;get("dot1dBasePortIfIndex\.$portnum"));
+
+        # from ifMIB.ifMIBObjects.ifXTable.ifXEntry in RFC1573 IF-MIB
+        $portname = 
+          (exists $portname{$ifnum}) ? $portname{$ifnum} :
+            ($portname{$ifnum}=$session-&gt;get("ifName\.$ifnum"));            
+
+        print "$macaddr on VLAN $vlan at $portname\n";
+
+        ($macaddr,$portnum) = $session-&gt;getnext($vars);
+    };
+
+    undef $session, $vars, %ifnum, %portname;
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>If you've read <a href="appe_01.htm">Appendix E, "The Twenty-Minute SNMP Tutorial"</a>, most of this code
+will look familiar. Here are some comments on the new stuff:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$ENV{'MIBFILES'}=
+  "CISCO-SMI.my:FDDI-SMT73-MIB.my:CISCO-STACK-MIB.my:BRIDGE-MIB.my";</pre>
+</blockquote>
+
+
+
+
+
+<p>This code sets the <tt class="literal">MIBFILES</tt> environment variable
+for the UCD-SNMP package library. When set, this variable instructs
+the library to parse the listed set of additional files for MIB
+object definitions. The only strange MIB module file in that list is
+<em class="filename">FDDI-SMT73-MIB.my</em>. This is included because
+<em class="filename">CISCO-STACK-MIB.my</em> has the following statement
+at the top to include certain definitions from other MIB entries:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">IMPORTS
+        MODULE-IDENTITY, OBJECT-TYPE, Integer32, IpAddress, TimeTicks,
+        Counter32, Counter64, NOTIFICATION-TYPE
+                FROM SNMPv2-SMI
+        DisplayString, RowStatus
+                FROM SNMPv2-TC
+        fddimibPORTSMTIndex, fddimibPORTIndex
+                FROM FDDI-SMT73-MIB
+        OwnerString
+                FROM IF-MIB
+        MODULE-COMPLIANCE, OBJECT-GROUP
+                FROM SNMPv2-CONF
+        workgroup
+                FROM CISCO-SMI;</pre>
+</blockquote>
+
+
+
+
+
+<p>Even though we don't reference any objects that use
+<tt class="literal">fddimibPORTSMTIndex</tt> or
+<tt class="literal">fddimibPORTIndex</tt>, we still (by choice) include
+that file in the file list to keep the MIB parser from complaining.
+All of the other MIB definitions in this <tt class="literal">IMPORTS</tt>
+statement are included either in our parse list or the
+library's default list. You often need to look for the
+<tt class="literal">IMPORTS</tt> section of a MIB module to see that
+module's dependencies when going MIB
+groveling.<a name="INDEX-1043"></a>
+</p>
+
+
+
+
+
+<p>Moving on in our code, here's another strange statement:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$session = new SNMP::Session(DestHost =&gt; $ARGV[0], 
+                             Community =&gt; $ARGV[1]."@".$vlan,
+                             UseSprintValue =&gt; 1);</pre>
+</blockquote>
+
+
+
+
+
+<p>Instead of just passing on the community name as provided by the
+user, we're appending something of the form
+<em class="replaceable">@VLAN-NUMBER</em>. In Cisco parlance, this is
+"community string indexing." When dealing with VLANs and
+bridging, Cisco devices keep track of several "instances"
+of the MIB, one for each VLAN. Our code makes the same queries once
+per each VLAN found on the switch:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$ifnum =  
+         (exists $ifnum{$portnum}) ? $ifnum{$portnum} :
+            ($ifnum{$portnum} = 
+                $session-&gt;get("dot1dBasePortIfIndex\.$portnum"));</pre>
+</blockquote>
+
+
+
+
+
+<p>Two comments on this piece of code. First, for variety's sake,
+we're using a simple string argument to <tt class="literal">get(
+)</tt>. We could easily have used something more Varbind-ish:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">($ifnum{$portnum}=$session-&gt;get(['dot1dBasePortIfIndex',$portnum]));</pre>
+</blockquote>
+
+
+
+
+
+<p>Second, note that we're doing some very simple caching here.
+Before we actually perform a <tt class="literal">get( )</tt>, we look in
+a simple hash table (<tt class="literal">%ifnum</tt>) to see if we've
+already made this query. If we haven't, we make the query and
+populate the hash table with the result. At the end of each VLAN
+pass, we delete the cache hash (<tt class="literal">undef</tt><tt class="literal">%ifnum</tt>) to prevent previous VLAN information from
+providing false information.</p>
+
+
+
+
+
+<p>This is a good technique to remember when programming SNMP code. It
+is important to query as little and as seldom as possible if you want
+to be kind to your network and network devices. A device may have to
+take horsepower away from its usual tasks to respond to your slew of
+queries if you are not prudent.</p>
+
+
+
+
+
+<p>Here's an excerpt from our code in action:<a name="INDEX-1044"></a><a name="INDEX-1045"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">"00 10 1F 2D F8 FB " on VLAN 1 at 1/1
+"00 10 1F 2D F8 FD " on VLAN 1 at 1/1
+"08 00 36 8B A9 03 " on VLAN 115 at 2/18
+"08 00 36 BA 16 03 " on VLAN 115 at 2/3
+"08 00 36 D1 CB 03 " on VLAN 115 at 2/15</pre>
+</blockquote>
+
+
+
+
+
+<p>It's not hard to see how this program could be enhanced.
+Besides prettier or more orderly output, it could save state between
+runs. Each time it ran, the program could let you know how things
+have changed: new addresses appearing, ports being changed, etc. One
+quick caveat: most switches are of the "learning"
+variety, so they will age out entries for addresses that they
+haven't heard from in a while. This just means that your
+program will need to run at least as often as the standard port aging
+time.<a name="INDEX-1046"></a><a name="INDEX-1047"></a><a name="INDEX-1048"></a><a name="INDEX-1049"></a>
+</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch10_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch10_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">10.2. Noticing Suspicious Activities</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">10.4. Danger on the Wire</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

@@ -1,0 +1,126 @@
+<html><head>
+<title>[Chapter 17] 17.5 Sample Specification Parser</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:39:53Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch17_01.htm" title="17. Template-Driven Code Generation"><link rel="prev" href="ch17_04.htm" title="17.4 Jeeves Implementation"><link rel="next" href="ch17_06.htm" title="17.6 Resources"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_04.htm" title="17.4 Jeeves Implementation"><img src="../gifs/txtpreva.gif" alt="Previous: 17.4 Jeeves Implementation" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch17_01.htm" title="17. Template-Driven Code Generation">Chapter 17<br>Template-Driven Code Generation</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_06.htm" title="17.6 Resources"><img src="../gifs/txtnexta.gif" alt="Next: 17.6 Resources" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch17-38404">17.5 Sample Specification Parser</A
+></H2
+><p class="para"><a class="indexterm" name="ch17-idx-977923-0"></A
+><a class="indexterm" name="ch17-idx-977923-1"></A
+><a class="indexterm" name="ch17-idx-977923-2"></A
+>The input specification parser is particular to an application domain. In this section, we look at the parser that is required for our toy object model specification, primarily to review how the AST library is used; the parsing code itself is quite trivial. For more involved parsing tasks, you can use a version of Berkeley <em class="emphasis">yacc</EM
+>, which has been hacked up to output Perl instead of C (available from <a class="systemitem.url" href="http://ftp.sterling.com:/local/perl-byacc.tar.Z">http://ftp.sterling.com:/local/perl-byacc.tar.Z</A
+>). I have successfully used this combination to produce IDL parsers for the CORBA specification. </P
+><p class="para">The parser in <a class="xref" href="#ch17-34178" title="OO_Schema.pm: The Specification Parser">Example 17.4</A
+> allows attributes to have additional annotations like this:</P
+><pre class="programlisting">class Foo {
+    int  id,  access=readonly, db_col_name=id, index=yes;
+};</PRE
+><p class="para">In the template, these attribute properties can be used just like "standard" properties such as <em class="emphasis">attr_name</EM
+> and <em class="emphasis">attr_type</EM
+>. </P
+><div class="example"><h4 class="example"><a class="title" name="ch17-34178">Example 17.4: OO_Schema.pm: The Specification Parser</A
+></H4
+><pre class="programlisting">package SchemaParser;
+use Ast;
+use Carp;
+sub parse{
+    my ($package, $filename) = @_;
+    open (P, $filename) || die &quot;Could not open $filename : $@&quot;;
+    my $root = Ast-&gt;new(&quot;Root&quot;);
+    eval {
+        while (1) {
+            get_line();
+            next unless ($line =~ /^\s*class +(\w+)/);
+            $c = Ast-&gt;new($1);
+            $c-&gt;add_prop(&quot;class_name&quot; =&gt; $1);
+            $root-&gt;add_prop_list(&quot;class_list&quot;, $c);
+            while (1) {
+                get_line();
+                last if $line =~ /^\s*}/;
+                if ($line =~ s/^\s*(\w+)\s*(\w+)//) {
+                    $a = Ast-&gt;new($2);  #attribute name
+                    $a-&gt;add_prop (&quot;attr_name&quot;, $2);  #attribute type
+                    $a-&gt;add_prop (&quot;attr_type&quot;, $1);  #attribute type
+                    $c-&gt;add_prop_list(&quot;attr_list&quot;, $a);
+                }
+                $curr_line = $line;
+                while ($curr_line !~ /;/) {
+                    get_line();
+                    $curr_line .= $line;
+                }
+                @props = split (/[,;]/,$curr_line);
+                foreach $prop (@props) {
+                    if ($prop =~ /\s*(\w*)\s*=\s*(.*)\s*/) {
+                         $a-&gt;add_prop($1, $2);
+                    }
+                }
+            }
+        }
+    };
+    # Comes here if &quot;END OF FILE&quot; exception is thrown
+    die $@ if ($@ &amp;&amp; ($@  !~ /END OF FILE/));
+    return $root;
+}
+sub get_line {
+    while (defined($line = &lt;P&gt;)) {
+        chomp $line;
+        $line =~ s#//.*$##;          # remove comments
+        return if $line !~ /^\s*$/;  # return if not white-space
+    } 
+    die &quot;END OF FILE&quot;; 
+}
+1;</PRE
+></DIV
+><p class="para">OO_Schema::parse starts by creating a new AST root node, and whenever it encounters a new class declaration, it adds it to the root's <em class="emphasis">class_list</EM
+> property. Similarly, for each attribute, it creates a new node and adds it to the <em class="emphasis">attr_list</EM
+> property of the AST node representing the class being examined.</P
+><p class="para">The procedure <code class="literal">get_line</CODE
+> throws an end of file exception when there's nothing more to read. This way, the user of <kbd class="command">get_line</KBD
+> can wrap multiple calls to <kbd class="command">get_line</KBD
+> inside an <kbd class="command">eval</KBD
+> <kbd class="command">w</KBD
+>ithout having to check at each place if it has prematurely reached the end of input. <a class="indexterm" name="ch17-idx-977985-0"></A
+><a class="indexterm" name="ch17-idx-977985-1"></A
+><a class="indexterm" name="ch17-idx-977985-2"></A
+><a class="indexterm" name="ch17-idx-977985-3"></A
+></P
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_04.htm" title="17.4 Jeeves Implementation"><img src="../gifs/txtpreva.gif" alt="Previous: 17.4 Jeeves Implementation" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_06.htm" title="17.6 Resources"><img src="../gifs/txtnexta.gif" alt="Next: 17.6 Resources" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">17.4 Jeeves Implementation</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">17.6 Resources</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

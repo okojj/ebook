@@ -1,0 +1,798 @@
+<html>
+<head>
+<title>Isolation and Database Locking (Enterprise JavaBeans)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Richard Monson-Haefel">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-869-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Isolation and Database Locking">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm" alt="Enterprise JavaBeans"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch08_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_01.htm">Chapter 8: Transactions</a></td><td align="right" valign="top" width="172"><a href="ch08_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_04.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">8.3. Isolation and Database Locking</h2>
+<p>
+<a name="INDEX-1642"></a><a name="INDEX-1643"></a><a name="INDEX-1644"></a><a name="INDEX-1645"></a>Transaction isolation (the
+"I" in ACID) is a critical part of any transactional
+system. This section explains isolation conditions, database locking,
+and transaction isolation levels. These concepts are important when
+deploying any transactional system.
+</p>
+
+<a name="JBEANS-CH-8-SECT-3.1"></a>
+<h3 class="sect2">8.3.1. Dirty, Repeatable, and Phantom Reads</h3>
+
+<p>Transaction isolation is defined in terms of <a name="INDEX-1646"></a><a name="INDEX-1647"></a>
+isolation conditions called <em class="emphasis">dirty
+reads</em><a name="INDEX-1648"></a><a name="INDEX-1649"></a>,
+<em class="emphasis">repeatable reads</em><a name="INDEX-1650"></a><a name="INDEX-1651"></a>, and <em class="emphasis">phantom
+reads</em><a name="INDEX-1652"></a><a name="INDEX-1653"></a>
+. These conditions describe what can happen when two or more
+transactions operate on the same data.<a href="#FOOTNOTE-2">[2]</a>
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-2"></a>
+<p>[2]Isolation
+conditions are covered in detail by the ANSI SQL-92 Specification,
+Document Number: ANSI X3.135-1992 (R1998).</p> </blockquote>
+
+<p>To illustrate these conditions, let's think about two separate
+client applications using their own instances of the TravelAgent to
+access the same data--specifically, a cabin record with the
+primary key of 99. These examples revolve around the
+<tt class="literal">RESERVATION</tt> table, which is accessed by both the
+<tt class="literal">bookPassage()</tt> method (through the Reservation
+bean) and the <tt class="literal">listAvailableCabins()</tt> method
+(through JDBC). It might be a good idea to go back to <a href="ch07_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch07_01.htm">Chapter 7, "Session Beans"</a> and review how the
+<tt class="literal">RESERVATION</tt> table is accessed through these
+methods. This will help you to understand how two transactions
+executed by two different clients can impact each other. Assume that
+both methods have a transaction attribute of
+<em class="emphasis">Required</em>.
+</p>
+
+<a name="JBEANS-CH-8-SECT-3.1.1"></a>
+<h3 class="sect3">8.3.1.1. Dirty reads</h3>
+
+<p>
+<a name="INDEX-1654"></a><a name="INDEX-1655"></a>A dirty read
+occurs when the first transaction reads uncommitted changes made by a
+second transaction. If the second transaction is rolled back, the
+data read by the first transaction becomes invalid because the
+rollback undoes the changes. The first transaction won't be
+aware that the data it has read has become invalid. Here's a
+scenario showing how a dirty read can occur (illustrated in <a href="#JBEANS-CH-8-FIG-9">Figure 8-9</a>):
+</p>
+
+<ol>
+<li>
+<p>Time 10:00:00: Client 1 executes the
+<tt class="literal">TravelAgent.bookPassage()</tt> method on its bean.
+Along with the Customer and Cruise beans, Client 1 had previously
+chosen Cabin 99 to be included in the reservation.
+</p>
+</li>
+<li>
+<p>Time 10:00:01: Client 1 creates a Reservation bean within the
+<tt class="literal">bookPassage()</tt> method. The Reservation bean's
+<tt class="literal">create()</tt> method inserts a record into the
+<tt class="literal">RESERVATION</tt> table, which reserves Cabin 99.
+</p>
+</li>
+<li>
+<p>Time 10:00:02: Client 2 executes
+<tt class="literal">TravelAgent.listAvailableCabins()</tt>. Cabin 99 has
+been reserved by Client 1, so it is <em class="emphasis">not</em> in the
+list of available cabins that are returned from this method.
+</p>
+</li>
+<li>
+<p>Time 10:00:03: Client 1 executes the
+<tt class="literal">ProcessPayment.byCredit()</tt> method within the
+<tt class="literal">bookPassage()</tt> method. The
+<tt class="literal">byCredit()</tt> method throws an exception because the
+expiration date on the credit card has passed.
+</p>
+</li>
+<li>
+<p>Time 10:00:04: The exception thrown by the ProcessPayment bean causes
+the entire <tt class="literal">bookPassage()</tt> transaction to be rolled
+back. As a result, the record inserted into the
+<tt class="literal">RESERVATION</tt> table when the Reservation bean was
+created is not made durable (it is removed). Cabin 99 is now
+available.
+</p>
+</li>
+</ol>
+<a name="JBEANS-CH-8-FIG-9"></a>
+<div class="figure">
+<img alt="figure" src="figs/ejb2_0809.gif" webstripperlinkwas="figs/ejb2_0809.gif"></div>
+<h4 class="objtitle">Figure 8-9. A dirty read</h4>
+
+<p>Client 2 is now using an invalid list of available cabins because
+Cabin 99 is available but is not included in the list. This would be
+serious if Cabin 99 was the last available cabin because Client 2
+would inaccurately report that the cruise was booked. The customer
+would presumably try to book a cruise on a competing cruise line.
+</p>
+
+
+
+<a name="JBEANS-CH-8-SECT-3.1.2"></a>
+<h3 class="sect3">8.3.1.2. Repeatable reads</h3>
+
+<p>
+<a name="INDEX-1656"></a><a name="INDEX-1657"></a>A repeatable read is when the data read
+is guaranteed to look the same if read again during the same
+transaction. Repeatable reads are guaranteed in one of two ways:
+either the data read is locked against changes or the data read is a
+snapshot that doesn't reflect changes. If the data is locked,
+then it cannot be changed by any other transaction until this
+transaction ends. If the data is a snapshot, then other transactions
+can change the data, but these changes won't be seen by this
+transaction if the read is repeated. Here's an example of a
+repeatable read (illustrated in <a href="#JBEANS-CH-8-FIG-10">Figure 8-10</a>):
+</p>
+
+<ol>
+<li>
+<p>Time 10:00:00: Client 1 begins an explicit
+<tt class="literal">javax.transaction.UserTransaction</tt>.
+</p>
+</li>
+<li>
+<p>Time 10:00:01: Client 1 executes
+<tt class="literal">TravelAgent.listAvailableCabins(2)</tt>, asking for a
+list of available cabins that have two beds. Cabin 99
+<em class="emphasis">is</em> in the list of available cabins.
+</p>
+</li>
+<li>
+<p>Time 10:00:02: Client 2 is working with an interface that manages
+Cabin beans. Client 2 attempts to change the bed count on Cabin 99
+from 2 to 3.
+</p>
+</li>
+<li>
+<p>Time 10:00:03: Client 1 re-executes the
+<tt class="literal">TravelAgent.listAvailableCabins(2)</tt>. Cabin 99 is
+<em class="emphasis">still</em> in the list of available cabins.
+</p>
+</li>
+</ol>
+<a name="JBEANS-CH-8-FIG-10"></a>
+<div class="figure">
+<img alt="figure" src="figs/ejb2_0810.gif" webstripperlinkwas="figs/ejb2_0810.gif"></div>
+<h4 class="objtitle">Figure 8-10. Repeatable read</h4>
+
+<p>This example is somewhat unusual because it uses
+<tt class="literal">javax.transaction.UserTransaction</tt>. This class is
+covered in more detail later in this chapter; essentially, it allows
+a client application to control the scope of a transaction
+explicitly. In this case, Client 1 places transaction boundaries
+around both calls to <tt class="literal">listAvailableCabins()</tt>, so
+that they are a part of the same transaction. If Client 1
+didn't do this, the two
+<tt class="literal">listAvailableCabins()</tt> methods would have executed
+as separate transactions and our repeatable read condition would not
+have occurred.
+</p>
+
+<p>Although Client 2 attempted to change the bed count for Cabin 99 to
+3, Cabin 99 still shows up in the Client 1 call to
+<tt class="literal">listAvailableCabins()</tt> when a bed count of 2 is
+requested. This is because either Client 2 was prevented from making
+the change (because of a lock), or Client 2 was able to make the
+change, but Client 1 is working with a snapshot of the data that
+doesn't reflect that change.
+</p>
+
+<p>A <a name="INDEX-1658"></a><a name="INDEX-1659"></a><em class="emphasis">nonrepeatable read</em>
+is when the data retrieved in a subsequent read within the same
+transaction can return different results. In other words, the
+subsequent read can see the changes made by other transactions.
+</p>
+
+
+
+<a name="JBEANS-CH-8-SECT-3.1.3"></a>
+<h3 class="sect3">8.3.1.3. Phantom reads</h3>
+
+<p>
+<a name="INDEX-1660"></a><a name="INDEX-1661"></a>Phantom reads
+occur when new records added to the database are detectable by
+transactions that started prior to the insert. Queries will include
+records added by other transactions after their transaction has
+started. Here's a scenario that includes a phantom read
+(illustrated in <a href="#JBEANS-CH-8-FIG-11">Figure 8-11</a>):
+</p>
+
+<ol>
+<li>
+<p>Time 10:00:00: Client 1 begins an explicit
+<tt class="literal">javax.transaction.UserTransaction</tt>.
+</p>
+</li>
+<li>
+<p>Time 10:00:01: Client 1 executes
+<tt class="literal">TravelAgent.listAvailableCabins(2)</tt>, asking for a
+list of available cabins that have two beds. Cabin 99
+<em class="emphasis">is</em> in the list of available cabins.
+</p>
+</li>
+<li>
+<p>Time 10:00:02: Client 2 executes <tt class="literal">bookPassage()</tt> and
+creates a Reservation bean. The reservation inserts a new record into
+the <tt class="literal">RESERVATION</tt> table, reserving cabin 99.
+</p>
+</li>
+<li>
+<p>Time 10:00:03: Client 1 re-executes the
+<tt class="literal">TravelAgent.listAvailableCabins(2)</tt>. Cabin 99 is no
+longer in the list of available cabins.
+</p>
+</li>
+</ol>
+<a name="JBEANS-CH-8-FIG-11"></a>
+<div class="figure">
+<img alt="figure" src="figs/ejb2_0811.gif" webstripperlinkwas="figs/ejb2_0811.gif"></div>
+<h4 class="objtitle">Figure 8-11. Phantom read</h4>
+
+<p>Client 1 places transaction boundaries around both calls to
+<tt class="literal">listAvailableCabins()</tt>, so that they are a part of
+the same transaction. In this case, the reservation was made between
+the <tt class="literal">listAvailableCabins()</tt> queries in the same
+transaction. Therefore, the record inserted in the
+<tt class="literal">RESERVATION</tt> table didn't exist when the
+first <tt class="literal">listAvailableCabins()</tt> method is invoked, but
+it does exist and is visible when the second
+<tt class="literal">listAvailableCabins()</tt> method is invoked. The
+record inserted is <a name="INDEX-1662"></a><a name="INDEX-1663"></a> a <em class="emphasis">phantom
+record</em><a name="INDEX-1664"></a>.
+</p>
+
+
+
+<a name="JBEANS-CH-8-SECT-3.2"></a>
+<h3 class="sect2">8.3.2. Database Locks</h3>
+
+<p>
+<a name="INDEX-1665"></a><a name="INDEX-1666"></a>Databases, especially relational
+databases, normally use several <a name="INDEX-1667"></a>different locking techniques. The
+most common are <em class="emphasis">read locks</em>, <em class="emphasis">write
+locks</em>, and <em class="emphasis">exclusive write locks</em>.
+(I've taken the liberty of adding "snapshots,"
+although this isn't a formal term.) These locking mechanisms
+control how transactions access data concurrently. Locking mechanisms
+impact the read conditions that were just described. These types of
+locks are simple concepts that are not directly addressed in the EJB
+specification. Database vendors implement these locks differently, so
+you should understand how your database addresses these locking
+mechanisms to best predict how the isolation levels described in this
+section will work.
+</p>
+
+<dl>
+<dt>
+<b>Read locks</b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1668"></a><a name="INDEX-1669"></a>Read locks
+prevent other transactions from changing data read during a
+transaction until the transaction ends, thus preventing nonrepeatable
+reads. Other transactions can read the data but not write it. The
+current transaction is also prohibited from making changes. Whether a
+read lock locks only the records read, a block of records, or a whole
+table depends on the database being used.
+</p>
+</dd>
+
+<dt>
+<b>Write locks</b>
+</dt>
+<dd>
+<p>Write locks are used for updates. A <a name="INDEX-1670"></a>write lock prevents other transactions
+from changing the data until the current transaction is complete. A
+write lock allows dirty reads, by other transactions and by the
+current transaction itself. In other words, the transaction can read
+its own uncommitted changes.
+</p>
+</dd>
+
+<dt>
+<b>Exclusive write locks</b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1671"></a>
+Exclusive write locks are used for updates. An exclusive write lock
+prevents other transactions from reading or changing data until the
+current transaction is complete. An exclusive write lock prevents
+dirty reads by other transactions. Other transactions are not allowed
+to read the data while it is exclusively locked. Some databases do
+not allow transactions to read their own data while it is exclusively
+locked.
+</p>
+</dd>
+
+<dt>
+<b>Snapshots</b>
+</dt>
+<dd>
+<p>Some databases get around locking by providing every transaction with
+its own
+<em class="emphasis">snapshot</em><a name="INDEX-1672"></a>
+of the data. A snapshot is a frozen view of the data that is taken
+when the transaction begins. Snapshots can prevent dirty reads,
+nonrepeatable reads, and phantom reads. Snapshots can be problematic
+because the data is not real-time; it is old the instant the snapshot
+is taken.
+</p>
+</dd>
+
+</dl>
+
+
+<a name="JBEANS-CH-8-SECT-3.3"></a>
+<h3 class="sect2">8.3.3. Transaction Isolation Levels</h3>
+
+<p>
+<a name="INDEX-1673"></a><a name="INDEX-1674"></a>Transaction isolation is defined in
+terms of <a name="INDEX-1675"></a><a name="INDEX-1676"></a>the isolation conditions (<em class="emphasis">dirty
+reads</em>, <em class="emphasis">repeatable reads</em>, and
+<em class="emphasis">phantom reads</em>). Isolation levels are commonly
+used in database systems to describe how locking is applied to data
+within a transaction.<a href="#FOOTNOTE-3">[3]</a> The following terms are
+usually used to discuss isolation levels:
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-3"></a>
+<p>[3]Isolation conditions are
+covered in detail by ANSI SQL-92 Specification, Document Number: ANSI
+X3.135-1992 (R1998).</p> </blockquote>
+
+<dl>
+<dt>
+<b>Read Uncommitted </b>
+</dt>
+<dd>
+<p>The transaction can <a name="INDEX-1677"></a><a name="INDEX-1678"></a>
+read uncommitted data (data changed by a different transaction that
+is still in progress).
+</p>
+
+<p>Dirty reads, nonrepeatable reads, and phantom reads can occur. Bean
+methods with this isolation level can read uncommitted change.
+</p>
+</dd>
+
+<dt>
+<b>Read Committed </b>
+</dt>
+<dd>
+<p>The transaction cannot <a name="INDEX-1679"></a><a name="INDEX-1680"></a>
+read uncommitted data; data that is being changed by a different
+transaction cannot be read.
+</p>
+
+<p>Dirty reads are prevented; nonrepeatable reads and phantom reads can
+occur. Bean methods with this isolation level cannot read uncommitted
+data.
+</p>
+</dd>
+
+<dt>
+<b>Repeatable Read </b>
+</dt>
+<dd>
+<p>The transaction cannot change data that is being read by a
+<a name="INDEX-1681"></a><a name="INDEX-1682"></a>
+different transaction.
+</p>
+
+<p>Dirty reads and nonrepeatable reads are prevented; phantom reads can
+occur. Bean methods with this isolation level have the same
+restrictions as <em class="emphasis">Read Committed</em> and can only
+execute repeatable reads.
+</p>
+</dd>
+
+<dt>
+<b>Serializable</b>
+</dt>
+<dd>
+<p>The transaction has <a name="INDEX-1683"></a><a name="INDEX-1684"></a>exclusive read and update privileges to
+data; different transactions can neither read nor write the same
+data.
+</p>
+
+<p>Dirty reads, nonrepeatable reads, and phantom reads are prevented.
+This isolation level is the most restrictive.
+</p>
+</dd>
+
+</dl>
+
+<p>These isolation levels are the same as those defined for JDBC.
+Specifically, they map to the static final variables in the
+<tt class="literal">java.sql.Connection</tt> class. The behavior modeled by
+the isolation levels in the connection class is the same as the
+behavior described here.
+</p>
+
+<p>The exact behavior of these isolation levels depends largely on the
+locking mechanism used by the underlying database or resource. How
+the isolation levels work depends in large part on how your database
+supports them.
+</p>
+
+<a name="JBEANS-CH-8-SECT-3.3.1"></a>
+<h3 class="sect3">8.3.3.1. EJB 1.1 transaction isolation control</h3>
+
+<p>In EJB 1.1, <a name="INDEX-1685"></a>isolation levels are not controlled
+through declarative attributes, as was the case in EJB 1.0. In EJB
+1.1, the deployer sets transaction isolation levels if the container
+manages the transaction. The bean developer sets the transaction
+isolation level if the bean manages the transaction. Up to this point
+we have only discussed container-managed transactions; bean-managed
+transactions are discussed later in this chapter.
+</p>
+
+
+
+<a name="JBEANS-CH-8-SECT-3.3.2"></a>
+<h3 class="sect3">8.3.3.2. EJB 1.0 transaction isolation control</h3>
+
+<p>
+<a name="INDEX-1686"></a>EJB 1.0 describes four isolation
+levels that can be assigned to the methods of a bean in the
+<tt class="literal">ControlDescriptor</tt>. We did this several times when
+we created control descriptors for all the beans we developed in this
+book. Here is a snippet of code from the <tt class="literal">MakeDD</tt>
+class used to create the <em class="emphasis">TravelAgentDD.ser</em> in
+<a href="ch07_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch07_01.htm">Chapter 7, "Session Beans"</a>, showing how we set the isolation level:
+</p>
+
+<blockquote>
+<pre class="programlisting">ControlDescriptor cd = new ControlDescriptor();
+<b class="emphasis-bold">cd.setIsolationLevel (ControlDescriptor.TRANSACTION_SERIALIZABLE);</b>
+cd.setMethod(null);
+ControlDescriptor [] cdArray = {cd};
+sd.setControlDescriptors(cdArray);</pre>
+</blockquote>
+
+<p>In our example so far, we have always used the isolation level
+<tt class="literal">ControlDescriptor.TRANSACTION_SERIALIZABLE</tt>, the
+most restrictive isolation level. <a href="#JBEANS-CH-8-TABLE-4">Table 8-2</a> shows
+the transaction isolation levels and their corresponding attribute in
+the
+<tt class="literal">ControlDescriptor</tt><a name="INDEX-1687"></a><a name="INDEX-1688"></a><a name="INDEX-1689"></a> class.
+</p>
+
+<p>
+</p>
+
+<a name="JBEANS-CH-8-TABLE-4"></a>
+<h4 class="objtitle">Table 8-2. Isolation Level Attributes in EJB 1.0</h4>
+<table border="1">
+
+
+
+<tr>
+<th>
+<p>Isolation Level</p>
+</th>
+<th>
+<p>ControlDescriptor Constant</p>
+</th>
+</tr>
+
+<tr>
+<td>
+<p>
+<em class="emphasis">Read Committed</em>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">TRANSACTION_READ_COMMITTED</tt>
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<p>
+<em class="emphasis">Read Uncommitted</em>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">TRANSACTION_READ_UNCOMMITTED</tt>
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<p>
+<em class="emphasis">Repeatable Read</em>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">TRANSACTION_REPEATABLE_READ</tt>
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<p>
+<em class="emphasis">Serializable</em>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">TRANSACTION_SERIALIZABLE </tt>
+</p>
+</td>
+</tr>
+
+</table>
+
+<p>You are allowed to specify isolation levels on a per-method basis,
+but this flexibility comes with an important restriction: all methods
+invoked in the same transaction must have the same isolation level.
+You can't mix isolation levels within transactions at runtime.
+</p>
+
+
+
+<a name="JBEANS-CH-8-SECT-3.4"></a>
+<h3 class="sect2">8.3.4. Balancing Performance Against Consistency</h3>
+
+<p>Generally <a name="INDEX-1690"></a>speaking, as the isolation levels
+become more <a name="INDEX-1691"></a><a name="INDEX-1692"></a>
+restrictive, the performance of the system decreases because more
+restrictive isolation levels prevent transactions from accessing the
+same data. If isolation levels are very restrictive, like
+<em class="emphasis">Serializable</em><a name="INDEX-1693"></a>, then all transactions, even simple
+reads, must wait in line to execute. This can result in a system that
+is very slow. EJB systems that process a large number of concurrent
+transactions and need to be very fast will therefore avoid the
+<em class="emphasis">Serializable</em>isolation level where it is not
+necessary, since it will be prohibitively slow.
+</p>
+
+<p>Isolation levels, however, also enforce consistency of data. More
+restrictive isolation levels help ensure that invalid data is not
+used for performing updates. The old adage "garbage in, garbage
+out" applies here. The <em class="emphasis">Serializable</em>
+isolation level ensures that data is never accessed concurrently by
+transactions, thus ensuring that the data is always consistent.
+</p>
+
+<p>Choosing the correct isolation level requires some research about the
+database you are using and how it handles locking. You must also
+balance the performance needs of your system against consistency.
+This is not a cut-and-dried process, because different applications
+use data differently.
+</p>
+
+<p>Although there are only three ships in Titan's system, the
+beans that represent them are included in most of Titan's
+transactions. This means that many, possibly hundreds, of
+transactions will be accessing these Ship beans at the same time.
+Access to Ship beans needs to be fast or it becomes a bottleneck, so
+we do not want to use very restrictive isolation levels. At the same
+time, the ship data also needs to be consistent; otherwise, hundreds
+of transactions will be using invalid data. Therefore, we need to use
+a strong isolation level when making changes to ship information. To
+accommodate these conflicting requirements, we can apply different
+isolation levels to different methods.
+</p>
+
+<p>Most transactions use the Ship bean's get methods to obtain
+information. This is <em class="emphasis">read-only</em> behavior, so the
+isolation level for the get methods can be very low, such as
+<em class="emphasis">Read Uncommitted</em><a name="INDEX-1694"></a>. The set methods
+of the ship bean are almost never used; the name of the ship probably
+wouldn't change for years. However, the data changed by the set
+methods must be isolated to prevent dirty reads by other
+transactions, so we will use the most restrictive isolation level,
+<em class="emphasis">Serializable</em>, on the ship's set methods.
+By using different isolation levels on different business methods, we
+can balance consistency against performance.
+</p>
+
+<a name="JBEANS-CH-8-SECT-3.4.1"></a>
+<h3 class="sect3">8.3.4.1. EJB 1.1: Controlling isolation levels</h3>
+
+<p>Different EJB servers allow different levels of granularity for
+setting isolation levels; some servers defer this responsibility to
+the database. In some servers, you may be able to set different
+isolation levels for different methods, while other products may
+require the same isolation level for all methods in a bean, or
+possibly even all beans in the container. You will need to consult
+your vendor's documentation to find out the level of control
+your server offers.
+</p>
+
+<p>Bean-managed transactions in <a name="INDEX-1695"></a>stateful session
+beans, however, allow the bean developer to specify the transaction
+isolation level using the API of the resource providing persistent
+storage. The JDBC API, for example, provides a mechanism for
+specifying the isolation level of the database connection. The
+following code shows how this is done. Bean-managed transactions are
+covered in more detail later in this chapter.
+</p>
+
+<blockquote>
+<pre class="programlisting">...
+DataSource source = (javax.sql.DataSource)
+    jndiCntxt.lookup("java:comp/env/jdbc/titanDB");
+
+Connection con = source.getConnection();
+con.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
+...</pre>
+</blockquote>
+
+<p>You can set the isolation level to be different for different
+databases within the same transaction, but all beans that use the
+same database in a transaction should use the same isolation level.
+</p>
+
+
+
+<a name="JBEANS-CH-8-SECT-3.4.2"></a>
+<h3 class="sect3">8.3.4.2. EJB 1.0: Controlling isolation levels</h3>
+
+<p>
+<a name="INDEX-1696"></a>The following code, taken from a
+deployment descriptor for a Ship bean, shows one way to assign these
+isolation levels:
+</p>
+
+<blockquote>
+<pre class="programlisting">Method [] methods = new Method[6];
+
+Class [] parameters = new Class[0]; 
+methods[ 0 ] = ShipBean.class.getDeclaredMethod("getName",parameters);
+methods[ 1 ] = ShipBean.class.getDeclaredMethod("getTonnage",parameters);
+methods[ 2 ] = ShipBean.class.getDeclaredMethod("getCapacity",parameters);
+
+parameters = new Class[1];
+
+parameters[0] = String.class;
+methods[ 3 ] = ShipBean.class.getDeclaredMethod("setName",parameters);
+parameters[0] = Double.TYPE;
+methods[ 4 ] = ShipBean.class.getDeclaredMethod("setTonnage",parameters);
+parameters[0] = Integer.TYPE;
+methods[ 5 ] = ShipBean.class.getDeclaredMethod("setCapacity",parameters);
+
+ControlDescriptor [] cds = new ControlDescriptor[methods.length];
+
+for (int i = 0; i &lt; methods.length; i++) {
+    cds[i] = new ControlDescriptor(methods[i]);
+    if (methods[i].getReturnType() == Void.TYPE) {
+        // Set methods all return void.
+<b class="emphasis-bold">        cds[i].setIsolationLevel(</b>
+<b class="emphasis-bold">            ControlDescriptor.TRANSACTION_SERIALIZABLE);</b>
+    }
+    else {
+        // Get methods don't return void.
+<b class="emphasis-bold">        cds[i].setIsolationLevel(</b>
+<b class="emphasis-bold">            ControlDescriptor.TRANSACTION_READ_UNCOMMITTED);</b>
+    }
+    cds[i].setRunAsMode(ControlDescriptor.CLIENT_IDENTITY);
+    cds[i].setTransactionAttribute(ControlDescriptor.TX_REQUIRED);
+}
+
+shipDD.setControlDescriptors(cds);</pre>
+</blockquote>
+
+<p>This code takes all the set methods in the <tt class="literal">Ship</tt>
+interface that are used to make updates
+(<tt class="literal">setName()</tt>, <tt class="literal">setCapacity()</tt>,
+<tt class="literal">setTonnage()</tt>) and gives them an isolation level of
+<tt class="literal">TRANSACTION_SERIALIZABLE</tt>. For the get methods
+(<tt class="literal">getName()</tt>, <tt class="literal">getCapacity()</tt>,
+<tt class="literal">getTonnage()</tt>), which are used for reading data,
+the isolation level is set to
+<tt class="literal">TRANSACTION_READ_UNCOMMITTED</tt>.
+</p>
+
+<a name="ch08-25-fm2xml"></a>
+<blockquote class="note">
+<h4 class="objtitle">NOTE</h4>
+<p>Remember that all bean methods invoked in the same transaction must have the same isolation level.</p>
+</blockquote>
+
+<p>
+<a name="INDEX-1697"></a>Understanding the effect of
+isolation levels on your code's behavior is crucial to
+balancing performance against consistency. In EJB 1.0, all the bean
+methods invoked within the same transaction must have the same
+isolation level. In the TravelAgent bean, for example, every method
+invoked on every bean within the scope of the
+<tt class="literal">bookPassage()</tt> method must have the same
+transaction isolation level. Any method invoked with a different
+isolation level will throw a
+<tt class="literal">java.rmi.RemoteException</tt>. Therefore, mixing
+isolation levels across beans (specifying different isolation levels
+for different beans within your application) must be done with care
+and only in those circumstances when methods with <a name="INDEX-1698"></a> different
+isolation levels <a name="INDEX-1699"></a><a name="INDEX-1700"></a> will never <a name="INDEX-1701"></a><a name="INDEX-1702"></a> need to be
+<a name="INDEX-1703"></a><a name="INDEX-1704"></a>
+executed in the <a name="INDEX-1705"></a><a name="INDEX-1706"></a><a name="INDEX-1707"></a>same
+transaction<a name="INDEX-1708"></a>.
+</p>
+
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch08_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch08_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_04.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">8.2. Declarative Transaction Management</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">8.4. Non-Transactional Beans</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

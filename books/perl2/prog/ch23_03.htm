@@ -1,0 +1,590 @@
+<html>
+<head>
+<title>Handling Insecure Code (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Handling Insecure Code">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch23_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch23_01.htm">Chapter 23: Security</a></td><td align="right" valign="top" width="172"><a href="ch24_01.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">23.3. Handling Insecure Code</h2>
+
+<a name="INDEX-4055"></a><a name="INDEX-4056"></a><a name="INDEX-4057"></a>
+<p>Taint checking is just the sort of security blanket you need if you
+want to catch bogus data you ought to have caught yourself, but didn't
+think to catch before passing off to the system.  It's a bit like the
+optional warnings Perl can give you--they may not indicate a real
+problem, but on average the pain of dealing with the false positives is
+less than the pain of not dealing with the false negatives.  With
+tainting, the latter pain is even more insistent, because using bogus
+data doesn't just give the wrong answers; it can blow your system right
+out of the water, along with your last two years of work.  (And maybe
+your next two, if you didn't make good backups.)  Taint mode is useful
+when you trust yourself to write honest code but don't necessarily
+trust whoever is feeding you data not to try to trick you into doing
+something regrettable.</p>
+
+<p>
+<a name="INDEX-4058"></a>
+Data is one thing.  It's quite another matter when you don't even trust
+the code you're running.  What if you fetch an applet off the Net and
+it contains a virus, or a time bomb, or a Trojan horse?  Taint checking
+is useless here because the data you're feeding the program may be
+fine--it's the code that's untrustworthy.  You're placing yourself in
+the position of someone who receives a mysterious device from a
+stranger, with a note that says, "Just hold this to your head and pull
+the trigger."  Maybe you think it will dry your hair, but you might not
+think so for very long.</p>
+
+<p>
+<a name="INDEX-4059"></a>
+In this realm, prudence is synonymous with paranoia.  What you want is
+a system that lets you impose a quarantine on suspicious code.  The
+code can continue to exist, and even perform certain functions, but
+you don't let it wander around doing just anything it feels like.  In
+Perl, you can impose a kind of quarantine using the
+<tt class="literal">Safe</tt> module.</p>
+
+
+<h3 class="sect2">23.3.1. Safe Compartments</h3>
+
+<a name="INDEX-4060"></a><a name="INDEX-4061"></a><a name="INDEX-4062"></a><a name="INDEX-4063"></a>
+<p>
+<a name="INDEX-4064"></a>
+The <tt class="literal">Safe</tt> module lets you set up a <em class="emphasis">sandbox</em>, a special compartment in which
+all system operations are trapped, and namespace access is carefully
+controlled.  The low-level, technical details of this module are
+in a state of flux, so here we'll take a more philosophical approach.</p>
+
+
+<h3 class="sect3">23.3.1.1. Restricting namespace access</h3>
+
+<p>
+<a name="INDEX-4065"></a><a name="INDEX-4066"></a>
+At the most basic level, a <tt class="literal">Safe</tt> object is like a
+safe, except the idea is to keep the bad people in, not out.  In the
+Unix world, there is a syscall known as
+<em class="emphasis">chroot</em>(2) that can permanently consign a
+process to running only in a subdirectory of the directory
+structure--in its own private little hell, if you will.  Once the
+process is put there, there is no way for it to reach files outside,
+because there's no way for it to <em class="emphasis">name</em> files
+outside.<a href="#FOOTNOTE-13">[13]</a> A <tt class="literal">Safe</tt> object is a little
+like that, except that instead of being restricted to a subset of the
+filesystem's directory structure, it's restricted to a subset of
+Perl's package structure, which is hierarchical just as the filesystem
+is.</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-13"></a>
+<p>[13]Some sites do this for executing all CGI
+scripts, using loopback, read-only mounts.  It's something of a pain
+to set up, but if someone ever escapes, they'll find there's nowhere
+to go.</p>
+
+</blockquote>
+
+<p>Another way to look at it is that the <tt class="literal">Safe</tt> object
+is like one of those observation rooms with one-way mirrors that the
+police put suspicious characters into.  People on the outside can look
+into the room, but those inside can't see out.</p>
+
+<p>When you create a <tt class="literal">Safe</tt> object, you may give it a
+package name if you want.  If you don't, a new one will be chosen for
+you:
+<blockquote>
+<pre class="programlisting">use Safe;
+my $sandbox = Safe-&gt;new("Dungeon");
+$Dungeon::foo = 1;  # Direct access is discouraged, though.</pre>
+</blockquote>
+<a name="INDEX-4067"></a>
+If you fully qualify variables and functions using the package name
+supplied to the <tt class="literal">new</tt> method, you can access them in
+that package from the outside, at least in the current implementation.
+This may change however, since the current plan is to clone the symbol
+table into a new interpreter.  Slightly more upward compatible might
+be to set things up first before creating the <tt class="literal">Safe</tt>,
+as shown below.  This is likely to continue working and is a handy way
+to set up a <tt class="literal">Safe</tt> that has to start off with a lot
+of "state".  (Admittedly, <tt class="literal">$Dungeon::foo</tt> isn't a lot
+of state.)
+<blockquote>
+<pre class="programlisting">use Safe;
+$Dungeon::foo = 1;  # Still direct access, still discouraged.
+my $sandbox = Safe-&gt;new("Dungeon");</pre>
+</blockquote>
+<a name="INDEX-4068"></a>
+But <tt class="literal">Safe</tt> also provides a way to access the
+compartment's globals even if you don't know the name of the
+compartment's package.  So for maximal upward compatibility (though
+less than maximal speed), we suggest you use the
+<tt class="literal">reval</tt> method:
+<blockquote>
+<pre class="programlisting">use Safe;
+my $sandbox = Safe-&gt;new();
+$sandbox-&gt;reval('$foo = 1');</pre>
+</blockquote>
+
+(In fact, that's the same method you'll use to run suspicious code.)
+When you pass code into the compartment to compile and run, that
+code thinks that it's really living in the <tt class="literal">main</tt> package.  What
+the outside world calls <tt class="literal">$Dungeon::foo</tt>, the code inside thinks
+of as <tt class="literal">$main::foo</tt>, or <tt class="literal">$::foo</tt>, or just <tt class="literal">$foo</tt> if you aren't
+running under <tt class="literal">use strict</tt>.  It won't work to say <tt class="literal">$Dungeon::foo</tt>
+inside the compartment, because that would really access
+<tt class="literal">$Dungeon::Dungeon::foo</tt>.  By giving the <tt class="literal">Safe</tt> object its own
+notion of <tt class="literal">main</tt>, variables and subroutines in the rest of your
+program are protected.</p>
+
+<p>
+<a name="INDEX-4069"></a>
+To compile and run code inside the compartment, use the
+<tt class="literal">reval</tt> ("restricted <tt class="literal">eval</tt>") method, passing the code string as
+its argument.  Just as with any other <tt class="literal">eval</tt><em class="replaceable">STRING</em> construct,
+compilation errors and run-time exceptions in <tt class="literal">reval</tt> don't kill
+your program.  They just abort the <tt class="literal">reval</tt> and leave the exception
+in <tt class="literal">$@</tt>, so make sure to check it after every <tt class="literal">reval</tt> call.</p>
+
+<p>Using the initializations given earlier, this code will print out
+that "<tt class="literal">foo is now 2</tt>":
+<blockquote>
+<pre class="programlisting">$sandbox-&gt;reval('$foo++; print "foo is now $main::foo\n"');
+if ($@) {
+    die "Couldn't compile code in box: $@";
+}</pre>
+</blockquote>
+
+If you just want to compile code and not run it, wrap your
+string in a subroutine declaration:
+<blockquote>
+<pre class="programlisting">$sandbox-&gt;reval(q{
+    our $foo;
+    sub say_foo {
+        print "foo is now $main::foo\n";
+    }
+}, 1);
+die if $@;      # check compilation</pre>
+</blockquote>
+
+This time we passed <tt class="literal">reval</tt> a second argument which, since it's true,
+tells <tt class="literal">reval</tt> to compile the code under the <tt class="literal">strict</tt> pragma.  From within the
+code string, you can't disable strictness, either, because importing and
+unimporting are just two of the things you can't normally do in a
+<tt class="literal">Safe</tt> compartment.  There are a lot of things you can't do normally in
+a <tt class="literal">Safe</tt> compartment--see the next section.</p>
+
+<p>Once you've created the <tt class="literal">say_foo</tt> function in the
+compartment, these are pretty much the same:
+<blockquote>
+<pre class="programlisting">$sandbox-&gt;reval('say_foo()');       # Best way.
+die if $@;
+
+$sandbox-&gt;varglob('say_foo')-&gt;();   # Call through anonymous glob.
+
+Dungeon::say_foo();                 # Direct call, strongly discouraged.</pre>
+</blockquote>
+</p>
+
+
+
+
+<h3 class="sect3">23.3.1.2. Restricting operator access</h3>
+
+<p>
+<a name="INDEX-4070"></a><a name="INDEX-4071"></a>
+The other important thing about a <tt class="literal">Safe</tt> object is
+that Perl limits the available operations within the sandbox.  (You
+might well let your kid take a bucket and shovel into the sandbox, but
+you'd probably draw the line at a bazooka.)  It's not enough to
+protect just the rest of your program; you need to protect the rest of
+your computer, too.</p>
+
+<p>When you compile Perl code in a <tt class="literal">Safe</tt> object, either
+with <tt class="literal">reval</tt> or <tt class="literal">rdo</tt> (the
+restricted version of the <tt class="literal">do</tt><em class="replaceable">FILE</em> operator), the compiler consults a
+special, per-compartment access-control list to decide whether each
+individual operation is deemed safe to compile.  This way you don't
+have to stress out (much) worrying about unforeseen shell escapes,
+opening files when you didn't mean to, strange code assertions in
+regular expressions, or most of the external access problems folks
+normally fret about.  (Or ought to.)</p>
+
+<p>The interface for specifying which operators should be permitted or
+restricted is currently under redesign, so we only show how to use the
+default set of them here.  For details, consult the online
+documentation for the <tt class="literal">Safe</tt> module.</p>
+
+<p>The <tt class="literal">Safe</tt> module doesn't offer complete protection
+against <em class="emphasis">denial-of-service attacks</em>, especially
+when used in its more permissive modes.  Denial-of-service attacks
+consume all available system resources of some type, denying other
+processes access to essential system facilities.  Examples of such
+attacks include filling up the kernel process table, dominating the
+CPU by running forever in a tight loop, exhausting available memory,
+and filling up a filesystem.  These problems are very difficult to
+solve, especially portably.  See the end of the section <a href="ch23_03.htm#ch23-sect-masq">Section 23.3.2, "Code Masquerading as Data"</a> for more discussion of denial-of-service
+attacks.</p>
+
+
+
+
+<h3 class="sect3">23.3.1.3. Safe examples</h3>
+
+<p>
+<a name="INDEX-4072"></a><a name="INDEX-4073"></a>
+Imagine you've got a CGI program that manages a form into which the user
+may enter an arbitrary Perl expression and get back the evaluated
+result.<a href="#FOOTNOTE-14">[14]</a>  Like all external input, the string comes
+in tainted, so Perl won't let you <tt class="literal">eval</tt> it yet--you'll first have
+to untaint it with a pattern match.   The problem is that you'll
+never be able to devise a pattern that can detect all
+possible threats.  And you don't dare just untaint whatever you get
+and send it through the built-in <tt class="literal">eval</tt>.  (If you do that, <em class="emphasis">we</em>
+will be tempted to break into your system and delete the script.)</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-14"></a>
+<p>[14]Please don't laugh.  We really have seen web pages
+that do this.  Without a <tt class="literal">Safe</tt>!</p>
+
+</blockquote>
+
+<p>That's where <tt class="literal">reval</tt> comes in.  Here's a CGI script that processes a
+form with a single form field, evaluates (in scalar context) whatever
+string it finds there, and prints out the formatted result:
+<blockquote>
+<pre class="programlisting">#!/usr/bin/perl -lTw
+use strict;
+use CGI::Carp 'fatalsToBrowser';
+use CGI qw/:standard escapeHTML/;
+use Safe;
+
+print header(-type =&gt; "text/html;charset=UTF-8"),
+      start_html("Perl Expression Results");
+my $expr = param("EXPR") =~ /^([^;]+)/
+            ? $1 # return the now-taintless portion
+            : croak("no valid EXPR field in form");
+my $answer = Safe-&gt;new-&gt;reval($expr);
+die if $@;
+
+print p("Result of", tt(escapeHTML($expr)),
+               "is", tt(escapeHTML($answer)));</pre>
+</blockquote>
+
+Imagine some evil user feeding you "<tt class="literal">print `cat /etc/passwd`</tt>" (or
+worse) as the input string.  Thanks to the restricted environment that disallows backticks, Perl
+catches the problem during compilation and returns immediately.  The
+string in <tt class="literal">$@</tt> is "<tt class="literal">quoted execution (``, qx) trapped by operation
+mask</tt>", plus the customary trailing information identifying where the
+problem happened.</p>
+
+<p>Because we didn't say otherwise, the compartments we've been creating
+all used the default set of allowable operations.  How you go about declaring specific operations permitted or forbidden
+isn't important here.  What is important is that this is completely
+under the control of your program.  And since you can create multiple
+<tt class="literal">Safe</tt> objects in your program, you can confer various degrees of
+trust upon various chunks of code, depending on where you got them
+from.</p>
+
+<p>If you'd like to play around with <tt class="literal">Safe</tt>, here's a little interactive
+Perl calculator.  It's a calculator in that you can feed it numeric
+expressions and immediately see their results.  But it's not limited
+to numbers alone.  It's more like the looping example under <tt class="literal">eval</tt>
+in <a href="ch29_01.htm">Chapter 29, "Functions"</a>, where you can take whatever they give
+you, evaluate it, and give them back the result.  The difference
+is that the <tt class="literal">Safe</tt> version doesn't execute just anything you feel
+like.  You can run this calculator interactively at your terminal,
+typing in little bits of Perl code and checking the answers, to get
+a feel for what sorts of protection <tt class="literal">Safe</tt> provides.</p>
+
+<blockquote>
+<pre class="programlisting">#!/usr/bin/perl -w
+# safecalc - demo program for playing with Safe
+use strict;
+use Safe;
+my $sandbox = Safe-&gt;new();
+while (1) {
+    print "Input: ";
+    my $expr = &lt;STDIN&gt;;
+    exit unless defined $expr;
+    chomp($expr);
+    print "$expr produces ";
+    local $SIG{__WARN__} = sub { die @_ };
+    my $result = $sandbox-&gt;reval($expr, 1);
+    if ($@ =~ s/at \(eval \d+\).*//) {
+        printf "[%s]: %s", $@ =~ /trapped by operation mask/
+            ? "Security Violation" : "Exception", $@;
+    }
+    else {
+        print "[Normal Result] $result\n";
+    }
+}</pre>
+</blockquote>
+
+<p>Warning: the <tt class="literal">Safe</tt> module is currently being redesigned to run each
+compartment within a completely independent Perl interpreter inside the
+same process.  (This is the strategy that Apache's <tt class="literal">mod_perl</tt> employs
+when running precompiled Perl scripts.)  Details are still hazy at this
+time, but our crystal ball suggests that blindly poking at things
+inside the compartment using a named package won't get you very far
+after the impending rewrite.  If you're running a version of Perl later
+than 5.6, check the release notes in <em class="emphasis">perldelta</em>(1) to see what's
+changed, or consult the documentation for the <tt class="literal">Safe</tt> module itself.
+(Of course, you always do that anyway, right?)</p>
+
+<a name="INDEX-4074"></a><a name="INDEX-4075"></a><a name="INDEX-4076"></a><a name="INDEX-4077"></a>
+
+
+
+
+
+
+<a name="ch23-sect-masq"></a>
+<h3 class="sect2">23.3.2. Code Masquerading as Data</h3>
+
+<a name="INDEX-4078"></a><a name="INDEX-4079"></a><a name="INDEX-4080"></a>
+<p>
+<tt class="literal">Safe</tt> compartments are available for when the really scary stuff is
+going down, but that doesn't mean you should let down your guard
+totally when you're doing the everyday stuff around home.  You need to
+cultivate an awareness of your surroundings and look at things from
+the point of view of someone wanting to break in.  You need to take
+proactive steps like keeping things well lit and trimming the
+bushes that can hide various lurking problems.</p>
+
+<p>
+<a name="INDEX-4081"></a>
+Perl tries to help you in this area, too.  Perl's conventional parsing
+and execution scheme avoids the pitfalls that shell programming
+languages often fall prey to.  There are many extremely powerful
+features in the language, but by design, they're syntactically and
+semantically bounded in ways that keep things under the control of the
+programmer.  With few exceptions, Perl evaluates each token only once.
+Something that looks like it's being used as a simple data variable
+won't suddenly go rooting around in your filesystem.</p>
+
+<p>
+<a name="INDEX-4082"></a><a name="INDEX-4083"></a><a name="INDEX-4084"></a>
+Unfortunately, that sort of thing can happen if you call out to the
+shell to run other programs for you, because then you're running under
+the shell's rules instead of Perl's.  The shell is easy to avoid,
+though--just use the list argument forms of the <tt class="literal">system</tt>, <tt class="literal">exec</tt>, or
+piped <tt class="literal">open</tt> functions.  Although backticks don't have a list-argument
+form that is proof against the shell, you can always emulate them as
+described in the section <a href="ch23_01.htm#ch23-sect-access">Section 23.1.3, "Accessing Commands and Files Under
+Reduced Privileges"</a>.  (While there's no syntactic way to make backticks take an
+argument list, a multi-argument form of the underlying <tt class="literal">readpipe</tt>
+operator is in development; but as of this writing, it isn't quite ready
+for prime time.)</p>
+
+<p>When you use a variable in an expression (including when you
+interpolate it into a double-quoted string), there's No Chance that
+the variable will contain Perl code that does something you aren't
+intending.<a href="#FOOTNOTE-15">[15]</a> Unlike
+the shell, Perl never needs defensive quotes around variables, no
+matter what might be in them.
+<blockquote>
+<pre class="programlisting">$new = $old;                # No quoting needed.
+print "$new items\n";       # $new can't hurt you.
+
+$phrase = "$new items\n";   # Nor here, neither.
+print $phrase;              # Still perfectly ok.</pre>
+</blockquote>
+
+Perl takes a "what you see is what you get" approach.  If you
+don't see an extra level of interpolation, then it doesn't happen.
+It <em class="emphasis">is</em> possible to interpolate arbitrary Perl expressions into strings,
+but only if you specifically ask Perl to do that.  (Even so, the
+contents are still subject to taint checking if you're in taint
+mode.)
+<blockquote>
+<pre class="programlisting">$phrase = "You lost @{[ 1 + int rand(6) ]} hit points\n";</pre>
+</blockquote>
+
+Interpolation is not recursive, however. You can't just hide an arbitrary expression in a string:
+<blockquote>
+<pre class="programlisting">$count = '1 + int rand(6)';             # Some random code.
+$saying = "$count hit points";          # Merely a literal.
+$saying = "@{[$count]} hit points";     # Also a literal.</pre>
+</blockquote>
+
+Both assignments to <tt class="literal">$saying</tt> would produce "<tt class="literal">1 + int rand(6) hit
+points</tt>", without evaluating the interpolated contents of <tt class="literal">$count</tt>
+as code.  To get Perl to do that, you have to call <tt class="literal">eval</tt><em class="replaceable">STRING</em>
+explicitly:
+<blockquote>
+<pre class="programlisting">$code = '1 + int rand(6)';
+$die_roll = eval $code;
+die if $@;</pre>
+</blockquote>
+
+If <tt class="literal">$code</tt> were tainted, that <tt class="literal">eval</tt><em class="replaceable">STRING</em> would raise its own
+exception.  Of course, you almost never want to evaluate random user code--but
+if you did, you should look into using the <tt class="literal">Safe</tt> module.  You may have
+heard of it.</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-15"></a>
+<p>[15]Although if you're generating a web page, it's
+possible to emit HTML tags, including JavaScript code, that might do
+something that the remote browser isn't expecting.</p>
+
+</blockquote>
+
+<p>
+<a name="INDEX-4085"></a>
+There is one place where Perl can sometimes treat data as code; namely, when 
+the pattern in a <tt class="literal">qr//</tt>, <tt class="literal">m//</tt>, or <tt class="literal">s///</tt> operator contains either of
+the new regular expression assertions, <tt class="literal">(?{</tt><em class="replaceable">CODE</em><tt class="literal">})</tt> or
+<tt class="literal">(??{</tt><em class="replaceable">CODE</em><tt class="literal">})</tt>.  These pose no security issues when used as literals
+in pattern matches:
+<blockquote>
+<pre class="programlisting">$cnt = $n = 0;
+while ($data =~ /( \d+ (?{ $n++ }) | \w+ )/gx) {
+    $cnt++;
+}
+print "Got $cnt words, $n of which were digits.\n";</pre>
+</blockquote>
+
+But existing code that interpolates variables into matches was written
+with the assumption that the data is data, not code.  The new constructs
+might have introduced a security hole into previously secure programs.
+Therefore, Perl refuses to evaluate a pattern if an interpolated string
+contains a code assertion, and raises an exception instead.  If you
+really need that functionality, you can always enable it with the lexically scoped
+<tt class="literal">use re 'eval'</tt> pragma.  (You still can't use tainted data for an
+interpolated code assertion, though.)</p>
+
+<p>
+<a name="INDEX-4086"></a>
+A completely different sort of security concern that can come up
+with regular expressions is denial-of-service problems.  These can
+make your program quit too early, or run too long, or exhaust all
+available memory--and sometimes even dump core, depending on the phase of the moon.</p>
+
+<p>When you process user-supplied patterns, you don't have to worry
+about interpreting random Perl code. However, the regular expression engine
+has its own little compiler and interpreter, and the user-supplied
+pattern is capable of giving the regular expression compiler heartburn.
+If an interpolated pattern is not a valid pattern, a run-time exception
+is raised, which is fatal unless trapped.  If you do try to trap it,
+make sure to use only <tt class="literal">eval</tt><em class="replaceable">BLOCK</em>, not <tt class="literal">eval</tt><em class="replaceable">STRING</em>, because
+the extra evaluation level of the latter would in fact allow the execution
+of random Perl code.  Instead, do something like this:
+<blockquote>
+<pre class="programlisting">if (not eval { "" =~ /$match/; 1 }) {
+    # (Now do whatever you want for a bad pattern.)
+}
+else {
+    # We know pattern is at least safe to compile.
+    if ($data =~ /$match/) { ... }
+}</pre>
+</blockquote>
+<a name="INDEX-4087"></a>
+A more troubling denial-of-service problem is that given the right
+data and the right search pattern, your program can appear to hang
+forever.  That's because some pattern matches require exponential
+time to compute, and this can easily exceed the MTBF rating on our
+solar system.  If you're especially lucky, these computationally
+intensive patterns will also require exponential storage.  If so,
+your program will exhaust all available virtual memory, bog down
+the rest of the system, annoy your users, and either <tt class="literal">die</tt> with
+an orderly "<tt class="literal">Out of memory!</tt>" error or else leave behind a really big
+core dump file, though perhaps not as large as the solar system.</p>
+
+<p>
+<a name="INDEX-4088"></a>
+Like most denial-of-service attacks, this one is not easy to solve.
+If your platform supports the <tt class="literal">alarm</tt> function, you could time out
+the pattern match.  Unfortunately, Perl cannot (currently) guarantee
+that the mere act of handling a signal won't ever trigger a core dump.
+(This is scheduled to be fixed in a future release.)  You can always
+try it, though, and even if it the signal isn't handled gracefully,
+at least the program won't run forever.</p>
+
+<p>
+<a name="INDEX-4089"></a>
+If your system supports per-process resource limits, you could set
+these in your shell before calling the Perl program, or use the
+<tt class="literal">BSD::Resource</tt> module from CPAN to do so directly from Perl.  The
+Apache web server allows you to set time, memory, and file size limits
+on CGI scripts that it launches.</p>
+
+<p>Finally, we hope we've left you with some unresolved feelings of
+insecurity.  Remember, just because you're paranoid doesn't mean
+they're not out to get you.  So you might as well enjoy it.</p>
+
+<a name="INDEX-4090"></a><a name="INDEX-4091"></a><a name="INDEX-4092"></a><a name="INDEX-4093"></a><a name="INDEX-4094"></a>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch23_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch24_01.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">23.2. Handling Timing Glitches</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">24. Common Practices</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

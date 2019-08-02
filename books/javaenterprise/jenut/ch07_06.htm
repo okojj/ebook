@@ -1,0 +1,956 @@
+<html>
+<head>
+<title>Implementing Entity Beans (Java Enterprise in a Nutshell)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David Flanagan, Jim Farley, William Crawford and Kristopher Magnusson">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-483-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Implementing Entity Beans">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm" alt="Java Enterprise in a Nutshell"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch07_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch07_05.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch07_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch07_01.htm">Chapter 7: Enterprise JavaBeans</a></td><td align="right" valign="top" width="172"><a href="ch07_07.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch07_07.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY --><h2 class="sect1">7.6. Implementing Entity Beans</h2>
+<p>
+<a name="INDEX-1920"></a><a name="INDEX-1921"></a><a name="INDEX-1922"></a><a name="INDEX-1923"></a>
+An entity bean represents data that is stored in a database or some other persistent storage. Entity beans are persistent across client sessions and the lifetime of the server. Each entity bean of a given type has a unique identity that can look up the same bean from multiple clients. No matter when or where you get a reference to an entity bean with a given identity, the bean should reflect the current state of the persistent data it represents. Multiple clients can access an entity bean at the same time. The EJB container manages these concurrent transactions for the entity bean, ensuring that client transactions are properly isolated from each other. Note that support for entity beans is not strictly required by the EJB 1.0 specification. This has been changed in the EJB 1.1 specification, which makes entity bean support mandatory in EJB-compliant application servers.</p>
+<p>
+<a name="INDEX-1924"></a><a name="INDEX-1925"></a>
+An entity bean can be passivated by its container, but the meaning of being passivated is slightly different. A container passivates an entity bean (calling its <tt class="literal">ejbPassivate()</tt> method in the process) when it wants to disassociate the bean from the persistent data entity it has been representing. After being passivated, the bean may be put into the container's pool of entity beans to associate with another client-requested entity or it may be removed from the server altogether.</p>
+<p>
+<a name="INDEX-1926"></a><a name="INDEX-1927"></a><a name="INDEX-1928"></a><a name="INDEX-1929"></a><a name="INDEX-1930"></a><a name="INDEX-1931"></a><a name="INDEX-1932"></a><a name="INDEX-1933"></a><a name="INDEX-1934"></a><a name="INDEX-1935"></a>
+At a fundamental level, entity beans are implemented similarly to session beans. You need to provide a home interface, a remote interface, and a bean implementation. An entity bean, however, requires some additional methods in its home interface and bean implementation, to support the management of its persistent state and to allow clients to look up the entity bean from persistent storage. Entity beans must also provide a class that serves as its primary key, or index, into its persistent storage.</p>
+<p>There are two ways persistent storage for an entity bean can be managed: by the EJB container or by the bean itself. In the first case, called a <em class="emphasis">container-managed</em> entity bean, the bean leaves the database calls to the container. The deployment tools provided with the EJB server are responsible for generating these database calls in the classes it uses to deploy your bean. In the second case, called <em class="emphasis">bean-managed</em> entity beans, you provide the database calls for managing your bean's persistent storage as part of your bean implementation. </p>
+<p>If you can rely on the EJB container to handle your entity bean's persistence, this can be a huge benefit, since it saves you from having to add JDBC code to your beans. But the automated persistence support in EJB is limited, and there are times when you'll need to manage persistence directly in your bean implementation. We discuss the pros and cons of each of these scenarios a bit later in this section. </p>
+<a name="ch07-pgfid-966294"></a>
+<h3 class="sect2">7.6.1. Primary Keys</h3>
+<p>
+<a name="INDEX-1936"></a><a name="INDEX-1937"></a><a name="INDEX-1938"></a><a name="INDEX-1939"></a>
+If you develop an entity bean, you must provide the EJB container with a class that serves as the primary key for the bean. A primary key includes all of the information needed to uniquely identify an item in persistent storage. The primary key for a person's records in a database, for example, might be a first and last name, or a social security number (for U.S. citizens), or some other identification number. If you're developing an EJB object that represents a bank account, you might make the primary key an object that holds the account number, which is a unique identifier for an <tt class="literal">Account</tt> object. An EJB container typically creates unique identifiers for all session and entity beans, so that it can internally track individual beans. The primary key used for entity beans is a more public unique identifier, in that clients can see the primary key for an entity bean, and the primary key is used directly by the bean implementation to load/update its state from persistent storage. </p>
+<p>If we were to develop an entity-bean version of our <tt class="literal">ProfileBean </tt>(which we'll do shortly), the primary key class might look something like the following:
+<a name="INDEX-1940"></a>
+</p>
+<blockquote>
+<pre class="programlisting">
+public class ProfilePK implements java.io.Serializable {
+  public String mName;
+  public ProfilePK() {
+    mName = null;
+  }
+  public ProfilePK(String name) {
+    mName = name;
+  }
+}</pre>
+</blockquote>
+<p>Since there is a one-to-one correspondence between named users and their profiles, we just use the name of the user as our primary key for an entity <tt class="literal">ProfileBean</tt>.</p>
+<p>The primary key class for an entity bean must be derived from <tt class="literal">java.io.Serializable</tt>. If any of the persistence of the entity bean is container-managed, the primary key class must also obey the following:</p>
+<ul>
+<li>
+<p>It must be a public class.</p>
+</li>
+<li>
+<p>It must have a default constructor (one with no arguments) that is public.</p>
+</li>
+<li>
+<p>All its data members must be public.</p>
+</li>
+<li>
+<p>All of the names of the data members on the class must be names of container-managed data members on the entity bean.</p>
+</li>
+</ul>
+<p>The primary key for our <tt class="literal">ProfileBean</tt> is really just a wrapper around a <tt class="literal">String</tt> field that holds a name. We've done this to support the option of using container-managed persistence for the bean. We have to use the <tt class="literal">ProfilePK</tt> class as the primary key, not just a <tt class="literal">String</tt>, because the EJB container needs to be able to introspect on the primary key and match its fields with the corresponding fields on the bean class. </p>
+<a name="ch07-pgfid-966324"></a>
+<h3 class="sect2">7.6.2. Finder Methods</h3>
+<p>
+<a name="INDEX-1941"></a><a name="INDEX-1942"></a><a name="INDEX-1943"></a>
+Since entity beans are persistent and can be accessed by multiple clients, clients have to be able to find them as well as create them. To this end, an entity bean's home interface can provide <tt class="literal">findXXX()</tt> methods, and the bean implementation has to have corresponding <tt class="literal">ejbFindXXX()</tt> methods that take the same arguments and have the same return types. The <tt class="literal">findXXX()</tt> methods on the home interface can have any name, as long as the method name begins with <tt class="literal">find</tt>. A bank account bean, for example, might define a <tt class="literal">findByName()</tt> method that accepts a string that is the name of the person whose accounts are desired.</p>
+<p>
+<a name="INDEX-1944"></a><a name="INDEX-1945"></a><a name="INDEX-1946"></a><a name="INDEX-1947"></a>
+Each <tt class="literal">findXXX()</tt> method on the home interface must
+  return either an instance of the bean's remote interface or a
+  collection of these objects. In the EJB 1.0 specification, only
+  <tt class="literal">Enumeration</tt> objects can return collections of
+  entity beans, but the EJB 1.1 specification allows EJB
+  implementations to also use Java 2 <tt class="literal">Collection</tt>
+  types as return types for <tt class="literal">findXXX()</tt> methods. In
+  our bank account example, the <tt class="literal">findByName()</tt> method
+  can return multiple accounts (e.g., if a person has both checking and savings accounts), so it should be declared as returning an <tt class="literal">Enumeration</tt>. </p>
+<p>The home interface for an entity-based <tt class="literal">ProfileBean</tt> is shown in <a href="#ch07-27330">Example 7-8</a>. It provides two finder methods: <tt class="literal">findByPrimaryKey()</tt> finds a profile by its primary key (which encapsulates the user's name), and <tt class="literal">findByEntryValue()</tt> finds profiles that have a particular attribute value set. The first finder method returns a single <tt class="literal">Profile</tt> object, since there is only a single <tt class="literal">Profile</tt> for each user. The second finder method returns a collection of <tt class="literal">Profile</tt> objects (as an <tt class="literal">Enumeration</tt>), as multiple user profiles might have a given attribute value. The <tt class="literal">findByPrimaryKey()</tt> method is a standard finder method defined by the EJB specification; its only argument is always the primary key type for the entity bean.
+<a name="INDEX-1948"></a>
+</p>
+<a name="ch07-27330"></a>
+<div class="example">
+<h4 class="objtitle">Example 7-8. Home Interface for an Entity ProfileBean  </h4>
+<blockquote>
+<pre class="programlisting">
+import javax.ejb.*;
+import java.rmi.RemoteException;
+
+public interface ProfileHome extends EJBHome {
+  public Profile create() throws RemoteException;
+  public Profile create(String name)
+    throws RemoteException, DuplicateProfileException;
+
+  public Profile findByPrimaryKey(ProfilePK key)
+    throws RemoteException, FinderException;
+  public Enumeration findByEntryValue(String key, String value)
+    throws RemoteException, FinderException;
+}</pre>
+</blockquote>
+</div>
+<p>A client can use the <tt class="literal">findXXX()</tt> methods on the
+home interface to determine if a bean (or beans) with a given identity
+already exists in persistent storage. If a
+<tt class="literal">findXXX()</tt> method finds an appropriate bean (or
+beans), a single primary key (or set of keys) is initialized to
+represent the unique identity of the bean(s) that matched the client
+query, and these key(s) are returned to the client. If the identified
+bean cannot be found in persistent storage, a
+<a name="INDEX-1949"></a><a name="INDEX-1950"></a><a name="INDEX-1951"></a><tt class="literal">javax.ejb.FinderException</tt> is thrown. All
+<tt class="literal">findXXX()</tt> methods on the bean's home
+interface must declare that they can throw
+<tt class="literal">FinderException</tt> and
+<tt class="literal">RemoteException</tt> (since the method is an RMI remote
+method).</p>
+<p>The EJB container intercepts the client's invocation of
+the finder method and invokes the corresponding
+<tt class="literal">ejbFindXXX()</tt> method on an instance of the entity
+bean on the server. An entity bean of the appropriate type is pulled
+from the container's pool and its
+<tt class="literal">ejbFindXXX()</tt> method is called with the
+client's arguments. The <tt class="literal">ejbFindXXX()</tt> method
+on the bean should do the necessary queries to persistent storage to
+determine if the requested data exists there, then create primary key
+instances and initialize them with the results of the query. The
+primary key objects are the return value of the
+<tt class="literal">ejbFindXXX()</tt> method. The EJB container is
+<a name="INDEX-1952"></a><a name="INDEX-1953"></a>
+responsible for taking the key(s) returned by the
+<tt class="literal">ejbFindXXX()</tt> method and converting them to remote
+objects, whose stubs are returned to the client that invoked the
+finder method. </p>
+<p>
+<a name="INDEX-1954"></a>
+It's important to note that the entity bean that executes
+the <tt class="literal">ejbFindXXX()</tt> method doesn't necessarily
+represent the entities being looked up by the client. The container
+uses the bean to call the method, takes the primary key or keys
+returned, and then uses them to either create new beans or
+reinitialize existing beans.</p>
+<p>
+<a name="INDEX-1955"></a><a name="INDEX-1956"></a>
+An entity bean implementation must at a minimum provide an
+<tt class="literal">ejbFindByPrimaryKey()</tt> method that accepts a primary
+key object as its argument. The implementation must also provide
+additional <tt class="literal">findXXX()</tt> methods to match any
+other <tt class="literal">ejbfindXXX()</tt> methods on the home interface. Each
+<tt class="literal">ejbFind</tt> method must have the same arguments and
+return types as the corresponding <tt class="literal">find</tt> method.</p>
+<a name="ch07-pgfid-966338"></a>
+<h3 class="sect2">7.6.3. Entity Bean Implementation</h3>
+<p>
+<a name="INDEX-1957"></a><a name="INDEX-1958"></a>
+I've already mentioned a few additional requirements on
+entity bean implementations, but here is a list of all the additional
+methods an entity bean either must implement or has the option to
+implement:</p>
+<dl>
+<dt>
+<b><tt class="literal">public </tt><em class="replaceable">priKeyType</em><tt class="literal"> ejbFindByPrimaryKey(</tt><em class="replaceable">priKeyType</em><tt class="literal">) throws FinderException</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1959"></a>
+The only required finder method on an entity bean. Both the argument and the return type must be the bean's primary key type. </p>
+</dd>
+<dt>
+<b><tt class="literal">public void ejbPostCreate()</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1960"></a><a name="INDEX-1961"></a>
+If needed, an entity bean can optionally provide an <tt class="literal">ejbPostCreate()</tt> method for each <tt class="literal">ejbCreate()</tt> method it provides, taking the same arguments. The container calls the <tt class="literal">ejbPostCreate()</tt> method after the bean's <tt class="literal">ejbCreate()</tt> method has been called and after the container has initialized the transaction context for the bean.</p>
+</dd>
+<dt>
+<b><tt class="literal">public void ejbLoad()</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1962"></a><a name="INDEX-1963"></a><a name="INDEX-1964"></a>
+Called by the container to cause the bean instance to load its state from persistent storage. The container can call this bean method any time after the bean has been created, to do an initial load from persistent storage or to refresh the bean's state from the database. </p>
+</dd>
+<dt>
+<b><tt class="literal">public void ejbStore()</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1965"></a>
+Called by the container to cause the bean to write its current runtime state to persistent storage. This method can be called any time after a bean is created.</p>
+</dd>
+<dt>
+<b><tt class="literal">public void setEntityContext(EntityContext ctx)</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1966"></a>
+The container calls this method after a new instance of the bean has been constructed, but before any of its <tt class="literal">ejbCreate()</tt> methods are called. The bean is responsible for storing the context object.</p>
+</dd>
+<dt>
+<b><tt class="literal">public void unsetEntityContext(EntityContext ctx)</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1967"></a>
+The container calls this method before the entity bean is destroyed.</p>
+</dd>
+</dl>
+<p>Most of these methods, like <tt class="literal">ejbLoad()</tt> and <tt class="literal">ejbStore()</tt>, are invoked by the EJB container to notify the bean about persistent store management. </p>
+<p>In addition to these entity-specific methods on bean
+implementations, the semantics of some of the other standard methods
+are slightly different for entity beans. Each
+<tt class="literal">ejbCreate()</tt> method, for example, should not only
+<a name="INDEX-1968"></a>
+assign any state data passed in as variables, but also create a record
+in persistent storage for the new entity bean. The signatures of
+<tt class="literal">ejbCreate()</tt> methods on entity beans can be
+different too. For an entity bean that manages its own persistence (a
+bean-managed entity bean), the <tt class="literal">ejbCreate()</tt> methods
+return the primary key type for the bean. For a container-managed
+entity bean, the <tt class="literal">ejbCreate()</tt> methods return
+<tt class="literal">void</tt>, the same as for session beans. The
+<a name="INDEX-1969"></a><tt class="literal">ejbRemove()</tt> method is called by the container when
+the bean is to be removed from the server. The bean should also remove
+its state from the persistent storage in its
+<tt class="literal">ejbRemove()</tt> implementation, since a request by a
+<a name="INDEX-1970"></a>
+client to <tt class="literal">remove()</tt> an entity bean is really a
+request to remove the record from persistent storage as well. </p>
+<a name="ch07-pgfid-972475"></a>
+<h3 class="sect3">7.6.3.1. A persistent ProfileBean</h3>
+<p>
+<a name="INDEX-1971"></a><a name="INDEX-1972"></a>
+The major drawback in our stateful session
+<tt class="literal">ProfileBean</tt> is that the profile data it represents
+isn't persistent. A profile is created by a client and updated
+through remote method calls, but once the
+<tt class="literal">ProfileBean</tt> is removed by the server or the server
+crashes/restarts, the accumulated profile data is lost. What we really
+want is a bean whose state is persistent stored in a relational
+database or some other persistent storage, that can be reloaded at
+a later time, when the user reenters a profiled application. An entity
+EJB object provides this functionality, and an EJB container that
+supports entity beans provides your bean with facilities that make it
+easier to manage persistent state. It's also possible to have
+the container manage the persistence of the bean for you, if
+that's desired.</p>
+<p>Let's look at the implementation for the entity bean
+version of our <tt class="literal">ProfileBean</tt>, shown in Example
+7-9. We've already seen the home interface and remote interface
+for this entity bean in earlier examples. The purpose of the bean is
+the same as our stateful session version: it represents a profile for
+a named application user, maintaining a list of name/value pairs for
+various attributes and options. The difference is that this
+<tt class="literal">ProfileBean</tt> represents a profile entity that exists
+<a name="INDEX-1973"></a><a name="INDEX-1974"></a>
+as data in persistent storage (a database, in this case). The most
+obvious differences in the actual code are the JDBC calls peppered
+throughout the class, where the bean manages its persistent
+data. There are a few extra methods defined as well. Most of them are
+required by the EJB specification for entity beans and a few are
+utility methods used by the JDBC code to connect to the database and
+make updates.</p>
+<a name="ch07-pgfid-981979"></a>
+<div class="example">
+<h4 class="objtitle">Example 7-9. An Entity ProfileBean with Bean-Managed Persistence</h4>
+<blockquote>
+<pre class="programlisting">
+import javax.ejb.*;
+import java.rmi.RemoteException;
+import java.util.Properties;
+import java.util.Enumeration;
+import java.util.Vector;
+import java.sql.*;
+
+public class ProfileBean implements EntityBean {
+  // Entries in the profile (name/value pairs)
+  public Properties mEntries;
+
+  // Store context (nonpersistent)
+  private transient EntityContext mContext = null;
+
+  // Entity bean methods
+
+  // During activation, create our entry lookup table
+  public void ejbActivate() {
+    mEntries = new Properties();
+    System.out.println("ProfileBean activated.");
+  }
+
+   // Load bean from persistent store. In this case, we're managing the dbase
+   // storage, so we store our profile entries as independent records in a
+   // separate "PROFILE_ENTRY" table.
+  public void ejbLoad() throws RemoteException {
+    try {
+      // Get primary key from context, use it to load our data
+      ProfilePK key = (ProfilePK)mContext.getPrimaryKey();
+      loadFromDB(key);
+    }
+    catch (Exception e) {
+      System.out.println("Failed to load ProfileBean: ");
+      e.printStackTrace();
+      throw new RemoteException("ejbLoad failed: ", e);
+    }
+    System.out.println("ProfileBean load finished.");
+  }
+
+  protected void loadFromDB(ProfilePK key) throws FinderException {
+    boolean found = false;
+    try {
+      // Get a connection and select our profile record
+      Connection conn = newConnection();
+      Statement s = conn.createStatement();
+      s.executeQuery("select name from profile where name = `" + key.mName +
+                     "`");
+      ResultSet rs = s.getResultSet();
+      if (rs.next()) {
+        found = true;
+        // We found a profile record, so look up the entries
+        s.executeQuery("select key, value from profile_entry where name = `"
+                       + key.mName + "`");
+        rs = s.getResultSet();
+        while (rs.next()) {
+          String pKey = rs.getString(1);
+          String pValue = rs.getString(2);
+          mEntries.put(pKey, pValue);
+        }
+      }
+    }
+    catch (SQLException e) {
+      throw new FinderException("Failed to load profile entries from DB: " +
+                                e.toString());
+    }
+    if (!found) {
+      // No profile record found, throw a FinderException
+      throw new FinderException("No profile found for " + key.mName);
+    }
+  }
+
+  // Get connection (BEA/WebLogic-specific version)
+  private Connection newConnection() throws SQLException {
+    // Make sure that the JDBC driver is loaded
+    try {
+      Class.forName("weblogic.jdbc.oci.Driver");
+    }
+    catch (ClassNotFoundException cnfe) {
+      System.out.println("Failed to load JDBC drivers.");
+    }
+    // Get the connection from the pool that we specified in the 
+    // WebLogic server properties file
+    return DriverManager.getConnection("jdbc:weblogic:jts:myPool");
+  }
+
+   // Store bean to persistent store. Properties are stored as records in the
+   // PROFILE_ENTRY table.
+  public void ejbStore() throws RemoteException {
+    // Get our primary key from our context
+    ProfilePK key = (ProfilePK)mContext.getPrimaryKey();
+    try {
+      Connection conn = newConnection();
+      // Clear out old profile entries
+      Statement s = conn.createStatement();
+      s.executeUpdate("delete from PROFILE_ENTRY where name = `" + key.mName
+                      + "`");
+      Enumeration pKeys = mEntries.propertyNames();
+      // Add each entry to the PROFILE_ENTRY table
+      while (pKeys.hasMoreElements()) {
+        String pKey = (String)pKeys.nextElement();
+        String pValue = mEntries.getProperty(pKey);
+        s.executeUpdate("insert into PROFILE_ENTRY (name,key,value) values "
+                        + "(`" + key.mName + "`, `" + pKey + "`, `"
+                        + pValue + "`)");
+      }
+      // Close the statement and the connection, just to be tidy...
+      s.close();
+      conn.close();
+    }
+    catch (Exception e) {
+      // Store operation failed, toss a RemoteException
+      throw new RemoteException("ejbStore failed: ", e);
+    }
+    System.out.println("ProfileBean store finished.");
+  }
+
+  // Remove this named profile from the database
+  public void ejbRemove() {
+    // Get this profile's name
+    ProfilePK key = (ProfilePK)mContext.getPrimaryKey();
+    try {
+      Connection conn = newConnection();
+      // Clear out any profile entries
+      Statement s = conn.createStatement();
+      s.executeUpdate("delete from profile_entry where name = `" + key.mName
+                      + "`");
+      // Clear out the profile itself
+      s.executeUpdate("delete from profile where name = `" + key.mName 
+                      + "`");
+
+      s.close();
+      conn.close();
+      System.out.println("ProfileBean removed.");
+    }
+    catch (SQLException se) {
+      System.out.println("Error removing profile for " + key.mName);
+      se.printStackTrace();
+    }
+  }
+
+  // When we're passivated, release our entries.
+  public void ejbPassivate() {
+    mEntries = null;
+    System.out.println("ProfileBean passivated.");
+  }
+
+  // Get context from container
+  public void setEntityContext(EntityContext context) {
+    mContext = context;
+    System.out.println("ProfileBean context set.");
+  }
+
+  // Container is removing our context...
+  public void unsetEntityContext() throws RemoteException {
+    mContext = null;
+    System.out.println("ProfileBean context unset.");
+  }
+
+  // Since we're managing persistence here in the bean, we need to
+  // implement the finder methods
+  public ProfilePK ejbFindByPrimaryKey(ProfilePK key)
+    throws FinderException, RemoteException {
+    loadFromDB(key);
+    return key;
+  }
+
+  public Enumeration ejbFindByEntryValue(String key, String value)
+    throws RemoteException, FinderException {
+    Vector userList = new Vector();
+    // Get a new connection from the EJB server
+    try {
+      Connection conn = newConnection();
+      Statement s = conn.createStatement();
+      // Issue a query for matching profile entries, grabbing just the name
+      s.executeQuery("select distinct(name) from profile_entry where " +
+                     " key = `" + key + "` and value = `" + value + "`");
+      // Convert the results in primary keys and return an enumeration
+      ResultSet results = s.getResultSet();
+      while (results.next()) {
+        String name = results.getString(1);
+        userList.addElement(new ProfilePK(name));
+      }
+    }
+    catch (SQLException se) {
+      // Failed to do database lookup
+      throw new FinderException();
+    }
+    return userList.elements();
+  }
+
+  // Create method (corresponds to each create() method on the
+  // home interface, ProfileHome).  Nothing to initialize in this case
+  public ProfilePK ejbCreate() {
+    System.out.println("Nameless ProfileBean created.");
+    return new ProfilePK();
+  }
+
+  // Create method with name of profile owner.
+  public ProfilePK ejbCreate(String name) throws DuplicateProfileException {
+    try {
+      Connection conn = newConnection();
+      Statement s = conn.createStatement();
+      s.executeUpdate("insert into profile (name) values (`" + name + "`)");
+      s.close();
+      conn.close();
+    }
+    catch (SQLException se) {
+      System.out.println("Error creating profile, assuming duplicate.");
+      throw new DuplicateProfileException("SQL error creating profile for " +
+                                          name + ": " + se.toString());
+    }
+      
+    System.out.println("ProfileBean created for " + name + ".");
+    return new ProfilePK(name);
+  }
+
+  // Post-creation notification.  Nothing to do here, but we need
+  // to provide an implementation.
+  public void ejbPostCreate() {
+    System.out.println("ProfileBean post-create called.");
+  }
+
+  // Post-creation notification.  Nothing to do here, what we need
+  // to provide an implementation.
+  public void ejbPostCreate(String name) {
+    System.out.println("ProfileBean post-create called for " + name + ".");
+  }
+   
+  // Business methods
+  public String getName() {
+    ProfilePK key = (ProfilePK)mContext.getPrimaryKey();
+    return key.mName;
+  }
+
+  public String getEntry(String key) {
+    return mEntries.getProperty(key);
+  }
+
+  public void setEntry(String key, String value) {
+    mEntries.put(key, value);
+  }
+}</pre>
+</blockquote>
+</div>
+<p>
+<a name="INDEX-1975"></a>
+The structure of the entity <tt class="literal">ProfileBean</tt> is similar to the stateful session bean version in <a href="ch07_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch07_05.htm">Example 7-6</a>. A <tt class="literal">Properties</tt> object holds the profile entries for the user, and the <tt class="literal">getEntry()</tt> and <tt class="literal">setEntry()</tt> remote method implementations access this <tt class="literal">Properties</tt> object for the client. You might notice that there is no data member on the entity <tt class="literal">ProfileBean</tt> to hold the name of the user. We can do this here because we're
+<a name="INDEX-1976"></a>
+not using the EJB container to manage the bean's persistence for us, so we're relying on the fact that the name is found in the primary key object, and the primary key is stored for us in the <tt class="literal">EntityContext</tt> the container gives us through the <tt class="literal">setEntityContext()</tt> method. If we were using container-managed persistence, however, we'd have to have a field on the bean for the name, so that the container would know how to set it. The <tt class="literal">getName()</tt> remote method on <tt class="literal">ProfileBean</tt> shows how we retrieve the username for the profile using the <tt class="literal">getPrimaryKey()</tt> method on the <tt class="literal">EntityContext</tt>. </p>
+<p>
+<a name="INDEX-1977"></a>
+We've also removed the <tt class="literal">setName()</tt> remote method from the entity <tt class="literal">ProfileBean</tt>, since we don't want to allow the client to change the name of an existing, active entity bean. The <tt class="literal">Profile</tt> remote interface for this bean, not shown here, is similar to the <tt class="literal">Profile</tt> interface in <a href="ch07_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch07_05.htm">Example 7-5</a>, but does not have a <tt class="literal">setName()</tt> method. Since the <tt class="literal">Profile</tt> is now a persistent entity bean and the name is the primary key, or identifying attribute, of the bean, the name of the bean can only be set when the bean is created. While the entity bean is active, it is associated with a profile entity for a specific user, and the client can only read the name associated with the profile. </p>
+<p>
+<a name="INDEX-1978"></a><a name="INDEX-1979"></a><a name="INDEX-1980"></a>
+In the <tt class="literal">ProfileBean</tt> code, you'll notice many of the EJB-required methods, including <tt class="literal">ejbActivate()</tt>, <tt class="literal">ejbPassivate()</tt>, <tt class="literal">ejbCreate()</tt>, and <tt class="literal">ejbRemove()</tt>. The <tt class="literal">ejbActivate()</tt> and <tt class="literal">ejbPassivate()</tt> methods handle the movement of the bean out of and into the EJB server's entity bean pool, respectively. </p>
+<p>The <tt class="literal">ejbCreate()</tt> methods on the <tt class="literal">ProfileBean</tt> create a new profile entity in the database. There is a matching <tt class="literal">ejbCreate()</tt> method for each <tt class="literal">create()</tt> method on our <tt class="literal">ProfileHome</tt> interface from <a href="#ch07-27330">Example 7-8</a>. The EJB container is responsible for intercepting the generated primary key object, converting it to a remote <tt class="literal">Profile</tt> object, and returning a remote <tt class="literal">Profile</tt> stub to the client that called the <tt class="literal">create()</tt> method on the <tt class="literal">ProfileHome</tt> interface. The <tt class="literal">ejbRemove()</tt> method on our <tt class="literal">ProfileBean</tt> deletes all the records for this profile entity from the database.</p>
+<p>The <tt class="literal">ProfileBean</tt> also contains methods specific to entity beans. For each <tt class="literal">ejbCreate()</tt> method, it has a corresponding <tt class="literal">ejbPostCreate()</tt> method, which is called by the container after the <tt class="literal">ejbCreate()</tt> method has returned, and the container has initialized the bean's transaction context. There's nothing more for us to do in our <tt class="literal">ProfileBean</tt> at this point, so we just print a message to standard output in each <tt class="literal">ejbPostCreate()</tt> method. </p>
+<p>
+<a name="INDEX-1981"></a><a name="INDEX-1982"></a>
+There is an <tt class="literal">ejbFindXXX()</tt> method in our entity
+  <tt class="literal">ProfileBean</tt> that corresponds to each
+  <tt class="literal">findXXX()</tt> method in
+  <tt class="literal">ProfileHome</tt>. The
+  <tt class="literal">ejbFindByPrimaryKey()</tt> method simply takes the
+  primary key passed in as an argument and attempts to load the data
+  for the entity from the database. If successful, it returns the
+  primary key back to the container, where it is converted to a remote
+  <tt class="literal">Profile</tt> object to be returned to the client. Note
+  that it's not necessary for us to actually load all the
+  profile data here in the finder method; we need to verify only that
+  the named entity exists in the database and either return the
+  primary key to signal success or throw an exception. The container
+  takes the returned primary key and assigns it to one of the beans in
+  its pool (possibly the same one it called the finder method on, but
+  not necessarily). Since we already have the
+  <tt class="literal">loadFromDB()</tt> method used in
+  <tt class="literal">ejbLoad()</tt>, it is a simple matter to reuse it here
+  in the finder method. If the performance hit for loading the profile
+  data twice is too great, we'd have to rewrite the finder
+  method to simply check the <tt class="literal">PROFILE</tt> table for a
+  record matching the name in the primary key. </p>
+<p>The <tt class="literal">ejbFindByEntryValue()</tt> method takes a key and
+value <tt class="literal">String</tt> arguments and attempts to find any and
+all profile entities with a matching key/value pair in the
+<tt class="literal">PROFILE_ENTRY</tt> table. Each name that has such a
+record is converted to a primary key object and returned to the
+container in an <tt class="literal">Enumeration</tt>. The container converts
+each primary key object into a remote <tt class="literal">Profile</tt>
+object and returns the set to the client. If we encounter a database
+problem along the way, we throw a <tt class="literal">FinderException</tt>.</p>
+<a name="ch07-pgfid-966471"></a>
+<h3 class="sect2">7.6.4. The Entity Context</h3>
+<p>
+<a name="INDEX-1983"></a>
+The EJB container provides context information to an entity bean in the form of an <tt class="literal">EntityContext</tt> object. The container sets this object using the bean's <tt class="literal">setEntityContext()</tt> method and removes it when the bean is being removed by calling the bean's <tt class="literal">unsetEntityContext()</tt> method. Like <tt class="literal">SessionContext</tt>, <tt class="literal">EntityContext</tt> provides the bean with access to its corresponding remotely exported object through the <tt class="literal">getEJBObject()</tt> method. The <tt class="literal">EntityContext</tt>, in addition, gives an entity bean access to its primary key through <tt class="literal">getPrimaryKey()</tt>. The declared return type of this method is <tt class="literal">Object</tt>, but the object returned is of the bean's primary key type. Note that the data accessed through the <tt class="literal">EntityContext</tt> might be changed by the EJB container during the bean's lifetime, as explained in the next section. For this reason, you shouldn't store the EJB remote object reference or primary key in data variables in the bean object, since they might not be valid for the entire lifetime of the bean. Our entity <tt class="literal">ProfileBean</tt>, for example, stores the <tt class="literal">EntityContext</tt> reference in an instance variable, where it can access the context data as needed during its lifetime.</p>
+<a name="ch07-pgfid-966473"></a>
+<h3 class="sect2">7.6.5. Life Cycle of an Entity Bean</h3>
+<p>
+<a name="INDEX-1984"></a><a name="INDEX-1985"></a><a name="INDEX-1986"></a><a name="INDEX-1987"></a>
+Before the first client asks for an entity bean by calling a <tt class="literal">create()</tt> or <tt class="literal">findXXX()</tt> method on its home interface, an EJB container might decide to create a pool of entity beans to handle client requests for beans. This potentially reduces the amount of time it takes for a client to receive a entity bean remote reference after it makes a request for an entity bean. To add a bean to its pool, the container creates an instance of your bean implementation class and sets its context using the <tt class="literal">setEntityContext()</tt> method. At this point, the entity bean hasn't been associated with a particular data entity, so it doesn't have a corresponding remote object.</p>
+<p>When a client calls a <tt class="literal">create()</tt> method on the bean's home interface, the container picks a bean out of the pool and calls its corresponding <tt class="literal">ejbCreate()</tt> method. If the <tt class="literal">efbCreate()</tt> method is successful, it returns one or more primary key objects to the container. For each primary key, the container picks an entity bean out of its pool to be assigned to the entity represented by the key. Next, the container assigns the bean's identity by setting the properties in its <tt class="literal">EntityContext</tt> object (e.g., its primary key and remote object values). If the bean has an <tt class="literal">ejbPostCreate()</tt> method, that gets called after the bean's entity identity has been set. The <tt class="literal">ejbCreate()</tt> method should create the entity in persistent storage, if the bean is managing its own persistence. </p>
+<p>
+<a name="INDEX-1988"></a><a name="INDEX-1989"></a><a name="INDEX-1990"></a>
+Alternately, the client might call a <tt class="literal">findXXX()</tt> method on the home interface. The container picks one of the pooled entity beans and calls the corresponding <tt class="literal">ejbFindXXX()</tt> method on it. If the finder method finds one or more matching entities in persistent storage, the container uses pooled entity beans to represent these entities. It picks entity beans out of the pool and calls their <tt class="literal">ejbActivate()</tt> methods. Before calling <tt class="literal">ejbActivate()</tt>, the container sets the bean's context by assigning the corresponding primary key and remote object reference in its context. </p>
+<p>After an entity bean has been activated (either by being created through one of its <tt class="literal">ejbCreate()</tt> methods or by being found and having its <tt class="literal">ejbActivate()</tt> method called), it is associated with a specific entity in persistent storage, and with a specific remote object that has been exported to a remote client or clients. At any point after this, the container can call the bean's <tt class="literal">ejbLoad()</tt> or <tt class="literal">ejbStore()</tt> method to force the bean to read or write its state from/to persistent storage. The bean's business methods can also be invoked by clients when it is in this state.</p>
+<p>
+<a name="INDEX-1991"></a><a name="INDEX-1992"></a><a name="INDEX-1993"></a>
+At some point, the container may decide to put the bean back into its internal pool. This might happen after all remote references to the bean have been released or after a certain period of inactivity with the bean. The container might also do this as a reaction to client loading issues (e.g., time-sharing pooled beans between client requests). When the container wants to remove the association between the bean and the remote object, but doesn't want the object's state removed from persistent store, it calls the bean's <tt class="literal">ejbPassivate()</tt> method. The bean can release any resources it allocated while in the active state, but it doesn't have to update persistent storage for the entity it represents, as this was done the last time its <tt class="literal">ejbStore() </tt>method was invoked by the container. </p>
+<p>
+<a name="INDEX-1994"></a>
+The bean can also lose its association with an entity when the client decides to remove the entity. The client does this either by calling a <tt class="literal">remove()</tt> method on the bean's home interface or calling the <tt class="literal">remove()</tt> method directly on an EJB object. When one of these things happens, the container calls the bean's <tt class="literal">ejbRemove()</tt> method, and the bean should delete the data in persistent storage pertaining to the entity it represents. After the <tt class="literal">ejbRemove()</tt> method completes, the container puts the bean back into its internal pool.</p>
+<a name="ch07-pgfid-977633"></a>
+<h3 class="sect2">7.6.6. Handles on Entity Beans</h3>
+<p>
+<a name="INDEX-1995"></a><a name="INDEX-1996"></a>
+Every bean's remote interface extends the <tt class="literal">EJBObject</tt> interface. This interface allows the client to obtain a serializable handle on the enterprise bean. This handle is a persistent reference to the bean that can be serialized and then stored in local storage on the bean or emailed as an attachment to other users, for example. Later, a client can deserialize the handle object and continue interacting with the bean it references. The handle contains all of the information needed to reestablish a remote reference to the enterprise bean it represents. Since this is only useful for beans that are still valid when the handle is reconstituted, it is usually only applicable to entity beans.</p>
+<p>
+<a name="INDEX-1997"></a>
+The handle for a bean can be obtained using the <tt class="literal">getHandle()</tt> method on a remote bean object reference:</p>
+<blockquote>
+<pre class="programlisting">
+Profile profile = ...;
+Handle pHandle = profile.getHandle();</pre>
+</blockquote>
+<p>
+<a name="INDEX-1998"></a><a name="INDEX-1999"></a><a name="INDEX-2000"></a><tt class="literal">getHandle()</tt> returns a <tt class="literal">javax.ejb.Handle</tt> object. The <tt class="literal">Handle</tt> interface itself does not extend <tt class="literal">java.io.Serializable</tt>, but any class that implements it is required by the EJB specification to extend <tt class="literal">Serializable</tt>. Typically, the <tt class="literal">Handle</tt> implementation is provided by the EJB container, which enforces this restriction. So you can always assume that the <tt class="literal">Handle</tt> for an EJB object can be stored in serialized format, if needed:</p>
+<blockquote>
+<pre class="programlisting">
+ObjectOutputStream oout = ...;
+oout.writeObject(pHandle);</pre>
+</blockquote>
+<p>Later, you can read the object back from its serialized state and obtain a reference to the remote bean object, using the <tt class="literal">getEJBObject()</tt> method on the handle:
+<a name="INDEX-2001"></a>
+</p>
+<blockquote>
+<pre class="programlisting">
+ObjectInputStream oin = ...;
+Handle pHandleIn = (Handle)oin.readObject();
+Profile profileIn = (Profile)pHandleIn.getEJBObject();
+profileIn.getEntry("favoriteColor");</pre>
+</blockquote>
+<a name="ch07-pgfid-970849"></a>
+<h3 class="sect2">7.6.7. Container-Managed Persistence</h3>
+<p>
+<a name="INDEX-2002"></a><a name="INDEX-2003"></a>
+In our entity-based <tt class="literal">ProfileBean</tt>, shown in <a href="#ch07-pgfid-981979">Example 7-9</a>, the persistent state of the profile entity is managed by the bean itself. There's JDBC code in the <tt class="literal">ProfileBean</tt> implementation that loads, stores, and removes the entity's database entries. This is called <em class="emphasis">bean-managed persistence</em> : the EJB container calls the appropriate methods on your entity bean, but your bean implementation is responsible for connecting to the database and making all of the necessary queries and updates to reflect the life cycle of the data entity. </p>
+<p>
+<a name="INDEX-2004"></a><a name="INDEX-2005"></a>
+As I mentioned earlier, the EJB specification provides another option: <em class="emphasis">container-managed persistence</em>. In this case, you define data members on your entity bean implementation that hold the state of the entity and tell the EJB container how to map these data members to persistent storage. If the persistent storage is a database, you tell the container which columns in which tables hold the various data members of your entity. With container-managed persistence, the container is responsible for loading, updating, and removing the entity data from persistent storage, based on the mapping you provide. The container also implements all the finder methods required by the bean's home interface. </p>
+<p>
+<a name="INDEX-2006"></a><a name="INDEX-2007"></a>
+If you want to take advantage of container-managed persistence, you have to indicate this to the EJB container when you deploy the bean. You also provide the data mapping at deployment time. To see this in action, let's use a simple entity bean that represents a person using just a first and last name:</p>
+<blockquote>
+<pre class="programlisting">
+import javax.ejb.*;
+import java.rmi.RemoteException;
+import jen.ejb.NoSuchPersonException;
+import java.util.Properties;
+
+public class PersonBean implements EntityBean {
+  // First name of person
+  public String mFirstName = "";
+  // Last name
+  public String mLastName = "";
+
+  // Store context (nonpersistent)
+  private transient EntityContext mContext = null;
+
+  // No need for us to activate anything in this bean, but we need to
+  // provide an implementation.
+  public void ejbActivate() {
+    System.out.println("ProfileBean activated.");
+  }
+
+  // Load bean from persistent store. Container is doing this for us, so
+  // nothing to do here.
+  public void ejbLoad() throws RemoteException {}
+
+  // Store bean to persistent store.  Container is doing this, so nothing
+  // to do here, either.
+  public void ejbStore() throws RemoteException {}
+  
+  // Nothing to do on a remove.
+  public void ejbRemove() {}
+
+  // No state to store on passivation (it's all in persistenct storage).
+  public void ejbPassivate() {}
+
+  // Get context from container.
+  public void setEntityContext(EntityContext context) {
+    mContext = context;
+  }
+
+  // Container is removing our context.
+  public void unsetEntityContext() throws RemoteException {
+    mContext = null;
+  }
+
+  // Create method (corresponds to each create() method on the
+  // home interface).  Nothing to initialize in this case.
+  public void ejbCreate() {
+    System.out.println("Nameless PersonBean created.");
+  }
+
+  // Postcreation notification.  Nothing to do here, but we need
+  // to provide an implementation.
+  public void ejbPostCreate() {
+    System.out.println("PersonBean post-create called.");
+  }
+   
+  // Create method with name of person.
+  public void ejbCreate(String fname, String lname) 
+    throws NoSuchPersonException {
+    mFirstName = fname;
+    mLastName = lname;
+  }
+
+  // Postcreation notification.  Nothing to do here, but we need
+  // to provide an implementation.
+  public void ejbPostCreate(String fname, String lname) {}
+   
+  // Business methods 
+  public String getFirstName() {
+    return mFirstName;
+  }
+
+  public String getLastName() {
+    return mLastName;
+  }
+}</pre>
+</blockquote>
+<p>
+<a name="INDEX-2008"></a>
+
+We're going to focus on the bean implementation here; I leave it to you to sort out the home and remote interfaces for this bean. The <tt class="literal">PersonBean</tt> has two data members, representing the first and last name of the person. In comparison to our entity <tt class="literal">ProfileBean</tt> from earlier, this bean is much simpler, since the <tt class="literal">ejbRemove()</tt>, <tt class="literal">ejbLoad()</tt>, and <tt class="literal">ejbStore()</tt> methods are empty. We're going to let the container handle the loading and storing of the bean's data and the removal of any entities from the database, so we don't need to do anything about these operations in our bean implementation.</p>
+<p>
+<a name="INDEX-2009"></a><a name="INDEX-2010"></a>
+In order for an EJB container to manage the persistence of this bean, we need to tell it what data members should be stored persistently and where to store them in the database. We'll see some examples of container-managed data mappings in the section on deploying enterprise beans, but to give you a sense of how this works, here's the relevant section from a deployment descriptor file for BEA's WebLogic EJB server:</p>
+<blockquote>
+<pre class="programlisting">
+...
+(persistentStoreProperties
+  persistentStoreType    jdbc 
+  (jdbc
+    tableName            PERSON
+		. . .
+    (attributeMap
+      mFirstName         FIRST_NAME
+      mLastName          LAST_NAME
+    )
+  )
+)
+...
+containerManagedFields    [mFirstName mLastName]
+primaryKeyClassName       PersonPK
+...</pre>
+</blockquote>
+<p>
+<a name="INDEX-2011"></a>
+In this part of the bean's deployment descriptor, we're telling the container that the <tt class="literal">mFirstName</tt> and <tt class="literal">mLastName</tt> members of the <tt class="literal">PersonBean</tt> are stored persistently, and that they should be stored in the <tt class="literal">FIRST_NAME</tt> and <tt class="literal">LAST_NAME</tt> columns of the <tt class="literal">PERSON</tt> table. We also have to tell the container which JDBC connection pool to use to connect to the database, but I've omitted those details for now. </p>
+<p>
+<a name="INDEX-2012"></a><a name="INDEX-2013"></a>
+We also need to tell the container the primary key class for our entity bean. In this case, it's the <tt class="literal">PersonPK</tt> class, which looks like this:</p>
+<blockquote>
+<pre class="programlisting">
+public class PersonPK implements java.io.Serializable {
+  public String mFirstName;
+  public String mLastName;
+
+  public PersonPK() {
+    mFirstName = null;
+    mLastName = null;
+  }
+  public PersonPK(String fname, String lname) {
+    mFirstName = fname;
+    mLastName = lname;
+  }
+}</pre>
+</blockquote>
+<p>
+<a name="INDEX-2014"></a><a name="INDEX-2015"></a>
+Since we're using container-managed persistence, the primary key class for our bean has to include members that match the corresponding members on the bean class. This allows the bean to map the key fields to bean fields automatically and to generate the default finder methods for the bean.</p>
+<p>
+<a name="INDEX-2016"></a><a name="INDEX-2017"></a><a name="INDEX-2018"></a>
+If you choose container-managed persistence for your bean, the EJB container generates all the <tt class="literal">ejbFindXXX()</tt> methods required for the finder methods on the home interface. It automatically generates an <tt class="literal">ejbFindByPrimaryKey()</tt> method, based on the data-mapping information you provide at deployment time. For any other <tt class="literal">ejbFindXXX()</tt> methods, you need to provide the container with a recipe for implementing the methods. The EJB 1.0 specification doesn't provide a standard format for specifying these additional finder methods for your bean, nor does it provide a means for you to specify some of the finder methods yourself in the bean implementation and leave the rest for the EJB container to implement. Some EJB providers allow you to provide code segments at deployment time for the finder methods, while other providers define a descriptive scripting language that allows you to describe the logic of the method implementation to the EJB container. In either case, the container takes this information and creates implementations for the finder methods. These finder methods are located within one of the support classes it generates, usually in a generated subclass of your home interface.</p>
+<p>As an example, suppose we want to have a finder method for our
+    <tt class="literal">PersonBean</tt> class called
+    <tt class="literal">findFreds()</tt> that finds all the people whose
+    first name starts with "Fred." BEA's WebLogic
+    server specifies a syntax for describing the logic of a finder
+    method in the bean's deployment descriptor file. The segment
+    of the descriptor that describes this finder method for a WebLogic
+    server might look like this:</p>
+<blockquote>
+<pre class="programlisting">
+(finderDescriptors
+  "findFreds()" "(like mFirstName Fred%)"
+)</pre>
+</blockquote>
+<p>
+<a name="INDEX-2019"></a><a name="INDEX-2020"></a><a name="INDEX-2021"></a>
+If you are implementing an entity bean with many complicated
+  finder methods, or if you are concerned with your bean being easily
+  portable between EJB server providers, you may want to shy away from
+  container-managed persistence and stick with managing the persistent
+  data yourself. With some EJB providers, you may find that the format
+  they provide for describing finder methods is too limited for your
+  purposes. And deploying the bean in different EJB servers means
+  porting the descriptions of your finder methods from server to
+  server, which defeats the purpose of writing to a distributed
+  component standard.</p>
+<p>
+<a name="INDEX-2022"></a><a name="INDEX-2023"></a><a name="INDEX-2024"></a><a name="INDEX-2025"></a>
+If your EJB object is using container-managed persistence, the
+  container is handling the loading and storing of persistent
+  data. You still can provide <tt class="literal">ejbLoad()</tt> and
+  <tt class="literal">ejbStore()</tt> methods on your bean implementation,
+  however. The <tt class="literal">ejbLoad()</tt> method is called just
+  after the container has loaded the specified data fields from
+  persistent storage into your data members, and
+  <tt class="literal">ejbStore()</tt> is called just before the container
+  writes your data members to persistent storage. If there is any
+  conversion or bookkeeping you need to handle, you can do that in
+  these methods. </p>
+<p>
+<a name="INDEX-2026"></a><a name="INDEX-2027"></a><a name="INDEX-2028"></a><a name="INDEX-2029"></a>
+Container-managed beans also rely on the container to create and
+remove the entities they represent from persistent storage. The bean
+can still provide <tt class="literal">ejbCreate()</tt> and
+<tt class="literal">ejbRemove()</tt> methods, however. The appropriate
+creation method is called just before the container creates the
+required records for the new entity in the database. The bean can use
+these methods to initialize any data members the container accesses
+while creating the records. The container also invokes the
+bean's <tt class="literal">ejbRemove()</tt> method just before the
+container removes the necessary records from persistent storage. This
+lets you do any cleanup before the entity is removed.</p>
+<a name="ch07-pgfid-977805"></a>
+<h3 class="sect3">7.6.7.1. Handling complex data structures</h3>
+<p>
+<a name="INDEX-2030"></a><a name="INDEX-2031"></a><a name="INDEX-2032"></a><a name="INDEX-2033"></a>
+Each EJB container is limited to some degree in the way that data on
+  your bean implementation can be mapped into persistent data
+  fields. There is no standard format defined for the data mapping the
+  container supports, so it's possible a particular EJB provider
+  won't support whatever complicated mapping you require for
+  your bean. For the most part, however, you can expect EJB providers
+  to limit the format to a single persistent data field being mapped
+  to a single data member on your bean implementation. If the data
+  structures on your bean are too complicated for you to provide an
+  explicit mapping to persistent data fields, you have to decide how
+  to deal with this. </p>
+<p>In our entity <tt class="literal">ProfileBean</tt> example,
+we've stored the profile entries in a
+<tt class="literal">Properties</tt> object. We don't know at
+deployment time how many entries there will be, so we can't
+enumerate a mapping to database fields. We really want each entry in
+the <tt class="literal">Properties</tt> object to be stored in the
+<tt class="literal">PROFILE_ENTRY</tt> table in our database, along with the
+name of the owner of the entry, which is exactly how we implemented
+our bean-managed implementation in <a href="#ch07-pgfid-981979">Example 7-9</a>. </p>
+<p>One option is to give up on container-managed persistence and manage
+it yourself in the bean implementation. Another is to make each entry
+in the profile its own bean and store the entries in a list on the
+profile bean. This would probably turn out to be too expensive in
+terms of interactions with the container and memory, however. Each
+entry in the profile would need to be managed separately by the
+container, with all of the relevant lifecycle notifications. </p>
+<p>
+<a name="INDEX-2034"></a><a name="INDEX-2035"></a><a name="INDEX-2036"></a>
+
+Another option is to serialize your data structures into individual
+data members on your bean and allow the container to read/write the
+serialized bytes to database fields as binary data. In our entity
+<tt class="literal">ProfileBean</tt> example, rather than using the
+<tt class="literal">PROFILE</tt> and <tt class="literal">PROFILE_ENTRY</tt> tables
+we used in the bean-managed version, we can define a single table to
+hold the name of the profile owner, along with the serialized
+bytecodes for the <tt class="literal">Properties</tt> object that represents
+the profile entries. We can then use the <tt class="literal">ejbStore()</tt>
+method on our bean to convert the <tt class="literal">Properties</tt> object
+to an array of bytes:</p>
+<blockquote>
+<pre class="programlisting">
+public void ejbStore() throws RemoteException {
+  try {
+    ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+    ObjectOutputStream objOut = new ObjectOutputStream(byteOut);
+    objOut.writeObject(mEntries);
+    mEntriesBytes = byteOut.toByteArray();
+  }
+  catch (Exception e) {
+    throw new RemoteException("ejbStore failed: ", e);
+  }
+}</pre>
+</blockquote>
+<p>
+<a name="INDEX-2037"></a><a name="INDEX-2038"></a>
+After the container calls our <tt class="literal">ejbStore()</tt> method, it
+  can write the <tt class="literal">mEntriesBytes</tt> data member on our
+  bean to a raw data field in the database (e.g., a <tt class="literal">LONG
+  BINARY</tt> field in a SQL database). On the reading end, we
+  can use the <tt class="literal">ejbLoad()</tt> method to convert the bytes
+  loaded by the container to the <tt class="literal">mEntriesBytes</tt> data
+  member into a <tt class="literal">Properties</tt> object:</p>
+<blockquote>
+<pre class="programlisting">
+public void ejbLoad() throws RemoteException {
+  try {
+    ByteArrayInputStream byteIn = new ByteArrayInputStream(mEntriesBytes);
+    ObjectInputStream objIn = new ObjectInputStream(byteIn);
+    mEntries = (Properties)objIn.readObject();
+  }
+  catch (Exception e) {
+    throw new RemoteException("ejbLoad failed: ", e);
+  }
+}</pre>
+</blockquote>
+<p>This workaround allows us to deploy our entity
+  <tt class="literal">ProfileBean</tt> with container-managed persistence,
+  but it makes our database records unusable for other, non-Java
+  applications. There's no way, for example, to check on a
+  user's profile entries using a simple SQL query. </p>
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch07_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch07_05.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch07_07.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch07_07.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">7.5. Implementing Session Beans</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">7.7. Deploying an Enterprise JavaBeans Object</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

@@ -1,0 +1,141 @@
+<html><head>
+<title>Recipe 17.10. Writing Bidirectional Clients</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:35Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch17_01.htm" title="17. Sockets"><link rel="prev" href="ch17_10.htm" title="17.9. Closing a Socket After Forking"><link rel="next" href="ch17_12.htm" title="17.11. Forking Servers"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_10.htm" title="17.9. Closing a Socket After Forking"><img src="../gifs/txtpreva.gif" alt="Previous: 17.9. Closing a Socket After Forking" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch17_01.htm" title="17. Sockets">Chapter 17<br>Sockets</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_12.htm" title="17.11. Forking Servers"><img src="../gifs/txtnexta.gif" alt="Next: 17.11. Forking Servers" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch17-14110">17.10. Writing Bidirectional Clients</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1106">Problem<a class="indexterm" name="ch17-idx-1000004793-0"></A
+><a class="indexterm" name="ch17-idx-1000004793-1"></A
+><a class="indexterm" name="ch17-idx-1000004793-2"></A
+></A
+></H3
+><p class="para">You want set up a fully interactive client so you can type a line, get the answer, type a line, get the answer, etc., somewhat like <em class="emphasis">telnet</EM
+>.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1112">Solution</A
+></H3
+><p class="para">Once you've connected, fork off a duplicate process. One twin only reads your input and passes it on to the server, and the other only reads the server's output and sends it to your own output.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1118">Discussion</A
+></H3
+><p class="para">In a client-server relationship, it is difficult to know whose turn it is to talk. Single-threaded solutions involving the four-argument version of <code class="literal">select</CODE
+> are hard to write and maintain. But there's no reason to ignore multitasking solutions. The <code class="literal">fork</CODE
+> function dramatically simplifies this problem.</P
+><p class="para">Once you've connected to the service you'd like to chat with, call <code class="literal">fork</CODE
+> to clone a twin. Each of these two (nearly) identical processes has a simple job. The parent copies everything from the socket to standard output, and the child simultaneously copies everything from standard input to the socket.</P
+><p class="para">The code is in <a class="xref" href="#ch17-35420" title="biclient">Example 17.4</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch17-35420">Example 17.4: biclient</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch17-idx-1000004800-0"></A
+>biclient - bidirectional forking client
+    use strict;
+use IO::Socket;
+my ($host, $port, $kidpid, $handle, $line);
+
+unless (@ARGV == 2) { die &quot;usage: $0 host port&quot; }
+($host, $port) = @ARGV;
+
+# create a tcp connection to the specified host and port
+$handle = IO::Socket::INET-&gt;new(Proto     =&gt; &quot;tcp&quot;,
+                                PeerAddr  =&gt; $host,
+                                PeerPort  =&gt; $port)
+       or die &quot;can't connect to port $port on $host: $!&quot;;
+
+$handle-&gt;autoflush(1);              # so output gets there right away
+print STDERR &quot;[Connected to $host:$port]\n&quot;;
+
+# split the program into two processes, identical twins
+die &quot;can't fork: $!&quot; unless defined($kidpid = fork());
+
+if ($kidpid) {                      
+    # parent copies the socket to standard output
+    while (defined ($line = &lt;$handle&gt;)) {
+        print STDOUT $line;
+    }
+    kill(&quot;TERM&quot; =&gt; $kidpid);        # send SIGTERM to child
+}
+else {                              
+    # child copies standard input to the socket
+    while (defined ($line = &lt;STDIN&gt;)) {
+        print $handle $line;
+    }
+}
+exit;</PRE
+></DIV
+><p class="para">To accomplish the same thing using just one process is remarkably more difficult. It's easier to code two processes, each doing a single task, than it is to code one process to do two different tasks. Take advantage of multitasking by splitting your program into multiple threads of control, and some of your bewildering problems will become much easier.</P
+><p class="para">The <code class="literal">kill</CODE
+> function in the parent's <code class="literal">if</CODE
+> block is there to send a signal to the child (currently running in the <code class="literal">else</CODE
+> block) as soon as the remote server has closed its end of the connection. The <code class="literal">kill</CODE
+> at the end of the parent's block is there to eliminate the child process as soon as the server on the other end goes away.</P
+><p class="para">If the remote server sends data a byte at time and you need that data immediately without waiting for a newline (which may never arrive), you may wish to replace the <code class="literal">while</CODE
+> loop in the parent with the following:</P
+><pre class="programlisting">my $byte;
+while (sysread($handle, $byte, 1) == 1) {
+    print STDOUT $byte;
+}</PRE
+><p class="para">Making a system call for each byte you want to read is not very efficient (to put it mildly), but it is the simplest to explain and works reasonably well. <a class="indexterm" name="ch17-idx-1000004802-0"></A
+><a class="indexterm" name="ch17-idx-1000004802-1"></A
+><a class="indexterm" name="ch17-idx-1000004802-2"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1214">See Also</A
+></H3
+><p class="para">The 
+<a class="olink" href="../prog/ch03_166.htm">&#13;<code class="literal">sysread</CODE
+></A
+>
+and <a class="olink" href="../prog/ch03_040.htm">&#13;<code class="literal">fork</CODE
+></A
+>
+functions in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlfunc </I
+>(1); the documentation for the standard IO::Socket module; <a class="xref" href="ch16_06.htm" title="Filtering Your Own Output">Recipe 16.5</A
+>; <a class="xref" href="ch16_11.htm" title="Communicating Between Related Processes">Recipe 16.10</A
+>; <a class="xref" href="ch17_12.htm" title="Forking Servers">Recipe 17.11</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_10.htm" title="17.9. Closing a Socket After Forking"><img src="../gifs/txtpreva.gif" alt="Previous: 17.9. Closing a Socket After Forking" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_12.htm" title="17.11. Forking Servers"><img src="../gifs/txtnexta.gif" alt="Next: 17.11. Forking Servers" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">17.9. Closing a Socket After Forking</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">17.11. Forking Servers</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

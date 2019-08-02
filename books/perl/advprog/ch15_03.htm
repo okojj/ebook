@@ -1,0 +1,335 @@
+<html><head>
+<title>[Chapter 15] 15.3 Implementation</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:39:25Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch15_01.htm" title="15. GUI Example: Tetris"><link rel="prev" href="ch15_02.htm" title="15.2 Design"><link rel="next" href="ch16_01.htm" title="16. GUI Example: Man Page Viewer"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch15_02.htm" title="15.2 Design"><img src="../gifs/txtpreva.gif" alt="Previous: 15.2 Design" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch15_01.htm" title="15. GUI Example: Tetris">Chapter 15<br>GUI Example: Tetris</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="chapter" href="ch16_01.htm" title="16. GUI Example: Man Page Viewer"><img src="../gifs/txtnexta.gif" alt="Next: 16. GUI Example: Man Page Viewer" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch15-13388">15.3 Implementation</A
+></H2
+><p class="para">We will focus only on those routines that either are central to the game or illustrate Tk in action.</P
+><p class="para">The main program simply consists of the two calls to <kbd class="command">init()</KBD
+> and <kbd class="command">MainLoop()</KBD
+>. <kbd class="command">init</KBD
+> creates the screen, sets up the key bindings, and configures a timer to call <kbd class="command">tick</KBD
+>. Let us jump into the meat of the action by starting with this procedure.</P
+><p class="para"><kbd class="command">tick</KBD
+> moves the block down and then reloads the timer, specifying itself as a callback:</P
+><pre class="programlisting">sub <b class="emphasis.bold">tick</B
+> {
+    return if ($state == $PAUSED);
+    if (!@block_cells) {
+        if (!create_random_block()) {
+            game_over();           # Heap is full:could not place block
+            return;                # at next tick interval
+        }
+        $w_top-&gt;after($interval, \&amp;tick);
+        return;
+    }
+    move_down();                      # move the block down
+    $w_top-&gt;after($interval, \&amp;tick); # reload timer for nex
+}</PRE
+><p class="para"><kbd class="command">fall()</KBD
+> is called when the space bar is hit; it keeps moving the block down until it hits any tile in the heap or hits bottom. <kbd class="command">move_down</KBD
+> returns a false when either of these happens.</P
+><pre class="programlisting">sub fall {                 # Called when spacebar hit
+    return if (!@block_cells);   # Return if not initialized
+    1 while (move_down()); # Move down until it hits heap or bottom.
+}</PRE
+><p class="para"><kbd class="command">move_down()</KBD
+> simply adds <kbd class="command">$MAX_COLS</KBD
+> to each of the block tile's cell positions to effectively move it one row down. It then checks whether any of these new positions touch the bottom of the grid or intersect with any preexisting heap tile's cell position. If so, it calls the <code class="literal">merge_block_and_heap</CODE
+> routine and returns a false value. If not, it simply remembers the set of new positions and uses the <kbd class="command">move</KBD
+> method to move all the block tiles down in one fell swoop (<kbd class="command">$TILE_HEIGHT</KBD
+> pixels down). It returns a 1 so that <kbd class="command">fall</KBD
+> above knows to keep continuing. </P
+><pre class="programlisting">sub move_down {
+    my $cell;
+    my $first_cell_last_row = ($MAX_ROWS-1)*$MAX_COLS;
+    # if already at the bottom of the heap, or if a move down
+    # intersects with the heap, then merge both.
+    foreach $cell (@block_cells) {
+        if (($cell &gt;= $first_cell_last_row) ||
+            ($heap[$cell+$MAX_COLS])) {
+            merge_block_and_heap();
+            return 0;
+        }
+    }
+    foreach  $cell (@block_cells) {
+        $cell += $MAX_COLS;
+    }
+    $w_heap-&gt;move('block', 0,  $TILE_HEIGHT);
+    return 1;
+}</PRE
+><p class="para"><code class="literal">merge_block_and_heap</CODE
+> does two major things: it hands over all of the block's tiles to the heap, and it nullifies <kbd class="command">%block</KBD
+>. Then it marches through <kbd class="command">@heap</KBD
+> looking for rows that have tiles in all columns. If it finds any, it marks all those tiles with an additional tag called <code class="literal">delete</CODE
+>, using the addtag method: </P
+><pre class="programlisting">$w_canvas-&gt;addtag('delete', 'withtag' =&gt; $heap[$i]);</PRE
+><p class="para">The straightforward way to delete a row would be to remove the corresponding entries in the heap and to delete the corresponding tiles on the canvas. But that method doesn't give the user an idea of which rows are being consolidated; besides, it's too boring. So <kbd class="command">merge_block_and_heap</KBD
+> fills all the tiles tagged <code class="literal">delete</CODE
+> with a white background and, after 300 ms, deletes all these items. This way the user sees a full row change color to white for a brief instant before vanishing. Notice how the closure supplied to <kbd class="command">after</KBD
+> makes it convenient to supply a piece of code to execute in the future. The same closure also moves the rest of the heap's tiles to their new places (because some rows have collapsed). </P
+><pre class="programlisting">my $last_cell = $MAX_COLS * $MAX_ROWS;
+sub merge_block_and_heap {
+    my $cell;
+    # merge block
+    foreach $cell (@block_cells) {
+        $heap[$cell] = shift @tile_ids;
+    }
+    $w_heap-&gt;dtag('block'); # Forget about the block - it is now merged 
+    # check for full rows, and get rid of them
+    # All rows above them need to be moved down, both in @heap and 
+    # the canvas, $w_heap
+    my $last_cell = $MAX_ROWS * $MAX_COLS;
+    my $filled_cell_count;
+    my $rows_to_be_deleted = 0;
+    my $i;
+    for ($cell = 0; $cell &lt; $last_cell; ) {
+        $filled_cell_count = 0;
+        my $first_cell_in_row = $cell;
+        for ($i = 0; $i &lt; $MAX_COLS; $i++) {
+            $filled_cell_count++ if ($heap[$cell++]);
+        }
+        if ($filled_cell_count == $MAX_COLS) {
+            # this row is full
+            for ($i = $first_cell_in_row; $i &lt; $cell; $i++) {
+                $w_heap-&gt;addtag('delete', 'withtag' =&gt; $heap[$i]);
+            }
+            splice(@heap, $first_cell_in_row, $MAX_COLS);
+            unshift (@heap, (undef) x $MAX_COLS);
+            $rows_to_be_deleted = 1;
+        }
+    }
+    @block_cells = ();
+    @tile_ids = ();
+    if ($rows_to_be_deleted) {
+        $w_heap-&gt;itemconfigure('delete', 
+                               '-fill'=&gt; 'white');
+        $w_top-&gt;after (300, 
+                       sub {
+                           $w_heap-&gt;delete('delete');
+                           my ($i);
+                           my $last = $MAX_COLS * $MAX_ROWS;
+                           for ($i = 0; $i &lt; $last; $i++) {
+                               next if !$heap[$i];
+                               # get where they are
+                               my $col = $i % $MAX_COLS;
+                               my $row = int($i / $MAX_COLS);
+                               $w_heap-&gt;coords(
+                                    $heap[$i],
+                                    $col * $TILE_WIDTH,       #x0
+                                    $row * $TILE_HEIGHT,      #y0
+                                    ($col+1) * $TILE_WIDTH,   #x1
+                                    ($row+1) * $TILE_HEIGHT); #y1
+                           }
+                       });
+    }
+}</PRE
+><p class="para">Let us now look at two of the other routines to manipulate the block: <kbd class="command">move_left</KBD
+> and <kbd class="command">rotate</KBD
+>. We'll skip <kbd class="command">move_right</KBD
+> because it is similar to <kbd class="command">move_left</KBD
+>.</P
+><p class="para"><code class="literal">move_left</CODE
+> moves each of the block's tiles to the left by simply subtracting 1 from their respective cell positions. The function does nothing if any of the new positions go past the left edge or intersect with an occupied heap cell. If moving is allowed, the canvas items tagged "block" are simply moved <kbd class="command">$TILE_WIDTH</KBD
+> pixels to the left:</P
+><pre class="programlisting">sub move_left {
+    my $cell;
+    foreach $cell (@block_cells) {
+        # Check if cell is at the left edge already
+        # If not, check whether the cell to its left is already
+        # occupied
+        if ((($cell % $MAX_COLS) == 0) ||
+            ($heap[$cell-1])){
+            return;
+        }
+    }
+    foreach $cell (@block_cells) {
+        $cell--; # This affects the contents of @block_cells
+    }
+    
+    $w_heap-&gt;move('block', - $TILE_WIDTH, 0);
+}</PRE
+><p class="para"><kbd class="command">rotate</KBD
+> is a trifle more complex. It computes a <i class="firstterm">pivot</I
+> row and column from the block's tile positions and calculates new tile positions by a simple transformation explained in the following code. It also ensures that the newly computed positions are not illegal in any way (moving out of the grid or intersecting with the heap). It then calls the canvas's <kbd class="command">coords</KBD
+> method to move each of the tiles individually to their new places.</P
+><pre class="programlisting">sub rotate {
+    # rotates the block counter_clockwise
+    return if (!@block_cells);
+    my $cell;
+    # Calculate the pivot position around which to turn
+    # The pivot is at (average x, average y) of all block_cells
+    my $row_total = 0; my $col_total = 0;
+    my ($row, $col);
+    my @cols = map {$_ % $MAX_COLS} @block_cells;
+    my @rows = map {int($_ / $MAX_COLS)} @block_cells;
+    foreach (0 .. $#cols) {
+        $row_total += $rows[$_];
+        $col_total += $cols[$_];
+    }
+    my $pivot_row = int ($row_total / @cols + 0.5); # pivot row
+    my $pivot_col = int ($col_total / @cols + 0.5); # pivot col
+    # To position each cell counter_clockwise, we need to do a small
+    # transformation. A row offset from the pivot becomes an equivalent 
+    # column offset, and a column offset becomes a negative row offset.
+    my @new_cells = ();
+    my @new_rows = ();
+    my @new_cols = ();
+    my ($new_row, $new_col);
+    while (@rows) {
+        $row = shift @rows;
+        $col = shift @cols;
+        # Calculate new $row and $col
+        $new_col = $pivot_col + ($row - $pivot_row);
+        $new_row = $pivot_row - ($col - $pivot_col);
+        $cell = $new_row * $MAX_COLS + $new_col;
+        # Check if the new row and col are invalid (is outside or
+        # something is already occupying that  cell)
+        # If valid, then no-one should be occupying it.
+        if (($new_row &lt; 0) || ($new_row &gt; $MAX_ROWS) ||
+            ($new_col &lt; 0) || ($new_col &gt; $MAX_COLS)  ||
+            $heap[$cell]) {
+            return 0;
+        }
+        push (@new_rows, $new_row);
+        push (@new_cols, $new_col);
+        push (@new_cells, $cell);
+    }
+    # Move the UI tiles to the appropriate coordinates
+    my $i= @new_rows-1;
+    while ($i &gt;= 0) {
+        $new_row = $new_rows[$i];
+        $new_col = $new_cols[$i];
+        $w_heap-&gt;coords($tile_ids[$i],
+                        $new_col * $TILE_WIDTH,      #x0
+                        $new_row * $TILE_HEIGHT,     #y0
+                        ($new_col+1) * $TILE_WIDTH,  #x1
+                        ($new_row+1) * $TILE_HEIGHT);
+        $i--;
+    }
+    @block_cells = @new_cells;
+    1; # Success
+}</PRE
+><p class="para">When this mutant version of Tetris starts, it draws a small red triangular "gun" (cell number 70 in <a class="xref" href="ch15_01.htm#ch15-25914" title="Tetris screen">Figure 15.1</A
+>). <kbd class="command">shoot</KBD
+> is called when the "a" or "s" key is pressed. The "a" key shoots an arrow from the gun and blows off the leftmost tile of the block in the gun's row if the block happens to be passing by. The "s" key takes a shot at the rightmost tile. This is quite cheesy, really, but useful if you want to see how an animation sequence can be staged by using the canvas. The first part of the procedure simply determines which block tile is to be removed, if any. It then creates an arrow (a line with an arrowhead) from the gun to the selected tile, changes its stippling, and after a 200-ms interval, deletes both the tile and the arrow. This has the visual effect of blowing up a tile.</P
+><pre class="programlisting">sub shoot {
+    my ($dir) = @_;
+    my $first_cell_shoot_row = $shoot_row*$MAX_COLS;
+    my $last_cell_shoot_row = $first_cell_shoot_row + $MAX_COLS;
+    my $cell;
+    my (@indices) = 
+        sort {
+            $dir eq 'left' ? 
+                $block_cells[$a] &lt;=&gt; $block_cells[$b] :
+                    $block_cells[$b] &lt;=&gt; $block_cells[$a]
+                    } (0 .. $#block_cells);
+    my $found = -1;
+    my $i;
+    foreach $i (@indices) {
+        $cell = $block_cells[$i];
+        if (($cell &gt;= $first_cell_shoot_row) &amp;&amp;
+            ($cell &lt; $last_cell_shoot_row)) {
+            $found = $i;
+            last;
+        }
+    }
+    if ($found != -1) {
+        my $shot_tile = $tile_ids[$found];
+        ($cell) = splice (@block_cells, $found, 1);
+        splice (@tile_ids, $found, 1);
+        my $y = ($shoot_row + 0.5)*$TILE_HEIGHT;
+        my $arrow = $w_heap-&gt;create(
+                                    'line',
+                                    0,
+                                    $y,
+                                    (($cell % $MAX_COLS) + 0.5) 
+                                                        * $TILE_WIDTH,
+                                    $y,
+                                    '-fill' =&gt; 'white',
+                                    '-arrow' =&gt; 'last',
+                                    '-arrowshape' =&gt; [7,7,3]
+                                    );
+        
+        $w_heap-&gt;itemconfigure($shot_tile,
+                               '-stipple' =&gt; 'gray25');
+        $w_top-&gt;after (200,sub {
+            $w_heap-&gt;delete($shot_tile); 
+            $w_heap-&gt;delete($arrow); 
+        });
+    }
+}</PRE
+><p class="para">Let us now see the two routines responsible for setting up the screen: <kbd class="command">create_screen</KBD
+> and <kbd class="command">bind_key</KBD
+>. Both these functions are called by <kbd class="command">init()</KBD
+>. Note the way the <kbd class="command">pack</KBD
+> method is used in <kbd class="command">create_screen</KBD
+> and how the space character is translated to an event-binding in <code class="literal">bind_key</CODE
+>. </P
+><pre class="programlisting">sub create_screen {
+    $w_top = MainWindow-&gt;new('Tetris - Perl/Tk');
+    $w_heap = $w_top-&gt;Canvas('-width'  =&gt; $MAX_COLS * $TILE_WIDTH,
+                             '-height' =&gt; $MAX_ROWS  * $TILE_HEIGHT,
+                             '-border' =&gt; 1,
+                             '-relief' =&gt; 'ridge');
+    $w_start = $w_top-&gt;Button('-text' =&gt; 'Start',
+                              '-command' =&gt; \&amp;start_pause,
+                              );
+    my $w_quit = $w_top-&gt;Button('-text' =&gt; 'Quit',
+                                '-command' =&gt; sub {exit(0)}
+                                );
+    $w_heap-&gt;pack();
+    $w_start-&gt;pack('-side'=&gt; 'left', '-fill' =&gt; 'y', '-expand' =&gt; 'y');
+    $w_quit-&gt;pack('-side'=&gt; 'right', '-fill' =&gt; 'y', '-expand' =&gt; 'y');
+}</PRE
+><pre class="programlisting"></PRE
+><pre class="programlisting">sub bind_key {
+    my ($keychar, $callback) = @_;
+    if ($keychar eq ' ') {
+        $keychar = &quot;KeyPress-space&quot;;
+    }
+    $w_top-&gt;bind(&quot;&lt;${keychar}&gt;&quot;, $callback);
+}<a class="indexterm" name="ch15-idx-997663-0"></A
+><a class="indexterm" name="ch15-idx-997663-1"></A
+><a class="indexterm" name="ch15-idx-997663-2"></A
+></PRE
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch15_02.htm" title="15.2 Design"><img src="../gifs/txtpreva.gif" alt="Previous: 15.2 Design" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="chapter" href="ch16_01.htm" title="16. GUI Example: Man Page Viewer"><img src="../gifs/txtnexta.gif" alt="Next: 16. GUI Example: Man Page Viewer" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">15.2 Design</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">16. GUI Example: Man Page Viewer</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

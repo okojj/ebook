@@ -1,0 +1,454 @@
+<html>
+<head>
+<title>Signed Classes (Java Security)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Scott Oaks">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-403-7E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Signed Classes">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm" alt="Java Security"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch12_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch12_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch12_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch12_01.htm">Chapter 12: Digital Signatures</a></td><td align="right" valign="top" width="172"><a href="ch12_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch12_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">12.2. Signed Classes</h2>
+
+<p>
+<a name="INDEX-1460"></a><a name="INDEX-1461"></a><a name="INDEX-1462"></a><a name="INDEX-1463"></a><a name="INDEX-1464"></a>One of the primary applications
+of digital signatures in Java is to create and verify signed classes.
+Signed classes allow the expansion of Java's sandbox in two
+different ways:
+</p>
+
+<ul>
+<li>
+<p>The policy file can insist that classes coming from a particular site
+be signed by a particular entity before the access controller will
+grant that particular set of permissions. In the policy file, such an
+entry contains a <tt class="literal">signedBy</tt> directive:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">grant signedBy "sdo", codeBase "http://piccolo.East.Sun.COM/" {
+		java.io.FilePermission "-", "read,write";
+}</pre>
+</blockquote>
+
+<p>This entry allows classes that are loaded from
+<em class="filename">piccolo.East.Sun.COM</em> to read and write any local
+files under the current directory only if the classes have been
+signed by <tt class="literal">sdo</tt>.
+</p>
+</li>
+<li>
+<p>The security manager can cooperate with the class loader in order to
+determine whether or not a particular class is signed; the security
+manager is then free to grant permissions to that class based on its
+own internal policy. This technique is far more important in Java
+1.1, since most Java 1.2 security managers simply defer decisions to
+the access controller.
+</p>
+</li>
+</ul>
+
+<p>In this section, we'll explore the necessary components behind
+this expansion of the Java sandbox. This example in the rest of the
+section fills in the remaining details of the
+<tt class="literal">JavaRunner</tt> program by showing us how to use a
+signed class.
+</p>
+
+<p>There are three necessary ingredients to expand the Java sandbox with
+signed classes:
+</p>
+
+<ul>
+<li>
+<p>A method to create the signed class. The
+<tt class="literal">jarsigner</tt> utility is used for this (see <a href="appa_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/appa_01.htm">Appendix A, "Security Tools"</a>).
+</p>
+</li>
+<li>
+<p>A class loader that knows how to understand the digital signature
+associated with the class. The <tt class="literal">URLClassLoader</tt>
+class knows how to do this, but we'll show an example of how to
+do that for our <tt class="literal">JavaRunnerLoader</tt> class as well.
+</p>
+</li>
+<li>
+<p>A security manager or access controller that grants the desired
+permissions based on the digital signature. The default access
+controller will do this for us; we'll show how the security
+manager might do this directly.
+</p>
+</li>
+</ul>
+
+<a name="SEC-CH-12-SECT-2.1"></a>
+<h3 class="sect2">12.2.1. Reading Signed JAR Files</h3>
+
+<p>
+<a name="INDEX-1465"></a><a name="INDEX-1466"></a><a name="INDEX-1467"></a><a name="INDEX-1468"></a>Signed
+classes in the Java-browser world are typically delivered as signed
+JAR files; there are various tools <tt class="literal">(javakey</tt> for
+Java 1.1 and <tt class="literal">jarsigner </tt>for Java 1.2) that can
+take an ordinary JAR file and attach a digital signature to it. A
+signed JAR file has three special elements:
+</p>
+
+<ul>
+<li>
+<p>A <a name="INDEX-1469"></a>manifest (MANIFEST.MF), containing a
+listing of the files in the archive that have been signed, along with
+a message digest for each signed file.
+</p>
+</li>
+<li>
+<p>A <a name="INDEX-1470"></a><a name="INDEX-1471"></a>signature file (XXX.SF, where XXX is
+the name of the entity that signed the archive) that contains
+signature information. The data in this file is comprised of message
+digests of entries in the manifest file.
+</p>
+</li>
+<li>
+<p>A <a name="INDEX-1472"></a><a name="INDEX-1473"></a>block file (XXX.DSA, where XXX is the
+name of the entity that signed the archive and DSA is the name of the
+signature algorithm used to create the signature). The block file
+contains the actual signature data in a format known as PKCS7.
+</p>
+</li>
+</ul>
+
+<p>There are many advantages to this format, not the least of which is
+that the <a name="INDEX-1474"></a>
+PKCS7 block file (that is, the signature itself) is a standard format
+for external signatures. Unfortunately, the necessary classes to
+create PKCS7 blocks are not part of Java's public API; if you
+want to be able to write a signed JAR file, you'll need to
+write the classes to create the signature block yourself.
+</p>
+
+<p>However, we can read a signed JAR file using the core API. This means
+that the class loader we've been using for the
+<tt class="literal">JavaRunner</tt> program can be modified to read a
+standard JAR file and associate the digital signature of that archive
+with the classes it loads.
+</p>
+
+<p>We'll enhance the <tt class="literal">JarLoader</tt> class loader
+that we first developed in <a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_01.htm">Chapter 3, "Java Class Loaders"</a> in order to
+read the signature. For reference, we'll show the entire class
+again here, although only the highlighted portions of it have changed
+(it also contains some methods that we added in <a href="ch06_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch06_01.htm">Chapter 6, "Implementing Security Policies"</a>):
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class JarLoader extends SecureClassLoader {
+	private URL urlBase;	
+	public boolean printLoadMessages = true;
+	Hashtable classArrays;
+<b class="emphasis-bold">	Hashtable classIds;</b>
+	static int groupNum = 0;
+	ThreadGroup threadGroup;
+
+	public JarLoader(String base, ClassLoader parent) {
+		super(parent);
+		try {
+			if (!(base.endsWith("/")))
+				base = base + "/";
+			urlBase = new URL(base);
+			classArrays = new Hashtable();
+			classIds = new Hashtable();
+		} catch (Exception e) {
+			throw new IllegalArgumentException(base);
+		}
+	}
+
+	private byte[] getClassBytes(InputStream is) {
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		BufferedInputStream bis = new BufferedInputStream(is);
+		boolean eof = false;
+		while (!eof) {
+			try {
+				int i = bis.read();
+				if (i == -1)
+					eof = true;
+				else baos.write(i);
+			} catch (IOException e) {
+				return null;
+			}
+		}
+		return baos.toByteArray();
+	}
+
+	protected Class findClass(String name) {
+		String urlName = name.replace('.', '/');
+		byte buf[];
+		Class cl;
+
+		SecurityManager sm = System.getSecurityManager();
+		if (sm != null) {
+			int i = name.lastIndexOf('.');
+			if (i &gt;= 0)
+				sm.checkPackageDefinition(name.substring(0, i));
+		}
+
+		buf = (byte[]) classArrays.get(urlName);
+		if (buf != null) {
+			<b class="emphasis-bold">Certificate ids[] = (Certificate) classIds.get(urlName);</b>
+			<b class="emphasis-bold">CodeSource cs = new CodeSource(urlBase, ids);</b>
+<b class="emphasis-bold">			cl = defineClass(name, buf, 0, buf.length, cs);</b>
+			return cl;
+		}
+
+		try {
+			URL url = new URL(urlBase, urlName + ".class");
+			if (printLoadMessages)
+				System.out.println("Loading " + url);
+			InputStream is = url.openConnection().getInputStream();
+			buf = getClassBytes(is);
+			CodeSource cs = new CodeSource(urlBase, null);
+			cl = defineClass(name, buf, 0, buf.length, cs);
+			return cl;
+		} catch (Exception e) {
+			System.out.println("Can't load " + name + ": " + e);
+			return null;
+		}
+	}
+
+	public void readJarFile(String name) {
+		URL jarUrl = null;
+		JarInputStream jis;
+		JarEntry je;
+
+		try {
+			jarUrl = new URL(urlBase, name);
+		} catch (MalformedURLException mue) {
+			System.out.println("Unknown jar file " + name);
+			return;
+		}
+		if (printLoadMessages)
+			System.out.println("Loading jar file " + jarUrl);
+
+		try {
+			jis = new JarInputStream(
+						jarUrl.openConnection().getInputStream());
+		} catch (IOException ioe) {
+			System.out.println("Can't open jar file " + jarUrl);
+			return;
+		}
+
+		try {
+			while ((je = jis.getNextJarEntry()) != null) {
+				String jarName = je.getName();
+				if (jarName.endsWith(".class"))
+					loadClassBytes(jis, jarName, je);
+				// else ignore it; it could be an image or audio file
+				jis.closeEntry();
+			}
+		} catch (IOException ioe) {
+			System.out.println("Badly formatted jar file");
+		}
+	}
+
+	private void loadClassBytes(JarInputStream jis,
+									String jarName, JarEntry je) {
+		if (printLoadMessages)
+			System.out.println("\t" + jarName);
+		BufferedInputStream jarBuf = new BufferedInputStream(jis);
+		ByteArrayOutputStream jarOut = new ByteArrayOutputStream();
+		int b;
+		try {
+			while ((b = jarBuf.read()) != -1)
+				jarOut.write(b);
+			String className = jarName.substring(0, jarName.length() - 6);
+			classArrays.put(className, jarOut.toByteArray());
+<b class="emphasis-bold">			Certificate c[] = je.getCertificates();</b>
+<b class="emphasis-bold">			if (c == null)</b>
+<b class="emphasis-bold">				c = new Certificate[0];</b>
+<b class="emphasis-bold">			classIds.put(className, c);</b>
+		} catch (IOException ioe) {
+			System.out.println("Error reading entry " + jarName);
+		}
+	}
+
+	public void checkPackageAccess(String name) {
+		SecurityManager sm = System.getSecurityManager();
+		if (sm != null)
+			sm.checkPackageAccess(name);
+	}
+
+	ThreadGroup getThreadGroup() {
+		if (threadGroup == null)
+			threadGroup = new ThreadGroup(
+							"JavaRuner ThreadGroup-" + groupNum++);
+		return threadGroup;
+	}
+
+	String getHost() {
+		return urlBase.getHost();
+	}
+}</pre>
+</blockquote>
+
+<p>Interestingly enough, all the details of the digital signature are
+handled for us by the classes in the <tt class="literal">jar</tt>
+package. All that we're left to do is obtain the array of
+signers when we read in each JAR entry and then use that array of
+signers when we construct the code source we use to define the class.
+Remember that each file in a JAR file may be signed by a different
+group of identities and that some may not be signed at all. This is
+why we must construct a new code source object for each signed class
+that was in the JAR file.<a name="INDEX-1475"></a><a name="INDEX-1476"></a><a name="INDEX-1477"></a><a name="INDEX-1478"></a>
+</p>
+
+
+<a name="SEC-CH-12-SECT-2.2"></a>
+<h3 class="sect2">12.2.2. The Signed JAR File and Security Policies</h3>
+
+<p>
+<a name="INDEX-1479"></a><a name="INDEX-1480"></a><a name="INDEX-1481"></a><a name="INDEX-1482"></a>
+The last item in our examination of signed JAR files involves the
+security policy and its interaction with the signed JAR file. In the
+case where the security policy is completely determined by the access
+controller, the class loader has already done all our work for us;
+the access controller depends on each class to have an appropriate
+code source, and permissions for that code will be completely defined
+in the policy file.
+</p>
+
+<p>In Java 1.1, the mechanism is different; we can't use the JAR
+classes to parse a signed JAR file, and we can't use the
+<tt class="literal">defineClass()</tt> method to set the signers for a
+particular signed class. The first of these problems is harder to
+overcome; it requires that you implement the equivalent of the
+<tt class="literal">java.util.jar</tt> package. We've presented all
+the background information you'd need to do that, but it is a
+lot of code to write (so we won't). The second of these
+problems means that your class loader must define a class as follows:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">if (isSecure(urlName)) {
+	cl = defineClass(name, buf, 0, buf.length);
+<b class="emphasis-bold">	if (ids != null)</b>
+<b class="emphasis-bold">		setSigners(cl, ids);</b>
+}
+else cl = defineClass(name, buf, 0, buf.length);</pre>
+</blockquote>
+
+<p>The <tt class="literal">isSecure()</tt> method in this case must base its
+decision on information obtained from reading the manifest of the JAR
+file and verifying the signature that is contained in the signature
+file. The array of <tt class="literal">ids</tt> will need to be created
+by constructing instances of the <tt class="literal">Identity</tt> class
+to represent the signer of the class.
+</p>
+
+<p>The reason for setting the signers in this way is to allow the
+<a name="INDEX-1483"></a>security manager to retrieve those
+signatures easily. When the security manager does not defer all
+permissions to the access controller--and, hence, in all Java
+1.1 programs--the security manager will need to take advantage
+of signed class information to base its decisions. This is typically
+done by programming the security manager to retrieve the keys that
+were used to sign a class via the <tt class="literal">getSigners()</tt>
+method. This allows the security manger to function with any standard
+signature-aware class loader. The security manager could then do
+something like this:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public void checkAccess(Thread t) {
+	Class cl = currentLoadedClass();
+	if (cl == null)
+		return;
+	Identity ids[] = (Identity[]) cl.getSigners();
+	for (int i = 0; i &lt; ids.length; i++) {
+		if (isTrustedId(ids[i]))
+			return;
+	}
+	throw new SecurityException("Can't modify thread states");
+}</pre>
+</blockquote>
+
+<p>The key to this example is writing a good
+<tt class="literal">isTrustedId()</tt> method. A possible implementation
+is to use the information stored in the keystore (for 1.2) or
+identity database (for 1.1) to grant a level of trust to an entity;
+such an implementation requires that you have a non-default
+implementation of these databases. Alternately, your application
+could hardwire the public keys of certain entities (like the public
+key of the HR group of XYZ corporation) and use that information as
+the basis of its security <a name="INDEX-1484"></a><a name="INDEX-1485"></a><a name="INDEX-1486"></a><a name="INDEX-1487"></a> decisions.<a name="INDEX-1488"></a><a name="INDEX-1489"></a><a name="INDEX-1490"></a><a name="INDEX-1491"></a><a name="INDEX-1492"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch12_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch12_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch12_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch12_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">12.1. The Signature Class</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">12.3. Implementing a Signature Class</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

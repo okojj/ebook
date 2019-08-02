@@ -1,0 +1,164 @@
+<html><head>
+<title>[Chapter 10] 10.2 Streamed Data</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:35:24Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch10_01.htm" title="10. Persistence"><link rel="prev" href="ch10_01.htm" title="10.1 Persistence Issues"><link rel="next" href="ch10_03.htm" title="10.3 Record-Oriented Approach"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch10_01.htm" title="10.1 Persistence Issues"><img src="../gifs/txtpreva.gif" alt="Previous: 10.1 Persistence Issues" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch10_01.htm" title="10. Persistence">Chapter 10<br>Persistence</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch10_03.htm" title="10.3 Record-Oriented Approach"><img src="../gifs/txtnexta.gif" alt="Next: 10.3 Record-Oriented Approach" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch10-24773">10.2 Streamed Data</A
+></H2
+><p class="para"><a class="indexterm" name="ch10-idx-982597-0"></A
+><a class="indexterm" name="ch10-idx-982597-1"></A
+>We look at three modules, FreezeThaw, Data::Dumper, and Storable, in this section. All of them serialize Perl data structures to ASCII or binary strings; only Storable actually writes them to disk. The other two modules are important because they can be used in conjunction with other persistence mechanisms such as databases and DBM files. All of them correctly account for blessed object references and self-referential data structures, but trip up when it comes to typeglobs, tied variables, or scalars containing pointers to C data types (justifiably so). It is also impossible for these (or any) modules to understand implicit relationships. For example, if you use the ObjectTemplate approach described in <a class="xref" href="ch08_01.htm#ch08-40982" title="Efficient Attribute Storage">Section 8.1, "Efficient Attribute Storage"</A
+>, the "object" is basically an array index, and so the disk will get to see only a bunch of meaningless array indices minus the data. Another subtle error occurs when you use references as hash indices and Perl converts them to strings (such as <kbd class="command">SCALAR(0xe3f434)</KBD
+>). This is not a real reference, so if you store the hash table to a file and recreate it, the implicit reference to the original structure is not valid any more.</P
+><p class="para">Moral of the story: simple nests of Perl structures are handled easily; in all other cases, it is your responsibility to translate your application data into a structure containing ordinary Perl elements before sending it to disk.</P
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch10-pgfId-976236">10.2.1 FreezeThaw</A
+></H3
+><p class="para"><a class="indexterm" name="ch10-idx-982598-0"></A
+><a class="indexterm" name="ch10-idx-982598-1"></A
+>FreezeThaw, written by Ilya <a class="indexterm" name="ch10-idx-982605-0"></A
+>Zakharevich, is a pure Perl module (no C extensions) and encodes complex data structures into printable ASCII strings. It does not deal directly with files and leaves it to you to send the encoded string to a normal file, a DBM file, or a database. Here's an example of the module's use:</P
+><pre class="programlisting">use FreezeThaw qw(freeze thaw); # Import freeze() and thaw()
+# Create a complex data structure: a hash of arrays
+$c = { 'even' =&gt; [2, 4, 6, 8],
+       'odd'  =&gt; [1, 3, 5, 7]};
+# Create sample object
+$obj = bless {'foo' =&gt; 'bar'}, 'Example';
+$msg = freeze($c, $obj);
+open (F, &quot;&gt; test&quot;) || die;
+syswrite (F, $msg, length($msg)); # can also use write() or print()</PRE
+><p class="para">The <kbd class="command">freeze()</KBD
+> function takes a list of scalars to be encoded and returns one string. Arrays and hashes must be passed by reference. The <kbd class="command">thaw</KBD
+> method takes an encoded string and returns the same list of scalars:</P
+><pre class="programlisting">($c, $obj) = thaw ($msg);</PRE
+><p class="para">We will use FreezeThaw in <a class="xref" href="ch13_01.htm#ch13-37076" title="Msg: Messaging Toolkit">Section 13.1, "Msg: Messaging Toolkit"</A
+>, to send data structures across a socket connection. Because the encoding is ASCII, we don't need to worry about machine-specific details such as byte order, or the length of integers and floating point numbers.<a class="indexterm" name="ch10-idx-982600-0"></A
+><a class="indexterm" name="ch10-idx-982600-1"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch10-pgfId-976240">10.2.2 Data::Dumper</A
+></H3
+><p class="para"><a class="indexterm" name="ch10-idx-982603-0"></A
+><a class="indexterm" name="ch10-idx-982603-1"></A
+><a class="indexterm" name="ch10-idx-982603-2"></A
+>Data::Dumper, written by Gurusamy <a class="indexterm" name="ch10-idx-982606-0"></A
+>Sarathy, is similar in spirit to FreezeThaw, but takes a very different approach. It converts the list of scalars passed to its <code class="literal">Dumper</CODE
+> function into pretty-printed Perl code, which can be stored into a file and subsequently <kbd class="command">eval</KBD
+>ed. Consider</P
+><pre class="programlisting">use Data::Dumper ; 
+# Create a complex data structure: a hash of arrays
+$c = { 'even' =&gt; [2, 4,],
+       'odd'  =&gt; [1, 3,]};
+# Create sample object
+$obj = bless {'foo' =&gt; 'bar'}, 'Example';
+$msg = <b class="emphasis.bold">Dumper</B
+>($c, $obj);
+print $msg;</PRE
+><p class="para">This prints</P
+><pre class="programlisting">$VAR1 = {
+          even =&gt; [
+                    2,
+                    4
+                  ],
+          odd =&gt; [
+                   1,
+                   3
+                 ]
+        };
+$VAR2 = bless( {
+                 foo =&gt; 'bar'
+               }, 'Example' );</PRE
+><p class="para">Data::Dumper assigns an arbitrary variable name to each scalar, which is not really useful if you want to <kbd class="command">eval</KBD
+> it subsequently and recreate your original data. The module allows you to assign your own variable names by using the <kbd class="command">Dump</KBD
+> method:</P
+><pre class="programlisting">$a = 100;
+@b = (2,3);
+print <b class="emphasis.bold">Data::Dumper-&gt;Dump</B
+>([$a, \@b], [&quot;foo&quot;, &quot;*bar&quot;]);</PRE
+><p class="para">This prints</P
+><pre class="programlisting">$foo = 100;
+@bar = (
+         2,
+         3
+       );</PRE
+><p class="para"><kbd class="command">Dump</KBD
+> takes two parameters: a reference to a list of scalars to be dumped and a reference to a list of corresponding names. If a "<kbd class="command">*</KBD
+>" precedes a name, <code class="literal">Dump</CODE
+> outputs the appropriate type of the variable. That is, instead of assigning to <kbd class="command">$b</KBD
+> a reference to an anonymous array, it assigns a real list to <kbd class="command">@b</KBD
+>. You can substitute <kbd class="command">Dumpx</KBD
+> for <kbd class="command">Dump</KBD
+> and take advantage of a C extension that implements the same functionality and gives you a speed increase of four to five times. </P
+><p class="para">Data::Dumper gives you an opportunity to specify custom subroutines to serialize and deserialize data, which allows you to smooth the troublesome spots mentioned earlier. Please refer to the documentation for details.<a class="indexterm" name="ch10-idx-982608-0"></A
+><a class="indexterm" name="ch10-idx-982608-1"></A
+><a class="indexterm" name="ch10-idx-982608-2"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch10-pgfId-976867">10.2.3 Storable</A
+></H3
+><p class="para"><a class="indexterm" name="ch10-idx-982610-0"></A
+><a class="indexterm" name="ch10-idx-982610-1"></A
+><a class="indexterm" name="ch10-idx-982610-2"></A
+>Storable is a C extension module for serializing data directly to files and is the fastest of the three approaches. The <kbd class="command">store</KBD
+> function takes a reference to a data structure (the <em class="emphasis">root</EM
+>) and the name of a file. The <kbd class="command">retrieve</KBD
+> method does the converse: given a filename, it returns the root:</P
+><pre class="programlisting">use Storable;
+$a = [100, 200, {'foo' =&gt; 'bar'}];
+eval {
+    store($a, 'test.dat');
+};
+print &quot;Error writing to file: $@&quot; if $@;
+$a = retrieve('test.dat');</PRE
+><p class="para">If you have more than one structure to stuff into a file, simply put all of them in an anonymous array and pass this array's reference to <kbd class="command">store</KBD
+>. </P
+><p class="para">You can pass an open filehandle to <kbd class="command">store_fd</KBD
+> instead of giving a filename to <kbd class="command">store</KBD
+>. The functions <kbd class="command">nstore</KBD
+> and <kbd class="command">nstore_fd</KBD
+> can be used for storing the data in "network" order, making the data machine-independent. When you use <kbd class="command">retrieve</KBD
+> or <kbd class="command">retrieve_fd</KBD
+>, the data is automatically converted back to the native machine format (while storing, the module stores a flag indicating whether it has stored it in a machine-independent format or not).<a class="indexterm" name="ch10-idx-982673-0"></A
+><a class="indexterm" name="ch10-idx-982673-1"></A
+><a class="indexterm" name="ch10-idx-982673-2"></A
+><a class="indexterm" name="ch10-idx-982673-3"></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch10_01.htm" title="10.1 Persistence Issues"><img src="../gifs/txtpreva.gif" alt="Previous: 10.1 Persistence Issues" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch10_03.htm" title="10.3 Record-Oriented Approach"><img src="../gifs/txtnexta.gif" alt="Next: 10.3 Record-Oriented Approach" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">10.1 Persistence Issues</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">10.3 Record-Oriented Approach</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

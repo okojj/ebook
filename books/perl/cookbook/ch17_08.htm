@@ -1,0 +1,133 @@
+<html><head>
+<title>Recipe 17.7. Identifying the Other End of a Socket</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:32Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch17_01.htm" title="17. Sockets"><link rel="prev" href="ch17_07.htm" title="17.6. Using UNIX Domain Sockets"><link rel="next" href="ch17_09.htm" title="17.8. Finding Your Own Name and Address"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_07.htm" title="17.6. Using UNIX Domain Sockets"><img src="../gifs/txtpreva.gif" alt="Previous: 17.6. Using UNIX Domain Sockets" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch17_01.htm" title="17. Sockets">Chapter 17<br>Sockets</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_09.htm" title="17.8. Finding Your Own Name and Address"><img src="../gifs/txtnexta.gif" alt="Next: 17.8. Finding Your Own Name and Address" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch17-26620">17.7. Identifying the Other End of a Socket</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-922">Problem<a class="indexterm" name="ch17-idx-1000004772-0"></A
+><a class="indexterm" name="ch17-idx-1000004772-1"></A
+></A
+></H3
+><p class="para">You have a socket and want to identify the machine at the other end.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-928">Solution</A
+></H3
+><p class="para">If you're only interested in the IP address of the remote machine, use:</P
+><pre class="programlisting">use Socket;
+
+$other_end         = getpeername(SOCKET)
+    or die &quot;Couldn't identify other end: $!\n&quot;;
+($port, $iaddr)    = unpack_sockaddr_in($other_end);
+$ip_address        = inet_ntoa($iaddr);</PRE
+><p class="para">If you want its actual host name, use:</P
+><pre class="programlisting">use Socket;
+
+$other_end        = getpeername(SOCKET)
+    or die &quot;Couldn't identify other end: $!\n&quot;;
+($port, $iaddr)   = unpack_sockaddr_in($other_end);
+$actual_ip        = inet_ntoa($iaddr);
+$claimed_hostname = gethostbyaddr($iaddr, AF_INET);
+@name_lookup      = gethostbyname($claimed_hostname)
+    or die &quot;Could not look up $claimed_hostname : $!\n&quot;;
+@resolved_ips     = map { inet_ntoa($_) }
+    @name_lookup[ 4 .. $#ips_for_hostname ];</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-970">Discussion</A
+></H3
+><p class="para">For a long time, figuring out who connected to you was considered more straightforward than it really is. The <code class="literal">getpeername</CODE
+> function returns the IP address of the remote machine in a packed binary structure (or <code class="literal">undef</CODE
+> if an error occurred). To unpack it, use <code class="literal">inet_ntoa</CODE
+>. If you want the name of the remote end, call <code class="literal">gethostbyaddr</CODE
+> to look up the name of the machine in the DNS tables, right?</P
+><p class="para">Not really. That's only half the solution. Because a name lookup goes to the name's owner's DNS server and a lookup of an IP addresses goes to the address's owner's DNS server, you have to contend with the possibility that the machine that connected to you is giving incorrect names. For instance, the machine <code class="literal">evil.crackers.org</CODE
+> could belong to malevolent cyberpirates who tell their DNS server that its IP address (<code class="literal">1.2.3.4</CODE
+>) should be identified as <code class="literal">trusted.dod.gov</CODE
+>. If your program trusts <code class="literal">trusted.dod.gov</CODE
+>, a connection from <code class="literal">evil.crackers.org</CODE
+> will cause <code class="literal">getpeername</CODE
+> to return the right IP address (<code class="literal">1.2.3.4</CODE
+>), but <code class="literal">gethostbyaddr</CODE
+> will return the duplicitous name.</P
+><p class="para">To avoid this problem, we take the (possibly deceitful) name returned by <code class="literal">get-hostbyaddr</CODE
+><a class="indexterm" name="ch17-idx-1000004778-0"></A
+><a class="indexterm" name="ch17-idx-1000004778-1"></A
+> and look it up again with <code class="literal">gethostbyname</CODE
+>. In the case of <code class="literal">evil.crackers.org</CODE
+>, the lookup of <code class="literal">trusted.dod.gov</CODE
+> will be done through <code class="literal">dod.gov</CODE
+>'s DNS servers, and will return the real IP address(es) for <code class="literal">trusted.dod.gov</CODE
+>. Because many machines have more than one IP address (multihomed web servers are the obvious example), we can't use the simplified form of <code class="literal">gethostbyname</CODE
+>:</P
+><pre class="programlisting">$packed_ip  = gethostbyname($name) or die &quot;Couldn't look up $name : $!\n&quot;;
+$ip_address = inet_ntoa($packed_ip);</PRE
+><p class="para">So far we've assumed we're dealing with an Internet domain application. You can also call <code class="literal">getpeername</CODE
+> on a Unix domain socket. If the other end called <code class="literal">bind</CODE
+>, you'll get the filename they bound to. If the other end <em class="emphasis">didn't</EM
+> call <code class="literal">bind</CODE
+>, however, <code class="literal">getpeername</CODE
+> may return an empty string (unpacked), a packed string with oddball garbage in it, or <code class="literal">undef</CODE
+> to indicate an error, or your computer may reboot. (These possibilities are listed in descending order of probability and desirability.) This is what we in the computer business call "undefined behavior."<a class="indexterm" name="ch17-idx-1000004774-0"></A
+><a class="indexterm" name="ch17-idx-1000004774-1"></A
+></P
+><p class="para">Even this level of paranoia and mistrust isn't enough. It's still possible for people to fake out DNS servers they don't directly control, so don't use hostnames for identification or authentication. True paranoiacs and misanthropes use cryptographically-secure methods.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1000005818">See Also</A
+></H3
+><p class="para">The 
+<a class="olink" href="../prog/ch03_047.htm">&#13;<code class="literal">gethostbyaddr</CODE
+></A
+>, 
+
+<a class="olink" href="../prog/ch03_048.htm">&#13;<code class="literal">gethostbyname</CODE
+></A
+>, and 
+
+<a class="olink" href="../prog/ch03_054.htm">&#13;<code class="literal">getpeername</CODE
+></A
+> in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlfunc </I
+>(1); the <code class="literal">inet_ntoa</CODE
+> in the standard Socket module; the documentation for the standard IO::Socket and Net::hostnet modules</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_07.htm" title="17.6. Using UNIX Domain Sockets"><img src="../gifs/txtpreva.gif" alt="Previous: 17.6. Using UNIX Domain Sockets" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_09.htm" title="17.8. Finding Your Own Name and Address"><img src="../gifs/txtnexta.gif" alt="Next: 17.8. Finding Your Own Name and Address" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">17.6. Using UNIX Domain Sockets</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">17.8. Finding Your Own Name and Address</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

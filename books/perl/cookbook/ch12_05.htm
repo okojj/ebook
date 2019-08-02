@@ -1,0 +1,144 @@
+<html><head>
+<title>Recipe 12.4. Making Variables Private to a Module</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:41:31Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch12_01.htm" title="12. Packages, Libraries, and Modules"><link rel="prev" href="ch12_04.htm" title="12.3. Delaying use Until Run Time"><link rel="next" href="ch12_06.htm" title="12.5. Determining the Caller's Package"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch12_04.htm" title="12.3. Delaying use Until Run Time"><img src="../gifs/txtpreva.gif" alt="Previous: 12.3. Delaying use Until Run Time" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch12_01.htm" title="12. Packages, Libraries, and Modules">Chapter 12<br>Packages, Libraries, and Modules</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch12_06.htm" title="12.5. Determining the Caller's Package"><img src="../gifs/txtnexta.gif" alt="Next: 12.5. Determining the Caller's Package" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch12-36333">12.4. Making Variables Private to a Module</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch12-pgfId-596">Problem<a class="indexterm" name="ch12-idx-1000005204-0"></A
+><a class="indexterm" name="ch12-idx-1000005204-1"></A
+><a class="indexterm" name="ch12-idx-1000005204-2"></A
+><a class="indexterm" name="ch12-idx-1000005204-3"></A
+><a class="indexterm" name="ch12-idx-1000005204-4"></A
+></A
+></H3
+><p class="para">You want to make a variable or function private to a package.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch12-pgfId-602">Solution</A
+></H3
+><p class="para">You can't. But you can make them private to the file that the module sits in, which usually suffices.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch12-pgfId-608">Discussion</A
+></H3
+><p class="para">Remember that a package is just a way of grouping variables and functions together, conferring no privacy. Anything in a package is by definition global and accessible from anywhere. Packages only group; they don't hide.</P
+><p class="para">For privacy, only lexical variables will do. A module is implemented in a <em class="emphasis">Module.pm</EM
+>, with all its globals in the package named Module. Because that whole file is by definition a scope and lexicals are private to a scope, creating file-scoped lexicals is effectively the same thing as a module-private variable.</P
+><p class="para">If you alternate packages within a scope, though, you may be surprised that the scope's lexicals are visible no matter where you are. That's because a package statement only sets a different prefix for a global identifier.</P
+><pre class="programlisting">package Alpha;
+my $aa = 10;
+   $x = &quot;azure&quot;;
+
+package Beta;
+my $bb = 20;
+   $x = &quot;blue&quot;;
+
+package main;
+print &quot;$aa, $bb, $x, $Alpha::x, $Beta::x\n&quot;;
+<b class="emphasis.bold">10, 20, , azure, blue</B
+></PRE
+><p class="para">Was that the output you expected? The two lexicals, <code class="literal">$aa</CODE
+> and <code class="literal">$bb</CODE
+>, are still in scope because we haven't left the current block, file, or <code class="literal">eval</CODE
+>. You might think of globals and lexicals as existing in separate dimensions, forever unrelated to each other. Package statements have nothing to do with lexicals. By setting the current prefix, the first global variable <code class="literal">$x</CODE
+> is really <code class="literal">$Alpha::x</CODE
+>, whereas the second <code class="literal">$x</CODE
+> is now <code class="literal">$Beta::x</CODE
+> because of the intervening package statement changing the default prefix. Package identifiers, if fully qualified, can be accessed from anywhere, as we've done in the <code class="literal">print</CODE
+> statement.</P
+><p class="para">So, packages can't have privacy &nbsp;-  but modules can because they're in a file, which is always its own scope. Here's a simple module, placed in the file <em class="emphasis">Flipper.pm</EM
+>, that exports two functions, <code class="literal">flip_words</CODE
+> and <code class="literal">flip_boundary</CODE
+>. The module provides code to reverse words in a line, and to change the definition of a word boundary.</P
+><pre class="programlisting"># Flipper.pm
+package Flipper;
+use strict;
+
+require Exporter;
+use vars qw(@ISA @EXPORT $VERSION);
+@ISA     = qw(Exporter);
+@EXPORT  = qw(flip_words flip_boundary);
+$VERSION = 1.0;
+
+my $Separatrix = ' ';  # default to blank; must precede functions
+
+sub flip_boundary {
+    my $prev_sep = $Separatrix;
+    if (@_) { $Separatrix = $_[0] }
+    return $prev_sep;
+}
+sub flip_words {
+    my $line  = $_[0];
+    my @words = split($Separatrix, $line);
+    return join($Separatrix, reverse @words);
+}
+1;</PRE
+><p class="para">This module sets three package variables needed by the Exporter and also initializes a lexical variable at file level called <code class="literal">$Separatrix</CODE
+>. Again, this variable is private to the file, not to the package. All code beneath its declaration in the same scope (or nested within that scope, as are the functions' blocks) can see <code class="literal">$Separatrix</CODE
+> perfectly. Even though they aren't exported, global variables could be accessed using the fully qualified name, as in <code class="literal">$Flipper::VERSION</CODE
+>.</P
+><p class="para">A scope's lexicals cannot be examined or tinkered with from outside that scope, which in this case is the entire file below their point of declaration. You cannot fully qualify lexicals or export them either; only globals can be exported. If someone outside the module needs to look at or change the file's lexicals, they must ask the module itself. That's where the <code class="literal">flip_boundary</CODE
+> function comes into play, allowing indirect access to the module's private parts.</P
+><p class="para">This module would work the same even if its <code class="literal">$Separatrix</CODE
+> variable were a package global rather than a file lexical. Someone from the outside could theoretically play with it without the module realizing this. On the other hand, if they really want to that badly, perhaps you should let them do so. Peppering your module with file-scoped lexicals is not necessary. You already have your own namespace (Flipper, in this case) where you can store all the identifiers you want. That's what it's there for, after all. Good Perl programming style nearly always avoids fully qualified identifiers.</P
+><p class="para">Speaking of style, the case of identifiers used in the Flipper module was not random. Following the Perl style guide, identifiers in all capitals are reserved for those with special meaning to Perl itself. Functions and local variables are all lowercase. The module's persistent variables (either file lexicals or package globals) are capitalized. Identifiers with multiple words have each of these separated by an underscore to make it easier to read. Please don't use mixed capitals without underscores &nbsp;-  you wouldn't like reading this book without spaces, either.<a class="indexterm" name="ch12-idx-1000005206-0"></A
+><a class="indexterm" name="ch12-idx-1000005206-1"></A
+><a class="indexterm" name="ch12-idx-1000005206-2"></A
+><a class="indexterm" name="ch12-idx-1000005206-3"></A
+><a class="indexterm" name="ch12-idx-1000005206-4"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch12-pgfId-706">See Also</A
+></H3
+><p class="para">The discussion on file-scoped lexicals in <i class="filename">perlmod </I
+>(1); the <a class="olink" href="../prog/ch02_06.htm#PERL2-CH-2-SECT-6.8">"Scoped Declarations"</A
+> section in <a class="olink" href="../prog/ch02_01.htm">Chapter 2</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; the section on <a class="olink" href="../prog/ch08_04.htm">"Programming with Style"</A
+> in <a class="olink" href="../prog/ch08_01.htm">Chapter 8</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> or <i class="filename">perlstyle</I
+> (1); <a class="xref" href="ch10_03.htm" title="Making Variables Private to a Function">Recipe 10.2</A
+>; <a class="xref" href="ch10_04.htm" title="Creating Persistent Private Variables">Recipe 10.3</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch12_04.htm" title="12.3. Delaying use Until Run Time"><img src="../gifs/txtpreva.gif" alt="Previous: 12.3. Delaying use Until Run Time" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch12_06.htm" title="12.5. Determining the Caller's Package"><img src="../gifs/txtnexta.gif" alt="Next: 12.5. Determining the Caller's Package" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">12.3. Delaying use Until Run Time</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">12.5. Determining the Caller's Package</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

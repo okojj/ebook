@@ -1,0 +1,832 @@
+<html><head>
+<title>[Chapter 5] The UNIX Filesystem</TITLE>
+<meta name="DC.title" content="Practical UNIX &amp; Internet Security"><meta name="DC.creator" content="Simson Garfinkel &amp; Gene Spafford"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-02-04T00:01:25Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-148-8" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="part02.htm" title="II. User Responsibilities"><link rel="prev" href="ch04_04.htm" title="4.4 Summary"><link rel="next" href="ch05_02.htm" title="5.2 Using File Permissions"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Practical UNIX &amp; Internet Security" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Practical UNIX &amp; Internet Security"><area shape="RECT" coords="467,0,514,18" href="../search/psrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch04_04.htm" title="4.4 Summary"><img src="../gifs/txtpreva.gif" alt="Previous: 4.4 Summary" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 5</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch05_02.htm" title="5.2 Using File Permissions"><img src="../gifs/txtnexta.gif" alt="Next: 5.2 Using File Permissions" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="CHAPTER"><h1 class="chapter"><a class="title" name="PUIS-CHP-5">5. The UNIX Filesystem</A
+></H1
+><div class="htmltoc"><p><b>Contents:</B
+><br><a class="SECT1" href="#PUIS-CHP-5-SECT-1" title="5.1 Files">Files</A
+><br><a class="SECT1" href="ch05_02.htm" title="5.2 Using File Permissions">Using File Permissions</A
+><br><a class="SECT1" href="ch05_03.htm" title="5.3 The umask">The umask</A
+><br><a class="SECT1" href="ch05_04.htm" title="5.4 Using Directory Permissions">Using Directory Permissions</A
+><br><a class="SECT1" href="ch05_05.htm" title="5.5 SUID">SUID</A
+><br><a class="SECT1" href="ch05_06.htm" title="5.6 Device Files">Device Files</A
+><br><a class="SECT1" href="ch05_07.htm" title="5.7 chown: Changing a File's Owner">chown: Changing a File's Owner</A
+><br><a class="SECT1" href="ch05_08.htm" title="5.8 chgrp: Changing a File's Group">chgrp: Changing a File's Group</A
+><br><a class="SECT1" href="ch05_09.htm" title="5.9 Oddities and Dubious Ideas">Oddities and Dubious Ideas</A
+><br><a class="SECT1" href="ch05_10.htm" title="5.10 Summary">Summary</A
+></P
+><p></P
+></DIV
+><p class="para">The <span class="acronym">UNIX</SPAN
+> filesystem <a class="indexterm" name="AUTOID-3679"></A
+><a class="indexterm" name="AUTOID-3682"></A
+><a class="indexterm" name="AUTOID-3685"></A
+>
+controls the way that
+information in files and directories is stored on disk and other
+forms of secondary storage. It controls which users can access what
+items and how. The filesystem is therefore one of the most basic
+tools for enforcing <span class="acronym">UNIX</SPAN
+> security on your system.</P
+><p class="para">Information stored in the <span class="acronym">UNIX</SPAN
+> filesystem
+is arranged as a tree structure of directories and files. The tree
+is constructed from directories and subdirectories within a single
+directory, which is called the <i class="firstterm">root</I
+>.
+[1]
+
+Each directory,
+in turn, can contain other directories or entries such as files,
+pointers (symbolic links) to other parts of the filesystem, logical
+names that represent devices (such as <i class="filename">/dev/tty</I
+>),
+and many other types.[2]</P
+><blockquote class="footnote"><p class="para">[1] This
+is where the &quot;root&quot; user (superuser) name originates:
+the owner of the root of the filesystem.</P
+><p class="para">[2] For example, the UNIX &quot;process&quot;
+filesystem in System V contains entries that represent processes
+that are currently executing.</P
+></BLOCKQUOTE
+><p class="para">This chapter explains, from the user's point of view,
+how the filesystem represents and protects information.</P
+><div class="sect1"><h2 class="sect1"><a class="title" name="PUIS-CHP-5-SECT-1">5.1 Files</A
+></H2
+><p class="para">From <a class="indexterm" name="AUTOID-3701"></A
+>
+the simplest perspective,
+everything visible to the user in a <span class="acronym">UNIX</SPAN
+> system
+can be represented as a &quot;file&quot; in the filesystem
+&nbsp;-  including processes and network connections. Almost all
+of these items are represented as &quot;files&quot; each
+having at least one name, an owner, access rights, and other attributes.
+This information is actually stored in the filesystem in an <i class="firstterm">inode</I
+>(index node), the basic filesystem entry. An <a class="indexterm" name="AUTOID-3705"></A
+>
+inode
+stores everything about a filesystem entry except its name; the
+names are stored in directories and are associated with pointers
+to inodes.</P
+><div class="sect2"><h3 class="sect2"><a class="title" name="PUIS-CHP-5-SECT-1.1">5.1.1 Directories</A
+></H3
+><p class="para">One <a class="indexterm" name="AUTOID-3710"></A
+>
+special kind of entry
+in the filesystem is the <i class="firstterm">directory</I
+>. A directory
+is nothing more than a simple list of names and inode numbers. A
+name can consist of any string of any characters with the exception
+of a &quot;/&quot; character and the &quot;null&quot;
+character (usually a zero byte).[3] There is a limit to the length
+of these strings, but it is usually quite long: 1024 or longer on
+many modern versions of <span class="acronym">UNIX</SPAN
+>; older <span class="acronym">AT&T</SPAN
+>
+versions limit names to 14 characters or less.</P
+><blockquote class="footnote"><p class="para">[3] Some versions of
+UNIX may further restrict the characters that can be used in filenames
+and directory names.</P
+></BLOCKQUOTE
+><p class="para">These strings are the names of files, directories, and the
+other objects stored in the filesystem. Each name can contain control
+characters, line feeds, and other characters. This can have some
+interesting implications for security, and we'll discuss
+those later in this and other chapters.</P
+><p class="para">Associated with each name is a numeric pointer that is actually
+an index on disk for an inode. An inode contains information about
+an individual entry in the filesystem; these contents are described
+in the next section.</P
+><p class="para">Nothing else is contained in the directory other than names
+and inode numbers. No protection information is stored there, nor
+owner names, nor data. The directory is a very simple relational
+database that maps names to inode numbers. No restriction on how
+many names can point to the same inode exists, either. A directory
+may have 2, 5, or 50 names that each have the same inode number.
+In like manner, several directories may have names that associate
+to the same inode. These are known as <i class="firstterm">links</I
+>
+[4] to the file. There
+is no way of telling which link was the first created, nor is there
+any reason to know: all the names are equal in what they access.
+This is often a confusing idea for beginning users as they try to
+understand the &quot;real name&quot; for a file.</P
+><blockquote class="footnote"><p class="para">[4] These are <em class="emphasis">hard links</EM
+> or <em class="emphasis">direct
+links</EM
+>. Some systems support a different form of pointer,
+known as a <em class="emphasis">symbolic link</EM
+>, that behaves in a
+different way.</P
+></BLOCKQUOTE
+><p class="para">This also means that you don't actually delete a
+file with commands such as <i class="filename">rm.</I
+> Instead, you
+<i class="firstterm">unlink</I
+> the name&nbsp;- you sever the connection
+between the filename in a directory and the inode number. If another
+link still exists, the file will continue to exist on disk. After
+the last link is removed, and the file is closed, the kernel will
+reclaim the storage because there is no longer a method for a user
+to access it.</P
+><p class="para">Every <a class="indexterm" name="AUTOID-3730"></A
+><a class="indexterm" name="AUTOID-3732"></A
+><a class="indexterm" name="AUTOID-3734"></A
+><a class="indexterm" name="AUTOID-3736"></A
+><a class="indexterm" name="AUTOID-3738"></A
+><a class="indexterm" name="AUTOID-3741"></A
+><a class="indexterm" name="AUTOID-3743"></A
+><a class="indexterm" name="AUTOID-3746"></A
+><a class="indexterm" name="AUTOID-3749"></A
+><a class="indexterm" name="AUTOID-3753"></A
+>
+normal directory has
+two names always present. One entry is for &quot;<i class="filename">.</I
+>&quot;
+(dot), and this is associated with the inode for the directory itself;
+it is self-referential. The second entry is for &quot;<i class="filename">..</I
+>&quot;
+(dot-dot), which points to the &quot;parent&quot; of this
+directory&nbsp;- the directory next closest to the root in the
+tree-structured filesystem. The exception is the root directory
+itself, named &quot;/&quot;. In the root
+directory, &quot;..&quot; is also a link to &quot;/&quot;.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="PUIS-CHP-5-SECT-1.2">5.1.2 Inodes</A
+></H3
+><p class="para">For <a class="indexterm" name="AUTOID-3762"></A
+>
+each object in the filesystem,
+<span class="acronym">UNIX</SPAN
+> stores administrative information in a structure
+known as an inode. Inodes reside on disk and do not have names.
+Instead, they have indices (numbers) indicating their positions
+in the array of inodes.</P
+><p class="para">Each inode generally contains:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para">The location of the item's
+contents on the disk, if any</P
+></LI
+><li class="listitem"><p class="para">The item's type (e.g., file, directory,
+symbolic link)</P
+></LI
+><li class="listitem"><p class="para">The item's size, in bytes, if applicable</P
+></LI
+><li class="listitem"><p class="para">The <a class="indexterm" name="AUTOID-3775"></A
+><a class="indexterm" name="AUTOID-3777"></A
+><a class="indexterm" name="AUTOID-3780"></A
+>
+time the file's inode was last modified
+(the <i class="firstterm"><a class="indexterm" name="AUTOID-3784"></A
+>ctime</I
+>)</P
+></LI
+><li class="listitem"><p class="para">The time the file's contents were last
+modified (the <i class="filename"><a class="indexterm" name="AUTOID-3789"></A
+>mtime</I
+>)</P
+></LI
+><li class="listitem"><p class="para">The time the file was last accessed (the <i class="firstterm"><a class="indexterm" name="AUTOID-3794"></A
+>
+atime</I
+>) for <i class="filename">read
+( )</I
+>, <i class="filename">exec ( ), </I
+>etc</P
+></LI
+><li class="listitem"><p class="para">A reference count: the number of names the file
+has</P
+></LI
+><li class="listitem"><p class="para">The file's owner (a <span class="acronym">UID</SPAN
+>)</P
+></LI
+><li class="listitem"><p class="para">The file's group (a <span class="acronym">GID</SPAN
+>)</P
+></LI
+><li class="listitem"><p class="para">The file's <i class="firstterm">mode bits</I
+>
+(also called <i class="firstterm">file permissions</I
+> or <i class="firstterm">permission
+bits</I
+>)</P
+></LI
+></UL
+><p class="para">The last three pieces of information, stored for each item,
+and coupled with <span class="acronym">UID/GID</SPAN
+> information about executing
+processes, are the fundamental data that <span class="acronym">UNIX</SPAN
+>
+uses for practically all operating system security.</P
+><p class="para">Other information can also be stored in the inode, depending
+on the particular version of <span class="acronym">UNIX</SPAN
+> involved. Some
+systems may also have other nodes such as vnodes, cnodes, and so
+on. These are simply extensions to the inode concept to support
+foreign files, <span class="acronym">RAID</SPAN
+>[5] disks, or other special
+kinds of filesystems. We'll confine our discussion to inodes,
+as that abstraction contains most of the information we need.</P
+><blockquote class="footnote"><p class="para">[5] RAID means
+Redundant Array of Inexpensive Disks. It is a technique for combining
+many low-cost hard disks into a single unit that offers improved
+performance and reliability.</P
+></BLOCKQUOTE
+><p class="para"><a class="xref" href="#PUIS-CHP-5-FIG-1" title="Files and inodes">Figure 5.1</A
+> shows how information is stored
+in an inode.</P
+><h4 class="figure"><a class="title" name="PUIS-CHP-5-FIG-1">Figure 5.1: Files and inodes</A
+></H4
+><img class="graphic" src="figs/puis_0501.gif" alt="Figure 5.1"></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="PUIS-CHP-5-SECT-1.3">5.1.3 Current Directory and Paths</A
+></H3
+><p class="para">Every <a class="indexterm" name="AUTOID-3827"></A
+><a class="indexterm" name="AUTOID-3829"></A
+>
+item in the
+filesystem with a name can be specified with a <i class="firstterm">pathname</I
+>.
+The word pathname is appropriate because a pathname represents the
+path to the entry from the root of the filesystem. By following
+this path, the system can find the inode of the referenced entry.</P
+><p class="para">Pathnames can be <a class="indexterm" name="AUTOID-3833"></A
+><a class="indexterm" name="AUTOID-3835"></A
+>
+absolute
+or relative. Absolute pathnames always start at the root, and thus
+always begin with a &quot;/&quot;, representing
+the root directory. Thus, a pathname such as <i class="filename">/homes/mortimer/bin/crashme</I
+>represents a pathname to an item starting at the root
+directory.</P
+><p class="para">A relative pathname always starts interpretation from the
+current directory of the process referencing the item. This concept
+implies that every process has associated with it a <i class="filename"><a class="indexterm" name="AUTOID-3840"></A
+>current directory</I
+>. Each process
+inherits its current directory from a parent process after a <i class="firstterm">fork</I
+>
+(see <a class="xref" href="appc_01.htm" title="UNIX Processes">Appendix C, <cite class="appendix">UNIX Processes</CITE
+></A
+>). The current
+directory is initialized at login from the sixth field of the user
+record in the <i class="filename">/etc/passwd</I
+> file: the <i class="firstterm">home
+directory</I
+>. The current directory is then updated every
+time the process performs a change-directory operation (chdir or
+cd). Relative pathnames also imply that the current directory
+is at the front of the given pathname. Thus, after executing the
+command <i class="filename">cd /usr,</I
+> the relative pathname <i class="filename">lib/makekey</I
+>
+would actually be referencing the pathname <i class="filename">/usr/lib/makekey</I
+>.
+Note that any pathname that doesn't start with a &quot;/&quot;
+must be relative.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="PUIS-CHP-5-SECT-1.4">5.1.4 Using the ls Command</A
+></H3
+><p class="para">You<a class="indexterm" name="AUTOID-3852"></A
+>
+ can use
+the <kbd class="command">ls</KBD
+> command to list all of the files in a directory. For instance,
+to list all the files in your current directory, type:</P
+><blockquote class="screen"><pre class="screen">% <b class="emphasis.bold">ls -a   </B
+>
+instructions  letter       notes 
+invoice       more-stuff   stats 
+% </PRE
+></BLOCKQUOTE
+><p class="para">You <a class="indexterm" name="AUTOID-3858"></A
+><a class="indexterm" name="AUTOID-3861"></A
+>
+can
+get a more detailed listing by using the ls -lF command:</P
+><blockquote class="screen"><pre class="screen">% <b class="emphasis.bold">ls -lF</B
+>
+total 161 -rw-r--r-- 1 sian    user          505 Feb  9 13:19 instructions 
+-rw-r--r-- 1 sian    user         3159 Feb  9 13:14 invoice 
+-rw-r--r-- 1 sian    user         6318 Feb  9 13:14 letter 
+-rw------- 1 sian    user        15897 Feb  9 13:20 more-stuff 
+-rw-r----- 1 sian    biochem      4320 Feb  9 13:20 notes 
+-rwxr-xr-x 1 sian    user       122880 Feb  9 13:26 stats* 
+% </PRE
+></BLOCKQUOTE
+><p class="para">The first line of output generated by the <kbd class="command">ls</KBD
+> command (&quot;total
+161&quot; in the example above) indicates the number of kilobytes taken
+up by the files in the directory.[6]
+Each of the other lines of output contains the fields, from left
+to right, as described in <a class="xref" href="#PUIS-CHP-5-TAB-1" title="ls Output">Table 5.1</A
+>.</P
+><blockquote class="footnote"><p class="para">[6] Some older versions of UNIX
+reported this in 512-byte blocks rather than in kilobytes.</P
+></BLOCKQUOTE
+><table class="table"><caption class="table"><a class="title" name="PUIS-CHP-5-TAB-1">Table 5.1: ls Output</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Field Contents</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Meaning</P
+></TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">-</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">The file's type; for regular
+files, this field is always a dash</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">rw-r--r--</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">The file's permissions</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">1</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">The number of &quot;hard&quot;
+links to the file; the number of &quot;names&quot; for the
+file</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">sian</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">The name of the file's owner</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">user</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">The name of the file's group</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">505</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">The file's size, in bytes</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">Feb  9 13:19</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">The file's modification time</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">instructions</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">The file's name</P
+></TD
+></TR
+></TBODY
+></TABLE
+><p class="para">The <kbd class="command">ls -F</KBD
+> option makes it easier for you to understand
+the listing by printing a special character after the filename to
+indicate what it is, as shown in <a class="xref" href="#PUIS-CHP-5-TAB-2" title="ls -F Tag Meanings">Table 5.2</A
+>.</P
+><table class="table"><caption class="table"><a class="title" name="PUIS-CHP-5-TAB-2">Table 5.2: ls -F Tag Meanings</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Symbol</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Meaning</P
+></TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">(blank)</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Regular file or named pipe (FIFO[7])</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">*</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Executable program or command file</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">/</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Directory</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">=</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Socket</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">@</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Symbolic link</P
+></TD
+></TR
+></TBODY
+></TABLE
+><blockquote class="footnote"><p class="para">[7] A FIFO is a First-In, First-Out buffer, which is a special
+kind of named pipe.</P
+></BLOCKQUOTE
+><p class="para">Thus, in the directory shown earlier, the file <i class="filename">stats</I
+>
+is an executable program file; the rest of the files are regular
+text files.</P
+><p class="para">The -g option to the <kbd class="command">ls</KBD
+> command alters the output,
+depending on the version of <span class="acronym">UNIX </SPAN
+>being used.</P
+><p class="para">If <a class="indexterm" name="AUTOID-3971"></A
+>
+you are using
+the Berkeley-derived version of ls,[8]
+you must use the<kbd class="command">ls -g</KBD
+> option to display
+the file's group in addition to the file's owner:</P
+><blockquote class="footnote"><p class="para">[8] On Solaris systems,
+this program is named <i class="filename">/usr/ucb/ls</I
+>.</P
+></BLOCKQUOTE
+><blockquote class="screen"><pre class="screen">% <b class="emphasis.bold">ls -lFg </B
+>
+total 161 
+-rw-r--r-- 1 sian     user       505 Feb  9 13:19 instructions 
+-rw-r--r-- 1 sian     user      3159 Feb  9 13:14 invoice 
+-rw-r--r-- 1 sian     user      6318 Feb  9 13:14 letter 
+-rw------- 1 sian     user     15897 Feb  9 13:20 more-stuff 
+-rw-r----- 1 sian     biochem   4320 Feb  9 13:20 notes 
+-rwxr-xr-x 1 sian     user    122880 Feb  9 13:26 stats* 
+% </PRE
+></BLOCKQUOTE
+><p class="para">If you are using an <span class="acronym">AT&T</SPAN
+>-derived version
+of ls,[9]
+using the <i class="filename">-g </I
+>option causes the <i class="filename">ls</I
+> command to only display the file's group:</P
+><blockquote class="footnote"><p class="para">[9] On Solaris systems, this program is named <i class="filename">/bin/ls</I
+>.</P
+></BLOCKQUOTE
+><blockquote class="screen"><pre class="screen">% <b class="emphasis.bold">ls -lFg</B
+>
+total 161 
+-rw-r--r-- 1 user        505 Feb  9 13:19 instructions 
+-rw-r--r-- 1 user       3159 Feb  9 13:14 invoice 
+-rw-r--r-- 1 user       6318 Feb  9 13:14 letter 
+-rw------- 1 user      15897 Feb  9 13:20 more-stuff 
+-rw-r----- 1 biochem    4320 Feb  9 13:20 notes 
+-rwxr-xr-x 1 user     122880 Feb  9 13:26 stats* 
+%</PRE
+></BLOCKQUOTE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="PUIS-CHP-5-SECT-1.5">5.1.5 File Times</A
+></H3
+><p class="para">The <a class="indexterm" name="AUTOID-3992"></A
+><a class="indexterm" name="AUTOID-3995"></A
+><a class="indexterm" name="AUTOID-3997"></A
+><a class="indexterm" name="AUTOID-4000"></A
+>
+times shown with the <kbd class="command">ls -l</KBD
+> command are the modification times of the
+files (<a class="indexterm" name="AUTOID-4004"></A
+>
+mtime). You can obtain the time
+of last access (the <a class="indexterm" name="AUTOID-4006"></A
+>
+atime) by providing
+the -u option (for example, by typing <kbd class="command">ls -lu</KBD
+>).
+Both of these time values can be changed with a call to a system
+library routine.[10]
+Therefore, as the system administrator, you should be in the habit
+of checking the inode change time (<a class="indexterm" name="AUTOID-4012"></A
+>
+ctime)
+by providing the <a class="indexterm" name="AUTOID-4015"></A
+>
+<kbd class="command">-c</KBD
+>
+option; for example, <kbd class="command">ls -lc</KBD
+>. You can't reset the
+ctime of a file under normal circumstances. It is updated by the
+operating system whenever any change is made to the inode for the
+file.</P
+><blockquote class="footnote"><p class="para">[10] <i class="filename">utimes ( )</I
+></P
+></BLOCKQUOTE
+><p class="para">Because the inode changes when the file is modified, ctime
+reflects the time of last writing, protection change, or change
+of owner. An attacker may change the mtime or atime of a file, but
+the ctime will usually be correct.</P
+><p class="para">Note <a class="indexterm" name="AUTOID-4022"></A
+><a class="indexterm" name="AUTOID-4025"></A
+><a class="indexterm" name="AUTOID-4027"></A
+>
+that we said &quot;usually.&quot;
+A clever attacker who gains superuser status can change the system
+clock and then touch the inode to force a misleading ctime on a
+file. Furthermore, an attacker can change the ctime by writing to
+the raw disk device and bypassing the operating system checks altogether.
+And if you are using Linux with the ext2 filesystem, an attacker
+can modify the inode contents directly using the debugfs command.</P
+><p class="para">For this reason, if the superuser account on your system has
+been compromised, you should not assume that any of the three times
+stored with any file or directory are correct.</P
+><blockquote class="note"><p class="para"><strong>NOTE:</STRONG
+> Some programs will change the ctime on a file without
+actually changing the file itself. This can be misleading when you
+are looking for suspicious activity. The <i class="filename">file </I
+>command
+is one such offender. The discrepancy occurs because <i class="filename">file</I
+>
+opens the file for reading to determine its type, thus changing
+the <i class="firstterm">atime</I
+> on the file. By default, most versions of <i class="filename">file</I
+>
+then reset the atime to its original value, but in so doing change
+the ctime. Some security scanning programs use the <i class="filename">file</I
+> program within them (or employ similar functionality),
+and this may result in wide-scale changes in ctime unless they are
+run on a read-only version of the filesystem.<a class="indexterm" name="AUTOID-4038"></A
+></P
+></BLOCKQUOTE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="PUIS-CHP-5-SECT-1.6">5.1.6 Understanding File Permissions</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-4043"></A
+>The file permissions
+on each line of the ls listing tell you what the file is and what
+kind of file access (that is, ability to read, write, or execute)
+is granted to various users on your system.</P
+><p class="para">Here are two examples of file permissions:</P
+><blockquote class="screen"><pre class="screen">-rw------- 
+drwxr-xr-x</PRE
+></BLOCKQUOTE
+><p class="para">The first character of the file's mode field indicates
+the type of file described in <a class="xref" href="#PUIS-CHP-5-TAB-3" title="File Types">Table 5.3</A
+>.<a class="indexterm" name="AUTOID-4049"></A
+></P
+><table class="table"><caption class="table"><a class="title" name="PUIS-CHP-5-TAB-3">Table 5.3: File Types</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Contents</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Meaning</P
+></TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">-</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Plain file</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">d</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Directory</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">c</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Character device (tty or printer)</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">b</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Block device (usually disk or CD-ROM)</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">l</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Symbolic link (<span class="acronym">BSD</SPAN
+>
+or V.4)</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">s</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Socket (<span class="acronym">BSD</SPAN
+> or V.4)</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">= or p</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para"><span class="acronym">FIFO</SPAN
+> (System V, Linux)</P
+></TD
+></TR
+></TBODY
+></TABLE
+><p class="para">The next nine characters taken in groups of three indicate
+<em class="emphasis">who</EM
+> on your computer can do <em class="emphasis">what</EM
+>
+with the file. There are three kinds of permissions:</P
+><dl class="variablelist"><dt class="term">r</DT
+><dd class="listitem"><p class="para">Permission to read</P
+></DD
+><dt class="term">w</DT
+><dd class="listitem"><p class="para">Permission to write</P
+></DD
+><dt class="term">x</DT
+><dd class="listitem"><p class="para">Permission to execute</P
+></DD
+></DL
+><p class="para">Similarly, there are three classes of permissions:</P
+><dl class="variablelist"><dt class="term">owner</DT
+><dd class="listitem"><p class="para">The file's owner</P
+></DD
+><dt class="term">group</DT
+><dd class="listitem"><p class="para">Users who are in the file's group</P
+></DD
+><dt class="term">other</DT
+><dd class="listitem"><p class="para">Everybody else on the system (except the superuser)</P
+></DD
+></DL
+><p class="para">In the <kbd class="command">ls -l</KBD
+> command, privileges
+are illustrated graphically (see <a class="xref" href="#PUIS-CHP-5-FIG-2" title="Basic permissions">Figure 5.2</A
+>).</P
+><h4 class="figure"><a class="title" name="PUIS-CHP-5-FIG-2">Figure 5.2: Basic permissions</A
+></H4
+><img class="graphic" src="figs/puis_0502.gif" alt="Figure 5.2"></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="PUIS-CHP-5-SECT-1.7">5.1.7 File Permissions in Detail</A
+></H3
+><p class="para">The terms <em class="emphasis">read</EM
+>, <em class="emphasis">write</EM
+>,
+and <em class="emphasis">execute</EM
+> have very specific meanings for
+files, as shown in <a class="xref" href="#PUIS-CHP-5-TAB-4" title="File Permissions">Table 5.4</A
+>.</P
+><table class="table"><caption class="table"><a class="title" name="PUIS-CHP-5-TAB-4">Table 5.4: File Permissions</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Character</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Permission</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Meaning</P
+></TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">r</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para"><span class="acronym">READ</SPAN
+></P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para"><a class="indexterm" name="AUTOID-4168"></A
+><a class="indexterm" name="AUTOID-4170"></A
+><a class="indexterm" name="AUTOID-4172"></A
+><a class="indexterm" name="AUTOID-4174"></A
+><a class="indexterm" name="AUTOID-4176"></A
+><a class="indexterm" name="AUTOID-4178"></A
+><a class="indexterm" name="AUTOID-4180"></A
+><a class="indexterm" name="AUTOID-4182"></A
+><a class="indexterm" name="AUTOID-4184"></A
+>Read access
+means exactly that: you can open a file with the <kbd class="command">open()</KBD
+>
+system call and you can read its contents with read.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">w</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para"><span class="acronym">WRITE</SPAN
+></P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Write access means that you can overwrite
+the file with a new one or modify its contents. It also means that
+you can use <kbd class="command">write()</KBD
+> to make the file longer
+or <kbd class="command">truncate()</KBD
+> or <kbd class="command">ftruncate()</KBD
+>
+to make the file shorter.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">x</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para"><span class="acronym">EXECUTE</SPAN
+></P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Execute access makes sense only for programs.
+If a file has its execute bits set, you can run it by typing its
+pathname (or by running it with one of the family of <kbd class="command">exec()</KBD
+>
+system calls). How the program gets executed depends on the first
+two bytes of the file.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"></TD
+><td class="entry" rowspan="1" colspan="1"></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">The first two bytes of an executable
+file are assumed to be a <i class="firstterm"><a class="indexterm" name="AUTOID-4213"></A
+>magic
+number</I
+> indicating the nature of the file. Some numbers
+mean that the file is a certain kind of machine code file. The special
+two-byte sequence &quot;#!&quot; means that it
+is an executable script of some kind. Anything with an unknown value
+is assumed to be a shell script and is executed accordingly.</P
+></TD
+></TR
+></TBODY
+></TABLE
+><p class="para">File permissions apply to devices, named sockets, and <span class="acronym">FIFOS</SPAN
+>
+exactly as they do for regular files. If you have write access,
+you can write information to the file or other object; if you have
+read access, you can read from it; and if you don't have
+either access, you're out of luck.</P
+><p class="para">File permissions do <em class="emphasis">not</EM
+> apply to <a class="indexterm" name="AUTOID-4219"></A
+><a class="indexterm" name="AUTOID-4221"></A
+>
+symbolic
+links. Whether or not you can read the file pointed to by a symbolic
+link depends on the file's permissions, not the link's.
+In fact, symbolic links are almost always created with a file permission
+of &quot;rwxrwxrwx&quot; (or mode 0777, as explained later
+in this chapter) and are ignored by the operating system.[11]</P
+><blockquote class="footnote"><p class="para">[11] Apparently, some vendors have found a use for the mode bits
+inside a symbolic link's inode. HP-UX 10.0 uses the sticky
+bit of symbolic links to indicate &quot;transition links&quot;&nbsp;- portability
+links to ease the transition from previous releases to the new SVR4
+filesystem layout.</P
+></BLOCKQUOTE
+><p class="para">Note the following facts about file permissions:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para">You can have execute access without
+having read access. In such a case, you can run a program without
+reading it. This ability is useful in case you wish to hide the
+function of a program. Another use is to allow people to execute
+a program without letting them make a copy of the program (see the
+note later in this section).</P
+></LI
+><li class="listitem"><p class="para">If you have read access but not execute access,
+you can then make a copy of the file and run it for yourself. The
+copy, however, will be different in two important ways: it will
+have a different absolute pathname; and it will be owned by you,
+rather than by the original program's owner.</P
+></LI
+><li class="listitem"><p class="para">On some versions of <span class="acronym">UNIX</SPAN
+> (including
+Linux), an executable command script must have both its read and
+execute bits set to allow people to run it.</P
+></LI
+></UL
+><p class="para">Most people think that file permissions are pretty basic stuff.
+Nevertheless, many <span class="acronym">UNIX</SPAN
+> systems have had security
+breaches because their file permissions are not properly set.</P
+><blockquote class="note"><p class="para"><strong>NOTE:</STRONG
+> <a class="indexterm" name="AUTOID-4239"></A
+>Sun's
+Network Filesystem (<span class="acronym">NFS</SPAN
+>) servers allow a client
+to read any file that has either the read or the execute permission
+set. They do so because there is no difference, from the <span class="acronym">NFS</SPAN
+>
+server's point of view, between a request to read the contents
+of a file by a user who is using the <kbd class="command">read()</KBD
+>
+system call and a request to execute the file by a user who is using
+the <kbd class="command">exec()</KBD
+> system call. In both cases, the contents
+of the file need to be transferred from the <span class="acronym">NFS</SPAN
+>
+server to the <span class="acronym">NFS</SPAN
+> client. (For a detailed description,
+see <a class="xref" href="ch20_01.htm" title="NFS">Chapter 20, <cite class="chapter">NFS</CITE
+></A
+>.)</P
+></BLOCKQUOTE
+></DIV
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch04_04.htm" title="4.4 Summary"><img src="../gifs/txtpreva.gif" alt="Previous: 4.4 Summary" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Practical UNIX &amp; Internet Security"><img src="../gifs/txthome.gif" alt="Practical UNIX &amp; Internet Security" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch05_02.htm" title="5.2 Using File Permissions"><img src="../gifs/txtnexta.gif" alt="Next: 5.2 Using File Permissions" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">4.4 Summary</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">5.2 Using File Permissions</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.htm" title="The Networking CD Bookshelf">Library Home</A
+> | <a href="../dnsbind/index.htm" title="DNS &amp; BIND">DNS &amp; BIND</A
+> | <a href="../tcpip/index.htm" title="TCP/IP Network Administration">TCP/IP</A
+> | <a href="../sendmail/index.htm" title="sendmail">sendmail</A
+> | <a href="../smdref/index.htm" title="sendmail Desktop Reference">sendmail Reference</A
+> | <a href="../firewall/index.htm" title="Building Internet Firewalls">Firewalls</A
+> | <a href="index.htm" title="Practical UNIX &amp; Internet Security">Practical Security</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

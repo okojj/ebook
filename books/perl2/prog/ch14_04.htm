@@ -1,0 +1,856 @@
+<html>
+<head>
+<title>Tying Filehandles (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Tying Filehandles">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch14_03.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch14_01.htm">Chapter 14: Tied Variables</a></td><td align="right" valign="top" width="172"><a href="ch14_05.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">14.4. Tying Filehandles</h2>
+
+<p>
+<a name="INDEX-2733"></a><a name="INDEX-2734"></a><a name="INDEX-2735"></a><a name="INDEX-2736"></a><a name="INDEX-2737"></a><a name="INDEX-2738"></a>
+A class implementing a tied filehandle should define the following
+methods: <tt class="literal">TIEHANDLE</tt> and at least one of <tt class="literal">PRINT</tt>, <tt class="literal">PRINTF</tt>,
+<tt class="literal">WRITE</tt>, <tt class="literal">READLINE</tt>, <tt class="literal">GETC</tt>, and <tt class="literal">READ</tt>.  The class can also
+provide a <tt class="literal">DESTROY</tt> method, and <tt class="literal">BINMODE</tt>, <tt class="literal">OPEN</tt>, <tt class="literal">CLOSE</tt>,
+<tt class="literal">EOF</tt>, <tt class="literal">FILENO</tt>, <tt class="literal">SEEK</tt>, <tt class="literal">TELL</tt>, <tt class="literal">READ</tt>, and <tt class="literal">WRITE</tt> methods to
+enable the corresponding Perl built-ins for the tied filehandle.
+(Well, that isn't quite true: <tt class="literal">WRITE</tt> corresponds to <tt class="literal">syswrite</tt> and
+has nothing to do with Perl's built-in <tt class="literal">write</tt> function for printing
+with <tt class="literal">format</tt> declarations.)</p>
+
+<p>Tied filehandles are especially useful when Perl is embedded in
+another program (such as Apache or <em class="emphasis">vi</em>) and output to <tt class="literal">STDOUT</tt> or <tt class="literal">STDERR</tt> needs to be
+redirected in some special way.</p>
+
+<p>
+<a name="INDEX-2739"></a>
+But filehandles don't actually have to be tied to a file at all.  You
+can use output statements to build up an in-memory data structure and input
+statements to read them back in.  Here's an easy way to reverse a sequence
+of <tt class="literal">print</tt> and <tt class="literal">printf</tt> statements without reversing the individual lines:
+<blockquote>
+<pre class="programlisting">package ReversePrint;
+use strict;
+sub TIEHANDLE {
+    my $class = shift;
+    bless [], $class;
+}
+sub PRINT {
+    my $self = shift;
+    push @$self, join '', @_;
+}
+sub PRINTF {
+    my $self = shift;
+    my $fmt = shift;
+    push @$self, sprintf $fmt, @_;
+}
+sub READLINE {
+    my $self = shift;
+    pop @$self;
+}
+ 
+package main;
+my $m = "--MORE--\n";
+tie *REV, "ReversePrint";
+ 
+# Do some prints and printfs.
+print REV "The fox is now dead.$m";
+
+printf REV &lt;&lt;"END", int rand 10000000;
+The quick brown fox jumps over
+over the lazy dog %d times!
+END
+ 
+print REV &lt;&lt;"END";
+The quick brown fox jumps
+over the lazy dog.
+END
+ 
+# Now read back from the same handle.
+print while &lt;REV&gt;;</pre>
+</blockquote>
+
+This prints:
+<blockquote>
+<pre class="programlisting">The quick brown fox jumps 
+over the lazy dog.
+The quick brown fox jumps over
+over the lazy dog 3179357 times!
+The fox is now dead.--MORE--</pre>
+</blockquote>
+</p>
+
+
+<h3 class="sect2">14.4.1. Filehandle-Tying Methods</h3>
+
+<p>
+<a name="INDEX-2740"></a><a name="INDEX-2741"></a>
+For our extended example, we'll create a filehandle that uppercases
+strings printed to it.  Just for kicks, we'll begin the file with
+<tt class="literal">&lt;SHOUT&gt;</tt> when it's opened and end with <tt class="literal">&lt;/SHOUT&gt;</tt> when
+it's closed.  That way we can rant in well-formed XML.</p>
+
+<p>Here's the top of our <em class="emphasis">Shout.pm</em> file that will implement the class:
+<blockquote>
+<pre class="programlisting">package Shout;
+use Carp;                # So we can croak our errors</pre>
+</blockquote>
+
+We'll now list the method definitions in <em class="emphasis">Shout.pm</em>.</p>
+
+<dl>
+<dt>
+<b><em class="replaceable">CLASSNAME</em><tt class="literal">-&gt;TIEHANDLE(</tt><em class="replaceable">LIST</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>This is the constructor for the class, which as usual should return a
+blessed reference.
+<blockquote>
+<pre class="programlisting">sub TIEHANDLE {
+    my $class = shift;
+    my $form = shift;
+    open my $self, $form, @_   or croak "can't open $form@_: $!";
+    if ($form =~ /&gt;/) {
+        print $self  "&lt;SHOUT&gt;\n";
+        $$self-&gt;{WRITING} = 1;     # Remember to do end tag
+    }
+    return bless $self, $class;    # $self is a glob ref
+}</pre>
+</blockquote>
+<a name="INDEX-"></a><a name="INDEX-"></a>
+Here, we open a new filehandle according to the mode and filename
+passed to the <tt class="literal">tie</tt> operator, write
+<tt class="literal">&lt;SHOUT&gt;</tt> to the file, and return a blessed
+reference to it.  There's a lot of stuff going on in that
+<tt class="literal">open</tt> statement, but we'll just point out that, in
+addition to the usual "open or die" idiom, the <tt class="literal">my
+$self</tt> furnishes an undefined scalar to
+<tt class="literal">open</tt>, which knows to autovivify it into a 
+typeglob.  The fact that it's a typeglob is also significant, because 
+not only does the typeglob contain the real I/O object of the file,
+but it also contains various other handy data structures that come
+along for free, like a scalar (<tt class="literal">$$$self</tt>), an array
+(<tt class="literal">@$$self</tt>), and a hash (<tt class="literal">%$$self</tt>).
+(We won't mention the subroutine, <tt class="literal">&amp;$$self</tt>.)</p>
+
+<p>The <tt class="literal">$form</tt> is the filename-or-mode argument.  If
+it's a filename, <tt class="literal">@_</tt> is empty, so it behaves as a
+two-argument open.  Otherwise, <tt class="literal">$form</tt> is the mode
+for the rest of the arguments.</p>
+
+<p>After the open, we test to see whether we should write the beginning
+tag.  If so, we do.  And right away, we use one of those glob data
+structures we mentioned.  That <tt class="literal">$$self-&gt;{WRITING}</tt>
+is an example of using the glob to store interesting information.  In
+this case, we remember whether we did the beginning tag so we know
+whether to do the corresponding end tag.  We're using the
+<tt class="literal">%$$self</tt> hash, so we can give the field a decent
+name.  We could have used the scalar as <tt class="literal">$$$self</tt>,
+but that wouldn't be self-documenting.  (Or it would
+<em class="emphasis">only</em> be self-documenting, depending on how you
+look at it.)</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;PRINT(</tt><em class="replaceable">LIST</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a>
+This method implements a <tt class="literal">print</tt> to the tied handle.
+The <em class="replaceable">LIST</em> is whatever was passed to
+<tt class="literal">print</tt>.  Our method below uppercases each element of
+<em class="replaceable">LIST</em>:
+<blockquote>
+<pre class="programlisting">sub PRINT {
+    my $self = shift;
+    print $self map {uc} @_;
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;READLINE</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a><a name="INDEX-"></a>
+This method supplies the data when the filehandle is read from via the
+angle operator (<tt class="literal">&lt;FH&gt;</tt>) or
+<tt class="literal">readline</tt>.  The method should return
+<tt class="literal">undef</tt> when there is no more data.
+<blockquote>
+<pre class="programlisting">sub READLINE {
+    my $self = shift;
+    return &lt;$self&gt;;
+}</pre>
+</blockquote>
+
+Here, we simply <tt class="literal">return &lt;$self&gt;</tt> so that the
+method will behave appropriately depending on whether it was called in
+scalar or list context.</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;GETC</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a>
+This method runs whenever <tt class="literal">getc</tt> is used on the tied
+filehandle.
+
+<blockquote>
+<pre class="programlisting">sub GETC {
+    my $self = shift;
+    return getc($self);
+}</pre>
+</blockquote>
+Like several of the methods in our <tt class="literal">Shout</tt> class, the
+<tt class="literal">GETC</tt> method simply calls its corresponding Perl
+built-in and returns the result.</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;OPEN(</tt><em class="replaceable">LIST</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p> Our <tt class="literal">TIEHANDLE</tt> method itself opens
+a file, but a program using the <tt class="literal">Shout</tt> class that
+calls <tt class="literal">open</tt> afterward triggers this method.
+<blockquote>
+<pre class="programlisting">sub OPEN {
+    my $self = shift;
+    my $form = shift;
+    my $name = "$form@_";
+    $self-&gt;CLOSE;
+    open($self, $form, @_)      or croak "can't reopen $name: $!";
+    if ($form =~ /&gt;/) {
+        print $self "&lt;SHOUT&gt;\n" or croak "can't start print: $!";
+        $$self-&gt;{WRITING} = 1;     # Remember to do end tag
+    }
+    else {
+        $$self-&gt;{WRITING} = 0;     # Remember not to do end tag
+    }
+    return 1;
+}</pre>
+</blockquote>
+<a name="INDEX-"></a>
+We invoke our own <tt class="literal">CLOSE</tt> method to explicitly close the file in case
+the user didn't bother to. Then we open a new file with whatever
+filename was specified in the <tt class="literal">open</tt> and shout at it.</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;CLOSE</tt></b>
+</dt>
+<dd>
+<p>This method deals with the request to close the handle.
+Here, we seek to the end of the file and, if that was successful, print
+<tt class="literal">&lt;/SHOUT&gt;</tt> before using Perl's built-in <tt class="literal">close</tt>.
+<blockquote>
+<pre class="programlisting">sub CLOSE {
+    my $self = shift;
+    if ($$self-&gt;{WRITING}) {
+        $self-&gt;SEEK(0, 2)             or return;
+        $self-&gt;PRINT("&lt;/SHOUT&gt;\n")    or return;
+    }
+    return close $self;
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;SEEK(</tt><em class="replaceable">LIST</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a>
+When you <tt class="literal">seek</tt> on a tied filehandle, the <tt class="literal">SEEK</tt> method gets called.
+<blockquote>
+<pre class="programlisting">sub SEEK {
+    my $self = shift;
+    my ($offset, $whence) = @_;
+    return seek($self, $offset, $whence);
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;TELL</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a>
+This method is invoked when <tt class="literal">tell</tt> is used on the tied handle.
+<blockquote>
+<pre class="programlisting">sub TELL {
+    my $self = shift;
+    return tell $self;
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;PRINTF(</tt><em class="replaceable">LIST</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a>
+This method is run whenever <tt class="literal">printf</tt> is used on the tied
+handle.  The <em class="replaceable">LIST</em> will contain the format and the items to be printed.
+<blockquote>
+<pre class="programlisting">sub PRINTF {
+    my $self = shift;
+    my $template = shift;
+    return $self-&gt;PRINT(sprintf $template, @_);
+}</pre>
+</blockquote>
+
+Here, we use <tt class="literal">sprintf</tt> to generate the formatted string and pass it
+to <tt class="literal">PRINT</tt> for uppercasing.  There's nothing that requires
+you to use the built-in <tt class="literal">sprintf</tt> function though.  You could
+interpret the percent escapes to suit your own purpose.
+<a name="INDEX-"></a>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;READ(</tt><em class="replaceable">LIST</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a><a name="INDEX-"></a>
+This method responds when the handle is read using <tt class="literal">read</tt> or
+<tt class="literal">sysread</tt>.  Note that we modify the first argument
+of <em class="replaceable">LIST</em> "in-place", mimicking <tt class="literal">read</tt>'s ability to fill in the
+scalar passed in as its second argument.
+<blockquote>
+<pre class="programlisting">sub READ {
+    my ($self, undef, $length, $offset) = @_;
+    my $bufref = \$_[1];
+    return read($self, $$bufref, $length, $offset);
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;WRITE(</tt><em class="replaceable">LIST</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a>
+This method gets invoked when the handle is written to with
+<tt class="literal">syswrite</tt>.  Here, we uppercase the string to be written.
+<blockquote>
+<pre class="programlisting">sub WRITE {
+    my $self = shift;
+    my $string = uc(shift);
+    my $length = shift || length $string;
+    my $offset = shift || 0;
+    return syswrite $self, $string, $length, $offset;
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;EOF</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a>
+This method returns a Boolean value when a filehandle tied to the
+<tt class="literal">Shout</tt> class is tested for its end-of-file status using <tt class="literal">eof</tt>.
+<blockquote>
+<pre class="programlisting">sub EOF {
+    my $self = shift;
+    return eof $self;
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;BINMODE(</tt><em class="replaceable">DISC</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>This method specifies the I/O discipline to be used on the filehandle.  If
+none is specified, it puts the tied filehandle into binary mode (the
+<tt class="literal">:raw</tt> discipline), for filesystems that distinguish between text and
+binary files.
+<blockquote>
+<pre class="programlisting">sub BINMODE {
+    my $self = shift;
+    my $disc = shift || ":raw";
+    return binmode $self, $disc;
+}</pre>
+</blockquote>
+
+That's how you'd write it, but it's actually useless in our case
+because the <tt class="literal">open</tt> already wrote on the handle.  So in our case we should
+probably make it say:
+<blockquote>
+<pre class="programlisting">sub BINMODE { croak("Too late to use binmode") }</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;FILENO</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a><a name="INDEX-"></a>
+This method should return the file descriptor (<tt class="literal">fileno</tt>) associated
+with the tied filehandle by the operating system.
+<blockquote>
+<pre class="programlisting">sub FILENO {
+    my $self = shift;
+    return fileno $self;
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;DESTROY</tt></b>
+</dt>
+<dd>
+<p>As with the other types of ties, this method is triggered when the tied
+object is about to be destroyed.  This is useful for letting the
+object clean up after itself.  Here, we make sure that the file is
+closed, in case the program forgot to call <tt class="literal">close</tt>.  We could just
+say <tt class="literal">close $self</tt>, but it's better to invoke the <tt class="literal">CLOSE</tt> method of
+the class.  That way if the designer of the class decides to change
+how files are closed, this <tt class="literal">DESTROY</tt> method won't have to be modified.
+<blockquote>
+<pre class="programlisting">sub DESTROY {
+    my $self = shift;
+    $self-&gt;CLOSE;      # Close the file using Shout's CLOSE method.
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+</dl>
+
+<p>
+</p>
+
+<p>Here's a demonstration of our <tt class="literal">Shout</tt> class:
+<blockquote>
+<pre class="programlisting">#!/usr/bin/perl
+use Shout;
+tie(*FOO, Shout::, "&gt;filename");
+print FOO "hello\n";            # Prints HELLO.
+seek FOO, 0, 0;                 # Rewind to beginning.
+@lines = &lt;FOO&gt;;                 # Calls the READLINE method.
+close FOO;                      # Close file explicitly.
+open(FOO, "+&lt;", "filename");    # Reopen FOO, calling OPEN.
+seek(FOO, 8, 0);                # Skip the "&lt;SHOUT&gt;\n".
+sysread(FOO, $inbuf, 5);        # Read 5 bytes from FOO into $inbuf.
+print "found $inbuf\n";         # Should print "hello".
+seek(FOO, -5, 1);               # Back up over the "hello".
+syswrite(FOO, "ciao!\n", 6);    # Write 6 bytes into FOO.
+untie(*FOO);                    # Calls the CLOSE method implicitly.</pre>
+</blockquote>
+
+After running this, the file contains:
+<blockquote>
+<pre class="programlisting">&lt;SHOUT&gt;
+CIAO!
+&lt;/SHOUT&gt;</pre>
+</blockquote>
+<a name="INDEX-2742"></a><a name="INDEX-2743"></a>
+Here are some more strange and wonderful things to do with that internal glob.  We
+use the same hash as before, but with new keys <tt class="literal">PATHNAME</tt> and <tt class="literal">DEBUG</tt>.
+First we install a stringify overloading so that printing one of our
+objects reveals the pathname (see <a href="ch13_01.htm">Chapter 13, "Overloading"</a>):
+<blockquote>
+<pre class="programlisting"># This is just so totally cool!
+use overload q("") =&gt; sub { $_[0]-&gt;pathname };
+
+# This is the stub to put in each function you want to trace.
+sub trace {
+    my $self = shift;
+    local $Carp::CarpLevel = 1;
+    Carp::cluck("\ntrace magical method") if $self-&gt;debug;
+}
+
+# Overload handler to print out our path.
+sub pathname {
+    my $self = shift;
+    confess "i am not a class method" unless ref $self;
+    $$self-&gt;{PATHNAME} = shift if @_;
+    return $$self-&gt;{PATHNAME};
+}
+# Dual moded.
+sub debug {
+    my $self = shift;
+    my $var = ref $self ? \$$self-&gt;{DEBUG} : \our $Debug;
+    $$var = shift if @_;
+    return ref $self ? $$self-&gt;{DEBUG} || $Debug : $Debug;
+}</pre>
+</blockquote>
+
+And then call <tt class="literal">trace</tt> on entry to all your ordinary methods like this:
+<blockquote>
+<pre class="programlisting">sub GETC { $_[0]-&gt;trace;           # NEW
+    my($self) = @_;
+    getc($self);
+}</pre>
+</blockquote>
+And also set the pathname in <tt class="literal">TIEHANDLE</tt> and
+<tt class="literal">OPEN</tt>:
+<blockquote>
+<pre class="programlisting">sub TIEHANDLE {
+    my $class    = shift;
+    my $form = shift;
+    my $name = "$form@_";          # NEW
+    open my $self, $form, @_   or croak "can't open $name: $!";
+    if ($form =~ /&gt;/) {
+        print $self  "&lt;SHOUT&gt;\n";
+        $$self-&gt;{WRITING} = 1;     # Remember to do end tag
+    }
+    bless $self, $class;           # $fh is a glob ref
+    $self-&gt;pathname($name);        # NEW
+    return $self;
+}
+
+sub OPEN { $_[0]-&gt;trace;           # NEW
+    my $self = shift;
+    my $form = shift;
+    my $name = "$form@_";          
+    $self-&gt;CLOSE;
+    open($self, $form, @_)      or croak "can't reopen $name: $!";
+    $self-&gt;pathname($name);        # NEW
+    if ($form =~ /&gt;/) {
+        print $self "&lt;SHOUT&gt;\n" or croak "can't start print: $!";
+        $$self-&gt;{WRITING} = 1;     # Remember to do end tag
+    }
+    else {
+        $$self-&gt;{WRITING} = 0;     # Remember not to do end tag
+    }
+    return 1;
+}</pre>
+</blockquote>
+<a name="INDEX-2744"></a>
+Somewhere you also have to call <tt class="literal">$self-&gt;debug(1)</tt>
+to turn debugging on.  When you do that, all your
+<tt class="literal">Carp::cluck</tt> calls will produce meaningful messages.
+Here's one that we get while doing the reopen above.  It shows us
+three deep in method calls, as we're closing down the old file in
+preparation for opening the new one:
+<blockquote>
+<pre class="programlisting">trace magical method at foo line 87
+    Shout::SEEK('&gt;filename', '&gt;filename', 0, 2) called at foo line 81
+    Shout::CLOSE('&gt;filename') called at foo line 65
+    Shout::OPEN('&gt;filename', '+&lt;', 'filename') called at foo line 141</pre>
+</blockquote>
+</p>
+
+
+
+
+
+
+<h3 class="sect2">14.4.2. Creative Filehandles</h3>
+
+<p>
+<a name="INDEX-2745"></a><a name="INDEX-2746"></a><a name="INDEX-2747"></a>
+You can <tt class="literal">tie</tt> the same filehandle to both the input
+and the output of a two-ended pipe.  Suppose you wanted to run the
+<em class="emphasis">bc</em>(1) (arbitrary precision calculator)
+program this way:
+<blockquote>
+<pre class="programlisting">use Tie::Open2;
+
+tie *CALC, 'Tie::Open2', "bc -l";
+$sum = 2;
+for (1 .. 7) {
+    print CALC "$sum * $sum\n";
+    $sum = &lt;CALC&gt;;
+    print "$_: $sum";
+    chomp $sum;
+}
+close CALC;</pre>
+</blockquote>
+
+One would expect it to print this:
+<blockquote>
+<pre class="programlisting">1: 4
+2: 16
+3: 256
+4: 65536
+5: 4294967296
+6: 18446744073709551616
+7: 340282366920938463463374607431768211456</pre>
+</blockquote>
+
+One's expectations would be correct if one had the <em class="emphasis">bc</em>(1) program on
+one's computer, and one also had <tt class="literal">Tie::Open2</tt> defined as follows.
+This time we'll use a blessed array for our internal object.  It
+contains our two actual filehandles for reading and writing.  (The
+dirty work of opening a double-ended pipe is done by <tt class="literal">IPC::Open2</tt>;
+we're just doing the fun part.)
+<blockquote>
+<pre class="programlisting">package Tie::Open2;
+use strict;
+use Carp;
+use Tie::Handle;  # do not inherit from this!
+use IPC::Open2;
+
+sub TIEHANDLE {
+    my ($class, @cmd) = @_;
+    no warnings 'once';
+    my @fhpair = \do { local(*RDR, *WTR) };
+    bless $_, 'Tie::StdHandle' for @fhpair;
+    bless(\@fhpair =&gt; $class)-&gt;OPEN(@cmd) || die;
+    return \@fhpair;
+}
+
+sub OPEN {
+    my ($self, @cmd) = @_;
+    $self-&gt;CLOSE if grep {defined} @{ $self-&gt;FILENO };
+    open2(@$self, @cmd);
+}
+
+sub FILENO {
+    my $self = shift;
+    [ map { fileno $self-&gt;[$_] } 0,1 ];
+}
+
+for my $outmeth ( qw(PRINT PRINTF WRITE) ) {
+    no strict 'refs';
+    *$outmeth = sub {
+        my $self = shift;
+        $self-&gt;[1]-&gt;$outmeth(@_);
+    };
+}
+for my $inmeth ( qw(READ READLINE GETC) ) {
+    no strict 'refs';
+    *$inmeth = sub {
+        my $self = shift;
+        $self-&gt;[0]-&gt;$inmeth(@_);
+    };
+}
+for my $doppelmeth ( qw(BINMODE CLOSE EOF)) {
+    no strict 'refs';
+    *$doppelmeth = sub {
+        my $self = shift;
+        $self-&gt;[0]-&gt;$doppelmeth(@_) &amp;&amp; $self-&gt;[1]-&gt;$doppelmeth(@_);
+    };
+}
+for my $deadmeth ( qw(SEEK TELL)) {
+    no strict 'refs';
+    *$deadmeth = sub {
+        croak("can't $deadmeth a pipe");
+    };
+}
+1;</pre>
+</blockquote>
+
+The final four loops are just incredibly snazzy, in our opinion.  For
+an explanation of what's going on, look back at the section <a href="ch08_03.htm#ch08-sect-clos">Section 14.3.7.1, "Closures as function templates"</a> in <a href="ch08_01.htm">Chapter 8, "References"</a>.</p>
+
+<p>
+<a name="INDEX-2748"></a><a name="INDEX-2749"></a><a name="INDEX-2750"></a>
+Here's an even wackier set of classes.  The package names should give you a
+clue as to what they do.
+<blockquote>
+<pre class="programlisting">use strict;
+package Tie::DevNull;
+
+    sub TIEHANDLE {
+        my $class = shift;
+        my $fh = local *FH;
+        bless \$fh, $class;
+    }
+    for (qw(READ READLINE GETC PRINT PRINTF WRITE)) {
+        no strict 'refs';
+        *$_  = sub { return };
+    }
+
+package Tie::DevRandom;
+
+    sub READLINE { rand() . "\n"; }
+    sub TIEHANDLE {
+        my $class = shift;
+        my $fh = local *FH;
+        bless \$fh, $class;
+    }
+
+    sub FETCH { rand() }
+    sub TIESCALAR {
+        my $class = shift;
+        bless \my $self, $class;
+    }
+
+package Tie::Tee;
+
+    sub TIEHANDLE {
+        my $class = shift;
+        my @handles;
+        for my $path (@_) {
+            open(my $fh, "&gt;$path") || die "can't write $path";
+            push @handles, $fh;
+        }
+        bless \@handles, $class;
+    }
+
+    sub PRINT {
+        my $self = shift;
+        my $ok = 0;
+        for my $fh (@$self) {
+            $ok += print $fh @_;
+        }
+        return $ok == @$self;
+    }</pre>
+</blockquote>
+<a name="INDEX-2751"></a><a name="INDEX-2752"></a><a name="INDEX-2753"></a>
+The <tt class="literal">Tie::Tee</tt> class emulates the standard Unix
+<em class="emphasis">tee</em>(1) program, which sends one stream of
+output to multiple different destinations.  The
+<tt class="literal">Tie::DevNull</tt> class emulates the null device,
+<em class="emphasis">/dev/null</em> on Unix systems.  And the
+<tt class="literal">Tie::DevRandom</tt> class produces random numbers either
+as a handle or as a scalar, depending on whether you call
+<tt class="literal">TIEHANDLE</tt> or <tt class="literal">TIESCALAR</tt>!
+Here's how you call them:
+<blockquote>
+<pre class="programlisting">package main;
+
+tie *SCATTER,   "Tie::Tee", qw(tmp1 - tmp2 &gt;tmp3 tmp4);
+tie *RANDOM,    "Tie::DevRandom";
+tie *NULL,      "Tie::DevNull";
+tie my $randy,  "Tie::DevRandom";
+
+for my $i (1..10) {
+    my $line = &lt;RANDOM&gt;;
+    chomp $line;
+    for my $fh (*NULL, *SCATTER) {
+        print $fh "$i: $line $randy\n";
+    }
+}</pre>
+</blockquote>
+This produces something like the following on your screen:
+<blockquote>
+<pre class="programlisting">1: 0.124115571686165 0.20872819474074
+2: 0.156618299751194 0.678171662366353
+3: 0.799749050426126 0.300184963960792
+4: 0.599474551447884 0.213935286029916
+5: 0.700232143543861 0.800773751296671
+6: 0.201203608274334 0.0654303290639575
+7: 0.605381294683365 0.718162304090487
+8: 0.452976481105495 0.574026269121667
+9: 0.736819876983848 0.391737610662044
+10: 0.518606540417331 0.381805078272308</pre>
+</blockquote>
+But that's not all!  It wrote to your screen because of the
+<tt class="literal">-</tt> in the <tt class="literal">*SCATTER</tt><tt class="literal">tie</tt> above.  But that line also told it to create
+files <em class="emphasis">tmp1</em>, <em class="emphasis">tmp2</em>, and
+<em class="emphasis">tmp4</em>, as well as to append to file
+<em class="emphasis">tmp3</em>.  (We also wrote to the
+<tt class="literal">*NULL</tt> filehandle in the loop, though of course that
+didn't show up anywhere interesting, unless you're interested in black
+holes.)
+<a name="INDEX-2754"></a><a name="INDEX-2755"></a>
+</p>
+
+<a name="INDEX-2756"></a><a name="INDEX-2757"></a><a name="INDEX-2758"></a>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch14_03.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch14_05.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">14.3. Tying Hashes</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">14.5. A Subtle Untying Trap</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

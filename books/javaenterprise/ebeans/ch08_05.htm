@@ -1,0 +1,842 @@
+<html>
+<head>
+<title>Explicit Transaction Management (Enterprise JavaBeans)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Richard Monson-Haefel">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-869-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Explicit Transaction Management">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm" alt="Enterprise JavaBeans"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch08_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_01.htm">Chapter 8: Transactions</a></td><td align="right" valign="top" width="172"><a href="ch08_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_06.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">8.5. Explicit Transaction Management</h2>
+
+<a name="ch08-26-fm2xml"></a>
+<blockquote class="note">
+<h4 class="objtitle">NOTE</h4> <p>
+<a name="INDEX-1712"></a><a name="INDEX-1713"></a><a name="INDEX-1714"></a>Although this section covers JTA, it is
+strongly recommended that you do not attempt to manage transactions
+explicitly. Through transaction attributes, EJB provides a
+comprehensive and simple mechanism for delimiting transactions at the
+method level and propagating transactions automatically. Only
+developers with a thorough understanding of transactional systems
+should attempt to use JTA with EJB.  </p>
+</blockquote>
+
+<p>In EJB, <a name="INDEX-1715"></a>implicit transaction management is
+provided on the bean method level so that we can define transactions
+that are delimited by the scope of the method being executed. This is
+one of the primary advantages of EJB over cruder distributed object
+implementations: it reduces complexity and therefore programmer
+error. In addition, declarative transaction demarcation, as used in
+EJB, separates the transactional behavior from the business logic; a
+change to transactional behavior does not require changes to the
+business logic. In rare situations, however, it may be necessary to
+take control of transactions explicitly. To do this, it is necessary
+to have a much more complete understanding of transactions.
+</p>
+
+<p>Explicit management of transactions is complex and is normally
+accomplished using the OMG's <a name="INDEX-1716"></a><a name="INDEX-1717"></a><a name="INDEX-1718"></a><a name="INDEX-1719"></a>OTS (Object
+Transaction Service) or the Java implementation of OTS,
+<a name="INDEX-1720"></a>JTS ( Java Transaction Service). OTS and
+JTS provide APIs that allow developers to work with transaction
+managers and resources (databases) directly. While the JTS
+implementation of OTS is robust and complete, it is not the easiest
+API to work with; it requires clean and intentional control over the
+bounds of enrollment in transactions.
+</p>
+
+<p>
+<a name="INDEX-1721"></a>Enterprise JavaBeans supports a much
+simpler API, the Java Transaction API (JTA), for working with
+transactions.<a href="#FOOTNOTE-4">[4]</a> This API is implemented by the
+<tt class="literal">javax.transaction</tt> package. JTA actually consists
+of two components: a high-level transactional client interface and a
+low-level X/Open XA interface. We are concerned with the high-level
+client interface since that is the one accessible to the beans and is
+the recommended transactional interface for client applications. The
+low-level XA interface is used by the EJB server and container to
+automatically coordinate transactions with resources like databases.
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-4"></a>
+<p>[4] Enterprise JavaBeans 1.0 originally
+specified JTS as the transitional API for explicit demarcation. JTA,
+which was released after EJB, is the preferred API in both EJB 1.0
+and EJB 1.1. Both JTS and JTA, however, use the
+<tt class="literal">UserTransaction</tt> interface, and so the information
+here is applicable to servers that support either API.</p>
+</blockquote>
+
+<p>As an application and bean developer, you will not work with the XA
+interface in JTA. Instead, your use of explicit transaction
+management will focus on one very simple interface:
+<tt class="literal">javax.transaction.UserTransaction</tt><a name="INDEX-1722"></a>. <tt class="literal">UserTransaction</tt>
+provides an interface to the transaction manager that allows the
+application developer to manage the scope of a transaction
+explicitly. Here is an example of how explicit demarcation might be
+used in a bean or client application:
+</p>
+
+<blockquote>
+<pre class="programlisting">// EJB 1.0: Use native casting instead of narrow()
+Object ref = getInitialContext().lookup("travelagent.Home");
+TravelAgentHome home = (TravelAgentHome)
+    PortableRemoteObject.narrow(ref,TravelAgentHome.class);
+
+TravelAgent tr1 = home.create(customer);
+tr1.setCruiseID(cruiseID);
+tr1.setCabinID(cabin_1);
+TravelAgent tr2 = home.create(customer);
+tr2.setCruiseID(cruiseID);
+tr2.setCabinID(cabin_2);
+
+javax.transaction.UserTransaction tran = ...; // Get the UserTransaction.
+<b class="emphasis-bold">tran.begin();</b>
+tr1.bookPassage(visaCard,price);
+tr2.bookPassage(visaCard,price);
+<b class="emphasis-bold">tran.commit();</b>
+</pre>
+</blockquote>
+
+<p>The client application needs to book two cabins for the same
+customer--in this case, the customer is purchasing a cabin for
+himself and his children. The customer doesn't want to book
+either cabin unless he can get both, so the client application is
+designed to include both bookings in the same transaction. Explicitly
+marking the transaction's boundaries through the use of the
+<tt class="literal">javax.transaction.UserTransaction</tt> object does
+this. Each bean method invoked by the current thread between the
+<tt class="literal">UserTransaction.begin()</tt><a name="INDEX-1723"></a> and
+<tt class="literal">UserTransaction.commit()</tt><a name="INDEX-1724"></a> method is included in the
+same transaction scope, according to transaction attribute of the
+bean methods invoked.
+</p>
+
+<p>Obviously this example is contrived, but the point it makes is clear.
+Transactions can be controlled directly, instead of depending on
+method scope to delimit them. The advantage of using explicit
+transaction demarcation is that it gives the client control over the
+bounds of a transaction. The client, in this case, may be a client
+application or another bean.<a href="#FOOTNOTE-5">[5]</a> In either case, the same
+<tt class="literal">javax.transaction.UserTransaction</tt> is used, but it
+is obtained from different sources depending on whether it is needed
+on the client or in a bean class.
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-5"></a>
+<p>[5] Only beans declared as
+managing their own transactions (bean-managed transaction beans) can
+use the <tt class="literal">UserTransaction</tt> interface.</p>
+</blockquote>
+
+<dl>
+<dt>
+<b>EJB 1.1: how client applications obtain the UserTransaction object</b>
+</dt>
+<dd>
+<p>Java 2 Enterprise Edition (J2EE) specifies how a client application
+can obtain a <tt class="literal">UserTransaction</tt> object using JNDI.
+Here's how a client obtains a
+<tt class="literal">UserTransaction</tt> object if the EJB 1.1 container is
+part of a J2EE system:
+</p>
+</dd>
+
+</dl>
+
+<blockquote>
+<pre class="programlisting">...
+Context jndiCntx = new InitialContext();
+UserTransaction tran =
+    (UserTransaction)jndiCntx.lookup("java:comp/UserTransaction");
+
+utx.begin();
+... 
+utx.commit();
+...</pre>
+</blockquote>
+<p>J2EE and its relationship with EJB 1.1 is covered in more detail in
+<a href="ch11_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch11_01.htm">Chapter 11, "Java 2, Enterprise Edition"</a>.
+</p>
+
+<dl>
+<dt>
+<b>EJB 1.0: how client applications obtain the UserTransaction object</b>
+</dt>
+<dd>
+<p>EJB 1.0 doesn't specify how client applications should obtain a
+reference to a <tt class="literal">UserTransaction</tt>. Many vendors make
+the <tt class="literal">UserTransaction</tt> available to the client
+application through JNDI. Here's how a client application
+obtains a <tt class="literal">UserTransaction</tt> using JNDI:
+</p>
+</dd>
+
+</dl>
+
+<blockquote>
+<pre class="programlisting">UserTransaction ut = (UserTransaction)   
+    jndiContext.lookup("javax.transaction.UserTransaction");</pre>
+</blockquote>
+<p>EJB servers may use other mechanisms, such as a proprietary API or
+casting the home interface into a <tt class="literal">UserTransaction</tt>.
+</p>
+
+<p>Beans can also manage transactions <a name="INDEX-1725"></a><a name="INDEX-1726"></a>explicitly. In EJB 1.1, only
+<a name="INDEX-1727"></a>session beans with the
+<tt class="literal">&lt;transaction-type&gt;</tt><a name="INDEX-1728"></a> value of "Bean" can be
+bean-managed transaction beans. Entity beans can never be
+bean-managed transaction beans. Beans that manage their own
+transactions do not declare transaction attributes for their methods.
+Here's how an EJB 1.1 session bean declares that it will manage
+transactions explicitly:
+</p>
+
+<blockquote>
+<pre class="programlisting">&lt;ejb-jar&gt;
+ &lt;enterprise-beans&gt;
+ ...
+   &lt;session&gt;
+   ...
+   &lt;transaction-type&gt;Bean&lt;/transaction-type&gt;
+   ...</pre>
+</blockquote>
+
+<p>In EJB 1.0, only beans with the
+<a name="INDEX-1729"></a><a name="INDEX-1730"></a>
+transaction attribute <tt class="literal">TX_BEAN_MANAGED</tt> for its
+methods are considered bean-managed transaction beans. Entity beans
+as well as session beans can manage their own transactions.
+</p>
+
+<p>To manage its own transaction, a bean needs to obtain a
+<tt class="literal">UserTransaction</tt> object. A bean obtains a reference
+to the <tt class="literal">UserTransaction</tt> from the
+<tt class="literal">EJBContext</tt>, as shown below:
+</p>
+
+<blockquote>
+<pre class="programlisting">public class HypotheticalBean extends SessionBean {
+  SessionContext ejbContext;
+  
+  public void someMethod() {
+   try {
+    UserTransaction ut = ejbContext.getUserTransaction();
+    ut.begin();
+    
+    // Do some work.
+    
+    ut.commit();
+    } catch(IllegalStateException ise) {...}
+      catch(SystemException se) {...}
+      catch(TransactionRolledbackException tre) {...}
+      catch(HeuristicRollbackException hre) {...}
+      catch(HeuristicMixedException hme) {...}</pre>
+</blockquote>
+
+<p>An EJB 1.1 bean can access the <tt class="literal">UserTransaction</tt>
+from the <tt class="literal">EJBContext</tt> as shown in the previous
+example or from the JNDI ENC as shown in the following example. Both
+methods are legal and proper in EJB 1.1. The bean performs the lookup
+using the "<tt class="literal">java:comp/env/UserTransaction</tt>" context:
+</p>
+
+<blockquote>
+<pre class="programlisting">InitialContext jndiCntx = new InitialContext();
+UserTransaction tran = (UserTransaction)
+    jndiCntx.lookup("java:comp/env/UserTransaction");</pre>
+</blockquote>
+
+<a name="JBEANS-CH-8-SECT-5.1"></a>
+<h3 class="sect2">8.5.1. Transaction Propagation in Bean-Managed Transactions</h3>
+
+<p>
+<a name="INDEX-1731"></a><a name="INDEX-1732"></a>With
+<a name="INDEX-1733"></a>stateless session beans (and
+<a name="INDEX-1734"></a>entity beans in EJB
+1.0), transactions that are managed using the
+<tt class="literal">UserTransaction</tt> must be started and completed
+within the same method, as shown previously. In other words,
+<tt class="literal">UserTransaction</tt> transactions cannot be started in
+one method and ended in another. This makes sense because both entity
+and stateless session bean instances are shared across many clients.
+</p>
+
+<p>With <a name="INDEX-1735"></a>stateful session beans, however, a
+transaction can begin in one method and be committed in another
+because a stateful session bean is only used by one client. This
+allows a stateful session bean to associate itself with a transaction
+across several different client-invoked methods. As an example,
+imagine the TravelAgent bean as a bean-managed transaction bean. In
+the following code, the transaction is started in the
+<tt class="literal">setCruiseID()</tt> method and completed in the
+<tt class="literal">bookPassage()</tt> method. This allows the TravelAgent
+bean's methods to be associated with the same transaction.
+</p>
+
+<blockquote>
+<pre class="programlisting"> public class TravelAgentBean implements javax.ejb.SessionBean {
+
+    public Customer customer;
+    public Cruise cruise;
+    public Cabin cabin;
+    public javax.ejb.SessionContext ejbContext;
+    ...
+    public void setCruiseID(int cruiseID)
+    throws javax.ejb.FinderException{
+    // EJB 1.0: also throws RemoteException
+          
+        try {
+<b class="emphasis-bold">        ejbContext.getUserTransaction().begin();</b>
+
+            CruiseHome home = (CruiseHome)getHome("CruiseHome", CruiseHome.class);
+            cruise = home.findByPrimaryKey(new CruisePK(cruiseID));
+        } catch(Exception re) {
+            // EJB 1.0: throw new RemoteException("",re);
+            throw new EJBException(re);
+        }
+     }
+
+public Ticket bookPassage(CreditCard card, double price)
+    throws IncompleteConversationalState { // EJB 1.0: also throws RemoteException
+<b class="emphasis-bold">        try {</b>
+<b class="emphasis-bold">            if (ejbContext.getUserTransaction().getStatus() != </b>
+<b class="emphasis-bold">               javax.transaction.Status.STATUS_ACTIVE) {</b>
+<b class="emphasis-bold">            // EJB 1.0: throw new RemoteException("Transaction is not active");</b>
+<b class="emphasis-bold">            throw new EJBException("Transaction is not active");</b>
+<b class="emphasis-bold">            }</b>
+<b class="emphasis-bold">        } catch(javax.transaction.SystemException se) {</b>
+<b class="emphasis-bold">          // EJB 1.0: throw new RemoteException("",se);</b>
+<b class="emphasis-bold">          throw new EJBException(se);</b>
+<b class="emphasis-bold">        }</b>
+
+        if (customer == null || cruise == null || cabin == null) {
+            throw new IncompleteConversationalState();
+        }
+        try {
+            ReservationHome resHome = (ReservationHome)
+                getHome("ReservationHome",ReservationHome.class);
+            Reservation reservation =
+            resHome.create(customer, cruise, cabin, price);
+            ProcessPaymentHome ppHome = (ProcessPaymentHome)
+                getHome("ProcessPaymentHome",ProcessPaymentHome.class);
+            ProcessPayment process = ppHome.create();
+            process.byCredit(customer, card, price);
+
+            Ticket ticket = new Ticket(customer,cruise,cabin,price);
+<b class="emphasis-bold">                ejbContext.getUserTransaction().commit();</b>
+            return ticket;
+        } catch(Exception e) {
+            // EJB 1.0: throw new RemoteException("",e);
+            throw new EJBException(e);
+        }
+    }
+    ...
+}</pre>
+</blockquote>
+
+<p>Repeated calls to the
+<tt class="literal">EJBContext.getUserTransaction()</tt><a name="INDEX-1736"></a><a name="INDEX-1737"></a> method return a reference to the
+same <tt class="literal">UserTransaction</tt> object. The container is
+required to retain the association between the transaction and the
+stateful bean instance across multiple client calls until the
+transaction terminates.
+</p>
+
+<p>In the <tt class="literal">bookPassage()</tt> method, we can check the
+status of the transaction to ensure that it's still active. If
+the transaction is no longer active, we throw an exception. The use
+of the <tt class="literal">getStatus()</tt> method is covered in more
+detail later in this chapter.
+</p>
+
+<p>When a bean-managed transaction method is invoked by a client that is
+already involved in a transaction, the client's transaction is
+suspended until the bean method returns. This suspension occurs
+whether the bean-managed transaction bean explicitly starts its own
+transaction within the method or, in the case of stateful beans, the
+transaction was started in a previous method invocation. The client
+transaction is always suspended until the <a name="INDEX-1738"></a><a name="INDEX-1739"></a> bean-managed
+transaction method returns.
+</p>
+
+<a name="ch08-28-fm2xml"></a>
+<blockquote class="note">
+<h4 class="objtitle">NOTE</h4>
+<p>
+<a name="INDEX-1740"></a>Transaction control across
+methods is <a name="INDEX-1741"></a> strongly discouraged because it can
+result in improperly managed transactions and long-lived transactions
+that lock up resources.</p> </blockquote>
+
+
+<a name="JBEANS-CH-8-SECT-5.2"></a>
+<h3 class="sect2">8.5.2. Heuristic Decisions</h3>
+
+<p>Transactions are normally controlled by a <em class="emphasis">transaction
+manager</em><a name="INDEX-1742"></a><a name="INDEX-1743"></a><a name="INDEX-1744"></a>(often the EJB server) that manages the
+ACID characteristics across several beans, databases, and servers.
+This transaction manager uses a <em class="emphasis">two-phase commit</em>
+(2-PC) to manage transactions. 2-PC is a protocol for managing
+transactions that commits updates in two stages. 2-PC is complex and
+outside the scope of this book, but basically it requires that
+servers and databases cooperate to ensure that all the data is made
+durable together. Some EJB servers support 2-PC while others
+don't, and the value of this transaction mechanism is a source
+of some debate. The important point to remember is that a transaction
+manager controls the transaction; based on the results of a poll
+against the resources (databases and other servers), it decides
+whether all the updates should be committed or rolled back. A
+<em class="emphasis">heuristic decision</em>is when one of the resources
+makes a unilateral decision to commit or roll back without permission
+from the transaction manager. Once a heuristic decision has been
+made, the atomicity of the transaction is lost and possible data
+integrity errors can occur.
+</p>
+
+<p>
+<tt class="literal">UserTransaction</tt>, discussed in the next section,
+throws a couple of different exceptions related to heuristic
+decisions; these are included in the following discussion.
+</p>
+
+
+<a name="JBEANS-CH-8-SECT-5.3"></a>
+<h3 class="sect2">8.5.3. UserTransaction</h3>
+
+<p>
+<a name="INDEX-1745"></a><tt class="literal">UserTransaction</tt> is
+a Java interface that is defined in the following code. In EJB 1.0,
+the EJB server is only required to support the functionality of this
+interface and the <tt class="literal">Status</tt> interface discussed here.
+EJB servers are not required to support the rest of JTA, nor are they
+required to use JTS for their transaction service. The
+<tt class="literal">UserTransaction</tt><a name="INDEX-1746"></a> is
+defined as follows:
+</p>
+
+<blockquote>
+<pre class="programlisting">public interface javax.transaction.UserTransaction
+{
+    public abstract void <tt class="userinput"><b>begin</b></tt>() 
+       throws IllegalStateException, SystemException;
+    public abstract void <tt class="userinput"><b>commit</b></tt>()
+        throws IllegalStateException, SystemException, 
+               TransactionRolledbackException,
+               HeuristicRollbackException, HeuristicMixedException;
+    public abstract int <tt class="userinput"><b>getStatus</b></tt>();
+    public abstract void <tt class="userinput"><b>rollback</b></tt>()
+       throws IllegalStateException, SecurityException, SystemException;
+    public abstract void <tt class="userinput"><b>setRollbackOnly</b></tt>()
+       throws IllegalStateException, SystemException;
+    public abstract void <tt class="userinput"><b>setTransactionTimeout</b></tt>(int seconds)
+        throws SystemException;
+}</pre>
+</blockquote>
+
+<p>Here's what the methods defined in this interface do:</p>
+
+<dl>
+<dt>
+<b><tt class="literal">begin()</tt>
+<a name="INDEX-1747"></a>
+</b>
+</dt>
+<dd>
+<p>Invoking the <tt class="literal">begin()</tt> method creates a new
+transaction. The thread that executes the <tt class="literal">begin()</tt>
+method is immediately associated with the new transaction. The
+transaction is propagated to any bean that supports existing
+transactions. The <tt class="literal">begin()</tt> method can throw one of
+two checked exceptions. <tt class="literal">IllegalStateException</tt> is
+thrown when <tt class="literal">begin()</tt> is called by a thread that is
+already associated with a transaction. You must complete any
+transactions associated with that thread before beginning a new
+transaction. <tt class="literal">SystemException</tt> is thrown if the
+transaction manager (the EJB server) encounters an unexpected error
+condition.
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">commit()</tt>
+<a name="INDEX-1748"></a>
+</b>
+</dt>
+<dd>
+<p>The <tt class="literal">commit()</tt> method completes the transaction that
+is associated with the current thread. When
+<tt class="literal">commit()</tt> is executed, the current thread is no
+longer associated with a transaction. This method can throw several
+checked exceptions. <tt class="literal">IllegalStateException</tt> is
+thrown if the current thread is not associated with a transaction.
+<tt class="literal">SystemException</tt> is thrown if the transaction
+manager (the EJB server) encounters an unexpected error condition.
+<tt class="literal">TransactionRolledbackException</tt> is thrown when the
+entire transaction is rolled back instead of committed; this can
+happen if one of the resources was unable to perform an update or if
+the <tt class="literal">UserTransaction.rollBackOnly()</tt> method was
+called. <tt class="literal">HeuristicRollbackException</tt> indicates that
+heuristic decisions were made by one or more resources to roll back
+the transaction. <tt class="literal">HeuristicMixedException</tt> indicates
+that heuristic decisions were made by resources to both roll back and
+commit the transaction; some resources decided to roll back while
+others decided to commit.
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">rollback()</tt>
+<a name="INDEX-1749"></a>
+</b>
+</dt>
+<dd>
+<p>The <tt class="literal">rollback()</tt> method is invoked to roll back the
+transaction and undo updates. The <tt class="literal">rollback()</tt>
+method can throw one of three different checked exceptions.
+<tt class="literal">SecurityException</tt> is thrown if the thread using
+the <tt class="literal">UserTransaction</tt> object is not allowed to roll
+back the transaction. <tt class="literal">IllegalStateException</tt> is
+thrown if the current thread is not associated with a transaction.
+<tt class="literal">SystemException</tt> is thrown if the transaction
+manager (the EJB server) encounters an unexpected error condition.
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">setRollBackOnly()</tt>
+<a name="INDEX-1750"></a>
+<a name="INDEX-1751"></a>
+</b>
+</dt>
+<dd>
+<p>This method is invoked to mark the transaction for rollback. This
+means that, whether or not the updates executed within the
+transaction succeed, the transaction must be rolled back when
+completed. This method can be invoked by any
+<tt class="literal">TX_BEAN_MANAGED</tt> bean participating in the
+transaction or by the client application. The
+<tt class="literal">setRollBackOnly()</tt> method can throw one of two
+different checked exceptions.
+<tt class="literal">IllegalStateException</tt> is thrown if the current
+thread is not associated with a transaction.
+<tt class="literal">SystemException</tt> is thrown if the transaction
+manager (the EJB server) encounters an unexpected error condition.
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">setTransactionTimeout(int seconds)</tt>
+<a name="INDEX-1752"></a>
+<a name="INDEX-1753"></a>
+</b>
+</dt>
+<dd>
+<p>This method sets the life span of a transaction: how long it will
+live before timing out. The transaction must complete before the
+transaction timeout is reached. If this method is not called, the
+transaction manager (EJB server) automatically sets the timeout. If
+this method is invoked with a value of
+seconds, the default timeout of the transaction manager will be used.
+This method must be invoked after the <tt class="literal">begin()</tt>
+method. <tt class="literal">SystemException</tt> is thrown if the
+transaction manager (EJB server) encounters an unexpected error
+condition.
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">getStatus()</tt></b>
+</dt>
+<dd>
+<p>The <tt class="literal">getStatus()</tt><a name="INDEX-1754"></a> method returns an integer
+that can be compared to constants defined in the
+<tt class="literal">javax.transaction.Status</tt> interface. This method
+can be used by a sophisticated programmer to determine the status of
+a transaction associated with a <tt class="literal">UserTransaction</tt>
+object. <tt class="literal">SystemException</tt> is thrown if the
+transaction manager (EJB server) encounters an unexpected error
+<a name="INDEX-1755"></a>
+condition.
+</p>
+</dd>
+
+</dl>
+
+
+<a name="JBEANS-CH-8-SECT-5.4"></a>
+<h3 class="sect2">8.5.4. Status</h3>
+
+<p>
+<tt class="literal">Status</tt><a name="INDEX-1756"></a> is a
+simple interface that contains no methods, only constants. Its sole
+purpose is to provide a set of constants that describe the current
+status of a transactional object--in this case, the
+<tt class="literal">UserTransaction</tt>:
+</p>
+
+<blockquote>
+<pre class="programlisting">interface javax.transaction.Status
+{
+   public final static int STATUS_ACTIVE;
+   public final static int STATUS_COMMITTED;
+   public final static int STATUS_COMMITTING;
+   public final static int STATUS_MARKED_ROLLBACK;
+   public final static int STATUS_NO_TRANSACTION;
+   public final static int STATUS_PREPARED;
+   public final static int STATUS_PREPARING;
+   public final static int STATUS_ROLLEDBACK;
+   public final static int STATUS_ROLLING_BACK;
+   public final static int STATUS_UNKNOWN;
+}</pre>
+</blockquote>
+
+<p>The value returned by <a name="INDEX-1757"></a><tt class="literal">getStatus()</tt> tells the client using the
+<tt class="literal">UserTransaction</tt> the status of a transaction.
+Here's what the constants mean:
+</p>
+
+<dl>
+<dt>
+<b><tt class="literal">STATUS_ACTIVE</tt></b>
+</dt>
+<dd>
+<p>An active transaction is associated with the
+<tt class="literal">UserTransaction</tt> object. This status is returned
+after a transaction has been started and prior to a transaction
+manager beginning a 2-PC commit. (Transactions that have been
+suspended are still considered active.)
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">STATUS_COMMITTED</tt></b>
+</dt>
+<dd>
+<p>A transaction is associated with the
+<tt class="literal">UserTransaction</tt> object; the transaction has been
+committed. It is likely that heuristic decisions have been made;
+otherwise, the transaction would have been destroyed and the
+<tt class="literal">STATUS_NO_TRANSACTION </tt>constant would have been
+returned instead.
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">STATUS_COMMITTING</tt></b>
+</dt>
+<dd>
+<p>A transaction is associated with the
+<tt class="literal">UserTransaction</tt> object; the transaction is in the
+process of committing. The <tt class="literal">UserTransaction</tt> object
+returns this status if the transaction manager has decided to commit
+but has not yet completed the process.
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">STATUS_MARKED_ROLLBACK</tt></b>
+</dt>
+<dd>
+<p>A transaction is associated with the
+<tt class="literal">UserTransaction</tt> object; the transaction has been
+marked for rollback, perhaps as a result of a
+<tt class="literal">UserTransaction.setRollbackOnly()</tt> operation
+invoked somewhere else in the application.
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">STATUS_NO_TRANSACTION</tt></b>
+</dt>
+<dd>
+<p>No transaction is currently associated with the
+<tt class="literal">UserTransaction</tt> object. This occurs after a
+transaction has completed or if no transaction has been created. This
+value is returned rather than throwing an
+<tt class="literal">IllegalStateException</tt>.
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">STATUS_PREPARED</tt></b>
+</dt>
+<dd>
+<p>A transaction is associated with the
+<tt class="literal">UserTransaction</tt> object. The transaction has been
+prepared, which means that the first phase of the two-phase commit
+process has completed.
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">STATUS_PREPARING</tt></b>
+</dt>
+<dd>
+<p>A transaction is associated with the
+<tt class="literal">UserTransaction</tt> object; the transaction is in the
+process of preparing, which means that the transaction manager is in
+the middle of executing the first phase of the two-phase commit.
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">STATUS_ROLLEDBACK</tt></b>
+</dt>
+<dd>
+<p>A transaction is associated with the
+<tt class="literal">UserTransaction</tt> object; the outcome of the
+transaction has been identified as a rollback. It is likely that
+heuristic decisions have been made; otherwise, the transaction would
+have been destroyed and the <tt class="literal">STATUS_NO_TRANSACTION</tt>
+constant would have been returned.
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">STATUS_ROLLING_BACK</tt></b>
+</dt>
+<dd>
+<p>A transaction is associated with the
+<tt class="literal">UserTransaction</tt> object; the transaction is in the
+process of rolling back.
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">STATUS_UNKNOWN</tt></b>
+</dt>
+<dd>
+<p>A transaction is associated with the
+<tt class="literal">UserTransaction</tt> object; its current status cannot
+be determined. This is a transient condition and subsequent
+invocations will ultimately return a different
+<tt class="literal"></tt><a name="INDEX-1758"></a> status.
+</p>
+</dd>
+
+</dl>
+
+
+<a name="JBEANS-CH-8-SECT-5.5"></a>
+<h3 class="sect2">8.5.5. EJBContext Rollback Methods</h3>
+
+<p>
+<a name="INDEX-1759"></a><a name="INDEX-1760"></a>Only beans that manage their own
+transactions have access to the <tt class="literal">User-Transaction</tt>
+from the <tt class="literal">EJBContext</tt>. To provide other types of
+beans with an interface to the transaction, the
+<tt class="literal">EJBContext</tt> interface provides the methods
+<tt class="literal">setRollbackOnly()</tt> and
+<tt class="literal">getRollbackOnly()</tt>.
+</p>
+
+<p>The
+<tt class="literal">setRollbackOnly()</tt><a name="INDEX-1761"></a> method gives a bean the power to
+veto a transaction. This power can be used if the bean detects a
+condition that would cause inconsistent data to be committed when the
+transaction completes. Once a bean invokes the
+<tt class="literal">setRollbackOnly()</tt> method, the current transaction
+is marked for rollback and cannot be committed by any other
+participant in the transaction--including the container.
+</p>
+
+<p>The
+<tt class="literal">getRollbackOnly()</tt><a name="INDEX-1762"></a> method returns
+<tt class="literal">true</tt> if the current transaction has been marked
+for rollback. This can be used to avoid executing work that
+wouldn't be committed anyway. If, for example, an exception is
+thrown and captured within a bean method, this method can be used to
+determine whether the exception caused the current transaction to be
+rolled back. If it did, there is no sense in continuing the
+processing. If it didn't, the bean has an opportunity to
+correct the problem and retry the task that failed. Only expert bean
+developers should attempt to retry tasks within a transaction.
+Alternatively, if the exception didn't cause a rollback
+(<tt class="literal">getRollbackOnly()</tt> returns
+<tt class="literal">false</tt>), a rollback can be forced using the
+<tt class="literal">setRollbackOnly()</tt>
+method<a name="INDEX-1763"></a>
+.
+</p>
+
+<p>Beans that manage their own transaction must <em class="emphasis">not</em>
+use the <tt class="literal">setRollbackOnly()</tt> and
+<tt class="literal">getRollbackOnly()</tt> methods of the
+<tt class="literal">EJBContext</tt>. These beans should use the
+<tt class="literal">getStatus()</tt> and <tt class="literal">rollback()</tt>
+methods on the <tt class="literal">UserTransaction</tt> object to check for
+rollback and force a rollback <a name="INDEX-1764"></a><a name="INDEX-1765"></a><a name="INDEX-1766"></a> respectively.
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch08_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch08_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_06.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">8.4. Non-Transactional Beans</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">8.6. EJB 1.1: Exceptions and Transactions</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

@@ -1,0 +1,316 @@
+<html>
+<head>
+<title>SQL Stragglers  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="SQL Stragglers">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="appd_05.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="appd_01.htm">Appendix D: The Fifteen-Minute SQL Tutorial</a></td><td align="right" valign="top" width="172"><a href="appe_01.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">D.6. SQL Stragglers</h2>
+
+
+
+
+<p>Before we close this tutorial section, there are a few more advanced
+SQL topics you may encounter in your travels.</p>
+
+
+
+
+<a name="appd-12-fm2xml"></a>
+<h3 class="sect2">D.6.1. Views</h3>
+
+
+
+
+<p>
+<a name="INDEX-1150"></a>Some SQL servers allow you to create
+different <em class="emphasis">views</em> of a table. Views are like magic
+permanent <tt class="literal">SELECT</tt> queries. Once you create a view
+using a special <tt class="literal">SELECT</tt> query, the results of your
+query stick around and behave like their own table. Views can be
+queried like any other table. Modifications to a view, with a few
+restrictions, are propagated back to the original table or tables.</p>
+
+
+
+
+<p>Note I said <em class="emphasis">tables</em>. Here's where the magic
+of views comes in: a view on a table can be created that consists of
+a join between that table and another. This view behaves as one large
+virtual table. Changes to this view are propagated back to the
+original tables that are part of the join that created the view.</p>
+
+
+
+
+<p>A view can also be created with a new column consisting of
+calculations performed between other columns in that table, almost
+like a spreadsheet. Views are useful for more mundane purposes also,
+like query simplification (i.e., may be able to select fewer columns)
+and data restructuring (i.e., table users sees a view of the data
+that doesn't change, even if other columns in the underlying
+table structure are modified).</p>
+
+
+
+
+<p>Here's a view creation example that demonstrates query
+simplification:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">USE sysadm
+CREATE VIEW ipaddr_view AS SELECT name, ipaddr FROM hosts</pre>
+</blockquote>
+
+
+
+
+<p>Now we can use a very simple query to get back just the information
+we need:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">USE sysadm
+SELECT * FROM ipaddr_view</pre>
+</blockquote>
+
+
+
+
+<p>The result of this query is:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">name                           ipaddr          
+------------------------------ --------------- 
+shimmer                        192.168.1.11    
+bendir                         192.168.1.3     
+sander                         192.168.1.55    
+sulawesi                       192.168.1.12</pre>
+</blockquote>
+
+
+
+
+<p>Like tables, views are dropped using a form of the
+<tt class="literal">DROP</tt> command:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">USE sysadm
+DROP VIEW ipaddr_view</pre>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="appd-13-fm2xml"></a>
+<h3 class="sect2">D.6.2. Cursors</h3>
+
+
+
+
+<p>In all of the queries we've seen above, we've asked the
+server to hand us back all of the results once the query has
+completed. Sometimes it is preferable to receive the answer to a
+query one line at a time. This is most often the case when embedding
+SQL queries in other programs. If your query returns tens of
+thousands of lines, chances are pretty good that you'll want to
+process the results one line at a time, rather than storing them all
+in memory for later use. Most SQL programming in Perl uses this
+line-at-a-time method. Here's a small native-SQL program that
+demonstrates cursor use on a Sybase or MS-SQL Server:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">USE sysadm
+-- declare our variables
+DECLARE @hostname character(30)
+DECLARE @ip character(15)
+
+-- declare our cursor
+DECLARE hosts_curs CURSOR FOR SELECT name,ipaddr FROM hosts
+
+-- open this cursor
+OPEN hosts_curs
+
+-- iterate over table, fetching rows one at a time, 
+-- until we receive an error 
+FETCH hosts_curs INTO @hostname,@ip
+WHILE (@@fetch_status = 0)
+  BEGIN 
+     PRINT "----"
+     PRINT @hostname
+     PRINT @ip
+     FETCH hosts_curs INTO @hostname,@ip
+  END
+
+-- close the cursor (not strictly necessary when followed 
+-- by a DEALLOCATE)
+CLOSE hosts_curs
+
+-- undefine cursor def
+DEALLOCATE hosts_curs</pre>
+</blockquote>
+
+
+
+
+<p>This produces the following output:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">----
+shimmer                       
+192.168.1.11   
+----
+bendir                        
+192.168.1.3    
+----
+sander                        
+192.168.1.55   
+----
+sulawesi                      
+192.168.1.12</pre>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="appd-14-fm2xml"></a>
+<h3 class="sect2">D.6.3. Stored Procedures</h3>
+
+
+
+
+<p>
+<a name="INDEX-1151"></a><a name="INDEX-1152"></a>Most database systems allow you to
+upload SQL code to the server where it is stored in an optimized,
+post-parsed form for faster execution. These uploads are known as
+<em class="emphasis">stored procedures</em>. Stored procedures are often a
+critical component of SQL for administrators because large parts of
+server administration for some servers rely on them. For example, to
+change the owner of the <em class="filename">sysadm</em> database in
+Sybase, you might do this:</p>
+
+
+
+
+<blockquote>
+<pre class="programlisting">USE sysadm
+sp_changedbowner "jay"</pre>
+</blockquote>
+
+
+
+
+<p>See <a href="ch07_01.htm">Chapter 7, "SQL Database Administration"</a> for
+examples of calling stored procedures. Now that you've seen the
+basics of SQL, you're ready to tackle <a href="ch07_01.htm">Chapter 7, "SQL Database Administration"</a>.<a name="INDEX-1153"></a>
+</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="appd_05.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="appe_01.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">D.5. Relating Tables to Each Other</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">E. The Twenty-Minute SNMP Tutorial</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

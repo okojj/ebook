@@ -1,0 +1,194 @@
+<html><head>
+<title>Recipe 16.11. Making a Process Look Like a File with Named Pipes</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:00Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch16_01.htm" title="16. Process Management and Communication"><link rel="prev" href="ch16_11.htm" title="16.10. Communicating Between Related Processes"><link rel="next" href="ch16_13.htm" title="16.12. Sharing Variables in Different Processes"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_11.htm" title="16.10. Communicating Between Related Processes"><img src="../gifs/txtpreva.gif" alt="Previous: 16.10. Communicating Between Related Processes" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch16_01.htm" title="16. Process Management and Communication">Chapter 16<br>Process Management and Communication</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch16_13.htm" title="16.12. Sharing Variables in Different Processes"><img src="../gifs/txtnexta.gif" alt="Next: 16.12. Sharing Variables in Different Processes" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch16-20777">16.11. Making a Process Look Like a File with Named Pipes</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1960">Problem</A
+></H3
+><p class="para"><a class="indexterm" name="ch16-idx-1000006359-0"></A
+><a class="indexterm" name="ch16-idx-1000006359-1"></A
+><a class="indexterm" name="ch16-idx-1000006359-2"></A
+>You want a process to intercept all access to a file. For instance, you want to make your <em class="emphasis">~/.plan</EM
+> file a program that returns a random quote.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1966">Solution</A
+></H3
+><p class="para">Use named pipes. First create one, probably from your shell:</P
+><pre class="programlisting">% mkfifo /path/to/named.pipe</PRE
+><p class="para">Here's a reader for it:</P
+><pre class="programlisting">open(FIFO, &quot;&lt; /path/to/named.pipe&quot;)         or die $!;
+while (&lt;FIFO&gt;) {
+    print &quot;Got: $_&quot;;
+}
+close(FIFO);</PRE
+><p class="para">Here's a writer for it:</P
+><pre class="programlisting">open(FIFO, &quot;&gt; /path/to/named.pipe&quot;)         or die $!;
+print FIFO &quot;Smoke this.\n&quot;;
+close(FIFO);</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-1994">Discussion</A
+></H3
+><p class="para">A named pipe, or FIFO as they are also known, is a special file that acts as a buffer to connect processes on the same machine. Ordinary pipes also allow processes to communicate, but those processes must have inherited the filehandles from their parents. To use a named pipe, a process need know only the named pipe's filename. In most cases, processes don't even need to be aware that they're reading from a FIFO.</P
+><p class="para">Named pipes can be read from and written to just as though they were ordinary files (unlike Unix-domain sockets as discussed in <a class="xref" href="ch17_01.htm" title="Sockets">Chapter 17, <cite class="chapter">Sockets</CITE
+></A
+>). Data written into the FIFO is buffered up by the operating system, then read back in the order it was written in. Because a FIFO acts as a buffer to connect processes, opening one for reading will block until another process opens it for writing, and vice versa. If you <code class="literal">open</CODE
+> for read and write using the +&lt; mode to <code class="literal">open</CODE
+>, you won't block (on most systems) because your process could be both reader and writer.</P
+><p class="para">Let's examine how to use a named pipe so people will get a different file each time they <em class="emphasis">finger</EM
+> you. To create a named pipe, use <em class="emphasis">mkfifo</EM
+> or <em class="emphasis">mknod</EM
+> to create a named pipe called <em class="emphasis">.plan</EM
+> in your home directory:</P
+><pre class="programlisting">% mkfifo ~/.plan                    # isn't this everywhere yet?
+% mknod  ~/.plan p                  # in case you don't have mkfifo</PRE
+><p class="para">On some systems, you must use <i class="filename">mknod </I
+>(8). The location and names of these programs aren't uniform or necessarily obvious, so consult your system documentation to find out where these programs are.</P
+><p class="para">The next step is to create a program to feed data to the programs that read from your ~<em class="emphasis">/.plan</EM
+> file. We'll just print the date and time, as shown in <a class="xref" href="#ch16-15443" title="dateplan">Example 16.9</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch16-15443">Example 16.9: dateplan</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# dateplan - place current date and time in .plan file
+while (1) {
+    open(FIFO, &quot;&gt; $ENV{HOME}/.plan&quot;)
+        or die &quot;Couldn't open $ENV{HOME}/.plan for writing: $!\n&quot;;
+    print FIFO &quot;The current time is &quot;, scalar(localtime), &quot;\n&quot;;
+    close FIFO;
+    sleep 1;
+}</PRE
+></DIV
+><p class="para">Unfortunately, this won't always work, because some <em class="emphasis">finger</EM
+> programs and their attendant daemons check the size of the <em class="emphasis">.plan</EM
+> file before trying to read it. Because named pipes appear as special files of zero size on the filesystem, such clients and servers will not try to open or read from our named pipe, and the trick will fail.</P
+><p class="para">In our <em class="emphasis">.plan</EM
+> example, the writer was a daemon. It's not uncommon for readers to be daemons as well. Take, for instance, the use of a named pipe to centralize logging from many processes. The log server reads log messages from the named pipe and can send them to a database or file. Clients write their messages to the named pipe. This removes the distribution logic from the clients, making changes to message distribution easy to implement.</P
+><p class="para"><a class="xref" href="#ch16-41177" title="fifolog">Example 16.10</A
+> is a simple program to read two-line messages where the first line is the name of the service and the second line is the message being logged. All messages from <code class="literal">httpd</CODE
+> are ignored, while all messages from <code class="literal">login</CODE
+> are saved to <i class="filename">/var/log/login</I
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch16-41177">Example 16.10: fifolog</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch16-idx-1000006360-0"></A
+>fifolog - read and record log msgs from fifo
+
+use IO::File;
+
+$SIG{ALRM} = sub { close(FIFO) };   # move on to the next queued process
+
+while (1) {
+    alarm(0);                       # turn off alarm for blocking open
+    open(FIFO, &quot;&lt; /tmp/log&quot;)        or die &quot;Can't open /tmp/log : $!\n&quot;;
+    alarm(1);                       # you have 1 second to log
+
+    $service = &lt;FIFO&gt;;
+    next unless defined $service;   # interrupted or nothing logged
+    chomp $service;
+
+    $message = &lt;FIFO&gt;;
+    next unless defined $message;   # interrupted or nothing logged
+    chomp $message;
+
+    alarm(0);                       # turn off alarms for message processing
+
+    if ($service eq &quot;http&quot;) {
+        # ignoring
+    } elsif ($service eq &quot;login&quot;) {
+        # log to /var/log/login
+        if ( open(LOG, &quot;&gt;&gt; /tmp/login&quot;) ) {
+            print LOG scalar(localtime), &quot; $service $message\n&quot;;
+            close(LOG);
+        } else {
+            warn &quot;Couldn't log $service $message to /var/log/login : $!\n&quot;;
+        }
+    }
+}</PRE
+></DIV
+><p class="para">This program is more complicated than the <em class="emphasis">.plan</EM
+> program for several reasons. First and foremost, we don't want our logging server to block would-be writers for long. It's easy to imagine a situation where an attacker or misbehaving writer opens the named pipe for writing, but doesn't send a complete message. To prevent this, we use <code class="literal">alarm</CODE
+> and <code class="literal">SIGALRM</CODE
+> to signal us if we get stuck reading.</P
+><p class="para">Only two exceptional conditions can happen when using named pipes: a writer can have its reader disappear, or vice versa. If a process is reading from a named pipe and the writer closes its end, the reading process will get an end of file (<code class="literal">&lt;&gt;</CODE
+> returns <code class="literal">undef</CODE
+>). If the reader closes the connection, though, the writer will get a <code class="literal">SIGPIPE</CODE
+> when it next tries to write there. If you disregard broken pipe signals with <code class="literal">$SIG{PIPE}</CODE
+> <code class="literal">=</CODE
+> <code class="literal">'IGNORE'</CODE
+>, your <code class="literal">print</CODE
+> will return a false value and <code class="literal">$!</CODE
+> will be set to <code class="literal">EPIPE</CODE
+>:</P
+><pre class="programlisting">use POSIX qw(:errno_h);
+
+$SIG{PIPE} = 'IGNORE';
+# ...
+$status = print FIFO &quot;Are you there?\n&quot;;
+if (!$status &amp;&amp; $! == EPIPE) {
+    warn &quot;My reader has forsaken me!\n&quot;;
+    next;
+}</PRE
+><p class="para">You may be asking "If I have 100 processes all trying simultaneously to write to this server, how can I be sure that I'll get 100 separate entries and not a jumbled mishmash with characters or lines from different processes?" That's a good question. The POSIX standard says that writes of less than <code class="literal">PIPE_BUF</CODE
+> bytes in size will be delivered atomically, i.e. not jumbled. You can get the <code class="literal">PIPE_BUF</CODE
+> constant from <code class="literal">POSIX</CODE
+>:</P
+><pre class="programlisting">use POSIX;
+print _POSIX_PIPE_BUF, &quot;\n&quot;;</PRE
+><p class="para">Fortunately, the POSIX standard also requires <code class="literal">PIPE_BUF</CODE
+> to be <em class="emphasis">at least</EM
+> 512 bytes. This means that all we have to do is ensure that our clients don't try to log more than 512 bytes at a time.</P
+><p class="para">What if you want to log more than 512 bytes at a time? Then you split each large message into several smaller (fewer than 512 bytes) messages, preface each with the unique client identifier (process ID, say) and have the server reassemble them. This is similar to the processing involved in TCP/IP message fragmentation and reassembly.</P
+><p class="para">Because a single named pipe doesn't allow bidirectional access between writer and reader, authentication and similar ways of preventing forged messages are hard to do (if not impossible). Rather than struggle to force such things on top of a model that doesn't accommodate them, you are better off using the filesystem's access control to restrict access to the file through the owner and group permissions on the named pipe.<a class="indexterm" name="ch16-idx-1000006362-0"></A
+><a class="indexterm" name="ch16-idx-1000006362-1"></A
+><a class="indexterm" name="ch16-idx-1000006362-2"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch16-pgfId-2138">See Also</A
+></H3
+><p class="para"><i class="filename">mkfifo (8)</I
+> or <i class="filename">mknod (8)</I
+> (if you have them); <a class="xref" href="ch17_07.htm" title="Using UNIX Domain Sockets">Recipe 17.6</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch16_11.htm" title="16.10. Communicating Between Related Processes"><img src="../gifs/txtpreva.gif" alt="Previous: 16.10. Communicating Between Related Processes" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch16_13.htm" title="16.12. Sharing Variables in Different Processes"><img src="../gifs/txtnexta.gif" alt="Next: 16.12. Sharing Variables in Different Processes" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">16.10. Communicating Between Related Processes</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">16.12. Sharing Variables in Different Processes</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

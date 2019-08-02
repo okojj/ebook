@@ -1,0 +1,246 @@
+<html><head>
+<title>Recipe 17.13. Non-Forking Servers</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:42Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch17_01.htm" title="17. Sockets"><link rel="prev" href="ch17_13.htm" title="17.12. Pre-Forking Servers"><link rel="next" href="ch17_15.htm" title="17.14. Writing a Multi-Homed Server"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_13.htm" title="17.12. Pre-Forking Servers"><img src="../gifs/txtpreva.gif" alt="Previous: 17.12. Pre-Forking Servers" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch17_01.htm" title="17. Sockets">Chapter 17<br>Sockets</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_15.htm" title="17.14. Writing a Multi-Homed Server"><img src="../gifs/txtnexta.gif" alt="Next: 17.14. Writing a Multi-Homed Server" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch17-25596">17.13. Non-Forking Servers</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1524">Problem<a class="indexterm" name="ch17-idx-1000004839-0"></A
+><a class="indexterm" name="ch17-idx-1000004839-1"></A
+><a class="indexterm" name="ch17-idx-1000004839-2"></A
+><a class="indexterm" name="ch17-idx-1000004839-3"></A
+></A
+></H3
+><p class="para">You want a server to deal with several simultaneous connections, but you don't want to <code class="literal">fork</CODE
+> a process to deal with each connection.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1530">Solution</A
+></H3
+><p class="para">Keep an array of open clients, use <code class="literal">select</CODE
+> to read information when it becomes available, and deal with a client only when you have read a full request from it, as shown in <a class="xref" href="#ch17-14829" title="nonforker">Example 17.6</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch17-14829">Example 17.6: nonforker</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch17-idx-1000005139-0"></A
+>nonforker - server who multiplexes without forking
+use POSIX;
+use IO::Socket;
+use IO::Select;
+use Socket;
+use Fcntl;
+use Tie::RefHash;
+
+$port = 1685;               # change this at will
+
+# Listen to port.
+$server = IO::Socket::INET-&gt;new(LocalPort =&gt; $port,
+                                Listen    =&gt; 10 )
+  or die &quot;Can't make server socket: $@\n&quot;;
+
+# begin with empty buffers
+%inbuffer  = ();
+%outbuffer = ();
+%ready     = ();
+
+tie %ready, 'Tie::RefHash';
+
+nonblock($server);
+$select = IO::Select-&gt;new($server);
+
+# Main loop: check reads/accepts, check writes, check ready to process
+while (1) {
+    my $client;
+    my $rv;
+    my $data;
+
+    # check for new information on the connections we have
+
+    # anything to read or accept?
+    foreach $client ($select-&gt;can_read(1)) {
+
+        if ($client == $server) {
+            # accept a new connection
+
+            $client = $server-&gt;accept();
+            $select-&gt;add($client);
+            nonblock($client);
+        } else {
+            # read data
+            $data = '';
+            $rv   = $client-&gt;recv($data, POSIX::BUFSIZ, 0);
+
+            unless (defined($rv) &amp;&amp; length $data) {
+                # This would be the end of file, so close the client
+                delete $inbuffer{$client};
+                delete $outbuffer{$client};
+                delete $ready{$client};
+
+                $select-&gt;remove($client);
+                close $client;
+                next;
+            }
+
+            $inbuffer{$client} .= $data;
+
+            # test whether the data in the buffer or the data we
+            # just read means there is a complete request waiting
+            # to be fulfilled.  If there is, set $ready{$client}
+            # to the requests waiting to be fulfilled.
+            while ($inbuffer{$client} =~ s/(.*\n)//) {
+                push( @{$ready{$client}}, $1 );
+            }
+        }
+    }
+
+    # Any complete requests to process?
+    foreach $client (keys %ready) {
+        handle($client);
+    }
+
+    # Buffers to flush?
+    foreach $client ($select-&gt;can_write(1)) {
+        # Skip this client if we have nothing to say
+        next unless exists $outbuffer{$client};
+
+        $rv = $client-&gt;send($outbuffer{$client}, 0);
+        unless (defined $rv) {
+            # Whine, but move on.
+            warn &quot;I was told I could write, but I can't.\n&quot;;
+            next;
+        }
+        if ($rv == length $outbuffer{$client} ||
+            $! == POSIX::EWOULDBLOCK) {
+            substr($outbuffer{$client}, 0, $rv) = '';
+            delete $outbuffer{$client} unless length $outbuffer{$client};
+        } else {
+            # Couldn't write all the data, and it wasn't because
+            # it would have blocked.  Shutdown and move on.
+            delete $inbuffer{$client};
+            delete $outbuffer{$client};
+            delete $ready{$client};
+
+            $select-&gt;remove($client);
+            close($client);
+            next;
+        }
+    }
+
+    # Out of band data?
+    foreach $client ($select-&gt;has_exception(0)) {  # arg is timeout
+        # Deal with out-of-band data here, if you want to.
+    }
+}
+
+# handle($socket) deals with all pending requests for $client
+sub handle {
+    # requests are in $ready{$client}
+    # send output to $outbuffer{$client}
+    my $client = shift;
+    my $request;
+
+    foreach $request (@{$ready{$client}}) {
+        # $request is the text of the request
+        # put text of reply into $outbuffer{$client}
+    }
+    delete $ready{$client};
+}
+
+# nonblock($socket) puts socket into nonblocking mode
+sub nonblock {
+    my $socket = shift;
+    my $flags;
+    
+    $flags = fcntl($socket, F_GETFL, 0)
+            or die &quot;Can't get flags for socket: $!\n&quot;;
+    fcntl($socket, F_SETFL, $flags | O_NONBLOCK)
+            or die &quot;Can't make socket nonblocking: $!\n&quot;;
+}</PRE
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1804">Discussion</A
+></H3
+><p class="para">As you see, handling multiple simultaneous clients within one process is more complicated than forking dedicated clones. You end up having to do a lot of operating system-like work to split your time between different connections and to ensure you don't block while reading.</P
+><p class="para">The <code class="literal">select</CODE
+> function tells which connections have data waiting to be read, which can have data written to them, and which have unread out-of-band data. We could use the <code class="literal">select</CODE
+> function built into Perl, but it would take more work to find out which filehandles are available. So we use the standard (as of 5.004) IO::Select module.</P
+><p class="para">We use <code class="literal">getsockopt</CODE
+><a class="indexterm" name="ch17-idx-1000004863-0"></A
+><a class="indexterm" name="ch17-idx-1000004863-1"></A
+> and <code class="literal">setsockopt</CODE
+> to turn on the non-blocking option for the server socket. Without it, a single client whose socket buffers filled up would cause the server to pause until the buffers emptied. Using nonblocking I/O, however, means that we have to deal with the case of partial reads and writes &nbsp;-  we can't simply use &lt; &gt; to block until an entire record can be read, or use <code class="literal">print</CODE
+> to send an entire record with <code class="literal">print</CODE
+>. <code class="literal">%inbuffer</CODE
+> holds the incomplete command read from clients, <code class="literal">%outbuffer</CODE
+> holds data not yet sent, and <code class="literal">%ready</CODE
+> holds arrays of unhandled messages.</P
+><p class="para">To use this code in your program, do three things. First, change the IO::Socket::INET call to specify your service's port. Second, change the code that moves records from the <code class="literal">inbuffer</CODE
+> to the <code class="literal">ready</CODE
+> queue. Currently it treats each line (text ending in <code class="literal">\n</CODE
+>) as a request. If your requests are not lines, you'll want to change this.</P
+><pre class="programlisting">while ($inbuffer{$client} =~ s/(.*\n)//) {
+    push( @{$ready{$client}}, $1 );
+}</PRE
+><p class="para">Finally, change the middle of the loop in <code class="literal">handler</CODE
+> to actually create a response to the request. A simple echoing program would say:</P
+><pre class="programlisting">$outbuffer{$client} .= $request;</PRE
+><p class="para">Error handling is left as an exercise to the reader. At the moment, we assume any read or write that caused an error is reason to end that client's connection. This is probably too harsh, because "errors" like EINTR and EAGAIN don't warrant termination (although you <em class="emphasis">should</EM
+> never get an EAGAIN when using <code class="literal">select ()</CODE
+>).<a class="indexterm" name="ch17-idx-1000004844-0"></A
+><a class="indexterm" name="ch17-idx-1000004844-1"></A
+><a class="indexterm" name="ch17-idx-1000004844-2"></A
+><a class="indexterm" name="ch17-idx-1000004844-3"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1828">See Also</A
+></H3
+><p class="para">The 
+<a class="olink" href="../prog/ch03_135.htm">&#13;<code class="literal">select</CODE
+></A
+> function in 
+<a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> or <i class="filename">perlfunc </I
+>(1); your system's <i class="filename">fcntl </I
+>(2) manpage (if you have one); the documentation for the standard Fcntl, Socket, IO::Select, IO::Socket, and Tie::RefHash modules; <a class="xref" href="ch17_12.htm" title="Forking Servers">Recipe 17.11</A
+>; <a class="xref" href="ch17_13.htm" title="Pre-Forking Servers">Recipe 17.12</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_13.htm" title="17.12. Pre-Forking Servers"><img src="../gifs/txtpreva.gif" alt="Previous: 17.12. Pre-Forking Servers" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_15.htm" title="17.14. Writing a Multi-Homed Server"><img src="../gifs/txtnexta.gif" alt="Next: 17.14. Writing a Multi-Homed Server" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">17.12. Pre-Forking Servers</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">17.14. Writing a Multi-Homed Server</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

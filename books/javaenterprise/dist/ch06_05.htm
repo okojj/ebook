@@ -1,0 +1,647 @@
+<html>
+<head>
+<title>Adaptable Protocols (Java Distributed Computing)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jim Farley">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-206-9E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Adaptable Protocols">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm" alt="Java Distributed Computing"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch06_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_01.htm">Chapter 6: Message-Passing Systems</a></td><td align="right" valign="top" width="172"><a href="ch06_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_06.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">6.5. Adaptable Protocols</h2>
+
+<p>
+<a name="INDEX-913"></a><a name="INDEX-914"></a>There are situations where an
+application's message protocol may change while the application
+is running. First we'll examine the ways in which a message
+protocol can vary during runtime, then we'll see how our
+message-passing facility would need to be modified to support these
+adaptable message protocols.
+</p>
+
+<a name="JDP-CH-6-SECT-5.1"></a>
+<h3 class="sect2">6.5.1. Variable Number of Arguments</h3>
+
+<p>
+<a name="INDEX-915"></a>The most common situation
+encountered in message passing is a message whose argument list
+varies in length. Some arguments are actually lists of values, whose
+size is not known by the receiver beforehand. A multiuser server may
+provide a way to ask for its current list of users, for example.
+Optional arguments are another cause for variable-length argument
+lists. Continuing with the multiuser server example, a request for
+its list of current users may be a message with some optional
+arguments that control how much data is returned. A
+"verbose" argument may indicate that the caller wants all
+available information on the current users. When this argument is not
+present, a more condensed set of data is returned.
+</p>
+
+<p>These possibilities imply that the recipient of a message may require
+information on the number of arguments to expect. In our previous
+examples, the message objects handling incoming messages were
+hardwired to expect a given number of messages, with each argument
+always having the same meaning. The <tt class="literal">readArgs()</tt>
+method on <tt class="literal">MoveMessage</tt> in <a href="ch06_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_04.htm">Example 6-7</a> reads in the expected argument list, then
+waits for the end-of-message string. If any additional arguments were
+included with the message, they would be skipped over in the
+<tt class="literal">while</tt> loop that searches for the end of the
+message. If an argument were left off of the message, then the
+end-of-message token would be read in (erroneously) as the last
+message argument, and <tt class="literal">readArgs()</tt> would wait for
+another end-of-message token. If the remote agent sends another
+message, its contents would be skipped and the end-of-message token
+would trigger an exit from the <tt class="literal">readArgs()</tt>
+method. If the remote agent is waiting for a response before sending
+another message, then communications would be deadlocked at this
+point--the receiver would be waiting for an end-of-message token
+that it had already read, and the sender would be waiting for the
+receiver to process the message and send a response.
+</p>
+
+
+<a name="JDP-CH-6-SECT-5.2"></a>
+<h3 class="sect2">6.5.2. Variable Message Argument Types</h3>
+
+<p>Occasionally the data types of a message's arguments can vary
+as well. A message meant to request information about a bank account,
+for example, may identify the account using a numeric account number,
+or may be allowed to specify the account by name (e.g.,
+"JSmith-savings-1"). The receiver would need to know
+which form of the argument is being used so that an integer value
+isn't read as a string, or vice versa. In our chess game
+example, suppose that, after updating our protocol to use
+<tt class="literal">ChessMove</tt> objects as arguments, we still wanted to
+support earlier versions of the message protocol that used three
+separate arguments to represent a chess move. The same message
+identifier could now be followed by either a single serialized
+object, or two strings followed by an integer. The
+<tt class="literal">MoveMessage</tt> class would need to have some
+indication of which data types to expect in order to decode the data
+on the input stream.<a name="INDEX-916"></a>
+</p>
+
+
+<a name="JDP-CH-6-SECT-5.3"></a>
+<h3 class="sect2">6.5.3. Adaptable Message Types</h3>
+
+<p>
+<a name="INDEX-917"></a>There are times when the message types
+in the protocol may change at runtime. Perhaps the agents need to
+negotiate a suitable protocol that both can support before engaging
+in a conversation. These protocol negotiations are fairly common in
+complex multimedia protocols, or in some network services protocols.
+A server or a client may not support the entire protocol, or may
+require different protocol dialects for backwards compatibility.
+</p>
+
+<p>Another application for adaptable message protocols is in distributed
+services that need to be highly reliable and cannot be shut down for
+any significant period of time. If an update to the message protocol
+for such a service is required, it would ideally be added to the
+system while it is online.
+</p>
+
+
+<a name="JDP-CH-6-SECT-5.4"></a>
+<h3 class="sect2">6.5.4. An Adaptable Message Handler</h3>
+
+<p>
+<a name="INDEX-918"></a>One
+way to deal with variable-length argument lists and variable-type
+arguments is to tag each message argument in a message with
+information about its type. We could define a set of argument type
+identifiers, one for each data type that we are going to support in
+our message protocol, and precede each argument with its type
+identifier when we send it. We could include basic data types (e.g.,
+integer, floating-point, character, string), as well as more complex
+data types (e.g., lists of basic data types). This would help to both
+identify and verify the type of incoming arguments. Having lists of
+basic data types helps us deal with variable-length argument lists.
+If we also include a message argument count, sent over the network
+before the actual arguments, we can deal with optional arguments and
+many of the other situations leading to variable argument lists.
+</p>
+
+<p>These measures would help us implement more robust message protocols,
+but they come with a price. Tagging each argument with a type
+identifier complicates the process of updating a message protocol. If
+we decide in the future to change an argument to be of a type not
+previously used in our protocol, then we not only have to update the
+corresponding message classes on all of our networked agents, we also
+have to update the table of type identifiers to include the new data
+type. Also, this type identification information, as well as the
+argument count information, add overhead. The overhead is generally
+insignificant, but in bandwidth-restricted situations, it may be
+enough to be a problem.
+</p>
+
+<p>Dealing with a message protocol with varying message
+<em class="emphasis">types</em> requires a bit more sophistication.
+Strange as it may seem, the easiest case to handle is one where the
+entire message protocol changes during an application's
+lifetime. In situations like this, we simply need to disable one
+<tt class="literal">BasicMsgHandler</tt>, and create another using the
+same input and output streams. Of course, we would need to know
+precisely when messages belonging to the new protocol would start
+coming in. If we are running the <tt class="literal">BasicMsgHandler</tt>
+within its own thread, we just need to call the thread's
+<tt class="literal">stop()</tt> method, wrap the new
+<tt class="literal">BasicMsgHandler</tt> with a new thread, and
+<tt class="literal">start()</tt> the thread.
+</p>
+
+<p>The same approach can be used if a modified version of the current
+protocol is expected to take over in midstream. If we have two
+separate subclasses of <tt class="literal">BasicMsgHandler</tt>
+implemented for the two protocol variants, then we just have to
+follow the process sketched out above to switch from one to the
+other.
+</p>
+
+<p>A tougher situation occurs when we periodically want to add message
+types to the current protocol. We may not know beforehand which
+message types will be needed while the application is running, which
+would mean that we couldn't create a message-handler subclass
+to support all possible message types. A particular message protocol
+may need to be augmented with additional message types after two
+agents finish negotiating the details of the protocol they will use.
+Or we may want to provide a more generic message management facility,
+where multiple sub-systems can add their own message types to the
+protocol. A manufacturing data management system, for example, may
+use a message protocol that includes messages for a machine
+diagnostic system, a machine scheduling algorithm, and an automatic
+material ordering system. Each subset of the message protocol may
+need to be refined and updated as the system (and the factory)
+evolves and grows, and while the system remains continuously
+operational.
+</p>
+
+<p>To support situations like these, our message-processing facility
+needs to be expanded to allow adding individual message types and
+groups of message types at runtime. <a href="#JDP-CH-6-EX-11">Example 6-10</a>
+shows the final version of our <tt class="literal">BasicMsgHandler</tt>,
+renamed <tt class="literal">MessageHandler</tt><a name="INDEX-919"></a><a name="INDEX-920"></a>, which has been updated to support these
+requirements. The <tt class="literal">MessageHandler</tt> now has a
+vector of <tt class="literal">Message</tt> objects that act as prototype
+messages in the message protocol. New message types can be added to
+the handler by calling the
+<tt class="literal">MessageHandler</tt>'s
+<tt class="literal">addMessageType()</tt><a name="INDEX-921"></a>
+method with a prototype <tt class="literal">Message</tt> object of the
+new type.
+</p>
+
+<a name="JDP-CH-6-EX-11"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-10. The Message Handler Class</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.message;
+
+import java.util.Vector;
+import java.io.*;
+
+public class MessageHandler implements Runnable
+{
+  // A global MessageHandler, for applications where one central 
+  // handler is used.
+  public static MessageHandler current = null;
+
+  InputStream msgIn;
+  OutputStream msgOut;
+  Vector msgPrototypes;
+
+  public MessageHandler() {}
+  public MessageHandler(InputStream in, OutputStream out) {
+    setStreams(in, out);
+  }
+
+  public void setStreams(InputStream in, OutputStream out) {
+    msgIn = in;
+    msgOut = out;
+  }
+
+  public void addMessageType(Message prototype) {
+    msgPrototypes.addElement(prototype);
+  }
+
+  public Message readMsg() throws IOException {
+    Message msg = null;
+    DataInputStream din = new DataInputStream(msgIn);
+
+    String msgId = din.readUTF();  
+    msg = buildMessage(msgId);
+    if (msg != null &amp;&amp; msg.readArgs(msgIn)) {
+      return msg;
+    }
+    else {
+      return null;
+    }
+  }
+
+  public void sendMsg(Message msg) throws IOException {
+    boolean success = true;
+    DataOutputStream dout = new DataOutputStream(msgOut);
+
+    dout.writeUTF(msg.messageID());
+    msg.writeArgs(msgOut);
+  }
+
+  public void run() {
+    try {
+      while (true) {
+        Message msg = readMsg();
+        if (msg != null) {
+          msg.Do();
+        }
+      }
+    }
+    // Treat an IOException as a termination of the message
+    // exchange, and let this message-processing thread die.
+    catch (IOException e) {}
+  }
+
+  protected Message buildMessage(String msgId) {
+    Message msg = null;
+    int numMTypes = msgPrototypes.size();
+    for (int i = 0; i &lt; numMTypes; i++) {
+      Message m = (Message)msgPrototypes.elementAt(i);
+      if (m.handles(msgId)) {
+        msg = m.newCopy();
+        break;
+      }
+    }
+    return msg;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="INDEX-922"></a>
+
+<p>The <tt class="literal">Message</tt><a name="INDEX-923"></a><a name="INDEX-924"></a> class referenced in the
+<tt class="literal">MessageHandler</tt> interface is a slightly modified
+version of our <tt class="literal">BasicMessage</tt> class, and is shown
+in <a href="#JDP-CH-6-EX-12">Example 6-11</a>. This new version of the message
+class includes a <tt class="literal">handles()</tt> method and a
+<tt class="literal">newCopy()</tt> method. After the
+<tt class="literal">MessageHandler</tt> reads a message identifier in its
+<tt class="literal">readMsg()</tt> method, it calls its
+<tt class="literal">buildMessage()</tt><a name="INDEX-925"></a>
+method to construct the message object corresponding to the
+identifier. The <tt class="literal">buildMessage()</tt> method
+sequentially calls the <tt class="literal">handles()</tt> method on each
+<tt class="literal">Message</tt> object in the prototype list to see
+whether the <tt class="literal">Message</tt> recognizes the message
+identifier. If <tt class="literal">handles()</tt> returns
+<tt class="literal">true</tt>, a copy of the prototype message is made to
+handle the incoming message. The
+<tt class="literal">newCopy()</tt><a name="INDEX-926"></a>
+method on <tt class="literal">Message</tt> returns a new
+<tt class="literal">Message</tt> object of the same type as the
+<tt class="literal">Message</tt> on which it is called. The new
+<tt class="literal">Message</tt> object is returned to
+<tt class="literal">MessageHandler</tt>'s<tt class="literal">
+readMsg()</tt> method, where it is told to read its arguments
+from the input stream as before.
+</p>
+
+<a name="JDP-CH-6-EX-12"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-11. The Message Class</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.message;
+
+import java.io.*;
+import java.util.Vector;
+
+public abstract class Message
+{
+  protected String id;
+  protected Vector argList;
+  protected String endToken = "END";
+
+  public Message() {
+    argList = new Vector();
+  }
+
+  public Message(String mid) {
+    id = mid;
+    argList = new Vector();
+  }
+
+  protected void addArg(Object arg) {
+    argList.addElement(arg);
+  }
+
+  public String messageID() {
+    return id;
+  }
+
+  public void setId(String mid) {
+    id = mid;
+  }
+
+  public Vector argList() {
+    Vector listCopy = (Vector)argList.clone();
+    return listCopy;
+  }
+
+  public boolean readArgs(InputStream ins) {
+    boolean success = true;
+    DataInputStream din = new DataInputStream(ins);
+
+    // Read tokens until the "end-of-message" token is seen.
+    try {
+      String token = din.readUTF();
+      while (token.compareTo(endToken) != 0) {
+        addArg(token);
+        token = din.readUTF();
+      }
+    }
+    catch (IOException e) {
+      // Failed to read complete argument list.
+      success = false;
+    }
+    return success;
+  }
+
+  public boolean writeArgs(OutputStream outs) {
+    int len = argList.size();
+    boolean success = true;
+    DataOutputStream dout = new DataOutputStream(outs);
+
+    // Write each argument in order
+    try {
+      for (int i = 0; i &lt; len; i++) {
+        String arg = (String)argList.elementAt(i);
+        dout.writeUTF(arg);
+      }
+
+      // Finish with the end-of-message token
+      dout.writeUTF(endToken);
+    }
+    catch (IOException e) {
+      success = false;
+    }
+    return success;
+  }
+
+  public abstract boolean Do();
+  public abstract boolean handles(String msgId);
+  public abstract Message newCopy();
+}</pre>
+</blockquote>
+</div>
+
+<a name="INDEX-927"></a>
+
+<p>With this final version of our message-passing and message-processing
+facility, we're able to define types of messages by creating
+subclasses of the <tt class="literal">Message</tt> class that can read
+the message with its arguments and perform the proper task based on
+the contents of the message. We can define complete message protocols
+in several ways using the <tt class="literal">MessageHandler</tt> class.
+A subclass of <tt class="literal">MessageHandler</tt> can be defined that
+recognizes the various message identifiers in the protocol directly
+in its <tt class="literal">buildMessage()</tt> method. A
+<tt class="literal">MessageHandler</tt> subclass could also be written
+that automatically adds the needed <tt class="literal">Message</tt>
+prototypes to its internal list, and then uses the default
+<tt class="literal">buildMessage()</tt> implementation to ask each
+<tt class="literal">Message</tt> object if it recognizes an incoming
+message's type. A third option, made possible by the fact that
+<tt class="literal">MessageHandler</tt> now has no abstract methods, is
+for a distributed application to construct a generic
+<tt class="literal">MessageHandler</tt> object, then add the necessary
+<tt class="literal">Message</tt> prototypes to the generic
+<tt class="literal">MessageHandler</tt> using its
+<tt class="literal">addMessageType()</tt> method. The
+<tt class="literal">buildMessage()</tt> method would then be able to
+create <tt class="literal">Message</tt> objects corresponding to the
+incoming messages.
+</p>
+
+<p>The techniques we discussed earlier for handling variable argument
+lists and argument types can also be applied within our new
+message-handling system. A new implementation of the
+<tt class="literal">MoveMessage</tt><a name="INDEX-928"></a> class from our chess examples demonstrates
+this in <a href="#JDP-CH-6-EX-13">Example 6-12</a>. The class has been modified to
+allow it to support two versions of the message argument list: one
+uses the <tt class="literal">from</tt>, <tt class="literal">to</tt>, and
+<tt class="literal">checkFlag</tt> arguments, and another uses a serialized
+<tt class="literal">ChessMove</tt><a name="INDEX-929"></a> object. The message includes an
+optional new string argument that indicates whether the chess move is
+being sent as a <tt class="literal">ChessMove</tt> object. The
+<tt class="literal">readArgs()</tt> method reads the first argument as a
+string, then checks the string's value. If the string's
+value is equal to "MOBJ," then the chess move argument is
+being sent as a <tt class="literal">ChessMove</tt> object, and an
+<tt class="literal">ObjectInputStream</tt> is used to read it. If not,
+then the chess move is being sent in the older format of two strings
+and an integer, and the <tt class="literal">DataInputStream</tt> is used
+to read the remaining arguments. The <tt class="literal">writeArgs()</tt>
+method sends out the new argument, then transmits its chess move as a
+serialized <tt class="literal">ChessMove</tt> object.
+</p>
+
+<a name="JDP-CH-6-EX-13"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-12. Backwards Compatible MoveMessage Class</h4>
+<blockquote>
+<pre class="programlisting">class MoveMessage extends ChessMessage {
+  public MoveMessage(ChessPlayer p) {
+    super(p);
+    setId("move");
+  }
+
+  public MoveMessage(String from, String to, int checkFlag) {
+    setId("move");
+    ChessMove move = new ChessMove(from, to, checkFlag);
+    addArg(move);
+  }
+
+  public boolean Do() {
+    boolean success = true;
+    ChessMove move = (ChessMove)argList.elementAt(1);
+    String to = move.to();
+    String from = move.from();
+    int checkFlag = move.checkFlag();
+
+    try {
+      if (!player.acceptMove(from, to, checkFlag)) {
+        MessageHandler.current.sendMsg(new RejectMoveMessage());
+      }
+      else {
+        ConfirmMoveMessage ccmsg =
+          new ConfirmMoveMessage(move);
+        MessageHandler.current.sendMsg(ccmsg);
+
+        // We accepted the opponent's move, now send them
+        // our countermove, unless they just mated us...
+        if (checkFlag == ChessPlayer.CHECKMATE) {
+          ConcedeMessage cmsg = new ConcedeMessage();
+          MessageHandler.current.sendMsg(cmsg);
+        }
+        else {
+          player.nextMove(from, to, checkFlag);
+          MoveMessage mmsg = new MoveMessage(from, to, checkFlag);
+          MessageHandler.current.sendMsg(mmsg);
+        }
+      }
+    }
+    catch (IOException e) {
+      success = false;
+    }
+
+    return success;
+  }
+
+  public boolean readArgs(InputStream ins) {
+    boolean success = true;
+
+    DataInputStream din = new DataInputStream(ins);
+
+    try {
+      String temp = din.readUTF();
+      if (temp.compareTo("MOBJ") == 0) {
+        ObjectInputStream oin = new ObjectInputStream(ins);
+        ChessMove move = (ChessMove)oin.readObject();
+        addArg(move);
+      }
+      else {
+        String to = din.readUTF();
+        int checkFlag = din.readInt();
+        ChessMove move = new ChessMove(temp, to, checkFlag);
+        addArg(move);
+      }
+
+      // Got all of our arguments, now watch for the
+      // end-of-message token
+      temp = din.readUTF();
+      while (temp.compareTo(endToken) != 0) {
+        temp = din.readUTF();
+      }
+    }
+    catch (Exception e) {
+      success = false;
+    }
+
+    return success;
+  }
+
+  public boolean writeArgs(OutputStream outs) {
+    boolean success = true;
+    DataOutputStream dout = new DataOutputStream(outs);
+    ObjectOutputStream oout = new ObjectOutputStream(outs);
+    ChessMove move = (ChessMove)argList.elementAt(0);
+
+    try {
+      dout.writeUTF("MOBJ");
+      oout.writeObject(move);
+    }
+    catch (IOException e) {
+      success = false;
+    }
+
+    return success;
+  }
+
+  public boolean handles(String mid) {
+    if (mid.compareTo("move") == 0)
+      return true;
+    else
+      return false;
+  }
+
+  public Message newCopy() {
+    return(new MoveMessage(player));
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>With this version of our <tt class="literal">MoveMessage</tt> class, we
+can talk to <tt class="literal">ChessPlayer</tt> agents using either the
+new or old versions of the class. We could have handled the variable
+argument list by adding an argument count to the argument list, but
+then our previous version of the <tt class="literal">MoveMessage</tt>
+class would also have to be modified to send the new argument. This
+would defeat the purpose, since our original intent was to provide
+backwards <a name="INDEX-930"></a> compatibility
+<tt class="literal"></tt><a name="INDEX-931"></a> with the previous version of our chess
+protocol.<a name="INDEX-932"></a><a name="INDEX-933"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch06_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_06.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">6.4. Fixed Protocols</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">6.6. Message Passing with Java Events</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

@@ -1,0 +1,185 @@
+<html><head>
+<title>Recipe 17.12. Pre-Forking Servers</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:41Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch17_01.htm" title="17. Sockets"><link rel="prev" href="ch17_12.htm" title="17.11. Forking Servers"><link rel="next" href="ch17_14.htm" title="17.13. Non-Forking Servers"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_12.htm" title="17.11. Forking Servers"><img src="../gifs/txtpreva.gif" alt="Previous: 17.11. Forking Servers" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch17_01.htm" title="17. Sockets">Chapter 17<br>Sockets</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_14.htm" title="17.13. Non-Forking Servers"><img src="../gifs/txtnexta.gif" alt="Next: 17.13. Non-Forking Servers" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch17-19439">17.12. Pre-Forking Servers</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1308">Problem</A
+></H3
+><p class="para"><a class="indexterm" name="ch17-idx-1000004828-0"></A
+><a class="indexterm" name="ch17-idx-1000004828-1"></A
+><a class="indexterm" name="ch17-idx-1000004828-2"></A
+><a class="indexterm" name="ch17-idx-1000004828-3"></A
+>You want to write a server that concurrently processes several clients (as in "Forking Servers"), but connections are coming in so fast that forking slows the server too much.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1314">Solution</A
+></H3
+><p class="para">Have a master server maintain a pool of pre-forked children, as shown in <a class="xref" href="#ch17-30092" title="preforker">Example 17.5</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch17-30092">Example 17.5: preforker</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl
+# <a class="indexterm" name="ch17-idx-1000004832-0"></A
+>preforker - server who forks first
+use IO::Socket;
+use Symbol;
+use POSIX;
+
+# establish SERVER socket, bind and listen.
+$server = IO::Socket::INET-&gt;new(LocalPort =&gt; 6969,
+                                Type      =&gt; SOCK_STREAM,
+                                Proto     =&gt; 'tcp',
+                                Reuse     =&gt; 1,
+                                Listen    =&gt; 10 )
+  or die &quot;making socket: $@\n&quot;;
+
+# global variables
+$PREFORK                = 5;        # number of children to maintain
+$MAX_CLIENTS_PER_CHILD  = 5;        # number of clients each child should process
+%children               = ();       # keys are current child process IDs
+$children               = 0;        # current number of children
+
+sub REAPER {                        # takes care of dead children
+    $SIG{CHLD} = \&amp;REAPER;
+    my $pid = wait;
+    $children --;
+    delete $children{$pid};
+}
+
+sub HUNTSMAN {                      # signal handler for SIGINT
+    local($SIG{CHLD}) = 'IGNORE';   # we're going to kill our children
+    kill 'INT' =&gt; keys %children;
+    exit;                           # clean up with dignity
+}
+    
+# Fork off our children.
+for (1 .. $PREFORK) {
+    make_new_child();
+}
+
+# Install signal handlers.
+$SIG{CHLD} = \&amp;REAPER;
+$SIG{INT}  = \&amp;HUNTSMAN;
+
+# And maintain the population.
+while (1) {
+    sleep;                          # wait for a signal (i.e., child's death)
+    for ($i = $children; $i &lt; $PREFORK; $i++) {
+        make_new_child();           # top up the child pool
+    }
+}
+
+sub make_new_child {
+    my $pid;
+    my $sigset;
+    
+    # block signal for fork
+    $sigset = POSIX::SigSet-&gt;new(SIGINT);
+    sigprocmask(SIG_BLOCK, $sigset)
+        or die &quot;Can't block SIGINT for fork: $!\n&quot;;
+    
+    die &quot;fork: $!&quot; unless defined ($pid = fork);
+    
+    if ($pid) {
+        # Parent records the child's birth and returns.
+        sigprocmask(SIG_UNBLOCK, $sigset)
+            or die &quot;Can't unblock SIGINT for fork: $!\n&quot;;
+        $children{$pid} = 1;
+        $children++;
+        return;
+    } else {
+        # Child can *not* return from this subroutine.
+        $SIG{INT} = 'DEFAULT';      # make SIGINT kill us as it did before
+    
+        # unblock signals
+        sigprocmask(SIG_UNBLOCK, $sigset)
+            or die &quot;Can't unblock SIGINT for fork: $!\n&quot;;
+    
+        # handle connections until we've reached $MAX_CLIENTS_PER_CHILD
+        for ($i=0; $i &lt; $MAX_CLIENTS_PER_CHILD; $i++) {
+            $client = $server-&gt;accept()     or last;
+            # do something with the connection
+        }
+    
+        # tidy up gracefully and finish
+    
+        # this exit is VERY important, otherwise the child will become
+        # a producer of more and more children, forking yourself into
+        # process death.
+        exit;
+    }
+}</PRE
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1502">Discussion</A
+></H3
+><p class="para">Whew. Although this is a lot of code, the logic is simple: the parent process never deals with clients but instead forks <code class="literal">$PREFORK</CODE
+> children to do that. The parent keeps track of how many children it has and forks more to replace dead children. Children exit after having handled <code class="literal">$MAX_CLIENTS_PER_CHILD</CODE
+> clients.</P
+><p class="para">The code is a reasonably direct implementation of the logic above. The only trick comes with signal handlers: we want the parent to catch SIGINT and kill its children, so we install our signal handler <code class="literal">&amp;HUNTSMAN</CODE
+> to do this. But we then have to be careful that the child doesn't have the same handler after we fork. We use POSIX signals to block the signal for the duration of the fork (see <a class="xref" href="ch16_21.htm" title="Blocking Signals">Recipe 16.20</A
+>).</P
+><p class="para">When you use this code in your programs, be sure that <code class="literal">make_new_child</CODE
+> never returns. If it does, the child will return, become a parent, and spawn off its own children. Your system will fill up with processes, your system administrator will storm down the hallway to find you, and you may end up tied to four horses wondering why you hadn't paid more attention to this paragraph.</P
+><p class="para">On some operating systems, notably Solaris, you cannot have multiple children doing an <code class="literal">accept</CODE
+> on the same socket. You have to use file locking to ensure that only one child can call <code class="literal">accept</CODE
+> at any particular moment.<a class="indexterm" name="ch17-idx-1000004834-0"></A
+><a class="indexterm" name="ch17-idx-1000004834-1"></A
+><a class="indexterm" name="ch17-idx-1000004834-2"></A
+><a class="indexterm" name="ch17-idx-1000004834-3"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-1514">See Also</A
+></H3
+><p class="para">The 
+<a class="olink" href="../prog/ch03_135.htm">&#13;
+<code class="literal">select</CODE
+></A
+> function in 
+<a class="olink" href="../prog/ch03_01.htm">&#13;Chapter 3</A
+> or <i class="filename">perlfunc </I
+>(1); your system's <i class="filename">fcntl </I
+>(2) manpage (if you have one); the documentation for the standard Fcntl, Socket, IO::Select, IO::Socket, and Tie::RefHash modules; <a class="xref" href="ch17_12.htm" title="Forking Servers">Recipe 17.11</A
+>; <a class="xref" href="ch17_13.htm" title="Pre-Forking Servers">Recipe 17.12</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_12.htm" title="17.11. Forking Servers"><img src="../gifs/txtpreva.gif" alt="Previous: 17.11. Forking Servers" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_14.htm" title="17.13. Non-Forking Servers"><img src="../gifs/txtnexta.gif" alt="Next: 17.13. Non-Forking Servers" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">17.11. Forking Servers</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">17.13. Non-Forking Servers</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

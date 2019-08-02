@@ -1,0 +1,562 @@
+<html>
+<head>
+<title>Server Documentation  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Server Documentation">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch07_03.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch07_01.htm">Chapter 7: SQL Database Administration</a></td><td align="right" valign="top" width="172"><a href="ch07_05.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">7.4. Server Documentation</h2>
+
+
+
+
+
+<p>
+<a name="INDEX-729"></a><a name="INDEX-730"></a><a name="INDEX-731"></a>A great deal of time and energy goes
+into the configuration of an SQL server and the objects that reside
+on it. Having a way to document this sort of information can come in
+handy in a number of situations. If a database gets corrupted and
+there's no backup, you may be called upon to recreate all of
+its tables. You may have to migrate data from one server to another;
+knowing the source and destination configuration can be important.
+Even for your own database programming, being able to see a table map
+can be very helpful.</p>
+
+
+
+
+
+<p>To give you a flavor of the nonportable nature of database
+administration, let me show you an example of the same simple task as
+written for three different SQL servers using both DBI and ODBC. Each
+of these programs does the exact same thing: print out a listing of
+all of the databases on a server, their tables, and the basic
+structure of each table. These scripts could easily be expanded to
+show more information about each object. For instance, it might be
+useful to show which columns in a table had NULL or NOT NULL set. The
+output of all three programs looks roughly like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">---sysadm---
+        hosts
+                name [char(30)]
+                ipaddr [char(15)]
+                aliases [char(50)]
+                owner [char(40)]
+                dept [char(15)]
+                bldg [char(10)]
+                room [char(4)]
+                manuf [char(10)]
+                model [char(10)]
+---hpotter---
+        customers
+                cid [char(4)]
+                cname [varchar(13)]
+                city [varchar(20)]
+                discnt [real(7)]
+        agents
+                aid [char(3)]
+                aname [varchar(13)]
+                city [varchar(20)]
+                percent [int(10)]
+        products
+                pid [char(3)]
+                pname [varchar(13)]
+                city [varchar(20)]
+                quantity [int(10)]
+                price [real(7)]
+        orders
+                ordno [int(10)]
+                month [char(3)]
+                cid [char(4)]
+                aid [char(3)]
+                pid [char(3)]
+                qty [int(10)]
+                dollars [real(7)]
+...</pre>
+</blockquote>
+
+
+
+
+
+<a name="ch07-4-fm2xml"></a>
+<h3 class="sect2">7.4.1. MySQL Server via DBI</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-732"></a><a name="INDEX-733"></a>Here's a DBI way of pulling this
+information from a MySQL server. MySQL's addition of the
+<em class="emphasis">SHOW</em> command makes this task pretty
+easy:<a name="INDEX-734"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use DBI;<a name="INDEX-735"></a>
+
+print "Enter user for connect: ";
+chomp($user = &lt;STDIN&gt;);
+print "Enter passwd for $user: ";
+chomp($pw = &lt;STDIN&gt;);
+
+$start= "mysql"; # connect initially to this database
+
+# connect to the start MySQL database
+$dbh = DBI-&gt;connect("DBI:mysql:$start",$user,$pw);
+die "Unable to connect: ".$DBI::errstr."\n" unless (defined $dbh);
+
+# find the databases on the server 
+$sth=$dbh-&gt;prepare(q{SHOW DATABASES}) or
+  die "Unable to prepare show databases: ". $dbh-&gt;errstr."\n";
+$sth-&gt;execute or
+  die "Unable to exec show databases: ". $dbh-&gt;errstr."\n";
+while ($aref = $sth-&gt;fetchrow_arrayref) {
+    push(@dbs,$aref-&gt;[0]);
+} 
+$sth-&gt;finish;
+
+# find the tables in each database
+foreach $db (@dbs) {
+    print "---$db---\n";
+    
+    $sth=$dbh-&gt;prepare(qq{SHOW TABLES FROM $db}) or
+     die "Unable to prepare show tables: ". $dbh-&gt;errstr."\n";
+    $sth-&gt;execute or
+      die "Unable to exec show tables: ". $dbh-&gt;errstr."\n";
+
+    @tables=(  );
+    while ($aref = $sth-&gt;fetchrow_arrayref) {
+	    push(@tables,$aref-&gt;[0]);
+    } 
+
+    $sth-&gt;finish;
+    
+   # find the column info for each table
+   foreach $table (@tables) {
+	    print "\t$table\n";
+
+	    $sth=$dbh-&gt;prepare(qq{SHOW COLUMNS FROM $table FROM $db}) or
+          die "Unable to prepare show columns: ". $dbh-&gt;errstr."\n";
+	    $sth-&gt;execute or
+          die "Unable to exec show columns: ". $dbh-&gt;errstr."\n";
+
+	    while ($aref = $sth-&gt;fetchrow_arrayref) {
+	        print "\t\t",$aref-&gt;[0]," [",$aref-&gt;[1],"]\n";
+	    } 
+
+       $sth-&gt;finish;
+   }
+}
+$dbh-&gt;disconnect;</pre>
+</blockquote>
+
+
+
+
+
+<p>A few quick comments about this code:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>We connect to a start database only to satisfy the DBI connect
+semantics, but this context is not necessary thanks to the
+<tt class="literal">SHOW</tt> commands. This won't be the case in our
+next two examples.</p>
+</li>
+<li>
+<p>If you thought the <tt class="literal">SHOW</tt><tt class="literal">TABLES</tt>
+and <tt class="literal">SHOW</tt><tt class="literal">COLUMNS</tt> prepare and
+execute statements looked like excellent candidates for placeholders,
+you're absolutely right. Unfortunately, this particular DBD
+driver/server combination doesn't support placeholders in this
+context (at least not when this book was being written). We'll
+see a similar situation in our next example.</p>
+</li>
+<li>
+<p>We prompt for a database user and password interactively because the
+alternatives (hard coding them into the script or passing them on the
+command line where they can be found by anyone running a process
+table dump) are even worse evils. This prompt will echo the password
+characters as typed. To be really careful, we should use something
+like <tt class="literal">Term::Readkey</tt> to turn off character echo.</p>
+</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch07-5-fm2xml"></a>
+<h3 class="sect2">7.4.2. Sybase Server via DBI</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-736"></a><a name="INDEX-737"></a>Here's the Sybase equivalent.
+Peruse the code and then we'll talk about a few salient
+points:<a name="INDEX-738"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use DBI;<a name="INDEX-739"></a>
+
+print "Enter user for connect: ";
+chomp($user = &lt;STDIN&gt;);
+print "Enter passwd for $user: ";
+chomp($pw = &lt;STDIN&gt;);
+
+$dbh = DBI-&gt;connect('dbi:Sybase:',$user,$pw);
+die "Unable to connect: $DBI::errstr\n" 
+  unless (defined $dbh);
+
+# find the databases on the server 
+$sth = $dbh-&gt;prepare(q{SELECT name from master.dbo.sysdatabases}) or
+  die "Unable to prepare sysdatabases query: ".$dbh-&gt;errstr."\n";
+$sth-&gt;execute or
+  die "Unable to execute sysdatabases query: ".$dbh-&gt;errstr."\n";
+
+while ($aref = $sth-&gt;fetchrow_arrayref) {
+    push(@dbs, $aref-&gt;[0]);
+}
+$sth-&gt;finish;
+
+foreach $db (@dbs) {
+    $dbh-&gt;do("USE $db") or
+      die "Unable to use $db: ".$dbh-&gt;errstr."\n";
+    print "---$db---\n";
+
+    # find the tables in each database
+    $sth=$dbh-&gt;prepare(q{SELECT name FROM sysobjects WHERE type="U"}) or
+      die "Unable to prepare sysobjects query: ".$dbh-&gt;errstr."\n";
+    $sth-&gt;execute or
+      die "Unable to exec sysobjects query: ".$dbh-&gt;errstr."\n";
+
+    @tables=(  );
+    while ($aref = $sth-&gt;fetchrow_arrayref) {
+        push(@tables,$aref-&gt;[0]);
+    } 
+    $sth-&gt;finish;
+
+    # we need to be "in" the database for the next step
+    $dbh-&gt;do("use $db") or
+          die "Unable to change to $db: ".$dbh-&gt;errstr."\n";
+  
+    # find the column info for each table
+    foreach $table (@tables) {
+	    print "\t$table\n";
+
+       $sth=$dbh-&gt;prepare(qq{EXEC sp_columns $table}) or
+	       die "Unable to prepare sp_columns query: ".$dbh-&gt;errstr."\n";
+	    $sth-&gt;execute or
+	       die "Unable to execute sp_columns query: ".$dbh-&gt;errstr."\n";
+
+	    while ($aref = $sth-&gt;fetchrow_arrayref) {
+	        print "\t\t",$aref-&gt;[3]," [",$aref-&gt;[5],"(",
+                  $aref-&gt;[6],")]\n";
+	    } 
+	    $sth-&gt;finish;
+    }
+}
+$dbh-&gt;disconnect or
+  warn "Unable to disconnect: ".$dbh-&gt;errstr."\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>Here are the promised salient points:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>Sybase keeps information on its databases and tables in the special
+system tables <em class="filename">sysdatabases</em> and
+<em class="filename">sysobjects</em>. Each database has a
+<em class="filename">sysobjects</em> table, but the server keeps track of
+the databases in a single <em class="filename">sysdatabases</em> table
+located in the master database. We use the more explicit
+<em class="replaceable">databases</em>.<em class="replaceable">owner</em>.<em class="replaceable">table</em>
+syntax in the first <tt class="literal">SELECT</tt> to
+unambiguously reference this table. To get at the per-database
+<em class="filename">sysobjects</em>, we could just use this syntax
+instead of explicitly switching database context with
+<tt class="literal">USE</tt>. But like <tt class="command">cd </tt>ing to a
+directory, this context makes the other queries a little simpler to
+write.</p>
+</li>
+
+<li>
+<p>The <tt class="literal">SELECT</tt> from <em class="filename">sysobjects</em>
+uses a <tt class="literal">WHERE</tt> clause to only return user-defined
+tables. This was done to limit the size of the output. If we wanted
+to include all of the system tables too, we would change this to:</p>
+
+
+
+<blockquote>
+<pre class="programlisting">WHERE type="U" AND type="S"</pre>
+</blockquote>
+</li>
+
+
+<li>
+<p>Placeholders in <tt class="literal">DBD::Sybase</tt> are implemented in
+such a way as to prohibit their use with stored procedures. If this
+weren't the case, we'd surely use them for the
+<tt class="literal">EXEC sp_columns</tt>.<a name="INDEX-740"></a><a name="INDEX-741"></a>
+</p>
+</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch07-6-fm2xml"></a>
+<h3 class="sect2">7.4.3. MS-SQL Server via ODBC</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-742"></a><a name="INDEX-743"></a>Finally, here's the code for
+pulling the same information from a MS-SQL server via ODBC.
+You'll notice that the actual SQL needed is almost identical to
+the previous example thanks to the Sybase/MS-SQL connection. The
+interesting changes between this example and the last are:<a name="INDEX-744"></a>
+</p>
+
+
+
+
+
+<ul>
+<li>
+<p>The use of a DSN, which also gives us a default database context, so
+we don't have to be explicit about where to look for the
+<em class="filename">sysdatabases</em> table.</p>
+</li>
+<li>
+<p>The use of <tt class="literal">$dbh-&gt;DropCursor( )</tt> as the rough
+analogue to <tt class="literal">$sth-&gt;finish</tt>.</p>
+</li>
+<li>
+<p>The annoying syntax you need to use to execute a stored procedure.
+See the <tt class="literal">Win32::ODBC</tt> web pages for more detail on
+dealing with stored procedures and other anomalies like this.</p>
+</li>
+</ul>
+<p>Here's the code:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::ODBC;
+
+print "Enter user for connect: ";
+chomp($user = &lt;STDIN&gt;);
+print "Enter passwd for $user: ";
+chomp($pw = &lt;STDIN&gt;);
+
+$dsn="sysadm"; # name of the DSN we will be using
+
+# find the available DSNs, creating $dsn if it doesn't exist already
+die "Unable to query available DSN's".Win32::ODBC::Error(  )."\n" 
+  unless (%dsnavail = Win32::ODBC::DataSources(  ));
+if (!defined $dsnavail{$dsn}) {
+    die "unable to create DSN:".Win32::ODBC::Error(  )."\n"
+      unless (Win32::ODBC::ConfigDSN(ODBC_ADD_DSN, 
+				  "SQL Server", 
+				  ("DSN=$dsn", 
+				   "DESCRIPTION=DSN for PerlSysAdm", 
+				   "SERVER=mssql.happy.edu",
+				   "DATABASE=master",
+				   "NETWORK=DBMSSOCN", # TCP/IP Socket Lib
+				  )));
+}
+
+# connect to the master database
+$dbh = new Win32::ODBC("DSN=$dsn;UID=$user;PWD=$pw;");
+die "Unable to connect to DSN $dsn:".Win32::ODBC::Error(  )."\n" 
+    unless (defined $dbh);
+
+# find the databases on the server
+if (defined $dbh-&gt;Sql(q{SELECT name from sysdatabases})){
+    die "Unable to query databases:".Win32::ODBC::Error(  )."\n";
+}
+
+while ($dbh-&gt;FetchRow(  )){
+    push(@dbs, $dbh-&gt;Data("name"));
+}
+$dbh-&gt;DropCursor(  );
+
+# find the user tables in each database
+foreach $db (@dbs) {
+    if (defined $dbh-&gt;Sql("use $db")){
+	     die "Unable to change to database $db:" . 
+             Win32::ODBC::Error(  ) . "\n";
+    }
+    print "---$db---\n";
+    @tables=(  );
+    if (defined $dbh-&gt;Sql(q{SELECT name from sysobjects 
+                            WHERE type="U"})){
+	    die "Unable to query tables in $db:" . 
+            Win32::ODBC::Error(  ) . "\n";
+    }
+    while ($dbh-&gt;FetchRow(  )) {
+	    push(@tables,$dbh-&gt;Data("name"));
+    } 
+    $dbh-&gt;DropCursor(  );
+
+    # find the column info for each table
+    foreach $table (@tables) {
+  	    print "\t$table\n";
+  	    if (defined $dbh-&gt;Sql(" {call sp_columns (\'$table\')} ")){
+	        die "Unable to query columns in 
+                $table:".Win32::ODBC::Error(  ) . "\n";
+	    }
+	    while ($dbh-&gt;FetchRow(  )) {
+	        @cols=(  );
+	        @cols=$dbh-&gt;Data("COLUMN_NAME","TYPE_NAME","PRECISION");
+	        print "\t\t",$cols[0]," [",$cols[1],"(",$cols[2],")]\n";
+	    } 
+	    $dbh-&gt;DropCursor(  );
+    }
+}
+$dbh-&gt;Close(  );
+
+die "Unable to delete DSN:".Win32::ODBC::Error(  )."\n"
+    unless (Win32::ODBC::ConfigDSN(ODBC_REMOVE_DSN,
+                                "SQL Server","DSN=$dsn"));<a name="INDEX-745"></a>
+<a name="INDEX-746"></a>
+<a name="INDEX-747"></a>
+<a name="INDEX-748"></a>
+</pre>
+</blockquote>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch07_03.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch07_05.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">7.3. Using the ODBC Framework</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">7.5. Database Logins</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

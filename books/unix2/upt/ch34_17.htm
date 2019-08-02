@@ -1,0 +1,218 @@
+<html><head><title>[Chapter 34] 34.17 Searching for Patterns Split Across Lines </TITLE
+><meta name="DC.title" content="UNIX Power Tools"><meta name="DC.creator" content="Jerry Peek, Tim O'Reilly &amp; Mike Loukides"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1998-08-04T21:47:27Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-260-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch34_01.htm" webstripperlinkwas="ch34_01.htm" title="34. The sed Stream Editor"><link rel="prev" href="ch34_16.htm" webstripperlinkwas="ch34_16.htm" title="34.16 The Deliberate Scrivener "><link rel="next" href="ch34_18.htm" webstripperlinkwas="ch34_18.htm" title="34.18 Multiline Delete "></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" alt="UNIX Power Tools" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,58" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/upt/index.htm" alt="UNIX Power Tools"><area shape="RECT" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="jobjects/fsearch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch34_16.htm" webstripperlinkwas="ch34_16.htm" title="34.16 The Deliberate Scrivener "><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous: 34.16 The Deliberate Scrivener " border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 34<br>The sed Stream Editor</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch34_18.htm" webstripperlinkwas="ch34_18.htm" title="34.18 Multiline Delete "><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next: 34.18 Multiline Delete " border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="UPT-ART-0090">34.17 Searching for Patterns Split Across Lines </A
+></H2
+><p class="para"><a class="indexterm" name="AUTOID-39103"></A
+>[Article 
+<a class="xref" href="ch27_11.htm" webstripperlinkwas="ch27_11.htm" title="A Multiline Context grep Using sed ">27.11</A
+>
+introduced a
+script called <i class="filename">cgrep.sed</I
+>,
+a general-purpose, <i class="filename">grep</I
+>-like program built with <i class="filename">sed</I
+>.
+It allows you to look for one or more words that appear on one line
+or across several lines.
+This article explains the <i class="filename">sed</I
+> tricks that
+are necessary to do this kind of thing.
+It gets into territory that
+is essential for any advanced applications of this obscure yet
+wonderful editor.
+(Articles
+<a class="xref" href="ch34_13.htm" webstripperlinkwas="ch34_13.htm" title="Hold Space: The Set-Aside Buffer ">34.13</A
+>
+through
+<a class="xref" href="ch34_16.htm" webstripperlinkwas="ch34_16.htm" title="The Deliberate Scrivener ">34.16</A
+>
+have background information.) -JP]</P
+><p class="para">Let's review the two examples from article
+<a class="xref" href="ch27_11.htm" webstripperlinkwas="ch27_11.htm" title="A Multiline Context grep Using sed ">27.11</A
+>.
+The first command below finds all lines containing the word <em class="emphasis">system</EM
+>
+in the file <em class="emphasis">main.c</EM
+>, and shows 10 additional lines of context above
+and below each match.
+The second command finds all occurrences of the word &quot;awk&quot; where it is
+followed by the word &quot;perl&quot; somewhere within the next 3 lines:<a class="indexterm" name="AUTOID-39117"></A
+></P
+><p class="para"><blockquote class="screen"><pre class="screen">cgrep -10 system main.c
+cgrep -3 &quot;awk.*perl&quot;</PRE
+></BLOCKQUOTE
+></P
+><p class="para">Now the script, followed by an explanation of how it works:</P
+><p class="para"><table class="screen.co" border="1"><tr><th valign="TOP"><pre class="calloutlist">
+&#13;
+
+
+
+<a class="co" href="ch44_06.htm" webstripperlinkwas="ch44_06.htm" title="44.6 Pattern Matching in case Statements ">case</A
+> 
+<a class="co" href="ch45_28.htm" webstripperlinkwas="ch45_28.htm" title="45.28 Quick Reference: expr ">expr</A
+> 
+
+
+<a class="co" href="ch45_12.htm" webstripperlinkwas="ch45_12.htm" title="45.12 Parameter Substitution ">${?}</A
+> 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a class="co" href="ch44_15.htm" webstripperlinkwas="ch44_15.htm" title="44.15 Handling Command-Line Arguments in Shell Scripts ">&quot;$@&quot;</A
+> </PRE
+></TH
+><td valign="TOP"><pre class="screen">
+#!/bin/sh
+#  cgrep - multiline context grep using sed
+#  Usage: cgrep [-context] pattern [file...]
+
+n=3
+case $1 in -[1-9]*)
+    n=`expr 1 - &quot;$1&quot;`
+    shift
+esac
+re=${1?}; shift
+
+sed -n &quot;
+    1b start
+    : top
+    \~$re~{
+        h; n; p; H; g
+        b endif
+    }
+        N
+        : start
+        //{ =; p; }
+    : endif
+    $n,\$D
+    b top
+&quot; &quot;$@&quot;</PRE
+></TD
+></TR
+></TABLE
+></P
+><p class="para">The <em class="emphasis">sed</EM
+> script is embedded in a bare-bones
+<span class="link">shell wrapper (<a class="linkend" href="ch44_14.htm" webstripperlinkwas="ch44_14.htm" title="Putting awk, sed, etc., Inside Shell Scripts ">44.14</A
+>)</SPAN
+>
+to parse out the initial arguments because, unlike <em class="emphasis">awk</EM
+> and
+<em class="emphasis">perl</EM
+>, <em class="emphasis">sed</EM
+> cannot directly access command-line parameters.
+If the first argument looks like a <em class="emphasis">-context</EM
+> option, variable
+<em class="emphasis">n</EM
+> is reset to one more than the number of lines specified, using
+a little trick&nbsp;- the argument is treated as a negative number and
+subtracted from <code class="literal">1</CODE
+>.
+The pattern argument is then stored in <code class="literal">$re</CODE
+>, with the
+<code class="literal">${1?}</CODE
+> syntax causing the shell to abort with an error message
+if no pattern was given.
+Any remaining arguments are passed as filenames to the <em class="emphasis">sed</EM
+>
+command.</P
+><p class="para">So that the <code class="literal">$re</CODE
+> and <code class="literal">$n</CODE
+> parameters can be embedded,
+the sed script is enclosed in
+<span class="link">double quotes (<a class="linkend" href="ch08_14.htm" webstripperlinkwas="ch08_14.htm" title="Bourne Shell Quoting ">8.14</A
+>)</SPAN
+>.
+We use the <em class="emphasis">-n</EM
+> option because we don't want to print out every
+line by default, and because we need to use the <code class="literal">n</CODE
+> command
+in the script without its side effect of outputting a line.</P
+><p class="para">The <em class="emphasis">sed</EM
+> script itself looks rather unstructured (it was actually
+designed using a flowchart), but the basic algorithm is easy enough
+to understand.
+We keep a &quot;window&quot; of <em class="emphasis">n</EM
+> lines in the pattern space
+and scroll this window through the input stream.
+If an occurrence of the pattern comes into the window, the entire
+window is printed (providing <em class="emphasis">n</EM
+> lines of previous context), and
+each subsequent line is printed until the pattern scrolls out of view
+again (providing <em class="emphasis">n</EM
+> lines of following context).
+The sed idiom <code class="literal">N;D</CODE
+> is used to advance the window, with the
+<code class="literal">D</CODE
+> not kicking in until the first <em class="emphasis">n</EM
+> lines of input have
+been accumulated.</P
+><p class="para">The core of the script is basically an if-then-else construct
+that decides if we are currently &quot;in context.&quot;
+(The regular expression here is delimited by tilde (<code class="literal">~</CODE
+>)
+characters because tildes are less likely to occur in the user-supplied
+pattern than slashes.)
+<b class="emphasis.bold">If</B
+> we are still in context, <b class="emphasis.bold">then</B
+> the next line of
+input is read and output, temporarily using the hold space to
+save the window (and effectively doing an <code class="literal">N</CODE
+> in the process).
+<b class="emphasis.bold">Else</B
+> we append the next input line (<code class="literal">N</CODE
+>) and search for the
+pattern again (an empty regular expression means to reuse the
+last pattern).
+If it's now found, then the pattern must have just come into view&nbsp;- so
+we print the current line number followed by the contents of the
+window.
+Subsequent iterations will take the &quot;then&quot; branch until the pattern
+scrolls out of the window.</P
+><div class="sect1info"><p class="SECT1INFO">- <span class="authorinitials">GU</SPAN
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch34_16.htm" webstripperlinkwas="ch34_16.htm" title="34.16 The Deliberate Scrivener "><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous: 34.16 The Deliberate Scrivener " border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/upt/index.htm" title="UNIX Power Tools"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="UNIX Power Tools" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch34_18.htm" webstripperlinkwas="ch34_18.htm" title="34.18 Multiline Delete "><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next: 34.18 Multiline Delete " border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">34.16 The Deliberate Scrivener </TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" webstripperlinkwas="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">34.18 Multiline Delete </TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#map" border="0" alt="The UNIX CD Bookshelf Navigation"><map name="map"><area shape="RECT" coords="0,0,73,21" href="../index.html" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/index.html" alt="The UNIX CD Bookshelf"><area shape="RECT" coords="74,0,163,21" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/upt/index.htm" alt="UNIX Power Tools"><area shape="RECT" coords="164,0,257,21" href="../unixnut/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/unixnut/index.htm" alt="UNIX in a Nutshell"><area shape="RECT" coords="258,0,321,21" href="../vi/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/vi/index.htm" alt="Learning the vi Editor"><area shape="RECT" coords="322,0,378,21" href="../sedawk/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/sedawk/index.htm" alt="sed &amp; awk"><area shape="RECT" coords="379,0,438,21" href="../ksh/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/ksh/index.htm" alt="Learning the Korn Shell"><area shape="RECT" coords="439,0,514,21" href="../lrnunix/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/lrnunix/index.htm" alt="Learning the UNIX Operating System"></MAP
+></DIV
+></BODY
+></HTML
+>

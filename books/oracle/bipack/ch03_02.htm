@@ -1,0 +1,2734 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 3] 3.2 DBMS_ALERT: Broadcasting Alerts to Users</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein, Charles Dye &amp; John Beresniewicz"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T17:48:18Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates-1-56592-375-8E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-375-8E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle Packages"><META
+NAME="DC.Title"
+CONTENT="Oracle Built-in Packages"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch03_01.htm"
+TITLE="3. Intersession Communication"><LINK
+REL="prev"
+HREF="ch03_01.htm"
+TITLE="3.1 DBMS_PIPE: Communicating Between Sessions "><LINK
+REL="next"
+HREF="ch04_01.htm"
+TITLE="4. User Lock and Transaction Management"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle Built-in Packages"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle Built-in Packages"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch03_01.htm"
+TITLE="3.1 DBMS_PIPE: Communicating Between Sessions "
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 3.1 DBMS_PIPE: Communicating Between Sessions "
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch03_01.htm"
+TITLE="3. Intersession Communication"
+>Chapter 3<BR>Intersession Communication</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch04_01.htm"
+TITLE="4. User Lock and Transaction Management"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 4. User Lock and Transaction Management"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch03-38513"
+>3.2 DBMS_ALERT: Broadcasting Alerts to Users</A
+></H2
+><P
+CLASS="para"
+>The <A
+CLASS="indexterm"
+NAME="ch03-idx-16318-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16318-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16318-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16318-3"
+></A
+>DBMS_ALERT package provides a facility to broadcast notification of database events (alerts) to multiple users who have previously registered their interest in receiving those alerts. You will use the DBMS_ALERT package to implement applications that respond immediately to data modifications of interest to the application. In this way, you can avoid the need to do regular polling on the data to determine if changes have taken place. This is typically accomplished by having the application register to receive an alert on the specific data of interest, querying the data to establish a baseline, and then waiting for the alert to be signaled, which indicates the need to requery the data. Alerts can be automatically signaled using database <A
+CLASS="indexterm"
+NAME="ch03-idx-16326-0"
+></A
+>triggers on the tables of interest, so that all modifications to the data will signal the alert, regardless of which application or user modified the data. Alerts are asynchronous and transaction-based, meaning that users can wait for and receive notification after the signaling event and that only committed transactions (usually involving data changes) will signal the alert.</P
+><P
+CLASS="para"
+>Here are two good examples of applications that could be implemented using DBMS_ALERT:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Graphical displays of statistics that must be updated whenever the underlying data changes</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>An online auction where bidders want to be notified when they have been outbid on an item</P
+></LI
+></UL
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.1"
+>3.2.1 Getting Started with DBMS_ALERT</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch03-idx-18738-0"
+></A
+>The DBMS_ALERT package is created when the Oracle database is installed. The  <I
+CLASS="filename"
+>dbmsalrt.sql</I
+><A
+CLASS="indexterm"
+NAME="ch03-idx-18740-0"
+></A
+> script (found in the built-in packages source code directory, as described in <A
+CLASS="xref"
+HREF="ch01_01.htm"
+>Chapter 1</A
+>) contains the source code for this package's specification. This script is called by <I
+CLASS="filename"
+>catproc.sql</I
+>, which is normally run immediately after database creation. <A
+CLASS="indexterm"
+NAME="ch03-idx-18744-0"
+></A
+>Under Oracle7, no privileges are automatically granted on DBMS_ALERT. Under Oracle8, the EXECUTE_CATALOG_ROLE role is granted EXECUTE privilege on DBMS_ALERT. Thus the DBMS_ALERT programs are not generally available to users. Access to DBMS_ALERT is obtained by granting EXECUTE privilege explicitly to users or roles that require use of the package. </P
+><P
+CLASS="para"
+>Note also that a public synonym for DBMS_ALERT is not created automatically by <I
+CLASS="filename"
+>dbmsalrt.sql</I
+>, so references to the package's programs must be qualified by the owning schema (SYS), unless synonyms have been created. To create a public synonym for DBMS_ALERT, issue the following SQL command:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE PUBLIC SYNONYM DBMS_ALERT FOR SYS.DBMS_ALERT;</PRE
+></BLOCKQUOTE
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.1.1"
+>3.2.1.1 DBMS_ALERT programs</A
+></H4
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16332-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16332-1"
+></A
+><A
+CLASS="xref"
+HREF="ch03_02.htm#ch03-23148"
+>Table 3.2</A
+> lists the programs included in  the DBMS_ALERT package.</P
+><BR><TABLE
+CLASS="table"
+BORDER="1"
+CELLPADDING="3"
+><CAPTION
+CLASS="table"
+><A
+CLASS="title"
+NAME="ch03-23148"
+>Table 3.2: DBMS_ALERT Programs </A
+></CAPTION
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Use in </P
+><P
+CLASS="para"
+>SQL?</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>REGISTER</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Registers interest in notification of an alert</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16334-0"
+></A
+>REMOVE</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Unregisters interest in notification of an alert</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16335-0"
+></A
+>REMOVEALL</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Unregisters interest in all alert notification</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16336-0"
+></A
+>SET_DEFAULTS</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Sets polling loop interval</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16337-0"
+></A
+>SIGNAL</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Signals the occurrence of an alert</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16338-0"
+></A
+>WAITANY</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Waits for any registered alerts to occur</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16339-0"
+></A
+>WAITONE</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Waits for a specific registered alert to occur</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch03-idx-18724-0"
+></A
+>DBMS_ALERT does not declare any package exceptions of its own. Many of the individual programs raise Oracle exceptions under certain circumstances, as described in the following sections.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.1.2"
+>3.2.1.2 DBMS_ALERT nonprogram elements</A
+></H4
+><P
+CLASS="para"
+>The DBMS_ALERT package contains one nonprogram element, maxwait. It is defined as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>maxwait CONSTANT INTEGER := 86400000;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The maxwait constant is the maximum time to wait for an alert. It is used as the default value for the timeout parameter in the WAITONE and WAITANY procedures. The value of 86400000 seconds corresponds to 1000 days. </P
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2"
+>3.2.2 The DBMS_ALERT Interface</A
+></H3
+><P
+CLASS="para"
+>This section describes the programs available through the DBMS_ALERT package.</P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.1"
+>3.2.2.1 The DBMS_ALERT.<A
+CLASS="indexterm"
+NAME="ch03-idx-16340-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16340-1"
+></A
+>REGISTER procedure</A
+></H4
+><P
+CLASS="para"
+>The REGISTER procedure registers interest in a specific alert by a database session. Once registered, the session will be notified of any occurrences of the alert. The header for this procedure is,</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_ALERT.REGISTER
+   (name IN VARCHAR2);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>where name is the name of the alert to register for notification.</P
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.1.1"
+>3.2.2.1.1 Exceptions</A
+></H4
+><P
+CLASS="para"
+>The REGISTER procedure does not raise any package exceptions. It will raise an ORA-20000 exception for specific error conditions, with message text indicating the error as follows:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+>ORU-10021</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Lock request error; status: n</P
+></DD
+><DT
+CLASS="term"
+>ORU-10025</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Lock request error; status: n</P
+></DD
+></DL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.1.2"
+>3.2.2.1.2 Restrictions</A
+></H4
+><P
+CLASS="para"
+>Note the following restrictions on calling REGISTER:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16344-0"
+></A
+>Alert names are limited to 30 bytes and are case-insensitive. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Alert names beginning with "ORA$" are reserved for use by Oracle Corporation.</P
+></LI
+></UL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.1.3"
+>3.2.2.1.3 Example</A
+></H4
+><P
+CLASS="para"
+>In this example, the session will be registered to be notified of the EMP_INSERT alert, which is raised whenever INSERTs are performed on the EMP table:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>BEGIN
+   DBMS_ALERT.REGISTER('EMP_INSERT');
+<A
+CLASS="indexterm"
+NAME="ch03-idx-16342-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16342-1"
+></A
+>END;</PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.2"
+>3.2.2.2 The DBMS_ALERT.REMOVE procedure</A
+></H4
+><P
+CLASS="para"
+>The <A
+CLASS="indexterm"
+NAME="ch03-idx-16345-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16345-1"
+></A
+>REMOVE procedure unregisters a session's interest in receiving notification of a specific alert. It has the following header,</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_ALERT.REMOVE
+   (name IN VARCHAR2);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>where name is the name of the alert to unregister from notification.</P
+><P
+CLASS="para"
+>The REMOVE procedure does not raise any package exceptions, nor does it assert a purity level with the RESTRICT_REFERENCES pragma. </P
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.2.1"
+>3.2.2.2.1 Example</A
+></H4
+><P
+CLASS="para"
+>The following example unregisters for the EMP_INSERT alert:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>BEGIN
+   DBMS_ALERT.REMOVE('EMP_INSERT');
+END;</PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.3"
+>3.2.2.3 The DBMS_ALERT.REMOVEALL procedure</A
+></H4
+><P
+CLASS="para"
+>The <A
+CLASS="indexterm"
+NAME="ch03-idx-16346-0"
+></A
+>REMOVEALL procedure unregisters the session from receiving notification of any and all alerts that have been previously registered. Here's the header:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_ALERT.REMOVEALL;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The REMOVEALL procedure does not raise package exceptions, nor does it assert a purity level with the RESTRICT_REFERENCES pragma. </P
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.3.1"
+>3.2.2.3.1 Example</A
+></H4
+><P
+CLASS="para"
+>This example stops all alert notifications to the session:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16347-0"
+></A
+>SQL&gt; execute DBMS_ALERT.REMOVALL;</PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.4"
+>3.2.2.4 The DBMS_ALERT.<A
+CLASS="indexterm"
+NAME="ch03-idx-16348-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16348-1"
+></A
+>SET_DEFAULTS procedure</A
+></H4
+><P
+CLASS="para"
+>The SET_DEFAULTS procedure is used to set session configurable settings used by the DBMS_ALERT package. Currently, the polling loop interval sleep time is the only session setting that can be modified using this procedure. The header for this procedure is,</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_ALERT.SET_DEFAULTS
+   (sensitivity IN NUMBER);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>where sensitivity is the polling interval sleep time in seconds.</P
+><P
+CLASS="para"
+>The SET_DEFAULTS procedure does not raise any package exceptions. </P
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.4.1"
+>3.2.2.4.1 Example</A
+></H4
+><P
+CLASS="para"
+>The following example sets the polling interval to one second:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt;  execute DBMS_ALERT.SET_DEFAULTS(600);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Setting the polling interval is relevant primarily to users of DBMS_ALERT under <A
+CLASS="indexterm"
+NAME="ch03-idx-16352-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16352-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16352-2"
+></A
+>Oracle Parallel Server (OPS), since under OPS a polling loop is required to check for alerts issued from another Oracle <A
+CLASS="indexterm"
+NAME="ch03-idx-16350-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16350-1"
+></A
+>instance.</P
+></DIV
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.5"
+>3.2.2.5 The DBMS_ALERT.<A
+CLASS="indexterm"
+NAME="ch03-idx-16353-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16353-1"
+></A
+>SIGNAL procedure</A
+></H4
+><P
+CLASS="para"
+>The SIGNAL procedure posts notification of the occurrence of an alert, which is then propagated to all sessions registered for the alert. Alert notification happens only if and when the signaling <A
+CLASS="indexterm"
+NAME="ch03-idx-16357-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16357-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16357-2"
+></A
+>transaction COMMITs. Here's the header:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_ALERT.SIGNAL
+   (name IN VARCHAR2
+   ,message IN VARCHAR2);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Parameters are summarized in the following table.</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>name</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the alert to signal</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>message</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Message to associate and pass on with the alert</P
+></TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+>When you are signaling alerts using SIGNAL, it is important to COMMIT (or ROLLBACK) the signaling transaction as soon as possible. Several problems can develop when signaling transactions are held open too long, including the following:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Other sessions signaling this alert will block and wait until the COMMIT.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Under the multithreaded server, a shared server will be bound to the session until the COMMIT.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The signaling session will receive an error if it waits on the alert prior to a COMMIT.</P
+></LI
+></UL
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16358-0"
+></A
+>If the signaling transaction is rolled back, no sessions will be notified of the alert. Thus the alerts in DBMS_ALERT are strictly transaction-based.</P
+><P
+CLASS="para"
+>Multiple sessions can signal the same alert. Note that this process is serialized using <A
+CLASS="indexterm"
+NAME="ch03-idx-16359-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16359-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16359-2"
+></A
+>DBMS_LOCK (described in <A
+CLASS="xref"
+HREF="ch04_01.htm"
+>Chapter 4, <CITE
+CLASS="chapter"
+>User Lock and Transaction Management</CITE
+></A
+>) and can add significant wait times unless transactions are closed quickly (as noted earlier).</P
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.5.1"
+>3.2.2.5.1 Exceptions</A
+></H4
+><P
+CLASS="para"
+>This program does not raise any package exceptions. It will raise an ORA-20000 exception for specific error conditions, with message text indicating the error as follows:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+>ORU-10001</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Lock request error, status: n</P
+></DD
+><DT
+CLASS="term"
+>ORU-10016</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Error: n sending on pipe `pipename'</P
+></DD
+><DT
+CLASS="term"
+>ORU-10017</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Error: n receiving on pipe `pipename'</P
+></DD
+><DT
+CLASS="term"
+>ORU-10022</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Lock request error, status: n</P
+></DD
+></DL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.5.2"
+>3.2.2.5.2 Restrictions</A
+></H4
+><P
+CLASS="para"
+>Note the following restrictions on calling SIGNAL:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Alert names are limited to 30 bytes and are case-insensitive. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Alert names beginning with "ORA$" are reserved for use by Oracle Corporation.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>RESTRICT_REFERENCES cannot be called in SQL.</P
+></LI
+></UL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.5.3"
+>3.2.2.5.3 Example</A
+></H4
+><P
+CLASS="para"
+>This trigger will signal the EMP_INSERT alert when rows are inserted into the EMP table. The empid column is passed as the alert message for receivers of the alert to use:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE TRIGGER emp_ARI
+AFTER INSERT ON emp
+FOR EACH ROW
+BEGIN
+   /*
+   || signal alert that emp has been inserted,
+   || passing the empid as alert message 
+   */
+   DBMS_ALERT.SIGNAL('EMP_INSERT', :NEW.empid);
+   END IF;
+
+END emp_ARI;
+/<A
+CLASS="indexterm"
+NAME="ch03-idx-16355-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16355-1"
+></A
+></PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.6"
+>3.2.2.6 The DBMS_ALERT.WAITANY procedure</A
+></H4
+><P
+CLASS="para"
+>The <A
+CLASS="indexterm"
+NAME="ch03-idx-16360-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16360-1"
+></A
+>WAITANY procedure waits for notification of any alerts for which the session is registered. The procedure call will complete when the first alert is signaled or when the wait timeout is reached. Here's the header:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_ALERT.WAITANY
+   (name OUT VARCHAR2
+   ,message OUT VARCHAR2
+   ,status OUT INTEGER
+   ,timeout IN NUMBER DEFAULT MAXWAIT);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Parameters are summarized in the following table.</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>name</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the alert that occurred</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>message</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Message attached to alert when signaled</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>status</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Status of WAITANY call: 0 means alert; 1 means timeout</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>timeout</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Time in seconds to wait for alerts</P
+></TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+>When multiple alerts for which the session is registered have been signaled, the call to WAITANY will return the most recent alert that has occurred.</P
+><P
+CLASS="para"
+>If a session waits on an alert that it has also signaled, a lock request exception will occur unless a COMMIT has taken place between the calls to the SIGNAL and WAITANY procedures. </P
+><P
+CLASS="para"
+>The WAITANY call uses a polling loop to detect alerts. This avoids notification problems that could otherwise occur when signaled, but uncommitted alerts mask notification of subsequent committed alerts. The polling loop begins with a 1-second interval that increases exponentially to 30 seconds.</P
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.6.1"
+>3.2.2.6.1 Exceptions</A
+></H4
+><P
+CLASS="para"
+>The program does not raise any package exceptions. The program will raise an ORA-20000 exception for specific error conditions, with message text indicating the error as follows:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+>ORU-10002</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Lock request error, status: n</P
+></DD
+><DT
+CLASS="term"
+>ORU-10015</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Error: n waiting for pipe status</P
+></DD
+><DT
+CLASS="term"
+>ORU-10020</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Error: n waiting on lock request</P
+></DD
+><DT
+CLASS="term"
+>ORU-10024</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>No alerts registered</P
+></DD
+></DL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.6.2"
+>3.2.2.6.2 Restrictions</A
+></H4
+><P
+CLASS="para"
+>Note the following restrictions on WAITANY:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The message parameter is limited to 1800 bytes in length.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>WAITANY cannot be called in SQL.</P
+></LI
+></UL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.6.3"
+>3.2.2.6.3 Example</A
+></H4
+><P
+CLASS="para"
+>This example waits five minutes to receive the next alert for which the session is registered. If an alert is received, it is displayed. If the EMP_INSERT alert is received, the employee id should be the message, and the employee status is changed without displaying the alert.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DECLARE
+   alert_msg     VARCHAR2(1800);
+   alert_status  INTEGER;
+   alert_name;
+BEGIN
+   DBMS_ALERT.WAITANY(alert_name, alert_msg, alert_status, 300);
+
+   IF alert_status = 1
+   THEN
+      DBMS_OUTPUT.PUT_LINE('timed out');
+
+   ELSIF alert_name = 'EMP_INSERT'
+   THEN
+      UPDATE emp SET status = 'REGISTERED'
+      WHERE empid := alert_msg;
+
+   ELSE
+      DBMS_OUTPUT.PUT_LINE('received alert: '||alert_name);
+   END IF;
+END;
+/<A
+CLASS="indexterm"
+NAME="ch03-idx-16362-0"
+></A
+></PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.7"
+>3.2.2.7 The DBMS_ALERT.WAITONE procedure</A
+></H4
+><P
+CLASS="para"
+>The <A
+CLASS="indexterm"
+NAME="ch03-idx-16367-0"
+></A
+>WAITONE procedure waits to be notified of an occurrence of the specified alert. The procedure call will complete when the alert is signaled or when the wait timeout is reached. Here's the header:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_ALERT.WAITONE
+   (name IN VARCHAR2
+   ,message OUT VARCHAR2
+   ,status OUT INTEGER
+   ,timeout IN NUMBER DEFAULT MAXWAIT);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Parameters are summarized in the following table.</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>name</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the alert to wait for </P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>message</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Message attached to alert when signaled</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>status</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Status of WAITONE call: 0 means alert; 1 means timeout</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>timeout</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Time in seconds to wait for alerts</P
+></TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+>Note the following special cases:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>If the alert has been registered and signaled prior to the call to the WAITONE procedure, the call will return immediately with the most recent occurrence of the alert.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>When multiple instances of the alert have been signaled, the call to WAITONE will return the most recent occurrence of the alert.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>If a session waits for and has also signaled the alert, a lock request exception will occur unless a COMMIT has taken place between the calls to the SIGNAL and WAITONE procedures. </P
+></LI
+></UL
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.7.1"
+>3.2.2.7.1 Exceptions</A
+></H4
+><P
+CLASS="para"
+>This program does not raise any package exceptions. The program will raise an ORA-20000 exception for specific error conditions, with message text indicating the error as follows:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+>ORU-10019</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Error: n on lock request</P
+></DD
+><DT
+CLASS="term"
+>ORU-10023</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Lock request error; status: n</P
+></DD
+><DT
+CLASS="term"
+>ORU-10037</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Attempting to wait on uncommitted signal from same session</P
+></DD
+></DL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.7.2"
+>3.2.2.7.2 Restrictions</A
+></H4
+><P
+CLASS="para"
+>Note the following restrictions on WAITONE:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The message parameter is limited to 1800 bytes in length.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The WAITONE procedure cannot be called in SQL.</P
+></LI
+></UL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.2.7.3"
+>3.2.2.7.3 Example</A
+></H4
+><P
+CLASS="para"
+>This example waits specifically on the EMP_INSERT alert and updates the status when it is signaled:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DECLARE
+   alert_msg     VARCHAR2(1800);
+   alert_status  INTEGER;
+BEGIN
+   DBMS_ALERT.WAITONE('EMP_INSERT', alert_msg, alert_status, 300);
+
+   IF alert_status = 1
+   THEN
+      DBMS_OUTPUT.PUT_LINE('timed out');
+
+   ELSE
+      UPDATE emp SET status = 'REGISTERED'
+      WHERE empid := alert_msg;
+
+      DBMS_OUTPUT.PUT_LINE('employee registered');
+   END IF;
+<A
+CLASS="indexterm"
+NAME="ch03-idx-16369-0"
+></A
+>END;
+/<A
+CLASS="indexterm"
+NAME="ch03-idx-16365-0"
+></A
+></PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.3"
+>3.2.3 DBMS_ALERT Examples</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16371-0"
+></A
+>The DBMS_ALERT package is a good example of how you can build higher-level functionality out of lower-level built-ins. Both the DBMS_LOCK and DBMS_PIPE packages are used extensively in the implementation of DBMS_ALERT. </P
+><BLOCKQUOTE
+CLASS="note"
+><P
+CLASS="para"
+><STRONG
+>NOTE:</STRONG
+> If you have an old <A
+CLASS="indexterm"
+NAME="ch03-idx-16374-0"
+></A
+>Version 7.1 installation of Oracle, you can check out <I
+CLASS="filename"
+>dbmsalrt.sql</I
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16373-0"
+></A
+> to see exactly how this is done, since the code is not wrapped. </P
+></BLOCKQUOTE
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16375-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16375-1"
+></A
+>An important feature of the alerting mechanism in DBMS_ALERT is that it is transaction-based. This means that alerts will be sent to registered sessions only if and when the signaling session issues a COMMIT. If the signaler issues a ROLLBACK instead, the alerts will not be sent. Applications that are interested only in real changes to data in the database will benefit from using transaction-based alerts. Applications that need to signal other sessions regardless of transaction boundaries or data modifications (like debuggers or auditing monitors) will probably need to use DBMS_PIPE instead of DBMS_ALERT.</P
+><P
+CLASS="para"
+>What kind of application might actually need to be alerted to changes in data? The classic example given in the Oracle documentation is a continuous graphical display of data extracted from some table. Pulling data from the table at set intervals using a polling mechanism can be very inefficient. For one thing, the data may not have changed since the last pull, so a refresh is not really necessary. Also, if the application is separated from the database by a network (as it most likely would be), then the overhead of redundant data extraction is multiplied. In this example, the application could use DBMS_ALERT to suspend itself and wait for a signal to awaken and pull new data for the display. The signal will be received only when data in the table has actually been modified (i.e., a new pull is truly necessary).</P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.3.1"
+>3.2.3.1 The online auction</A
+></H4
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16376-0"
+></A
+>Well, I wanted to do something new and original. I spent some time thinking about other examples for using DBMS_ALERT. Finally, I realized that I had participated in a perfect application for this technology many times already: an online auction. During an auction (especially a virtual one over a computer network), it is important to know when an item you have a bidding interest in has been bid upon. In a traditional auction, this happens because items are auctioned off serially, so bids can only be placed on the current item. In an online auction, the participants are not in a room together, and the auction itself typically takes longer than a traditional auction. Also, it is desirable to auction multiple items simultaneously, taking advantage of the virtual nature of the auction. An auction application that notifies participants of bidding activity relevant (to them) would relieve them of having to constantly monitor their screens to stay abreast of the auction. Bidding could take place simultaneously on multiple items since users interested in those items would automatically be notified of new bids.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.3.2"
+>3.2.3.2 The auction schema</A
+></H4
+><P
+CLASS="para"
+>The online auction was perfect for DBMS_ALERT, so I set about to prove the concept. First, I needed a basic schema. Professional data modelers may wince, but I came up with the following:</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Object</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Type</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>AUCTION_ITEMS </P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>TABLE</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Items up for auction</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>BIDS </P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>TABLE</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Bids on auction items</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>HIGH_BIDS</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>VIEW</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>High bids by item </P
+></TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+>These objects are created by the <I
+CLASS="filename"
+>auction.ddl</I
+> script, reproduced as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk:  <A
+CLASS="indexterm"
+NAME="ch03-idx-17808-0"
+></A
+>auction.ddl */*
+rem *********************************************************
+rem  AUCTION.DDL 
+rem
+rem  Creates objects used in the &quot;online auction&quot; example
+rem  for the DBMS_ALERT package.  
+rem
+rem  Auction_items -- table of items being auctioned
+rem  Bids -- table of bids placed on items
+rem  High_bids -- view showing the current high bids on
+rem               items and who placed them
+rem
+rem  Author:  John Beresniewicz, Savant Corp
+rem
+rem
+rem  12/07/97: created
+rem *********************************************************
+DROP VIEW high_bids;
+DROP TABLE bids;
+DROP TABLE auction_items;
+
+CREATE TABLE auction_items 
+   (id            VARCHAR2(20)  NOT NULL PRIMARY KEY
+   ,description   VARCHAR2(200) NOT NULL
+   ,min_bid       NUMBER        NOT NULL
+   ,curr_bid      NUMBER
+   ,status        VARCHAR2(10) 
+                  CONSTRAINT   valid_status
+                  CHECK (status IN ('OPEN','CLOSED') )
+   );
+
+CREATE TABLE bids
+   (bidder        VARCHAR2(30)
+   ,item_id       VARCHAR2(20)  
+                  REFERENCES auction_items(id) 
+                  ON DELETE CASCADE
+   ,bid           NUMBER         NOT NULL
+   );
+
+CREATE OR REPLACE VIEW high_bids
+   (item_id
+   ,item_desc
+   ,bidder
+   ,high_bid)
+AS
+SELECT
+        BID.item_id
+       ,AI.description
+       ,BID.bidder
+       ,BID.bid
+  FROM
+        bids           BID
+       ,auction_items  AI
+ WHERE
+        BID.item_id    = AI.id
+   AND  BID.bid        = (SELECT  MAX(bid) 
+                            FROM  bids    B2
+                           WHERE  BID.item_id = B2.item_id)
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The AUCTION_ITEMS table contains an identifier and a description of each auction item. There are also columns for the minimum bid, status, and current high bid. This latter is really redundant with information derived in the HIGH_BIDS view, but this denormalization makes for a more interesting example.</P
+><P
+CLASS="para"
+>The BIDS table holds the bidding activity. Each bid is a bid on an auction_item by a user for a specified amount. Originally, I had a BIDDERS table to track the auction participants, and this would likely be necessary for a real-world application. However, to simplify the example I decided to use the Oracle session username to identify bidders. Thus, there is an assumption that the online auction users will all be connected using unique usernames. The BIDS table also has a complex integrity constraint, which states that all bids must exceed the previous high bid for the same item (this is, after all, how an auction works). An additional constraint is that no bids may be updated or deleted from the table. These constraints are enforced by database triggers discussed later.</P
+><P
+CLASS="para"
+>The HIGH_BIDS view selects the highest bid for each item along with the item's description and the bidder who made the bid. The auction application's GUI component can make use of this view to display current bidding levels for all items.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.3.3"
+>3.2.3.3 Auction system requirements</A
+></H4
+><P
+CLASS="para"
+>Some basic requirements of the online auction application are as follows:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Enforce the complex integrity constraint on the BIDS table.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Enforce the no-update, no-delete rule on the BIDS table.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Update the CURR_BID column of AUCTION_ITEMS for new bids.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Inform bidders when they have been outbid on an item.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Inform bidders when an item is closed from further bidding.</P
+></LI
+></UL
+><P
+CLASS="para"
+>There is certainly more than one way to satisfy these requirements, especially the data integrity constraints on the two tables. I decided to implement a combination of database triggers and a package called <A
+CLASS="indexterm"
+NAME="ch03-idx-16387-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16387-1"
+></A
+>auction. The database triggers enforce some data integrity constraints and signal changes to interested bidders using DBMS_ALERT.SIGNAL. A procedure called place_bid is responsible for placing bids on items, making sure that the complex integrity constraint is satisfied, and that the bidder is registered to receive notice of any bidding or status changes on the item. Another packaged procedure, called watch_bidding, demonstrates how an application might use DBMS_ALERT.WAITANY to be alerted for any bidding activity of interest to the user.</P
+><P
+CLASS="para"
+>One immediate issue to address is what the alert names should be. The auction_items.id column seems a natural option since all alerts will concern a specific item.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.3.4"
+>3.2.3.4 Integrity constraint triggers</A
+></H4
+><P
+CLASS="para"
+>Here are the triggers for the auction_items and bids tables:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk:  auction2.sql */*
+CREATE OR REPLACE TRIGGER auction_items_ARU
+AFTER UPDATE ON auction_items
+FOR EACH ROW
+BEGIN
+   /* 
+   || trigger enforces no update of item_id and also
+   || signals an alert when status changes
+   */
+   IF UPDATING ('ITEM_ID')
+   THEN 
+      RAISE_APPLICATION_ERROR(-20000, 'Cannot update item id');
+   
+   ELSIF UPDATING ('STATUS') AND (:NEW.status != :OLD.status)
+   THEN
+      /* send new status on as the alert message */
+      DBMS_ALERT.SIGNAL(:NEW.id, :NEW.status);
+   END IF;
+END auction_items_ARU;
+/
+
+CREATE OR REPLACE TRIGGER bids_ARIUD
+AFTER INSERT OR UPDATE OR DELETE ON bids
+FOR EACH ROW
+BEGIN
+   /* 
+   || enforce all bids are final rule
+   */
+   IF UPDATING OR DELETING
+   THEN
+      RAISE_APPLICATION_ERROR
+         (-20001, 'Cannot update or delete, all bids final!');
+   ELSE
+   /*
+   || signal alert on item, send bidder name as message
+   */
+      DBMS_ALERT.SIGNAL(:NEW.item_id, :NEW.bidder);
+   END IF;
+
+END bids_ARIUD;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The triggers enforce the basic integrity rules that auction_items.id is a non-updatable column and that rows in the BIDS table cannot be updated or deleted. More importantly, they signal database alerts to registered sessions that auction data has changed using DBMS_ALERT.SIGNAL. The trigger on auction items signals status changes for items. Note the additional check requiring that :NEW.status be different from :OLD.status in order for the alert to be signaled. Also note that the item id is used as the alert name and that the new item status is passed as the alert's message. The trigger on BIDS signals the alert named by the item id and passes the bidder's name as the message. The use of the message parameter with the alerts allows the alert receiver to implement a context-sensitive response to the alert.</P
+><P
+CLASS="para"
+>By the way, my naming convention for triggers has the table name suffixed by a string like [ A|B ][ R|S ][ I|U|D ] where:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>A or B indicates an AFTER or BEFORE trigger</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>R or S indicates ROW or STATEMENT level trigger</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>I and/or U and/or D indicates an INSERT or UPDATE or DELETE</P
+></LI
+></UL
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.3.5"
+>3.2.3.5 The auction package</A
+></H4
+><P
+CLASS="para"
+>The rest of the online auction requirements are implemented in the auction package. Here is the package specification:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk:  <A
+CLASS="indexterm"
+NAME="ch03-idx-16388-0"
+></A
+>auction1.sql */*
+CREATE OR REPLACE PACKAGE auction
+   /*
+   || Implements a simple interactive bidding system
+   || using DBMS_ALERT to keep bidders informed 
+   || of activity in items they are interested in.
+   || 
+   || The item_id is used as the ALERT name for the 
+   || item.
+   ||
+   || Author:  John Beresniewicz, Savant Corp
+   ||
+   || 12/07/97: created
+   ||
+   || Compilation Requirements: 
+   ||
+   || EXECUTE on DBMS_ALERT
+   || SELECT, UPDATE on AUCTION_ITEMS
+   || INSERT on BIDS
+   || SELECT on HIGH_BIDS
+   ||
+   || Execution Requirements:
+   ||
+   */
+AS
+   /*
+   || exceptions raised and handled in PLACE_BID
+   || procedure
+   */
+   invalid_item   EXCEPTION;
+   bid_too_low    EXCEPTION;
+   item_is_closed EXCEPTION;
+
+   /*
+   || place a bid on an item, the bid must exceed any 
+   || other bids on the item (and the minimum bid)
+   ||
+   || bidding on an item registers interest in the 
+   || item using DBMS_ALERT.REGISTER
+   ||
+   || only this procedure should be used to add rows
+   || to the bids table, since it also updates 
+   || auction_items.curr_bid column
+   */
+   PROCEDURE place_bid
+      (item_id_IN IN VARCHAR2
+      ,bid_IN IN NUMBER);
+
+   /* 
+   || close bidding on an item
+   */
+   PROCEDURE <A
+CLASS="indexterm"
+NAME="ch03-idx-16392-0"
+></A
+>close_item(item_id_IN IN VARCHAR2);
+
+   /*
+   || watch for any alerts on items bid by the user 
+   || indicating other users have raised the bid
+   */
+   PROCEDURE watch_bidding(timeout_secs_IN IN NUMBER:=300);
+
+END auction;
+/</PRE
+></BLOCKQUOTE
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.3.5.1"
+>3.2.3.5.1 Place_bid procedure</A
+></H4
+><P
+CLASS="para"
+>The <A
+CLASS="indexterm"
+NAME="ch03-idx-16396-0"
+></A
+>place_bid procedure is intended to be used by the GUI application to place all bids in the auction. No INSERTS or UPDATES to the BIDS table should be allowed except through this procedure, as it maintains the complex integrity constraint on the table, updates the curr_bid column of AUCTION_ITEMS, and registers the session for receiving alerts on the item. The body of place_bid looks like this:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk:<A
+CLASS="indexterm"
+NAME="ch03-idx-18500-0"
+></A
+> auction1.sql */*
+PROCEDURE place_bid
+	(item_id_IN IN VARCHAR2
+	,bid_IN IN NUMBER)
+IS
+	temp_curr_bid auction_items.curr_bid%TYPE;
+	temp_statusauction_items.status%TYPE;
+
+	CURSOR auction_item_cur
+	IS
+	SELECT NVL(curr_bid,min_bid), status
+		FROM auction_items
+		WHERE id = item_id_IN
+		FOR UPDATE OF curr_bid;
+
+BEGIN
+	/* 
+	|| lock row in auction_items 
+	*/
+	OPEN auction_item_cur;
+	FETCH auction_item_cur INTO temp_curr_bid, temp_status;
+
+	/*
+	|| do some validity checks
+	*/
+	IF auction_item_cur%NOTFOUND
+	THEN
+		RAISE invalid_item;
+	
+	ELSIF temp_status = 'CLOSED'
+	THEN
+		RAISE item_is_closed;
+
+	ELSIF bid_IN &lt;= temp_curr_bid
+	THEN
+		RAISE bid_too_low;
+
+	ELSE
+		/* 
+		|| insert to bids AND update auction_items, 
+		|| bidders identified by session username
+		*/
+		INSERT INTO bids (bidder, item_id, bid)
+		VALUES (USER, item_id_IN, bid_IN);
+
+		UPDATE auction_items 
+		SET curr_bid = bid_IN
+		WHERE CURRENT OF auction_item_cur;
+
+		/* 
+		|| commit is important because it will send
+		|| the alert notifications out on the item
+		*/
+		COMMIT;
+
+		/*
+		|| register for alerts on item since bidding,
+		|| register after commit to avoid ORU-10002
+		*/
+		DBMS_ALERT.REGISTER(item_id_IN);
+
+	END IF;
+
+	CLOSE auction_item_cur;
+
+EXCEPTION
+	WHEN invalid_item
+		THEN
+			ROLLBACK WORK;
+			RAISE_APPLICATION_ERROR
+				(-20002,'PLACE_BID ERR: invalid item');
+	WHEN bid_too_low
+		THEN
+			ROLLBACK WORK;
+			RAISE_APPLICATION_ERROR
+				(-20003,'PLACE_BID ERR: bid too low');
+	WHEN item_is_closed
+		THEN
+			ROLLBACK WORK;
+			RAISE_APPLICATION_ERROR
+				(-20004,'PLACE_BID ERR: item is closed');
+	WHEN OTHERS
+		THEN
+			ROLLBACK WORK;
+			RAISE;
+END place_bid;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>There are a few things to notice about place_bid. First, the row in AUCTION_ITEMS is locked FOR UPDATE to begin the transaction. I chose not to use NOWAIT in the cursor, because the transaction is small and should be quite fast, minimizing contention problems. The COMMIT immediately follows the INSERT and UPDATE and precedes the call to DBMS_ALERT.REGISTER. Originally I had it the other way around, but kept getting ORU-10002 errors when calling DBMS_ALERT.WAITANY immediately after place_bid. What was happening was that the call to DBMS_ALERT.REGISTER was holding a user lock that the insert trigger to BIDS was also trying to get. By doing the COMMIT first, the trigger is able to acquire and release the lock, which can then be acquired by DBMS_ALERT.REGISTER. </P
+><BLOCKQUOTE
+CLASS="note"
+><P
+CLASS="para"
+><STRONG
+>NOTE:</STRONG
+> To avoid the locking problems mentioned, be careful to code applications in such a way that a COMMIT will occur between calls to SIGNAL and REGISTER.</P
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.3.5.2"
+>3.2.3.5.2 Exception handling</A
+></H4
+><P
+CLASS="para"
+>Exception handling in place_bid is inelegant but useful. The package defines named exceptions that place_bid detects, raises, and then handles using RAISE_APPLICATION_ERROR. In practice, it may be better to pass these out from the procedure to the calling application and let it handle them. Since I was prototyping in SQL*Plus and wanted to see the exception and an error message immediately, I used RAISE_APPLICATION_ERROR. When using DBMS_ALERT, note also that it is very important to terminate transactions to avoid the locking problems mentioned earlier, so the EXCEPTION section makes sure to include ROLLBACK WORK <A
+CLASS="indexterm"
+NAME="ch03-idx-16398-0"
+></A
+>statements.</P
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.3.5.3"
+>3.2.3.5.3 The <A
+CLASS="indexterm"
+NAME="ch03-idx-16401-0"
+></A
+>watch_bidding procedure</A
+></H4
+><P
+CLASS="para"
+>With the triggers and the place_bid procedure in place, the online auction system is basically ready to go. Since a real application would involve a GUI, but I was prototyping in SQL*Plus, I needed a way to simulate what the GUI should do to receive DBMS_ALERT signals and inform the user of auction activity. This is basically what the watch_bidding procedure does. It could be modified and called directly from the GUI or its logic could be adapted and embedded into the GUI. The watch_bidding procedure uses DBMS_OUTPUT to display bidding alerts received. It also demonstrates the use of the alert message to implement a context-sensitive response to alerts.</P
+><P
+CLASS="para"
+>Here is the source code for watch_bidding:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk:<A
+CLASS="indexterm"
+NAME="ch03-idx-16405-0"
+></A
+>auction1.sql */*
+PROCEDURE watch_bidding(timeout_secs_IN IN NUMBER:=300)
+IS
+	temp_nameVARCHAR2(30);
+	temp_message VARCHAR2(1800);
+	temp_statusINTEGER;
+BEGIN
+	/* 
+	|| enter a loop which will be exited explicitly 
+	|| when a new bid from another user received or 
+	|| DBMS_ALERT.WAITANY call times out
+	*/
+	LOOP
+		/*
+		|| wait for up to timeout_secs_IN for any alert
+		*/
+		DBMS_ALERT.WAITANY
+			(temp_name, temp_message, temp_status, timeout_secs_IN);
+
+		IF temp_status = 1
+		THEN
+			/* 
+			|| timed out, return control to application 
+			|| so it can do something here if necessary
+			*/
+			EXIT;
+
+		ELSIF temp_message = 'CLOSED'
+		THEN
+			/* 
+			|| unregister closed item, re-enter loop
+			*/
+			DBMS_ALERT.REMOVE(temp_name);
+			DBMS_OUTPUT.PUT_LINE('Item '||temp_name||
+						' has been closed.');
+
+		ELSIF temp_message = USER OR temp_message = 'OPEN'
+		THEN
+			/*
+			|| bid was posted by this user (no need to alert)
+			|| re-enter loop and wait for another
+			*/
+			NULL; 
+
+		ELSE
+			/* 
+			|| someone raised the bid on an item this user is bidding 
+			|| on, application should refresh user's display with a
+			|| query on the high_bids view and/or alert visually 
+			|| (we will just display a message)
+			||
+			|| exit loop and return control to user so they can bid
+			*/
+			DBMS_OUTPUT.PUT_LINE
+				('Item '||temp_name||' has new bid: '||
+				TO_CHAR(curr_bid(temp_name),'$999,999.00')||
+				' placed by: '||temp_message);
+			EXIT;
+		END IF;
+	END LOOP;
+
+END watch_bidding;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The watch_bidding procedure uses DBMS_ALERT.WAITANY to wait for any alerts for which the session has registered. In the auction system, registering for alerts is done when a bid is placed using place_bid. When an alert is received, the name of the alert is the auction item that has been updated. The alert message is used to respond intelligently to the alert as follows:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>If the alert signals that bidding is closed on the item, the procedure unregisters the alert using DBMS_ALERT.REMOVE and waits for another alert.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>If the alert was raised by the current user placing a bid or indicates that bidding has been opened on the item, the procedure waits for another alert.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>If the DBMS_ALERT.WAITANY call times out, control is passed back to the caller. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>If the alert is raised by another user, a message is displayed and control is passed back to the caller (so the user can make a new <A
+CLASS="indexterm"
+NAME="ch03-idx-16403-0"
+></A
+>bid).<A
+CLASS="indexterm"
+NAME="ch03-idx-16406-0"
+></A
+></P
+></LI
+></UL
+></DIV
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch03-SECT-2.3.6"
+>3.2.3.6 Testing the system</A
+></H4
+><P
+CLASS="para"
+>So the question is, does it work? I inserted some rows into the AUCTION_ITEMS table as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk:  auction3.sql */*
+INSERT INTO auction_items
+VALUES ('GB123','Antique gold bracelet',350.00,NULL,'OPEN');
+
+INSERT INTO auction_items
+VALUES ('PS447','Paul Stankard paperweight',550.00,NULL,'OPEN');
+
+INSERT INTO auction_items
+VALUES ('SC993','Schimmel print',750.00,NULL,'OPEN');
+
+COMMIT;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I granted EXECUTE privilege on the AUCTION package to two users, USER01 and USER02, and connected two SQL*Plus sessions, one for each user. Then I initiated a bidding war using the following PL/SQL block:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk:  auction4.sql */*
+set serveroutput on size 100000
+set verify off
+BEGIN
+   opbip.auction.place_bid('GB123',&amp;bid);
+   opbip.auction.watch_bidding(300);
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>On each execution of the previous block in each session, I raised the bid. Here are the results from the USER01 session:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; @auction4
+Enter value for bid: 1000
+Item GB123 has new bid:    $1,100.00 placed by: USER02
+
+PL/SQL procedure successfully completed.
+
+SQL&gt; /
+Enter value for bid: 1200
+Item GB123 has new bid:    $1,300.00 placed by: USER02
+
+PL/SQL procedure successfully completed.</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>USER01 opened the bidding on GB123 with a $1000 bid, which was quickly upped by USER02 to $1100, so USER01 came back with $1200 only to be topped finally by the winning $1300 bid by USER02. USER02's log of events confirms this exciting back and forth bidding war:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; @auction4
+Enter value for bid: 1100
+Item PS447 has been closed.
+Item GB123 has new bid:    $1,200.00 placed by: USER01
+
+PL/SQL procedure successfully completed.
+
+SQL&gt; /
+Enter value for bid: 1300
+
+PL/SQL procedure successfully completed.</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Note that each user is informed only of bids placed by the other user, and not of their own bids. Note also that USER02 was alerted to the fact that item PS447 (the subject of the previous bidding by USER02) had been closed.</P
+><P
+CLASS="para"
+>So the auction system really does work, and quite well, <A
+CLASS="indexterm"
+NAME="ch03-idx-16377-0"
+></A
+>as a <A
+CLASS="indexterm"
+NAME="ch03-idx-16372-0"
+></A
+>matter of <A
+CLASS="indexterm"
+NAME="ch03-idx-16320-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16320-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch03-idx-16320-2"
+></A
+>fact! <A
+CLASS="indexterm"
+NAME="ch03-idx-15956-0"
+></A
+></P
+></DIV
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch03_01.htm"
+TITLE="3.1 DBMS_PIPE: Communicating Between Sessions "
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 3.1 DBMS_PIPE: Communicating Between Sessions "
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle Built-in Packages"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle Built-in Packages"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch04_01.htm"
+TITLE="4. User Lock and Transaction Management"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 4. User Lock and Transaction Management"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>3.1 DBMS_PIPE: Communicating Between Sessions </TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>4. User Lock and Transaction Management</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

@@ -1,0 +1,289 @@
+<html>
+<head>
+<title>System V IPC (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="System V IPC">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch16_03.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch16_01.htm">Chapter 16: Interprocess Communication</a></td><td align="right" valign="top" width="172"><a href="ch16_05.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">16.4. System V IPC</h2>
+
+<p>
+<a name="INDEX-3048"></a><a name="INDEX-3049"></a>
+Everyone hates System V IPC.  It's slower than paper tape, carves
+out insidious 
+
+little 
+
+namespaces completely unrelated to the filesystem, uses human-hostile
+numbers to name its objects, and is constantly losing track of its own
+mind.  Every so often, your sysadmin has to go on a search-and-destroy
+mission to hunt down these lost SysV IPC objects with
+<em class="emphasis">ipcs</em>(1) and kill them with
+<em class="emphasis">ipcrm</em>(1), hopefully before the system runs
+out of memory.</p>
+
+<p>
+<a name="INDEX-3050"></a><a name="INDEX-3051"></a><a name="INDEX-3052"></a><a name="INDEX-3053"></a><a name="INDEX-3054"></a>
+Despite all this pain, ancient SysV IPC still has a few valid uses.
+The three kinds of IPC objects are shared memory, semaphores, and
+messages.  For message passing, sockets are the preferred mechanisms
+these days, and they're a lot more portable, too.  For simple uses of
+semaphores, the filesystem tends to get used.  As for shared
+memory--well, now there's a problem for you.  If you have it, the more
+modern <em class="emphasis">mmap</em>(2) syscall fits the bill,<a href="#FOOTNOTE-11">[11]</a> but the
+quality of the
+implementation varies from system to system.  It also requires a bit of
+care to avoid letting Perl reallocate your strings from where
+<em class="emphasis">mmap</em>(2) put them.  But when programmers look into using <em class="emphasis">mmap</em>(2),
+they hear these incoherent mumbles from the resident wizards about how
+it suffers from dodgy cache coherency issues on systems without
+something called a "unified buffer cache"--or maybe it was a
+"flycatcher unibus"--and, figuring the devil they know is better than
+the one they don't, run quickly back to the SysV IPC they know and hate
+for all their shared memory needs.
+</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-11"></a>
+<p>[11]There's even an <tt class="literal">Mmap</tt> module on CPAN.</p>
+
+</blockquote>
+
+<p>
+<a name="INDEX-3055"></a><a name="INDEX-3056"></a>
+Here's a little program that demonstrates controlled access to a
+shared memory buffer by a brood of sibling processes.  SysV IPC
+objects can also be shared among <em class="emphasis">unrelated</em> processes on the same
+computer, but then you have to figure out how they're going
+to find each other.  To mediate safe access, we'll create a semaphore
+per piece.<a href="#FOOTNOTE-12">[12]</a><a name="INDEX-3057"></a><a name="INDEX-3058"></a>
+</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-12"></a>
+<p>[12]It would be more realistic to create a pair of semaphores
+for each bit of shared memory, one for reading and the other for
+writing, and in fact, that's what the <tt class="literal">IPC::Shareable</tt> module on CPAN does.
+But we're trying to keep things simple here.  It's worth admitting,
+though, that with a couple of semaphores, you could then make use
+of pretty much the only redeeming feature of SysV IPC: you could
+perform atomic operations on entire sets of semaphores as one unit,
+which is occasionally useful.</p>
+
+</blockquote>
+
+<p>Every time you want to get or put a new value into the shared memory,
+you have to go through the semaphore first.  This can get pretty
+tedious, so we'll wrap access in an object class.  <tt class="literal">IPC::Shareable</tt>
+goes one step further, wrapping its object class in a
+<tt class="literal">tie</tt> interface.</p>
+
+<p>This program runs until you interrupt it with a Control-C or equivalent:
+<blockquote>
+<pre class="programlisting">#!/usr/bin/perl -w
+use v5.6.0;   # or better
+use strict;
+use sigtrap qw(die INT TERM HUP QUIT);
+my $PROGENY = shift(@ARGV) || 3;
+eval { main() };   # see DESTROY below for why
+die if $@ &amp;&amp; $@ !~ /^Caught a SIG/;
+print "\nDone.\n";
+exit;
+
+sub main {
+    my $mem = ShMem-&gt;alloc("Original Creation at " . localtime);
+    my(@kids, $child);
+    $SIG{CHLD} = 'IGNORE';
+    for (my $unborn = $PROGENY; $unborn &gt; 0; $unborn--) {
+        if ($child = fork) {
+            print "$$ begat $child\n";
+            next;
+        }
+        die "cannot fork: $!" unless defined $child;
+        eval {
+            while (1) {
+                $mem-&gt;lock();
+                $mem-&gt;poke("$$ " . localtime) 
+                    unless $mem-&gt;peek =~ /^$$\b/o;
+                $mem-&gt;unlock();
+            }
+        };
+
+        die if $@ &amp;&amp; $@ !~ /^Caught a SIG/;
+        exit;  # child death
+
+    }
+    while (1) {
+        print "Buffer is ", $mem-&gt;get, "\n";
+        sleep 1;
+    }
+}</pre>
+</blockquote>
+<a name="INDEX-3059"></a>
+And here's the <tt class="literal">ShMem</tt> package,
+which that program uses.  You can just tack it on to the end of the
+program, or put it in its own file (with a "<tt class="literal">1;</tt>" at
+the end) and <tt class="literal">require</tt> it from the main program.
+(The two IPC modules it uses in turn are found in the standard Perl
+distribution.)
+<blockquote>
+<pre class="programlisting">package ShMem;
+use IPC::SysV qw(IPC_PRIVATE IPC_RMID IPC_CREAT S_IRWXU);
+use IPC::Semaphore;
+sub MAXBUF() { 2000 }
+
+sub alloc {    # constructor method
+    my $class = shift;
+    my $value = @_ ? shift : '';
+
+    my $key = shmget(IPC_PRIVATE, MAXBUF, S_IRWXU) or die "shmget: $!";
+    my $sem = IPC::Semaphore-&gt;new(IPC_PRIVATE, 1, S_IRWXU | IPC_CREAT)
+                         or die "IPC::Semaphore-&gt;new: $!";
+    $sem-&gt;setval(0,1)    or die "sem setval: $!";
+
+    my $self = bless {
+        OWNER   =&gt; $$,
+        SHMKEY  =&gt; $key,
+        SEMA    =&gt; $sem,
+    } =&gt; $class;
+
+    $self-&gt;put($value);
+    return $self;
+}</pre>
+</blockquote>
+Now for the fetch and store methods.  The <tt class="literal">get</tt> and
+<tt class="literal">put</tt> methods lock the buffer, but
+<tt class="literal">peek</tt> and <tt class="literal">poke</tt> don't, so the
+latter two should be used only while the object is manually
+locked--which you have to do when you want to retrieve an old value
+and store back a modified version, all under the same lock.  The demo
+program does this in its <tt class="literal">while (1)</tt> loop.  The
+entire transaction must occur under the same lock, or the testing and
+setting wouldn't be atomic and might bomb.
+<blockquote>
+<pre class="programlisting">sub get {
+    my $self = shift;
+    $self-&gt;lock;
+    my $value = $self-&gt;peek(@_);
+    $self-&gt;unlock;
+    return $value;
+}
+sub peek {
+    my $self = shift;
+    shmread($self-&gt;{SHMKEY}, my $buff='', 0, MAXBUF) or die "shmread: $!";
+    substr($buff, index($buff, "\0")) = '';
+    return $buff;
+}
+sub put {
+    my $self = shift;
+    $self-&gt;lock;
+    $self-&gt;poke(@_);
+    $self-&gt;unlock;
+}
+sub poke {
+    my($self,$msg) = @_;
+    shmwrite($self-&gt;{SHMKEY}, $msg, 0, MAXBUF) or die "shmwrite: $!";
+}
+sub lock {
+    my $self = shift;
+    $self-&gt;{SEMA}-&gt;op(0,-1,0) or die "semop: $!";
+}
+sub unlock {
+    my $self = shift;
+    $self-&gt;{SEMA}-&gt;op(0,1,0) or die "semop: $!";
+}</pre>
+</blockquote>
+<a name="INDEX-3060"></a>
+Finally, the class needs a destructor so that when the object goes
+away, we can manually deallocate the shared memory and the semaphore
+stored inside the object.  Otherwise, they'll outlive their creator,
+and you'll have to resort to <em class="emphasis">ipcs</em> and <em class="emphasis">ipcrm</em> (or a sysadmin) to
+get rid of them.  That's why we went through the elaborate wrappers in
+the main program to convert signals into exceptions:  it
+that all destructors get run, SysV IPC objects get deallocated, and
+sysadmins get off our case.
+<blockquote>
+<pre class="programlisting">sub DESTROY {
+    my $self = shift;
+    return unless $self-&gt;{OWNER} == $$;  # avoid dup dealloc
+    shmctl($self-&gt;{SHMKEY}, IPC_RMID, 0)    or warn "shmctl RMID: $!";
+    $self-&gt;{SEMA}-&gt;remove()                 or warn "sema-&gt;remove: $!";
+}</pre>
+</blockquote>
+</p>
+
+<a name="INDEX-3061"></a><a name="INDEX-3062"></a>
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch16_03.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch16_05.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">16.3. Pipes</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">16.5. Sockets</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

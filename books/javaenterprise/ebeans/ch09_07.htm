@@ -1,0 +1,743 @@
+<html>
+<head>
+<title>Entity Bean Relationships (Enterprise JavaBeans)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Richard Monson-Haefel">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-869-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Entity Bean Relationships">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm" alt="Enterprise JavaBeans"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch09_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch09_06.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch09_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch09_01.htm">Chapter 9: Design Strategies</a></td><td align="right" valign="top" width="172"><a href="ch09_08.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch09_08.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">9.7. Entity Bean Relationships</h2>
+
+<p>
+<a name="INDEX-1891"></a><a name="INDEX-1892"></a><a name="INDEX-1893"></a>Business systems frequently
+define relationships between entity beans. These relationships can be
+complex or simple. The concept of a cabin and its relationship to a
+ship embodies both simple and complex relationships. A cabin always
+belongs to a particular ship--a relationship that's
+obviously fairly simple. From the ship's perspective, the
+relationship is more complex: a ship has many cabins and must
+maintain a relationship to all of them.
+</p>
+
+<p>This section explores how to write entity beans that use
+container-managed persistence and maintain relationships with other
+beans. This information will be most useful to EJB 1.0 developers.
+EJB 1.0 does not allow references to other beans to be
+container-managed. This means that a bean needs to manage persistence
+for references to other beans within its own code.
+</p>
+
+<p>If you're using EJB 1.1, you can probably ignore this section,
+particularly if your server has robust support for the persistence of
+bean references. While EJB 1.1 allows bean references to be
+container-managed fields, a few EJB 1.1 servers may not be able to
+persist relationships between beans. This section will be useful to
+developers using these limited EJB 1.1 servers. EJB 1.1 developers
+using bean-managed persistence may also find the strategies in this
+section useful.
+</p>
+
+<p>However, since this is predominately a EJB 1.0 problem, the code in
+this section has been left in the EJB 1.0 style. EJB 1.1 developers
+must make minor changes to the code for it to work in EJB 1.1
+servers.
+</p>
+
+<a name="JBEANS-CH-9-SECT-7.1"></a>
+<h3 class="sect2">9.7.1. Simple Associations</h3>
+
+<p>
+<a name="INDEX-1894"></a><a name="INDEX-1895"></a><a name="INDEX-1896"></a>In Titan
+Cruises, the business concept of a cabin models the real-world cabins
+that are in all of Titan's ships. Regardless of the ship,
+cabins all have certain attributes that we want to capture in the
+Cabin business concept: cabin name, deck level, and so forth.
+Important to this discussion is the cabin's relationship to its
+ship. How do we model and implement this simple relationship?
+</p>
+
+<p>There are several alternatives, which can be grouped into two general
+categories: implementation-specific and non-implementation-specific.
+Both categories have their own strengths and weaknesses, which we
+will explore later in this section.
+</p>
+
+<p>Let's start by defining the Cabin bean's remote
+interface. We add methods that allow the cabin to set and get the
+<tt class="literal">Ship</tt> as a bean, rather than by its ID. The
+advantage of this approach is that it encapsulates the Ship
+bean's unique identifier and deals with business concepts as
+beans, not database-dependent IDs.
+</p>
+
+<blockquote>
+<pre class="programlisting">package com.titan.cabin;
+<b class="emphasis-bold">import com.titan.ship.Ship;</b>
+import java.rmi.RemoteException;
+
+public interface Cabin extends javax.ejb.EJBObject {
+<b class="emphasis-bold">    public Ship getShip() throws RemoteException;</b>
+<b class="emphasis-bold">    public void setShip(Ship ship) throws RemoteException;</b>
+    
+    public String getName() throws RemoteException;
+    public void setName(String str) throws RemoteException;
+    public int getDeckLevel() throws RemoteException;
+    public void setDeckLevel(int level) throws RemoteException;
+    public int getBedCount() throws RemoteException;
+    public void setBedCount(int bc) throws RemoteException; 
+}</pre>
+</blockquote>
+
+<a name="JBEANS-CH-9-SECT-7.1.1"></a>
+<h3 class="sect3">9.7.1.1. Maintaining the database mapping</h3>
+
+<p>
+<a name="INDEX-1897"></a><a name="INDEX-1898"></a>The simplest strategy for
+managing the cabin-to-ship relationship would be to support the
+relationship as defined in the database. In the relational database,
+the <tt class="literal">CABIN</tt> table includes a foreign key to the
+<tt class="literal">SHIP</tt> table's primary key, called
+<tt class="literal">SHIP_ID</tt>. In its current definition, we maintain
+the database mapping by preserving the <tt class="literal">SHIP_ID</tt> as
+an integer value. We can modify the behavior slightly by using the
+Ship bean in the get and set methods rather than the ID:
+</p>
+
+<blockquote>
+<pre class="programlisting">public class CabinBean implements javax.ejb.EntityBean {
+
+    public int id;
+    public String name;
+    public int deckLevel;
+    public int bedCount;
+<b class="emphasis-bold">    public int ship_id;</b>
+<b class="emphasis-bold">    public Ship ship;</b>
+
+    public javax.ejb.EntityContext ejbContext;
+    public transient javax.naming.Context jndiContext;
+
+    public Ship <tt class="userinput"><b>getShip</b></tt>() throws RemoteException {
+      try {
+        if (ship != null)
+            return ship;
+        else {
+            ShipHome home = (ShipHome)getHome("jndiName_ShipHome");
+            ship = home.findByPrimaryKey(new ShipPK(ship_id));
+            return ship;
+        }
+      } catch(javax.ejb.FinderException fe) {
+         throw new RemoteException("Invalid Ship",fe);
+      }
+    }
+    public void <tt class="userinput"><b>setShip</b></tt>(Ship ship) throws RemoteException {
+        ship_id = ((ShipPK)ship.getPrimaryKey()).id;
+        this.ship = ship;
+    }
+    protected Object getHome(String name) throws RemoteException {
+        try {
+            String jndiName = 
+                ejbContext.getEnvironment().getProperty(name);
+            return getJndiContext().lookup(jndiName);
+        } catch(javax.naming.NamingException ne) {
+            throw new RemoteException("Could not lookup ("+name+")",ne);
+        }
+    }
+    private javax.naming.Context getJndiContext() 
+        throws javax.naming.NamingException {
+        if (jndiContext != null)
+            return jndiContext;
+            
+        Properties p = new Properties();
+        
+        // ... Specify the JNDI properties specific to the vendor.
+
+        jndiContext = new InitialContext(p);
+        return jndiContext;
+    }
+    public void ejbActivate() {
+        ship = null;
+    }
+}</pre>
+</blockquote>
+
+<p>
+<a name="INDEX-1899"></a><a name="INDEX-1900"></a><a name="INDEX-1901"></a>From the client's standpoint, the
+Cabin bean now models its relationship to the Ship bean as a business
+concept and not as a database ID. The advantage of this approach is
+that we maintain the database mapping defined by the
+<tt class="literal">CABIN</tt> table while hiding the mapping from the
+client. The disadvantage is that the bean must frequently dereference
+the ship's primary key whenever a client invokes the
+<tt class="literal">getShip()</tt> method. If the entity bean has been
+deactivated since the ship's remote reference was last
+obtained, the reference will need to be reobtained.
+</p>
+
+<p>After you've deployed this new version of the Cabin bean, you
+can use a client application to see if your code works. You can use
+code like this in your client:
+</p>
+
+<blockquote>
+<pre class="programlisting">Context ctx = getInitialContext();
+CabinHome cabinHome = (CabinHome)ctx.lookup("CabinHome");
+CabinPK pk = new CabinPK();
+pk.id = 1;
+Cabin cab = cabinHome.findByPrimaryKey(pk);
+System.out.println(cab.getName());
+Ship ship = cab.getShip();
+System.out.println(ship.getName());</pre>
+</blockquote>
+
+
+
+<a name="JBEANS-CH-9-SECT-7.1.2"></a>
+<h3 class="sect3">9.7.1.2. Mapping serializable to VARBINARY</h3>
+
+<p>
+<a name="INDEX-1902"></a>With the Cabin bean, the use of
+the database mappings is the most straightforward approach to
+preserving the Cabin bean's relationship to the Ship bean. With
+other relationships, a relational database foreign key may not
+already exist. In this case, we need to preserve the relationship in
+the form of primary keys or handles.
+</p>
+
+<p>Both primary keys and handles are serializable, so they can be
+preserved in a relational database as
+the<a name="INDEX-1903"></a><a name="INDEX-1904"></a><a name="INDEX-1905"></a><a name="INDEX-1906"></a>
+JDBC type <tt class="literal">VARBINARY</tt>. The data type in the actual
+database will vary; some databases use BLOB while others use a
+different data type to indicate variable-length binary data. These
+data types are typically used for storing arbitrary binary data-like
+images. If you are using an existing database and need to preserve a
+nonrelational association between entities, you must update the table
+structure to include a <tt class="literal">VARBINARY</tt> type column.
+</p>
+
+<p>Whether we use the primary key or the handle, we need to obtain it
+from the Ship bean and preserve it in the database. To do this, we
+use Java serialization to convert the primary key or handle into a
+byte array, which we can then save in the database as binary data. We
+can convert this data back into a usable key or handle as needed. One
+way to do this is to define a couple of simple methods that can take
+any <tt class="literal">Serializable</tt> object and make it into a byte
+array and convert it back. These methods are defined as follows:
+</p>
+
+<blockquote>
+<pre class="programlisting">public byte [] serialize(Object obj) throws IOException {
+   ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+   ObjectOutputStream oos = new ObjectOutputStream(byteStream);
+   oos.writeObject(obj);
+   return byteStream.toByteArray();
+}
+public Object deserialize(byte [] byteArray) 
+   throws IOException,ClassNotFoundException {
+   ByteArrayInputStream byteStream = new ByteArrayInputStream(byteArray);
+   ObjectInputStream oos = new ObjectInputStream(byteStream);
+   return oos.readObject();
+}</pre>
+</blockquote>
+
+
+
+<a name="JBEANS-CH-9-SECT-7.1.3"></a>
+<h3 class="sect3">9.7.1.3. Preserving the primary key</h3>
+
+<p>
+<a name="INDEX-1907"></a><a name="INDEX-1908"></a>If you can't preserve a foreign
+database ID, you can preserve the primary key directly. We can use
+the <tt class="literal">serialize()</tt> method defined earlier in
+<tt class="literal">setShip(Ship</tt><tt class="literal">ship)</tt> to preserve
+the primary key of the Ship bean in the database:
+</p>
+
+<blockquote>
+<pre class="programlisting">public class CabinBean implements javax.ejb.EntityBean {
+
+    public int id;
+    public String name;
+    public int deckLevel;
+<b class="emphasis-bold">    public byte [] shipBinary;</b>
+    public int bedCount;
+    public Ship ship;
+
+    public javax.ejb.EntityContext ejbContext;
+    public transient javax.naming.Context jndiContext;
+
+    public Ship getShip() throws RemoteException {
+      try {
+        if (ship != null)
+            return ship;
+        else {
+            ShipHome home = (ShipHome)getHome("jndiName_ShipHome");
+<b class="emphasis-bold">            ShipPK pk = (ShipPK)deserialize(shipBinary);</b>
+            ship = home.findByPrimaryKey(pk);
+                return ship;
+        }
+      } catch(Exception e) {
+          throw new RemoteException("Invalid Ship",e);
+      }
+    }
+    public void setShip(Ship ship) throws RemoteException {
+        try {
+        Object pk = ship.getPrimaryKey();
+<b class="emphasis-bold">            shipBinary = serialize(pk);</b>
+            this.ship = ship;
+        } catch(Exception e) {
+             throw new RemoteException("Ship not set",e);
+        }
+    }</pre>
+</blockquote>
+
+<p>We have replaced the <tt class="literal">ship_id</tt> field with
+<tt class="literal">shipBinary</tt>. Remember, we are now looking at
+situations where the relationship between entities cannot be modeled
+in a relational database. When the <tt class="literal">CabinBean</tt> class
+is persisted to the database, the <tt class="literal">shipBinary</tt> field
+is written to the database with the primary key's serialized
+value. If the bean uses container-managed persistence, the
+<tt class="literal">shipBinary</tt> field will need to be mapped to the
+BLOB or binary column of the table. If the bean uses bean-managed
+persistence, the JDBC API will simply return a binary data type from
+the appropriate column.
+</p>
+
+
+
+<a name="JBEANS-CH-9-SECT-7.1.4"></a>
+<h3 class="sect3">9.7.1.4. Preserving the handle</h3>
+
+<p>
+<a name="INDEX-1909"></a><a name="INDEX-1910"></a>
+Using the handle to preserve simple relationships is almost exactly
+the same as using the primary key. To preserve the handle, we can use
+the same <tt class="literal">shipBinary</tt> field that we used to save the
+primary key strategy; we only need to make a couple of simple changes
+to the <tt class="literal">setShip()</tt> and <tt class="literal">getShip()</tt>
+methods:
+</p>
+
+<blockquote>
+<pre class="programlisting">public Ship getShip() throws RemoteException {
+    try {
+      if (ship != null)
+          return ship;
+      else {
+<b class="emphasis-bold">          Handle handle = (Handle)deserialize(shipBinary);</b>
+<b class="emphasis-bold">          ship = (Ship)handle.getEJBObject();</b>
+          return ship;
+      }
+    } catch (Exception e) {
+       throw new RemoteException("Invalid Ship",e);
+    }
+}
+public void setShip(Ship ship) throws RemoteException {
+    try {
+<b class="emphasis-bold">        Object handle = ship.getHandle();</b>
+<b class="emphasis-bold">        shipBinary = serialize(handle);</b>
+        this.ship = ship;
+    } catch (Exception e) {
+        throw new RemoteException("Ship not set",e);
+    }
+}</pre>
+</blockquote>
+
+<p>In many cases, serializing the handle is simpler then using the
+primary key. This version of the <tt class="literal">getShip()</tt> method
+is much simpler: you don't need to reconstruct the primary key,
+and the <tt class="literal">getInitialContext()</tt> method is no longer
+needed. However, the use of handles over primary keys should be done
+with care. Handles are simpler, but also more volatile. A change in
+the container, naming, networking, or security can cause the handle
+to become invalid.
+</p>
+
+<p>This strategy is especially useful when the primary key is more
+complex than our simple <tt class="literal">ShipPK</tt>. If the primary key
+is made up of several fields, for example, using a binary format
+provides more benefits.
+</p>
+
+
+
+<a name="JBEANS-CH-9-SECT-7.1.5"></a>
+<h3 class="sect3">9.7.1.5. Native Java persistence</h3>
+
+<p>
+<a name="INDEX-1911"></a><a name="INDEX-1912"></a>Some database products support
+native persistence of Java objects. These might be object databases
+or even relational databases that can store Java objects. Entity
+beans that use native persistence are the simplest to develop because
+there is no need to convert fields to byte streams so they can be
+stored in the database. In the following listing, the
+<tt class="literal">CabinBean</tt> class has been changed so that it uses
+native Java persistence with the Ship bean's primary key:
+<a name="INDEX-1913"></a><a name="INDEX-1914"></a><a name="INDEX-1915"></a>
+</p>
+
+<blockquote>
+<pre class="programlisting">public class CabinBean implements javax.ejb.EntityBean {
+
+    public int id;
+    public String name;
+    public int deckLevel;
+<b class="emphasis-bold">    public ShipPK shipPK;</b>
+    public int bedCount;
+    public Ship ship;
+
+    public javax.ejb.EntityContext ejbContext;
+    public transient javax.naming.Context jndiContext;
+
+    public Ship getShip() throws RemoteException {
+      try {
+        if (ship != null)
+            return ship;
+        else {
+            ShipHome home = (ShipHome)getHome("jndiName_ShipHome");
+<b class="emphasis-bold">            ship = home.findByPrimaryKey(shipPK);</b>
+            return ship;
+        }
+      } catch(Exception e) {
+         throw new RemoteException("Invalid Ship",e);
+      }
+    }
+    public void setShip(Ship ship) throws RemoteException {
+        try {
+<b class="emphasis-bold">            shipPK = (ShipPK)ship.getPrimaryKey();</b>
+            this.ship = ship;
+        } catch(Exception e) {
+             throw new RemoteException("Ship not set",e);
+        }
+... 
+}</pre>
+</blockquote>
+
+
+
+<a name="JBEANS-CH-9-SECT-7.2"></a>
+<h3 class="sect2">9.7.2. Complex Entity Relationships</h3>
+
+<p>
+<a name="INDEX-1916"></a>
+Situations<a name="INDEX-1917"></a>in which
+an entity has a relationship to several other entities of a
+particular type are as common as simple relationships. An example of
+a complex relationship is a ship. In the real world, a ship may
+contain thousands of cabins. To develop a Ship bean that models the
+relationship between a real-world ship and its cabins, we can use the
+same strategies that we discussed earlier. The most important
+difference is that we're now discussing one-to-many
+associations rather than one-to-one. Before we get started,
+let's add a couple of new methods to the Ship bean's
+remote interface:
+</p>
+
+<blockquote>
+<pre class="programlisting">package com.titan.ship;
+
+import com.titan.cabin.Cabin;
+import javax.ejb.EJBObject;
+import java.rmi.RemoteException;
+
+public interface Ship extends javax.ejb.EJBObject {
+<b class="emphasis-bold">    public Cabin [] getCabins() throws RemoteException;</b>
+<b class="emphasis-bold">    public void addCabin(Cabin cabin) throws RemoteException;</b>
+    public String getName() throws RemoteException;
+    public void setName(String name) throws RemoteException;
+    public void setCapacity(int cap) throws RemoteException;
+    public int getCapacity() throws RemoteException;
+    public double getTonnage() throws RemoteException;
+    public void setTonnage(double tonnage) throws RemoteException;
+}</pre>
+</blockquote>
+
+<p>The Ship bean's remote interface indicates that it is
+associated with many Cabin beans, which makes perfectly good sense as
+a business concept. The application developer using the
+<tt class="literal">Ship</tt> remote interface is not concerned with how
+the Cabin beans are stored in the Ship bean. Application developers
+are only concerned with using the two new methods, which allow them
+to obtain a list of cabins assigned to a specific ship and to add new
+cabins to the ship when appropriate.
+</p>
+
+<a name="JBEANS-CH-9-SECT-7.2.1"></a>
+<h3 class="sect3">9.7.2.1. One-to-many database mapping</h3>
+
+<p>
+<a name="INDEX-1918"></a>The database structure provides a good
+relational model for mapping multiple cabins to a single ship. In the
+relational database, the <tt class="literal">CABIN</tt> table contains a
+foreign key called <tt class="literal">ship_id</tt>, which we used
+previously to manage the cabin's relationship to the ship.
+</p>
+
+<p>As a foreign key, the <tt class="literal">ship_id</tt> provides us with a
+simple relational mapping from a ship to many cabins using an SQL
+join:
+</p>
+
+<blockquote>
+<pre class="programlisting">"select ID from CABIN  where SHIP_ID = "+ship_id</pre>
+</blockquote>
+
+<p>Nothing complicated about that. Unfortunately, this relationship
+cannot be done conveniently with container-managed persistence,
+because we would need to map a collection to the join, which is not
+as straightforward as mapping a single entity field to a database
+field. More advanced object-to-relational mapping software will
+simplify this task, but these advanced tools are not always available
+and have their own limitations. If your EJB server doesn't
+support object-to-relational mapping, you will need an alternative
+solution. One alternative is to use bean-managed persistence to
+leverage the database mapping. If, however, your EJB server supports
+JavaBlend&#153; or some other object-to-relational technology, you
+may still be able to use container-managed persistence with a
+one-to-many database mapping.
+</p>
+
+<p>If you examine the <tt class="literal">SHIP</tt> table definition, there is
+no column for storing a list of cabins, so we will not store this
+relationship directly in the <tt class="literal">SHIP</tt> table. Instead,
+we use a <a name="INDEX-1919"></a><a name="INDEX-1920"></a><tt class="literal">Vector</tt> called <tt class="literal">cabins</tt> to store
+this relationship temporarily. Every time the bean's
+<tt class="literal">ejbLoad()</tt> method is called, it populates the
+vector with cabin IDs, as it does all the other fields. Here are the
+<tt class="literal">getCabins()</tt> and <tt class="literal">ejbLoad()</tt>
+methods of the <tt class="literal">ShipBean</tt> class, with the changes
+for managing the vector of cabin IDs in bold:
+</p>
+
+<blockquote>
+<pre class="programlisting">public class ShipBean implements ShipBusiness, javax.ejb.EntityBean {
+    public int id;
+    public String name;
+    public int capacity;
+    public double tonnage;
+<b class="emphasis-bold">    public Vector cabins;</b>
+
+    private EntityContext ejbContext;
+    private transient Context jndiContext;
+
+<b class="emphasis-bold">    public Cabin [] getCabins() throws RemoteException {</b>
+<b class="emphasis-bold">        try {</b>
+<b class="emphasis-bold">            Cabin [] cabinArray = new Cabin[cabins.size()];</b>
+<b class="emphasis-bold">            CabinHome home = (CabinHome)getHome("jndiName_CabinHome");</b>
+<b class="emphasis-bold">            for (int i = 0; i &lt; cabinArray.length; i++) {</b>
+<b class="emphasis-bold">                CabinPK pk = (CabinPK)cabins.elementAt(i);</b>
+<b class="emphasis-bold">                cabinArray[i] = home.findByPrimaryKey(pk);</b>
+<b class="emphasis-bold">            }</b>
+<b class="emphasis-bold">            return cabinArray;</b>
+<b class="emphasis-bold">        } catch(Exception e) {</b>
+<b class="emphasis-bold">            throw new RemoteException("Cannot get cabins",e);</b>
+<b class="emphasis-bold">        }</b>
+<b class="emphasis-bold">    }</b>
+    public void ejbLoad() throws RemoteException {
+        try {
+            ShipPK pk = (ShipPK) ejbContext.getPrimaryKey();
+<b class="emphasis-bold">            loadUsingId(pk.id);</b>
+        } catch(FinderException fe) {
+            throw new RemoteException();
+        }
+    }
+    private void <tt class="userinput"><b>loadUsingId</b></tt>(int id)
+            throws RemoteException, FinderException {
+        Connection con = null;
+        PreparedStatement ps = null;
+        ResultSet result = null;
+        try {
+          con = getConnection();
+          ps = con.prepareStatement(
+            "select name, capacity, tonnage from Ship where id = ?");
+          ps.setInt(1,id);
+          result = ps.executeQuery();
+          if (result.next()) {
+            this.id = id;
+            this.name = result.getString("name");
+            this.capacity = result.getInt("capacity");
+            this.tonnage = result.getDouble("tonnage");
+          } else {
+            throw new FinderException("Cannot find Ship with id = "+id);
+          }
+          result.close();
+<b class="emphasis-bold">          ps = con.prepareStatement(</b>
+<b class="emphasis-bold">              "select ID from CABIN where SHIP_ID = ?");</b>
+<b class="emphasis-bold">          ps.setInt(1,id);</b>
+<b class="emphasis-bold">          result = ps.getResultSet();</b>
+<b class="emphasis-bold">          cabins = new Vector();</b>
+<b class="emphasis-bold">          while(result.next()) {</b>
+<b class="emphasis-bold">              CabinPK pk = new CabinPK(result.getInt(1));</b>
+<b class="emphasis-bold">              cabins.addElement(pk);</b>
+<b class="emphasis-bold">          }</b>
+        }
+        catch (SQLException se) {
+          throw new RemoteException (se.getMessage());
+        }
+        finally {
+          try {
+            if (result != null) result.close();
+            if (ps != null) ps.close();
+            if (con!= null) con.close();
+          } catch(SQLException se) {
+            se.printStackTrace();
+          }
+        }
+    }
+...
+}</pre>
+</blockquote>
+
+
+
+<a name="JBEANS-CH-9-SECT-7.2.2"></a>
+<h3 class="sect3">9.7.2.2. Mapping serializable to VARBINARY</h3>
+
+<p>
+<a name="INDEX-1921"></a><a name="INDEX-1922"></a>Using byte arrays and Java
+serialization works with complex relationships just as well as it did
+with simple relationships. In this case, however, we are serializing
+some kind of collection instead of a single reference. If, for
+example, the Ship bean were container-managed, the
+<tt class="literal">ejbLoad()</tt> and <tt class="literal">ejbStore()</tt>
+methods could be used to convert our <tt class="literal">cabins</tt> vector
+between its representation as a <tt class="literal">Vector</tt> and a byte
+array. The following code illustrates how this could work with
+container-managed persistence; it applies equally well to Cabin
+primary keys or Cabin bean <tt class="literal">Handle</tt> objects:
+</p>
+
+<blockquote>
+<pre class="programlisting">public class ShipBean implements ShipBusiness, javax.ejb.EntityBean {
+    public int id;
+    public String name;
+    public int capacity;
+    public double tonnage;
+<b class="emphasis-bold">    public Vector cabins;</b>
+<b class="emphasis-bold">    public byte [] cabinBinary;</b>
+
+    public void <tt class="userinput"><b>ejbLoad</b></tt>() throws RemoteException {
+        try {
+          if (cabinBinary != null)
+<b class="emphasis-bold">            cabins = (java.util.Vector)deserialize(cabinBinary);</b>
+        } catch(Exception e) {
+            throw new RemoteException("Invalid Cabin aggregation ",e);
+        }
+    }
+    public void <tt class="userinput"><b>ejbStore</b></tt>() throws RemoteException {
+        try {
+          if (cabins != null)
+<b class="emphasis-bold">               cabinBinary = serialize(cabins);</b>
+        } catch(Exception e) {
+            throw new RemoteException("Invalid Cabin aggregation",e);
+        }
+    }
+    public byte [] <tt class="userinput"><b>serialize</b></tt>(Object obj) throws IOException {
+        ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(byteStream);
+        oos.writeObject(obj);
+        return byteStream.toByteArray();
+    }
+    public Object <tt class="userinput"><b>deserialize</b></tt>(byte [] byteArray)
+           throws IOException,ClassNotFoundException {
+        ByteArrayInputStream byteStream = 
+            new ByteArrayInputStream(byteArray);
+        ObjectInputStream oos = new ObjectInputStream(byteStream);
+        return oos.readObject();
+    }
+...
+}</pre>
+</blockquote>
+
+
+
+<a name="JBEANS-CH-9-SECT-7.2.3"></a>
+<h3 class="sect3">9.7.2.3. Native Java persistence</h3>
+
+<p>
+<a name="INDEX-1923"></a><a name="INDEX-1924"></a>As with the simple relationships,
+preserving complex relationships is the easiest with native Java
+persistence. The <tt class="literal">ShipBean</tt> definition is much
+simpler because the <tt class="literal">cabins</tt> vector can be stored
+directly, without converting it to a binary format. Using this
+strategy, we can opt to preserve the <tt class="literal">CabinPK</tt> types
+or Cabin bean <a name="INDEX-1925"></a>handles
+for the <a name="INDEX-1926"></a>aggregated <a name="INDEX-1927"></a>Cabin <a name="INDEX-1928"></a><a name="INDEX-1929"></a><a name="INDEX-1930"></a> beans.
+</p>
+
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch09_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch09_06.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch09_08.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch09_08.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">9.6. Entity Beans Without Create Methods</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">9.8. Object-to-Relational Mapping Tools</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

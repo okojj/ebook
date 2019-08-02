@@ -1,0 +1,255 @@
+<html><head>
+<title>Recipe 17.18. Program: fwdport</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:47Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch17_01.htm" title="17. Sockets"><link rel="prev" href="ch17_18.htm" title="17.17. Program: backsniff"><link rel="next" href="ch18_01.htm" title="18. Internet Services"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_18.htm" title="17.17. Program: backsniff"><img src="../gifs/txtpreva.gif" alt="Previous: 17.17. Program: backsniff" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch17_01.htm" title="17. Sockets">Chapter 17<br>Sockets</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="chapter" href="ch18_01.htm" title="18. Internet Services"><img src="../gifs/txtnexta.gif" alt="Next: 18. Internet Services" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch17-chap17_program_1">17.18. Program: fwdport</A
+></H2
+><p class="para"><a class="indexterm" name="ch17-idx-1000004889-0"></A
+><a class="indexterm" name="ch17-idx-1000004889-1"></A
+><a class="indexterm" name="ch17-idx-1000004889-2"></A
+><a class="indexterm" name="ch17-idx-1000004889-3"></A
+>Imagine that you're nestled deep inside a protective firewall. Somewhere in the outside world is a server that you'd like access to, but only processes on the firewall can reach it. You don't want to login to the firewall machine each time to access that service.</P
+><p class="para">For example, this might arise if your company's ISP provides a news-reading service that seems to come from your main firewall machine, but rejects any NNTP connections from any other address. As the administrator of the firewall, you don't want dozens of people logging on to it, but you would like to let them read and post news from their own workstations.</P
+><p class="para">The program in <a class="xref" href="#ch17-30078" title="fwdport">Example 17.8</A
+>, <em class="emphasis">fwdport</EM
+>, solves this problem in a generic fashion. You may run as many of these as you like, one per outside service. Sitting on the firewall, it can talk to both worlds. When someone wants to access the outside service, they contact this proxy, which connects on their behalf to the external service. To that outside service, the connection is coming from your firewall, so it lets it in. Then your proxy forks off twin processes, one only reading data from the external server and writing that data back to the internal client, the other only reading data from the internal client and writing that data back to the external server.</P
+><p class="para">For example, you might invoke it this way:</P
+><pre class="programlisting">% fwdport -s nntp -l fw.oursite.com -r news.bigorg.com</PRE
+><p class="para">That means that the program will act as the server for the NNTP service, listening for local connections on the NNTP port on the host <i class="systemitem.example">fw.oursite.com</I
+>. When one comes in, it contacts <i class="systemitem.example">news.bigorg.com</I
+> (on the same port), and then ferries data between the remote server and local client.</P
+><p class="para">Here's another example:</P
+><pre class="programlisting">% fwdport -l myname:9191 -r news.bigorg.com:nntp</PRE
+><p class="para">This time we listen for local connections on port 9191 of the host <em class="emphasis">myname</EM
+>, and patch those connecting clients to the remote server <i class="systemitem.example">news.bigorg.com</I
+> on its NNTP port.</P
+><p class="para">In a way, <em class="emphasis">fwdport</EM
+> acts as both a server and a client. It's a server from the perspective of inside the firewall and a client from the perspective of the remote server outside. The program summarizes this chapter well because it demonstrates just about everything we've covered here. It has server activity, client activity, collecting of zombie children, forking and process management, plus much more thrown in.</P
+><div class="example"><h4 class="example"><a class="title" name="ch17-30078">Example 17.8: fwdport</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# fwdport -- act as proxy forwarder for dedicated services
+
+use strict;                 # require declarations
+use Getopt::Long;           # for option processing
+use Net::hostent;           # by-name interface for host info
+use IO::Socket;             # for creating server and client sockets
+use POSIX &quot;:sys_wait_h&quot;;    # for reaping our dead children
+
+my (
+    %Children,              # hash of outstanding child processes
+    $REMOTE,                # whom we connect to on the outside
+    $LOCAL,                 # where we listen to on the inside
+    $SERVICE,               # our service name or port number
+    $proxy_server,          # the socket we accept() from
+    $ME,                    # basename of this program
+);
+
+($ME = $0) =~ s,.*/,,;      # retain just basename of script name
+
+check_args();               # processing switches
+start_proxy();              # launch our own server
+service_clients();          # wait for incoming
+die &quot;NOT REACHED&quot;;          # you can't get here from there
+
+# process command line switches using the extended
+# version of the getopts library.
+sub check_args { 
+    GetOptions(
+        &quot;remote=s&quot;    =&gt; \$REMOTE,
+        &quot;local=s&quot;     =&gt; \$LOCAL,
+        &quot;service=s&quot;   =&gt; \$SERVICE,
+    ) or die &lt;&lt;EOUSAGE;
+    usage: $0 [ --remote host ] [ --local interface ] [ --service service ]   
+EOUSAGE
+    die &quot;Need remote&quot;                   unless $REMOTE;
+    die &quot;Need local or service&quot;         unless $LOCAL || $SERVICE;
+}
+
+# begin our server 
+sub start_proxy {
+    my @proxy_server_config = (
+      Proto     =&gt; 'tcp',
+      Reuse     =&gt; 1,
+      Listen    =&gt; SOMAXCONN,
+    );
+    push @proxy_server_config, LocalPort =&gt; $SERVICE if $SERVICE;
+    push @proxy_server_config, LocalAddr =&gt; $LOCAL   if $LOCAL;
+    $proxy_server = IO::Socket::INET-&gt;new(@proxy_server_config)
+                    or die &quot;can't create proxy server: $@&quot;;
+    print &quot;[Proxy server on &quot;, ($LOCAL || $SERVICE), &quot; initialized.]\n&quot;;
+}
+
+
+sub service_clients { 
+    my (
+        $local_client,              # someone internal wanting out
+        $lc_info,                   # local client's name/port information
+        $remote_server,             # the socket for escaping out
+        @rs_config,                 # temp array for remote socket options
+        $rs_info,                   # remote server's name/port information
+        $kidpid,                    # spawned child for each connection
+    );
+
+    $SIG{CHLD} = \&amp;REAPER;          # harvest the moribund
+
+    accepting();
+
+    # an accepted connection here means someone inside wants out
+    while ($local_client = $proxy_server-&gt;accept()) {
+        $lc_info = peerinfo($local_client);
+        set_state(&quot;servicing local $lc_info&quot;);
+        printf &quot;[Connect from $lc_info]\n&quot;;
+
+        @rs_config = (
+            Proto     =&gt; 'tcp',
+            PeerAddr  =&gt; $REMOTE,
+        );
+        push(@rs_config, PeerPort =&gt; $SERVICE) if $SERVICE;
+
+        print &quot;[Connecting to $REMOTE...&quot;;
+        set_state(&quot;connecting to $REMOTE&quot;);                 # see below
+        $remote_server = IO::Socket::INET-&gt;new(@rs_config)
+                         or die &quot;remote server: $@&quot;;
+        print &quot;done]\n&quot;;
+
+        $rs_info = peerinfo($remote_server);
+        set_state(&quot;connected to $rs_info&quot;);
+
+        $kidpid = fork();
+        die &quot;Cannot fork&quot; unless defined $kidpid;
+        if ($kidpid) {
+            $Children{$kidpid} = time();            # remember his start time
+            close $remote_server;                   # no use to master
+            close $local_client;                    # likewise
+            next;                                   # go get another client
+        } 
+
+        # at this point, we are the forked child process dedicated
+        # to the incoming client.  but we want a twin to make i/o
+        # easier.
+
+        close $proxy_server;                        # no use to slave
+
+        $kidpid = fork(); 
+        die &quot;Cannot fork&quot; unless defined $kidpid;
+
+        # now each twin sits around and ferries lines of data.
+        # see how simple the algorithm is when you can have
+        # multiple threads of control?
+
+        # this is the fork's parent, the master's child
+        if ($kidpid) {              
+            set_state(&quot;$rs_info --&gt; $lc_info&quot;);
+            select($local_client); $| = 1;
+            print while &lt;$remote_server&gt;;
+            kill('TERM', $kidpid);      # kill my twin cause we're done
+            } 
+        # this is the fork's child, the master's grandchild
+        else {                      
+            set_state(&quot;$rs_info &lt;-- $lc_info&quot;);
+            select($remote_server); $| = 1;
+            print while &lt;$local_client&gt;;
+            kill('TERM', getppid());    # kill my twin cause we're done
+        } 
+        exit;                           # whoever's still alive bites it
+    } continue {
+        accepting();
+    } 
+}
+
+# helper function to produce a nice string in the form HOST:PORT
+sub peerinfo {
+    my $sock = shift;
+    my $hostinfo = gethostbyaddr($sock-&gt;peeraddr);
+    return sprintf(&quot;%s:%s&quot;, 
+                    $hostinfo-&gt;name || $sock-&gt;peerhost, 
+                    $sock-&gt;peerport);
+} 
+
+# reset our $0, which on some systems make &quot;ps&quot; report
+# something interesting: the string we set $0 to!
+sub set_state { $0 = &quot;$ME [@_]&quot; } 
+
+# helper function to call set_state
+sub accepting {
+    set_state(&quot;accepting proxy for &quot; . ($REMOTE || $SERVICE));
+}
+
+# somebody just died.  keep harvesting the dead until 
+# we run out of them.  check how long they ran.
+sub REAPER { 
+    my $child;
+    my $start;
+    while (($child = waitpid(-1,WNOHANG)) &gt; 0) {
+        if ($start = $Children{$child}) {
+            my $runtime = time() - $start;
+            printf &quot;Child $child ran %dm%ss\n&quot;, 
+                $runtime / 60, $runtime % 60;
+            delete $Children{$child};
+        } else {
+            print &quot;Bizarre kid $child exited $?\n&quot;;
+        } 
+    }
+    # If I had to choose between System V and 4.2, I'd resign. --Peter Honeyman
+    $SIG{CHLD} = \&amp;REAPER; 
+};<a class="indexterm" name="ch17-idx-1000004897-0"></A
+><a class="indexterm" name="ch17-idx-1000004897-1"></A
+><a class="indexterm" name="ch17-idx-1000004897-2"></A
+><a class="indexterm" name="ch17-idx-1000004897-3"></A
+></PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-2514">See Also</A
+></H3
+><p class="para"><em class="emphasis">Getopt::</EM
+><i class="filename">Long </I
+>(3), <em class="emphasis">Net::</EM
+><i class="filename">hostent </I
+>(3), <em class="emphasis">IO::</EM
+><i class="filename">Socket </I
+>(3), <i class="filename">POSIX </I
+>(3), <a class="xref" href="ch16_20.htm" title="Avoiding Zombie Processes">Recipe 16.19</A
+>, <a class="xref" href="ch17_11.htm" title="Writing Bidirectional Clients">Recipe 17.10</A
+> <a class="indexterm" name="ch17-idx-1000004655-0"></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_18.htm" title="17.17. Program: backsniff"><img src="../gifs/txtpreva.gif" alt="Previous: 17.17. Program: backsniff" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="chapter" href="ch18_01.htm" title="18. Internet Services"><img src="../gifs/txtnexta.gif" alt="Next: 18. Internet Services" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">17.17. Program: backsniff</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">18. Internet Services</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

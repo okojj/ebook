@@ -1,0 +1,130 @@
+<html><head>
+<title>Recipe 7.20. Copying Filehandles</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:37:36Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch07_01.htm" title="7. File Access"><link rel="prev" href="ch07_20.htm" title="7.19. Opening and Closing File Descriptors by Number"><link rel="next" href="ch07_22.htm" title="7.21. Program: netlock"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_20.htm" title="7.19. Opening and Closing File Descriptors by Number"><img src="../gifs/txtpreva.gif" alt="Previous: 7.19. Opening and Closing File Descriptors by Number" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch07_01.htm" title="7. File Access">Chapter 7<br>File Access</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch07_22.htm" title="7.21. Program: netlock"><img src="../gifs/txtnexta.gif" alt="Next: 7.21. Program: netlock" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch07-chap07_copying_0">7.20. Copying Filehandles</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-1928">Problem<a class="indexterm" name="ch07-idx-1000009796-0"></A
+><a class="indexterm" name="ch07-idx-1000009796-1"></A
+><a class="indexterm" name="ch07-idx-1000009796-2"></A
+><a class="indexterm" name="ch07-idx-1000009796-3"></A
+></A
+></H3
+><p class="para">You want to make a copy of a filehandle.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-1934">Solution</A
+></H3
+><p class="para">To create an alias for a filehandle, say:</P
+><pre class="programlisting">*ALIAS = *ORIGINAL;</PRE
+><p class="para">Use <code class="literal">open</CODE
+> with the <code class="literal">&amp;</CODE
+> mode to create an independent copy of the file descriptor for the filehandle:</P
+><pre class="programlisting">open(OUTCOPY, &quot;&gt;&amp;STDOUT&quot;)   or die &quot;Couldn't dup STDOUT: $!&quot;;
+open(INCOPY,  &quot;&lt;&amp;STDIN&quot; )   or die &quot;Couldn't dup STDIN : $!&quot;;</PRE
+><p class="para">Use <code class="literal">open</CODE
+> with the <code class="literal">&amp;=</CODE
+> mode to create an alias for that filehandle's file descriptor:</P
+><pre class="programlisting">open(OUTALIAS, &quot;&gt;&amp;=STDOUT&quot;) or die &quot;Couldn't alias STDOUT: $!&quot;;
+open(INALIAS,  &quot;&lt;&amp;=STDIN&quot;)  or die &quot;Couldn't alias STDIN : $!&quot;;
+open(BYNUMBER, &quot;&gt;&amp;=5&quot;)      or die &quot;Couldn't alias file descriptor 5: $!&quot;;</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-1956">Discussion</A
+></H3
+><p class="para">If you create an alias for a filehandle with <a class="indexterm" name="ch07-idx-1000012077-0"></A
+>typeglobs, only one Perl I/O object is still being accessed. If you close one of these aliased filehandles, the I/O object is closed. Any subsequent attempt to use a copy of that filehandle will give you an error like <code class="literal">&quot;print</CODE
+> <code class="literal">on</CODE
+> <code class="literal">closed</CODE
+> <code class="literal">filehandle&quot;</CODE
+>. When alternating access through the aliased filehandles, writes work as you'd expect because there's no duplicated stdio data structure to get out of sync.</P
+><p class="para">If you create a copy of a file descriptor with <code class="literal">open(COPY,</CODE
+> <code class="literal">&quot;&gt;&amp;HANDLE&quot;)</CODE
+>, you're really calling the <i class="filename">dup</I
+><em class="emphasis"> </EM
+>(2) system call. You get two independent file descriptors whose file position, locks, and flags are shared, but which have independent stdio buffers. Closing one filehandle doesn't affect its copy. Simultaneously accessing the file through both filehandles is a recipe for disaster. Instead, this technique is normally used to save and restore STDOUT and STDERR:</P
+><pre class="programlisting"># take copies of the file descriptors
+open(OLDOUT, &quot;&gt;&amp;STDOUT&quot;);
+open(OLDERR, &quot;&gt;&amp;STDERR&quot;);
+
+# redirect stdout and stderr
+open(STDOUT, &quot;&gt; /tmp/program.out&quot;)  or die &quot;Can't redirect stdout: $!&quot;;
+open(STDERR, &quot;&gt;&amp;STDOUT&quot;)            or die &quot;Can't dup stdout: $!&quot;;
+
+# run the program
+system($joe_random_program);
+
+# close the redirected filehandles
+close(STDOUT)                       or die &quot;Can't close STDOUT: $!&quot;;
+close(STDERR)                       or die &quot;Can't close STDERR: $!&quot;;
+
+# restore stdout and stderr
+open(STDERR, &quot;&gt;&amp;OLDERR&quot;)            or die &quot;Can't restore stderr: $!&quot;;
+open(STDOUT, &quot;&gt;&amp;OLDOUT&quot;)            or die &quot;Can't restore stdout: $!&quot;;
+
+# avoid leaks by closing the independent copies
+close(OLDOUT)                       or die &quot;Can't close OLDOUT: $!&quot;;
+close(OLDERR)                       or die &quot;Can't close OLDERR: $!&quot;;</PRE
+><p class="para">If you create an alias of a file descriptor using <code class="literal">open(ALIAS,</CODE
+> <code class="literal">&quot;&gt;&amp;=HANDLE&quot;</CODE
+>), you're really calling the <i class="filename">fdopen</I
+><em class="emphasis"> </EM
+>(3) stdio function. You get a single file descriptor with two stdio buffers accessed through two filehandles. Closing one filehandle closes the file descriptor of any aliases, but not their filehandles &nbsp;-  if you tried to <code class="literal">print</CODE
+> to a filehandle whose alias had been <code class="literal">close</CODE
+>d, Perl wouldn't give a <code class="literal">&quot;print on closed filehandle warning&quot;</CODE
+> even though the <code class="literal">print</CODE
+> didn't succeed. In short, accessing the file through both filehandles is also a recipe for disaster. This is really used only to open a file descriptor by number. See <a class="xref" href="ch07_20.htm" title="Opening and Closing File Descriptors by Number">Recipe 7.19</A
+> for more information on this.<a class="indexterm" name="ch07-idx-1000009798-0"></A
+><a class="indexterm" name="ch07-idx-1000009798-1"></A
+><a class="indexterm" name="ch07-idx-1000009798-2"></A
+><a class="indexterm" name="ch07-idx-1000009798-3"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-2010">See Also</A
+></H3
+><p class="para">The <code class="literal">open</CODE
+> function in <i class="filename">perlfunc </I
+>(1) and in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; your system's <i class="filename">dup</I
+> (2) manpage</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_20.htm" title="7.19. Opening and Closing File Descriptors by Number"><img src="../gifs/txtpreva.gif" alt="Previous: 7.19. Opening and Closing File Descriptors by Number" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch07_22.htm" title="7.21. Program: netlock"><img src="../gifs/txtnexta.gif" alt="Next: 7.21. Program: netlock" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">7.19. Opening and Closing File Descriptors by Number</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">7.21. Program: netlock</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

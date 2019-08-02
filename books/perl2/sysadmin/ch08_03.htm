@@ -1,0 +1,2050 @@
+<html>
+<head>
+<title>Receiving Mail  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Receiving Mail">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch08_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch08_01.htm">Chapter 8: Electronic Mail</a></td><td align="right" valign="top" width="172"><a href="ch08_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">8.3. Receiving Mail</h2>
+
+
+
+
+
+<p>
+<a name="INDEX-829"></a><a name="INDEX-830"></a>When we discuss receiving
+mail in this section, we're not going to be speaking of
+<em class="emphasis">fetching</em> mail. Transferring mail from one
+machine to another is not particularly interesting.
+<tt class="literal">Mail::POP3Client</tt> by Sean Dowd and
+<tt class="literal">Mail::Cclient</tt> by Malcolm Beattie can easily
+perform the necessary POP (Post Office Protocol) or IMAP (Internet
+Message Access Protocol) mail transfers for you. It is more
+instructive to look at what to do with this mail once it has arrived,
+and that's where we'll focus our
+attention.<a name="INDEX-831"></a><a name="INDEX-832"></a>
+</p>
+
+
+
+
+
+<p>Let's start with the basics and look at the tools available for
+the dissection of both a single mail message and an entire mailbox.
+For the first topic, we will again turn to Graham Barr's
+<em class="emphasis">MailTools</em> package, this time to use the
+<tt class="literal">Mail::Internet</tt> and <tt class="literal">Mail::Header</tt>
+modules.</p>
+
+
+
+
+
+<a name="ch08-11-fm2xml"></a>
+<h3 class="sect2">8.3.1. Dissecting a Single Message</h3>
+
+
+
+
+
+<p>The <tt class="literal">Mail::Internet</tt> and
+<tt class="literal">Mail::Header</tt> modules offer a convenient way to
+slice and dice the headers of an RFC822-compliant mail message.
+RFC822 dictates the format of a mail message, including the names of
+the acceptable header lines and their formats. <a name="INDEX-833"></a><a name="INDEX-834"></a><a name="INDEX-835"></a>
+</p>
+
+
+
+
+
+<p>To use <tt class="literal">Mail::Internet</tt>, you first feed it an open
+filehandle to a message file or a reference to an array that already
+holds the lines of a message:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Mail::Internet;
+
+$messagefile = "mail";
+
+open(MESSAGE,"$messagefile") or die "Unable to open $messagefile:$!\n";
+$message = new Mail::Internet \*MESSAGE;
+close(MESSAGE);</pre>
+</blockquote>
+
+
+
+
+
+<p>If we want to parse a message arriving in a stream of input (i.e.,
+piped to us on our standard input), we could do this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Mail::Internet;
+
+$message = new Mail::Internet \*STDIN;</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">Mail::Internet</tt> hands us back a message object
+instance. We'll commonly use two methods with this instance:
+<tt class="literal">body( )</tt> and <tt class="literal">head( )</tt>.
+<tt class="literal">body( )</tt> return a reference to an anonymous array
+that contains the lines of the body of the message. <tt class="literal">head(
+)</tt> is more interesting and offers a nice segue to the
+<tt class="literal">Mail::Header</tt> module.</p>
+
+
+
+
+
+<p>
+<tt class="literal">Mail::Header</tt> is implicitly loaded whenever we load
+<tt class="literal">Mail::Internet</tt>. If we call
+<tt class="literal">Mail::Internet</tt>'s <tt class="literal">head(
+)</tt> method, it returns a <tt class="literal">Mail::Header</tt>
+header object instance. This is the same object instance we would get
+if we changed our first <tt class="literal">Mail::Internet</tt> example
+code to use <tt class="literal">Mail::Header</tt> explicitly:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Mail::Header;
+
+$messagefile = "mail";
+
+open(MESSAGE,"$messagefile") or die "Unable to open $messagefile:$!\n";
+$header = new Mail::Header \*MESSAGE;
+close(MESSAGE);</pre>
+</blockquote>
+
+
+
+
+
+<p>The <tt class="literal">$header</tt> object holds the headers of that
+message and offers us several handy methods to get at this data. For
+instance, to print a sorted list of the header names (which the
+module calls "tags") appearing in the message, we could
+add this to the end of the previous code:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">print join("\n",sort $header-&gt;tags);</pre>
+</blockquote>
+
+
+
+
+
+<p>Depending on the message, we'd see something like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Cc
+Date
+From
+Message-Id
+Organization
+Received
+Reply-To
+Sender
+Subject
+To</pre>
+</blockquote>
+
+
+
+
+
+<p>We need to retrieve all of the <em class="emphasis">Received:</em> headers
+from a message. Here's how:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">@received = $header-&gt;get("Received");</pre>
+</blockquote>
+
+
+
+
+
+<p>Often we use the <tt class="literal">Mail::Header</tt> methods in
+conjunction with a <tt class="literal">Mail::Internet</tt> object. If we
+were using <tt class="literal">Mail::Internet</tt> to return an object that
+contained both the body and the headers of a message, we might chain
+some of the methods from both modules together like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">@received = $message-&gt;head-&gt;get("Received");</pre>
+</blockquote>
+
+
+
+
+
+<p>Note that we're calling <tt class="literal">get( ) </tt>in a list
+context. In a scalar context, it will return the first occurrence of
+that tag unless you provide it with an occurrence number as an
+optional second argument. For instance,
+<tt class="literal">get("Received",2)</tt> will return the second
+<tt class="literal">Received:</tt> line in the message. There are other
+methods provided by <tt class="literal">Mail::Header</tt> to add and delete
+tags in a header; see the documentation for more
+information.<a name="INDEX-836"></a><a name="INDEX-837"></a><a name="INDEX-838"></a><a name="INDEX-839"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch08-12-fm2xml"></a>
+<h3 class="sect2">8.3.2. Dissecting a Whole Mailbox</h3>
+
+
+
+
+
+<p>Taking this subject to the next level where we slice and dice entire
+mailboxes, is straightforward. If our mail is stored in
+"classical Unix mbox" format or <tt class="command">qmail</tt>
+(another Message Transfer Agent (MTA) &amp;#224; la
+<tt class="command">sendmail</tt> ) format, we can use
+<tt class="literal">Mail::Folder</tt> by Kevin Johnson. Many common
+non-Unix mail agents like Eudora store their mail in classical Unix
+mbox format as well, so this module can be useful on multiple
+platforms.<a name="INDEX-840"></a><a name="INDEX-841"></a><a name="INDEX-842"></a>
+</p>
+
+
+
+
+
+<p>The drill is very similar to the examples we've seen before:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Mail::Folder::Mbox; # for classic Unix mbox format
+
+$folder = new Mail::Folder('mbox',"filename");</pre>
+</blockquote>
+
+
+
+
+
+<p>The <tt class="literal">new( )</tt> constructor takes the mailbox format
+type and the filename to parse. It returns a
+<tt class="literal">folder</tt> object instance through which we can
+query, add, remove, and modify messages. To retrieve the sixth
+message in this folder:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$message = $folder-&gt;get_message(6);</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">$message</tt> now contains a
+<tt class="literal">Mail::Internet</tt> object instance. With this object
+instance you can use all of the methods we just discussed. If you
+need just the header of the same message:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$header = $folder-&gt;get_header(6);</pre>
+</blockquote>
+
+
+
+
+
+<p>No surprises here; a reference to a <tt class="literal">Mail::Header</tt>
+object instance is returned. See the <tt class="literal">Mail::Folder</tt>
+documentation for the other available methods.<a name="INDEX-843"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch08-13-fm2xml"></a>
+<h3 class="sect2">8.3.3. Tracking Down Spam</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-844"></a><a name="INDEX-845"></a>Now
+we know how to take a message apart; let's look at two places
+where this skill comes in handy. The first such domain we'll
+consider is UCE--Unsolicited Commercial Email (pronounced
+"spam"). On the whole, users dislike receiving
+unsolicited commercial email. System administrators detest UCE
+because it fills mail spool directories and log files unnecessarily.
+Plus, each UCE mailing generates complaints from users, so the amount
+of annoying mail in a system administrator's mailbox often
+increases in a 1:10 ratio for each UCE message received.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-846"></a><a name="INDEX-847"></a>The best way to fight
+back against this annoyance is to create a climate where spam is not
+tolerated and becomes too much trouble to send. Complaining to the
+spammer's Internet Service Provider (most of which have strict
+acceptable use policies) frequently causes the spammer to be booted
+off that service. If this happens at every ISP the spammer works
+from, eventually it becomes harder and harder to find a host ISP. The
+harder a spammer has to work to continue his or her business, the
+less likely he or she will stay in that business.</p>
+
+
+
+
+
+<p>Complaining to the right ISP or is made difficult by the following
+factors:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>Spammers frequently forge parts of their email in an attempt to cover
+their tracks. This fact in itself is another reason to dislike
+spammers. At the very least, it speaks volumes about their intent.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-848"></a><a name="INDEX-849"></a>Spammers
+frequently pass their trash through innocent (misconfigured) mail
+servers. This process is known as "relaying" because in
+most cases the mail neither originates from, nor is intended for,
+anyone at that mail server. The mail server is just acting as a
+relay. System administrators at open relay sites often find
+themselves in a world of pain. Their hijacked mail server starts to
+suffer under unintended load (perhaps disrupting real service), their
+site gets blacklisted, and a sizable portion of the legitimate mail
+that does get through consists of hate mail from the spammed sites.</p>
+</li>
+</ul>
+<p>
+<a name="INDEX-850"></a><a name="INDEX-851"></a>Perl can help us with the
+process of dissecting a spam message to find its source. We'll
+start small and then get progressively fancier by exercising some of
+the skills we learned in <a href="ch05_01.htm">Chapter 5, "TCP/IP Name Services"</a>, and <a href="ch06_01.htm">Chapter 6, "Directory Services"</a>. If you'd like to see a related and very
+sophisticated Perl spam-fighting script, I recommend you take a look
+at <tt class="command">adcomplain</tt> by Bill McFadden, found at
+<a href="http://www.rdrop.com/users/billmc/adcomplain.html">http://www.rdrop.com/users/billmc/adcomplain.html</a>.<a name="INDEX-852"></a>
+</p>
+
+
+
+
+
+<p>Here's a copy of a real piece of spam with the message body
+changed to avoid giving the spammer any satisfaction:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Received: from isiteinc.com (www.isiteinc.com [206.136.243.2])
+   by mailhost.example.com (8.8.6/8.8.6) with ESMTP id NAA14955
+   for &lt;webadmin@example.com&gt;; Fri, 7 Aug 1998 13:55:41 -0400 (EDT)
+From: responses@example.com
+Received: from extreme (host-209-214-9-150.mia.bellsouth.net 
+  [209.214.9.150])
+  by isiteinc.com (8.8.3/8.8.3) with SMTP id KAA19050 for
+    webadmin@example.com; Fri, 7 Aug 1998 10:48:09 -0700 (EDT)
+Date: Fri, 7 Aug 1998 10:48:09 -0700 (EDT)
+Received: from login_0246.whynot.net mx.whynot.net[206.212.231.88]) 
+    by whynot.net (8.8.5/8.7.3) with SMTP id XAA06927 for 
+    &lt;webadmin@example.com&gt;; Fri, 7 August 1998 13:48:11 -0700 (EDT)
+To: &lt;webadmin@example.com&gt;
+Subject: ***ADVERTISE VACATION RENTALS - $25/year*** - http://www.example.com
+Reply-To: sample@whynot.net
+X-PMFLAGS: 10322341.10
+X-UIDL: 10293287_192832.222
+Comments: Authenticated Sender is &lt;user122@whynot.net&gt;
+Message-Id: &lt;77126959_36550609&gt;
+
+
+We are proud to announce the all new http://www.example.com website brought to you by Extreme Technologies, Inc. 
+
+Our exciting new travel resource contains some of the most visually appealing vacation listings available on the WWW.  Within our site you will find information on properties for rent, properties for sale, international properties, bed &amp; breakfast and Inns presented in a highly efficient, and easily navigable fashion.  Our listings come complete with color photos, animated graphics, concise descriptions, and information on how to contact the renter/seller directly.  Plus, we change our site graphics every month!</pre>
+</blockquote>
+
+
+
+
+
+<p>Let's look at this message with a critical eye. First, most of
+the message headers are suspect. As you saw in the previous section
+of this chapter, most of the headers (<tt class="command">To:</tt>,
+<tt class="command">From:</tt>, etc.) are fed to our mailer during the
+<tt class="literal">DATA</tt> portion of the message transfer. The one set
+of headers that are hard to forge are those added by the mail
+transfer agent (e.g., <tt class="command">sendmail </tt>) as it passes
+through each mail system.</p>
+
+
+
+
+
+<p>In particular, we need to look closely at the
+<em class="emphasis">Received:</em> headers. A spammer can add forged
+<em class="emphasis">Received:</em> lines, but he or she can't take
+away the ones added by subsequent mail systems. It is possible to
+fake even those out, but it requires a certain level of
+sophistication (such as forging TCP/IP packets or spoofing DNS
+entries) that hit-and-run spammers vary rarely possess.</p>
+
+
+
+
+
+<p>Let's begin by extracting the <em class="emphasis">Received:</em>
+headers from the message and displaying them in a more readable form.
+We'll print them in the order a message was transmitted,
+starting from the first mail server that received the message and
+ending at its final destination (our
+site):<a name="INDEX-853"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Mail::Header;
+
+$header = new Mail::Header \*STDIN;
+
+$header-&gt;unfold('Received');
+@received = $header-&gt;get('Received');
+
+for (reverse @received){
+    chomp;
+    parseline($_);
+    if (!defined $ehelo and !defined $validname and !defined $validip){
+      print "$_\n";
+    }
+    else {
+      write;
+    }
+}
+
+format STDOUT =
+@&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;  @&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;  @&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;
+$ehelo,$validname,$validip
+.
+
+sub parseline {
+    my $line = $_;
+
+    # "normal" -- from HELO (REAL [IP])
+    if (/from\s+(\w\S+)\s*\((\S+)\s*\[(\d+\.\d+\.\d+\.\d+)/){
+      ($ehelo,$validname,$validip) = ($1,$2, $3);
+    }
+    # can't reverse resolve -- from HELO ([IP])
+    elsif (/from\s+(\w\S+)\s+\(\[(\d+\.\d+\.\d+\.\d+)\]/){
+      ($ehelo,$validname,$validip) = ($1,undef, $2);
+    }	
+    # exim -- from [IP] (helo=[HELO IP])
+    elsif (/from\s+\[(\d+\.\d+\.\d+\.\d+)\]\s+\(helo=\[(\d+\.\d+\.\d+\.\d+)\]/){
+      ($validip,$ehelo,$validname) = ($1,$2, undef);
+    }	
+    # Sun Internet Mail Server -- from [IP] by HELO
+    elsif (/from\s+\[(\d+\.\d+\.\d+\.\d+)\]\s+by\s+(\S+)/){
+      ($validip,$ehelo,$validname) = ($1,$2, undef);
+    }	
+    # Microsoft SMTPSVC -- from HELO - (IP)
+    elsif (/from\s+(\S+)\s+-\s+(\d+\.\d+\.\d+\.\d+)\s+/){
+      ($ehelo,$validname,$validip) = ($1,$2, $3);
+    }
+    else { # punt!
+      $ehelo = $validname = $validip = undef;
+    }
+
+    return [$ehelo,$validname,$validip];
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>This code first <tt class="literal">unfold( )</tt>s and extracts the
+<em class="emphasis">Received:</em> headers from the
+message. <tt class="literal">unfold( )</tt> simply removes the new lines
+and continuation characters from the given set of header lines. We do
+this to make parsing easier.</p>
+
+
+
+
+
+<p>We iterate through these lines in the reverse order they are found in
+the message. We are essentially operating from the core of the
+message out, since each system that handles the message envelops it
+in another layer of <em class="emphasis">Received:</em> headers. And the
+bulk of the work is done by the <tt class="literal">&amp;parseline</tt>
+subroutine. This subroutine attempts to use a set of regular
+expressions to extract the following from a
+<em class="emphasis">Received:</em> header:</p>
+
+
+
+
+
+<dl>
+<dt>
+<b>A HELO/EHLO hostname </b>
+</dt>
+<dd>
+<p>The name presented at the HELO or EHLO stage of the SMTP conversation.</p>
+</dd>
+
+
+
+
+
+<dt>
+<b>A "valid" IP address </b>
+</dt>
+<dd>
+<p>The IP address of the connecting client as noted by the mail
+transport agent at time of connect. It is more likely to be
+"valid" because it uses information that is independent
+from the information provided by the client during its SMTP
+conversation. This is important because a spammer's client is
+likely to be a compulsive liar. The word <em class="emphasis">valid</em>
+is quoted because there are ways to spoof this information.</p>
+</dd>
+
+
+
+
+
+<dt>
+<b>A "valid" name </b>
+</dt>
+<dd>
+<p>The name of the client found when the mail transfer agent performs a
+reverse-DNS lookup of the client's IP address. Like the
+previous item, this information does not come from the client (though
+it too can be faked).</p>
+</dd>
+
+</dl>
+
+
+
+
+
+<p>The format of a proper <em class="emphasis">Received:</em> line is
+suggested by RFC821 and RFC822. However, if you look at a collection
+of the mail you have received (as I did when generating the regular
+expressions used earlier), you'll see that not all mail
+transfer agents agree on this format. We deal with the most common
+formats in our program, but there are other variations loose in the
+wild that you'll have to handle if you plan to extend this
+code. See the <tt class="command">adcomplain</tt> script for an idea of the
+variety of formats in use.</p>
+
+
+
+
+
+<p>Here's the output of our program, run on the message cited
+earlier:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">login_0246.whynot.net    mx.whynot.net           206.212.231.88
+extreme                  host-209-214-9-150.mia  209.214.9.150
+isiteinc.com             www.isiteinc.com        206.136.243.2</pre>
+</blockquote>
+
+
+
+
+
+<p>The first column lists the name the machine used when identifying
+itself, the second column shows the name of the machine according to
+the server connection, and the last coluimn is the IP address of that
+connection's originator. As we mentioned previously, this list
+is ordered so the last line of output corresponds to the machine that
+handed the message to our mail server for delivery to us.</p>
+
+
+
+
+
+<p>Though spammers can't remove <em class="emphasis">Received:</em>
+lines, they can influence the contents of these lines by providing a
+fake name in their HELO or EHLO greeting. You can see it has happened
+in the second line of this example because the hostname in the first
+column looks nothing like the hostname in the second, more
+"valid" column.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-854"></a>But supposing they do match,
+how do you know if a <em class="emphasis">Received:</em> line is forged?
+One method is to check the "valid" IP address on each
+<em class="emphasis">Received:</em> line against the "valid"
+hostname and flag anomalies. The subroutine below will return
+<tt class="literal">true</tt> (<tt class="literal">1</tt>) if our lookup of the
+hostname does not match our reverse lookup of the IP address, and
+vice versa. We'll plug this code into a larger program shortly:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Socket;
+
+sub checkrev{
+    my($ip,$name) = @_;
+
+    return 0 unless ($ip and $name);
+
+    my $namelook = gethostbyaddr(inet_aton($ip),AF_INET);
+    my $iplook   = gethostbyname($name);
+
+    $iplook = inet_ntoa($iplook) if $iplook;
+    
+    # may be recorded with different capitalization
+    if ($iplook eq $ip and lc $namelook eq lc $name){
+        return 0;
+    }
+    else {
+        return 1;
+    }
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>This check is not truly reliable because, although not desired, it is
+certainly possible to have legitimate hosts with different or missing
+reverse IP address pointers. Additionally, name servers can be told
+to respond with bogus information (i.e., <tt class="literal">gethostbyaddr(
+)</tt> can't really be trusted).</p>
+
+
+
+
+
+<p>There's more we can divine from these
+<em class="emphasis">Received:</em> headers before we track down the
+owners of each mail hop. For instance, do we or anyone else consider
+any of the mail hops to be a known source of spam? <a name="INDEX-855"></a>
+</p>
+
+
+
+
+
+<a name="ch08-14-fm2xml"></a>
+<h3 class="sect3">8.3.3.1. Checking against a local blacklist</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-856"></a><a name="INDEX-857"></a>Some sites
+keep a local blacklist of hosts spammers are known to use for
+distributing their messages. This practice was adopted in the early
+days of the spam industry when it was found that certain ISPs refused
+to take action against even their most notorious spam-producing
+customers. In response, mechanisms were added to the major MTAs to
+deny connections from a list of antisocial hosts and domains.</p>
+
+
+
+
+
+<p>We can use this list to help us identify if a message has passed
+through any of the sites listed as known spammers in our local
+blacklist. We know the site that delivered the mail to us isn't
+in this list (otherwise we would not have allowed the connect in the
+first place), but all of the other mail servers listed in a
+mail's <em class="emphasis">Received:</em> headers are suspect.</p>
+
+
+
+
+
+<p>There's no one way to write generic code that checks a site
+against all possible MTA blacklists because different MTAs store this
+information in different formats. The majority of sites on the
+Internet currently use <tt class="command">sendmail</tt> as their mail
+transport agent, so we'll use its blacklist format for this
+part of our example. Recent versions of <tt class="command">sendmail</tt>
+store their blacklist database using the Berkeley DB 2.X libraries
+available from <a href="http://www.sleepycat.com">http://www.sleepycat.com</a>.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-858"></a><a name="INDEX-859"></a>Paul Marquess has released a module
+called <tt class="literal">BerkeleyDB</tt> specifically to use the Berkeley
+2.x/3.x libraries. This may be a bit confusing because the
+documentation for <tt class="literal">DB_File</tt><tt class="command">,</tt>
+Marquess' other famous module found in the core Perl
+distribution, also recommends using the 2.x/3.x libraries.
+<tt class="literal">DB_File</tt> uses the Berkeley DB 2.x/3.x libraries in
+"compatible mode" (for example, the library is built
+using the <tt class="literal">--enable-compat185</tt> flag so the version
+1.x API is available). The <tt class="literal">BerkeleyDB</tt> module lets
+a Perl programmer use the expanded functionality provided by the
+native 2.x/3.x API.</p>
+
+
+
+
+
+<p>
+<em class="emphasis">sendmail</em> uses the native Berkeley DB 2.x/3.x
+format, so we need to press the <tt class="literal">BerkeleyDB</tt> module
+into service. Here's some code that will display the contents
+of a local blacklist:<a name="INDEX-860"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$blacklist = "/etc/mail/blacklist.db";
+
+use BerkeleyDB;
+
+# tie the hash %blist to the blacklist file, using Berkeley DB 
+# to retrieve values
+tie %blist, 'BerkeleyDB::Hash', -Filename  =&gt; $blacklist
+  or die "Cannot open file $filename: $! $BerkeleyDB::Error\n" ;
+
+# iterate over each key and value in this file, printing only 
+# the REJECT entries
+while(($key,$value) = each %blist){
+    # the entry in the list can also be marked "OK", "RELAY", etc. 
+    next if ($value ne "REJECT"); 
+    
+    print "$key\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Building on this code, we can create a subroutine that checks to see
+if a given host, or the domain it is in, can be found in our local
+blacklist. If we are asked about the host
+<em class="emphasis">mailserver.spammer.com</em>, we need to cycle through
+all of the entries in our blacklist (which could contain
+<em class="emphasis">mailserver.spammer.com</em>,
+<em class="emphasis">spammer.com</em>, or even just
+<em class="emphasis">spammer</em>) to see if any of entries can be found
+in that hostname.</p>
+
+
+
+
+
+<p>There are many ways in Perl to write code that compares a list of
+values against some input, but to keep the code both efficient and
+interesting, we'll use two moderately advanced Perl techniques.
+These techniques are designed to reduce the amount of regular
+expression compilation that takes place during a program's
+execution. Every time our program uses a "new" regular
+expression in an interpolated matching situation, the Perl regular
+expression engine needs to compile the expression. For example, in
+this code snippet we force the Perl regular expression engine to chew
+on a new interpolated value each time we go through the loop:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># imagine another loop around this one that calls this code a 
+# kerjillion times
+foreach $match (qw(alewife davis porter harvard central kendall park)){
+   $station =~ /$match/ and print "found our station stop!";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>This process is computationally expensive, so if we can cut down on
+the amount of compilation needed, our program will run more
+efficiently. Regular expression compilation time becomes an issue
+mostly in code that iterates over a list of different regular
+expressions.</p>
+
+
+
+
+
+<p>Here's an example of the first technique designed to deal with
+this issue:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use BerkeleyDB;
+
+$blacklist = "/etc/mail/blacklist.db";
+
+&amp;loadblist;
+
+# take a host name as a command-line argument and complain 
+# if it is in the blacklist
+if (defined &amp;checkblist($ARGV[0])){
+        print "*** found $found in our blacklist\n";
+    }
+
+# load the blacklist into an array of anonymous subroutines
+sub loadblist{
+    tie %blist, 'BerkeleyDB::Hash', -Filename  =&gt; $blacklist
+      or die "Cannot open file $filename: $! $BerkeleyDB::Error\n" ;
+
+    while(my($key,$value) = each %blist){
+        # the blacklist can also say "OK", "RELAY", and etc. 
+        next if ($value ne "REJECT"); 
+        push(@blisttests, eval 'sub {$_[0] =~ /\Q$key/o and $key}');
+    }    
+}
+
+sub checkblist{
+    my($line) = shift;
+
+    foreach $subref (@blisttests){
+        return $found if ($found = &amp;$subref($line));
+    }
+    return undef;
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>This example uses the anonymous subroutine technique demonstrated in
+Joseph Hall's book <em class="citetitle">Effective Perl Programming
+</em>(Addison Wesley). For each blacklist entry, we create an
+anonymous subroutine. Each subroutine checks its input against one of
+the entries in the blacklist. If it matches, we return the entry.
+References to these subroutines are stored in a list as we create
+them. Here's the line of code that creates a subroutine and
+pushes a reference to that code on to a list:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">push(@blisttests, eval 'sub {$_[0] =~ /\Q$key/o and $key}');</pre>
+</blockquote>
+
+
+
+
+
+<p>So if our blacklist had an entry <em class="emphasis">spammer</em>, then
+the code reference pushed on the array would essentially point to:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub {
+   $_[0] =~ /\Qspammer/o and "spammer";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>The <tt class="literal">\Q</tt> at the beginning of the regular expression
+is there to prevent periods (as in <em class="emphasis">.com</em>) or
+other reserved punctuation from being treated as regular expression
+metacharacters.</p>
+
+
+
+
+
+<p>Later in the program we iterate over the list of code references and
+run each little anonymous subroutine against our input. If any of
+them return <tt class="literal">true</tt>, we hand back the return value of
+the subroutine:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">return $found if ($found = &amp;$subref($line));</pre>
+</blockquote>
+
+
+
+
+
+<p>The regular expression compilation we're concerned about takes
+place only once, when the code reference is being created. We can
+call each subroutine as often as we want without paying the time
+penalty for regular expression compilation.</p>
+
+
+
+
+
+<p>There's another, slightly less advanced technique for writing
+this code if you are using Perl Version 5.005 or later. Perl Version
+5.005 introduced a new syntactic construct called "precompiled
+regular expressions," which makes this task a little more
+straightforward. If we wanted to rewrite this code using this new
+construct, we might do something like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub loadblist{
+    tie %blist, 'BerkeleyDB::Hash', -Filename  =&gt; $blacklist
+      or die "Cannot open file $filename: $! $BerkeleyDB::Error\n" ;
+
+    while(my($key,$value) = each %blist){
+        # the blacklist can also say "OK", "RELAY", and etc. 
+        next if ($value ne "REJECT"); 
+        push(@blisttests,[qr/\Q$key/,$key]);
+    }    
+}
+
+sub checkblist{
+    my($line) = shift;
+
+    foreach my $test (@blisttests){
+        my($re,$key) = @{$test};
+        return $key if ($line =~ /$re/);
+    }
+    return undef;
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>This time we drop a reference to an anonymous array in
+<tt class="literal">@blisttest</tt>. The first element of that anonymous
+array is a compiled regular expression, created using the new
+"quote regular expression" syntax,
+<tt class="literal">qr//</tt>. This allows us to store a regular expression
+after it has been compiled. This precompiled regular expression will
+provide a significant speed increase when we later perform the match.
+The second element of our anonymous array is the blacklist entry
+itself, to be returned if the compiled regular expression is
+successfully matched. <a name="INDEX-861"></a><a name="INDEX-862"></a><a name="INDEX-863"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+<a name="ch08-15-fm2xml"></a>
+<h3 class="sect3">8.3.3.2. Checking against Internet-wide blacklists</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-864"></a><a name="INDEX-865"></a>Our
+last code example provided our site's opinion on the "Is
+this a spammer?" question for a particular host or domain, but
+it didn't draw upon the experiences of the rest of the Internet
+community. There are somewhat controversial<a href="#FOOTNOTE-2">[2]</a>
+services that offer easy access to Internet-wide blacklists of
+spammers or known open relay hosts. Two well-known services of this
+type are the Mail Abuse Prevention System's Realtime Blackhole
+List (RBL) and the Open Relay Behaviour-modification System (ORBS).
+To access these lists:<a name="INDEX-866"></a><a name="INDEX-867"></a><a name="INDEX-868"></a>
+</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-2"></a>
+<p>[2]The
+controversy stems over whether such blacklists should be kept, who
+should maintain them, how they should be applied, under what
+circumstances sites should be added and removed, and any other
+political issue you can imagine. For more information on these
+services, see <a href="http://www.maps.vix.com">http://www.maps.vix.com</a>and <a href="http://www.orbs.org">http://www.orbs.org</a>.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<ol>
+<li>
+<p>Reverse the order of the elements of the IP address you are checking.
+For instance, <tt class="literal">192.168.1.34</tt> becomes
+<tt class="literal">34.1.168.192</tt>.</p>
+</li>
+<li>
+<p>Append a special domain name to the resulting dotted-quad. To check
+against the RBL, you would use
+<tt class="literal">34.1.168.192.rbl.maps.vix.com</tt>.</p>
+</li>
+<li>
+<p>Fire off a DNS query for this address.</p>
+</li>
+</ol>
+<p>If you receive a positive response (i.e., it returns an
+<tt class="literal">A</tt> resource record), then the IP address in
+question is on the list and has been blacklisted.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-869"></a>A little
+less controversial is the Dial-up User List, also maintained by the
+Mail Abuse Prevention System folks. This is a voluntary list of IP
+address ranges for dynamically-assigned modem pools. The theory is
+that SMTP connections should not originate from any of these hosts.
+Those hosts should be sending their mail through their ISP's
+mail server (which is not on this list).</p>
+
+
+
+
+
+<p>Here's one way you might check to see if an IP address is on
+any of these lists:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub checkaddr{
+    my($ip,$domain) = @_;
+
+    return undef unless (defined $ip);
+
+    my $lookupip = join('.',reverse split(/\./,$ip));
+    
+    if (gethostbyname($lookupip.$domain)){
+        return $ip;
+    }
+    else {
+        return undef;
+    }
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>We'll roll this subroutine into this section's
+penultimate example in a moment. First, now that we've got
+significantly more detail about each of our
+<em class="emphasis">Received:</em> headers, let's make an attempt
+to locate the human or humans responsible for administering each of
+the machines listed. The <tt class="literal">Net::Whois</tt> module we saw
+in <a href="ch06_01.htm">Chapter 6, "Directory Services"</a> would probably be your first guess
+for the right tool for this task.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-870"></a>Unfortunately, that module is
+specialized to receive name-to-domain information only. It also
+expects the information be in the form used by the InterNIC, not any
+of the other registries. We may need to receive IP address-to-domain
+mappings from the WHOIS servers at <a href="http://whois.arin.net">http://whois.arin.net</a> (American Registry for
+Internet Numbers), <a href="http://whois.ripe.net">http://whois.ripe.net</a> (European IP Address
+Allocations), and <a href="http://whois.apnic.net">http://whois.apnic.net</a> (Asia Pacific Address
+Allocations). The lack of an appropriate module is the first hurdle
+we're going to have to conquer.<a name="INDEX-871"></a><a name="INDEX-872"></a><a name="INDEX-873"></a><a name="INDEX-874"></a>
+</p>
+
+
+
+
+
+<p>But even if we know how to connect to all of the registries and
+process their different output formats, it's not clear, given
+any random IP address, which registry we need to ask. Determining
+which server to ask is our second hurdle. Luckily, if we ask ARIN for
+an address in a range not in its database, it will refer us to the
+proper registry. So if we asked ARIN about a Japanese network
+address, it will point us at APNIC.</p>
+
+
+
+
+
+<p>To get over the first hurdle, we could use a general-purpose network
+communications module like the <tt class="literal">Net::Telnet</tt> module
+we used in <a href="ch06_01.htm">Chapter 6, "Directory Services"</a>. Another option is the
+<tt class="literal">IO::Socket</tt> module we saw earlier in this chapter.
+Choosing between them is mostly a matter of personal choice and their
+availability for the platform you'll be
+using.<a name="INDEX-875"></a>
+</p>
+
+
+
+
+
+<p>The WHOIS service runs on TCP port 43, though we'll use the
+service name to force a lookup just for caution sake. Talking to a
+WHOIS server is easy. You connect, provide a query string (in this
+case an IP address), and receive the answer back. Code to query a
+random WHOIS server is as simple as this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub getwhois{
+    my($ip) = shift;
+    my($info);
+
+    $cn = new Net::Telnet(Host =&gt; $whoishost,
+                          Port =&gt; 'whois',
+                          Errmode =&gt; "return",
+                          Timeout =&gt; 30)
+          or die "Unable to set up $whoishost connection:$!\n";
+
+    unless ($cn-&gt;print($ip."\n")){
+        $cn-&gt;close;
+        die "Unable to send $ip to $whoishost: ".$cn-&gt;errmsg."\n";
+    }
+
+    while ($ret = $cn-&gt;get){
+        $info .=$ret;
+    };
+
+    $cn-&gt;close;
+
+    return $info;
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>To deal with the second hurdle of choosing the right registry, we
+have at least two choices. We can query <a href="http://whois.arin.net">http://whois.arin.net</a> and parse the
+output. For instance, here's a transcript of the example I gave
+earlier of querying ARIN for the IP address of a Japanese machine.
+Bold type is used to indicate our input in the conversation:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">% <tt class="userinput"><b>telnet whois.arin.net 43</b></tt>
+Trying 192.149.252.22 ...
+Connected to whois.arin.net.
+Escape character is '^]'.
+<tt class="userinput"><b>210.161.92.226</b></tt>
+Asia Pacific Network Information Center (NETBLK-APNIC-CIDR-BLK)
+   Level 1 - 33 Park Road
+   Milton, 4064
+   AU
+
+   Netname: APNIC-CIDR-BLK2
+   Netblock: 210.0.0.0 - 211.255.255.0
+
+   Coordinator:
+      Administrator, System  (SA90-ARIN)  sysadm@APNIC.NET
+      +61-7-3367-0490
+
+   Domain System inverse mapping provided by:
+
+   SVC01.APNIC.NET              202.12.28.131
+   NS.TELSTRA.NET               203.50.0.137
+   NS.KRNIC.NET                 202.30.64.21
+   NS.RIPE.NET                  193.0.0.193
+
+   *** please refer to whois.apnic.net for more information ***
+   *** before contacting APNIC                              ***
+   *** use whois -h whois.apnic.net &lt;object&gt;                ***
+
+   Record last updated on 04-Mar-99.
+   Database last updated on 19-Apr-99 16:14:16 EDT.</pre>
+</blockquote>
+
+
+
+
+
+<p>Once we get output like this, we know we need to ask the question
+again at <a href="http://whois.apnic.net">http://whois.apnic.net</a>.</p>
+
+
+
+
+
+<p>Alternatively, we can query a "smart" WHOIS server to do
+the work for us. My favorite site for this is <a href="http://whois.geektools.com">http://whois.geektools.com</a>.
+
+<a href="#FOOTNOTE-3">[3]</a> This server will analyze your query, send
+the request off to the correct WHOIS server on your behalf, and
+return the result. A user of this service does not have to know or
+care about which site actually holds the information.</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-3"></a>
+<p>[3]As an
+interesting aside, the GeekTools WHOIS proxy server is written in
+Perl. For more information about this service or for a copy of the
+code, see <a href="http://www.geektools.com">http://www.geektools.com</a>.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<p>To keep our example code from getting too large and keep this
+discussion on target, we'll take the second (and easier)
+option.</p>
+
+
+
+
+
+<p>Let's wrap all of these little queries into one big package and
+run it. If we run this code to call all of the above subroutines on
+our example spam message:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Mail::Header;
+use Socket; 
+use BerkeleyDB;
+use Net::Telnet;
+
+$header = new Mail::Header \*STDIN;
+
+$header -&gt;unfold('Received');
+@received = $header-&gt;get('Received');
+
+$rbldomain  = ".rbl.maps.vix.com";
+$orbsdomain = ".relays.orbs.org";
+$duldomain  = ".dul.maps.vix.com";
+$blacklist  = "/etc/mail/blacklist.db";
+$whoishost  = "whois.geektools.com";
+
+&amp;loadblist;
+
+for (reverse @received){
+    chomp;
+
+
+    parseline($_);
+    if (!defined $ehelo and !defined $validname and !defined $validip){
+       print "$_\n";
+    }
+    else {
+     $flags  = (&amp;checkaddr($validip,$rbldomain)  ? "R" : ""); # in RBL?
+     $flags .= (&amp;checkaddr($validip,$orbsdomain) ? "O" : ""); # in ORBS?
+     $flags .= (&amp;checkaddr($validip,$duldomain)  ? "D" : ""); # in DUL?
+     $flags .= (&amp;checkblist($_)                  ? "B" : ""); # in our list?
+     $flags .= (&amp;checkrev($validip,$validname)   ? "L" : ""); # rev-lookup?
+      push(@iplist,$validip);
+	
+      write;
+    }
+}
+
+for (@iplist){
+    print "\nWHOIS info for $_:\n";
+    print &amp;getwhois($_);
+}
+
+format STDOUT =
+@&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;  @&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;  @&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt; @&lt;&lt;&lt;&lt;
+$ehelo,$validname,$validip,$flags
+.</pre>
+</blockquote>
+
+
+
+
+
+<p>we get output that looks like this (slightly abridged):</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">login_0246.whynot.net   mx.whynot.net           206.212.231.88   L
+extreme                 host-209-214-9-150.mia  209.214.9.150    DB
+isiteinc.com            www.isiteinc.com        206.136.243.2    OB
+
+WHOIS info for 206.212.231.88:
+
+WHOIS info for 209.214.9.150:
+BellSouth.net Inc. (NETBLK-BELLSNET-BLK4)
+   1100 Ashwood Parkway
+   Atlanta, GA 30338
+
+   Netname: BELLSNET-BLK4
+   Netblock: 209.214.0.0 - 209.215.255.255
+   Maintainer: BELL
+
+   Coordinator:...
+
+WHOIS info for 206.136.243.2:
+Brainsell Incorporated (NET-ISITEINC)
+   4105-R Laguna St.
+   Coral Gables, FL 33146
+   US
+
+   Netname: ISITEINC
+   Netnumber: 206.136.243.0
+
+   Coordinator:...</pre>
+</blockquote>
+
+
+
+
+
+<p>Much nicer! Now we know:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>The spammer gave misleading HELO/EHLO responses.</p>
+</li>
+<li>
+<p>The first site is probably bogus (it had a lookup failure and there
+was no WHOIS information).</p>
+</li>
+<li>
+<p>The spam message was probably injected into the Net via a dial-up
+machine.</p>
+</li>
+<li>
+<p>Two of these addresses are already on our blacklist.</p>
+</li>
+<li>
+<p>ORBS doesn't like them either.</p>
+</li>
+<li>
+<p>Contact information for the ISP and site we might want to contact.</p>
+</li>
+</ul>
+<p>Perl has helped us get well on our way towards dealing with this
+particular piece of unsolicited commercial email.</p>
+
+
+
+
+
+<p>But spam is such an unpleasant subject. Let's move on to a
+cheerier topic, like interacting with users via email.<a name="INDEX-876"></a><a name="INDEX-877"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch08-16-fm2xml"></a>
+<h3 class="sect2">8.3.4. Support Mail Augmentation</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-878"></a><a name="INDEX-879"></a><a name="INDEX-880"></a>Even if you
+do not have a "help desk" at your site, you probably have
+some sort of support email address for user questions and problems.
+Email as a support communications medium has certain advantages:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>It can be stored and tracked, unlike hallway conversations.</p>
+</li>
+<li>
+<p>It is asynchronous; the system administrator can read and answer mail
+during the more rational nighttime hours.</p>
+</li>
+<li>
+<p>It can be a unicast, multicast, or broadcast medium by choice. If 14
+people write in (let's say, about a spam message), it is
+possible to respond to all of them simultaneously when the problem is
+resolved.</p>
+</li>
+<li>
+<p>It can be easily forwarded to someone else who might know the answer
+or have authority over that service domain.</p>
+</li>
+</ul>
+<p>These are all strong reasons to make email an integral part of any
+support relationship. However, email does have certain disadvantages:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>If there is a problem with your email system itself, or if the user
+is having email-related problems, another medium must be used.</p>
+</li>
+<li>
+<p>Users can and will type anything they want into an email message.
+There's no guarantee that this message will contain the
+information you need to fix the problem or assist the user. You may
+not gain even a superficial understanding of the purpose of the
+email. This leads us to the conundrum we'll attempt to address
+in this section.</p>
+</li>
+</ul>
+<p>My favorite support email of all time is reproduced in its entirety
+with only the name of the sender changed to protect the guilty:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Date: Sat, 28 Sep 1996 12:27:35 -0400 (EDT)
+From: Special User &lt;user@example.com&gt;
+To: systems@example.com
+Subject: [Req. #9531] printer help
+
+something is wrong and I have know idea what</pre>
+</blockquote>
+
+
+
+
+
+<p>If the user hadn't mentioned "printer" in the
+subject of her mail, we would have no clue where to begin and would
+probably have chalked the situation up to existential angst. Granted,
+this was perhaps the most extreme example. More often you receive
+mail like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">From: Another user &lt;user2@example.com&gt;
+Subject: [Req #14563] broken macine
+To: systems@example.com
+Date: Wed, 11 Mar 1998 10:59:42 -0500 (EST)
+
+There is something wrong with the following machine:
+
+        krakatoa.example.com</pre>
+</blockquote>
+
+
+
+
+
+<p>A user does not send mail devoid of contextual content like this out
+of malice. I believe the root cause of these problems is an impedance
+mismatch between the user's and the system
+administrator's mental model of the computing environment.</p>
+
+
+
+
+
+<p>In the case of most users, the visible structure of the computing
+environment is limited to the client machine they are logged into,
+the nearby printer, and their storage (i.e., home directory). For a
+system administrator the structure of the computing environment is
+considerably different. She sees a set of servers providing services
+to clients, all of which may have a myriad of different peripheral
+devices. Each machine may have a different set of software that is
+installed and a different state (system load, configuration, etc.).</p>
+
+
+
+
+
+<p>To a user, the question "Which machine is having a
+problem?" seems strange. They are talking about
+<em class="emphasis">the</em> computer, the one they are using
+<em class="emphasis">now</em>. Isn't that obvious? To a system
+administrator, a request for "help with
+<em class="emphasis">the</em> printer" is equally odd; after all,
+there are many printers in her charge.</p>
+
+
+
+
+
+<p>So too it goes with the specifics of a problem. System administrators
+around the world grit their teeth every day when they receive mail
+that says, "My machine isn't working, can you help
+me?" They know "not working" could mean a whole
+panoply of symptoms, each with its own array of causes. To a user
+that has experienced three screen freezes in the last week,
+"not working" is unambiguous.</p>
+
+
+
+
+
+<p>One way to address this disconnect is to constrain the material sent
+in email. Some sites force the user to send in trouble reports using
+a custom support application or web form. The problem with this
+approach is that very few users enjoy engaging in a click-and-scroll
+fest just to report a problem or ask a question. The more pain
+involved in the process, the less likely someone will go to the
+trouble of using these mechanisms. It doesn't matter how
+carefully constructed or beautifully designed your web form is if no
+one is willing to use it. Hallway requests will become the norm
+again. Back to square one?</p>
+
+
+
+
+
+<p>Well, with the help of Perl, maybe not. Perl can help us augment
+normal mail receiving to assist us in the support process. One of the
+first steps in this process for a system administrator is the
+identification of locus: "Where is the problem? Which printer?
+Which machine?" And so on.
+<a name="INDEX-881"></a>
+</p>
+
+
+
+
+
+<p>Here is a program I call <em class="emphasis">suss,</em> which provides a
+bare-bones example of this augmentation. It looks at an email message
+and attempts to guess the name of a machine associated with that
+message. The upshot of this is that we often can determine the
+hostname for the "My machine has a problem" category of
+email without having to engage in a second round of email with the
+vague user. This hostname is more than likely going to be a good
+starting point in the troubleshooting process.
+<a name="INDEX-882"></a>
+</p>
+
+
+
+
+
+<p>
+<em class="emphasis">suss</em> uses an extremely simple algorithm to guess
+the name the machine in question (basically just a hash lookup for
+every word in the message). First, it examines the message subject,
+then the body of the message, and finally looks at the
+<em class="emphasis">Received:</em> headers on the message. Here's a
+simplified version of the code that expects to be able to read an
+<tt class="command">/etc/hosts</tt> file to determine the names of our
+hosts:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Mail::Internet;
+$localdomain = ".example.com";
+
+# read in our host file
+open(HOSTS,"/etc/hosts") or die "Can't open host file\n";
+while(defined($_ = &lt;HOSTS&gt;)){
+    next if /^#/;        # skip comments
+    next if /^$/;        # skip blank lines
+    next if /monitor/i;  # an example of a misleading host 
+
+    $machine = lc((split)[1]);  # extract the first host name &amp; downcase
+    $machine =~ s/\Q$localdomain\E$//oi; # remove our domain name
+    $machines{$machine}++ unless $machines{$machine};
+}
+
+# parse the message
+$message = new Mail::Internet \*STDIN;
+$message-&gt;head-&gt;unfold(  );
+
+# check in the subject line
+my $subject = $message-&gt;head-&gt;get('Subject');
+$subject  =~ s/[.,;?]//g;
+for (split(/\s+/,$subject)) {
+    if (exists $machines{lc $_}) {
+      print "subject: $_\n";
+      $found++;
+    }
+}
+exit if $found;
+
+# check in the body of the message
+chomp(my @body = @{$message-&gt;body(  )});
+my $body = join(" ",@body);
+$body =~ s/[^\w\s]/ /g;              # remove punctuation 
+@body{split(' ', lc $body)} = (  );    # uniq'ify the body
+for (keys %body) {
+    if (exists $machines{lc $_}) {
+      print "body: $_\n";
+      $found++;
+    }
+}
+exit if $found;
+
+# last resort: check the last Received: line
+$received = (reverse $message-&gt;head-&gt;get('Received'))[0]; 
+$received =~ s/\Q$localdomain\E//g;
+for (split(/\s+/,$received)) {
+    if (exists $machines{lc $_}) {
+      print "received: $_\n";
+    }
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Two comments on this code:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>The simplicity of our word check becomes painfully apparent when we
+encounter perfectly reasonable hostnames like
+<em class="emphasis">monitor</em>. If you have hostnames that are likely
+to appear in support messages, you will either have to special-case
+them as we do with <tt class="literal">next if /monitor/i</tt>, or
+preferably create a more complicated parsing scheme.</p>
+</li>
+<li>
+<p>We're using a hash slice construct
+(<tt class="literal">@body{...}</tt>) to help speed up our search of the
+body of the message. In one step, we've extracted all of the
+unique words from the text. To understand this construct, you can
+read it from the inside out. First, the <tt class="literal">split( )</tt>
+returns a list of all of the "words" (lowercased) in the
+message. These words are used as keys to populate the hash
+<tt class="literal">%body</tt>. Because a hash can only contain one
+instance of any given key, the hash will contain keys consisting of
+all of the unique words found in the body of the message. It is magic
+like this that can make programming Perl fun.</p>
+</li>
+</ul>
+<p>Let's take this code out for a spin. Here are two real support
+messages:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Received: from strontium.example.com (strontium.example.com [192.168.1.114])
+        by mailhub.example.com (8.8.4/8.7.3) with ESMTP id RAA27043
+        for &lt;systems&gt;; Thu, 27 Mar 1997 17:07:44 -0500 (EST)
+From: User Person &lt;user@example.com&gt;
+Received: (user@localhost)
+        by strontium.example.com (8.8.4/8.6.4) id RAA10500
+        for systems; Thu, 27 Mar 1997 17:07:41 -0500 (EST)
+Message-Id: &lt;199703272207.RAA10500@strontium.example.com&gt;
+Subject: [Req #11509] Monitor
+To: systems@example.com
+Date: Thu, 27 Mar 1997 17:07:40 -0500 (EST)
+
+Hi,
+My monitor is flickering a little bit and it is tiresome
+whe working with it to much.
+Is it possible to fix it or changing the monitor? 
+
+Thanks.
+
+User.
+-------------------------------------
+Received: from example.com (user2@example.com [192.168.1.7])
+        by mailhost.example.com (8.8.4/8.7.3) with SMTP id SAA00732
+        for &lt;systems@example.com&gt;; Thu, 27 Mar 1997 18:34:54 -0500 (EST)
+Date: Thu, 27 Mar 1997 18:34:54 -0500 (EST)
+From: Another User &lt;user2@example.com&gt;
+To: systems@example.com
+Subject: [Req #11510] problems with two computers
+Message-Id: &lt;Pine.SUN.3.95.970327183117.23440A-100000@example.com&gt;
+
+In Jenolen (in room 292), there is a piece of a disk stuck in it. In intrepid, there is a disk with no cover (or whatever you call that silver thing) stuck in it. We tried to turn off intrepid, but it wouldn't work. We (the proctor on duty and I) tried to get the disk piece out, but it didn't work. The proctor in charge decided to put signs on them saying 'out of order'
+
+AnotherUser</pre>
+</blockquote>
+
+
+
+
+
+<p>Aiming our code at these two messages yields:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">received: strontium</pre>
+</blockquote>
+
+
+
+
+
+<p>and:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">body: jenolen
+body: intrepid</pre>
+</blockquote>
+
+
+
+
+
+<p>Both hostname guesses were right on the money, and that's with
+just a little bit of simple code. To take things one step further,
+let's assume you get this email:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Received: from [192.168.1.118] (buggypeak.example.com [192.168.1.118])
+        by mailhost.example.com (8.8.6/8.8.6) with SMTP id JAA16638
+        for &lt;systems&gt;; Tue, 4 Aug 1998 09:07:15 -0400 (EDT)
+Message-Id: &lt;v02130502b1ecb78576a9@[192.168.1.118]&gt;
+Date: Tue, 4 Aug 1998 09:07:16 -0400
+To: systems@example.com
+From: user@example.com (Nice User)
+Subject: [Req #15746] printer
+
+Could someone please persuade my printer to behave and print like a nice printer should?  Thanks much :)
+
+-Nice User.</pre>
+</blockquote>
+
+
+
+
+
+<p>The user may not realize that you are responsible for a herd of 30
+printers. But we can use Perl and a basic observation to help make an
+educated guess. Users tend to print to printers that are
+geographically close to the machine they are using at the time. If we
+can determine which machine they sent mail from, we can probably can
+pick the printer. There are many ways to retrieve a
+machine-to-printer mapping, e.g., from a separate file, from a field
+in the host database we mentioned in <a href="ch05_01.htm">Chapter 5, "TCP/IP Name Services"</a>, or
+even a directory service from LDAP. Here's some code that uses
+a simple hostname-to-associated-printer database:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Mail::Internet;
+use DB_File;
+
+$localdomain = ".example.com";
+
+# printdb is a Berkeley DB file with a host for a key and a 
+# printer for a value
+$printdb     = "printdb"; 
+
+# parse the message
+$message = new Mail::Internet \*STDIN;
+$message-&gt;head-&gt;unfold(  );
+
+# check in the subject line
+my $subject = $message-&gt;head-&gt;get('Subject');
+if ($subject =~ /print(er|ing)?/i){
+    # find sending machine (assumes Sendmail's header format)
+    $received = (reverse $message-&gt;head-&gt;get('Received'))[0]; 
+    ($host) = 
+         $received =~ /^from \S+ \((?:\S+@)?(\S+)\Q$localdomain\E \[/;
+}
+
+tie %printdb, "DB_File",$printdb  or die "Can't tie $printdb database:$!\n";
+
+print "Problem on $host may be with the printer called " . 
+       $printdb{$host} . ".\n";
+
+untie %printdb;</pre>
+</blockquote>
+
+
+
+
+
+<p>If the message mentions "print," "printer,"
+or "printing" in its subject line, we pull out the
+hostname from the <em class="emphasis">Received:</em> header. Unlike our
+UCE examples, we know the format our mail hub uses for
+<em class="emphasis">Received:</em> headers, so we can use a single
+regular expression to extract this information. With hostname in
+hand, we can look up the associated printer in a Berkeley DB
+database. The end result:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Problem on buggypeak may be with the printer called hiroshige.</pre>
+</blockquote>
+
+
+
+
+
+<p>If you take a moment to examine the fabric of your environment, you
+will see other ways to augment the receiving of your support email.
+The examples in this section are small and designed to get you
+thinking about the possibilities. What other help could programs that
+read mail (perhaps mail sent by other programs) provide you? Perl
+gives you many ways to analyze your email, place it in a larger
+context, and then act upon that information.<a name="INDEX-883"></a><a name="INDEX-884"></a><a name="INDEX-885"></a><a name="INDEX-886"></a><a name="INDEX-887"></a>
+</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch08_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch08_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">8.2. Common Mistakes in Sending Email</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">8.4. Module Information for This Chapter</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

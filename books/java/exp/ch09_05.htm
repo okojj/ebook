@@ -1,0 +1,638 @@
+<!doctype html public "-//ORA//DTD CD HTML 3.2//EN">
+<html>
+<head>
+<title>[Chapter 9] 9.5 Writing a Content Handler</TITLE>
+<meta name="author" content="Pat Niemeyer and Josh Peck">
+<meta name="date" content="Thu Jul 24 12:08:46 1997">
+<meta name="form" content="html">
+<meta name="metadata" content="dublincore.0.1">
+<meta name="objecttype" content="book part">
+<meta name="otheragent" content="gmat dbtohtml">
+<meta name="publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="source" content="SGML">
+<meta name="subject" content="Java">
+<meta name="title" content="Exploring Java">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+</HEAD>
+<body bgcolor="#FFFFFF">
+
+<div class=htmlnav>
+<h1><a href='index.htm'><img src="gifs/smbanner.gif" alt="Exploring Java" border=0></a></H1>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch09_04.htm"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 9<br>Network Programming</FONT></B></TD>
+<td width=172 align=right valign=top><a href="ch09_06.htm"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+</table>
+
+&nbsp;
+<hr align=left width=515>
+</DIV>
+<div class=sect1>
+<h2 class=sect1><a class="TITLE" name="EXJ-CH-9-SECT-5">9.5 Writing a Content Handler</A></h2>
+
+<p class=para>
+<tt class=literal>getContent()</tt> invokes a content handler whenever
+it's called to retrieve an object at some URL. The
+content handler must read the flat stream of data produced by the
+<tt class=literal>URL</tt>'s protocol handler (the data read from
+the remote source), and construct a well-defined Java object from
+it. By "flat," I mean that the data stream the content
+handler receives has no artifacts left over from retrieving the data
+and processing the protocol. It's the protocol handler's job to
+fetch and decode the data before passing it along. The protocol
+handler's output is your data, pure and simple.
+
+<p class=para>
+The roles of content and protocol handlers do not overlap. The content 
+handler doesn't care how the data arrives, or what form it takes. It's 
+concerned only with what kind of object it's supposed to create. For example, 
+if a particular protocol involves sending an object over the network in 
+a compressed format, the protocol handler should do whatever is necessary 
+to unpack it before passing the data on to the content handler. The same 
+content handler can then be used again with a completely different protocol 
+handler to construct the <i class=emphasis>same</I> type of object 
+received via a <i class=emphasis>different</I> transport mechanism. 
+
+<p class=para>
+Let's look at an example. The following lines construct a
+<tt class=literal>URL</tt> that points to a GIF file on an FTP archive and
+attempt to retrieve its contents:
+
+<div class=programlisting>
+<p>
+<pre>
+try { 
+    URL url = new URL ("ftp://ftp.wustl.edu/graphics/gif/a/apple.gif"); 
+    Image img = (Image)url.getContent(); 
+    ... 
+</PRE>
+</DIV>
+
+<p class=para>
+When we construct the <tt class=literal>URL</tt> object, Java looks at the
+first part of the URL string (i.e., everything
+prior to the colon) to determine the protocol and locate a protocol
+handler. In this case, it locates the FTP protocol
+handler, which is used to open a connection to the host and transfer
+data for the specified file.
+
+<p class=para>
+<a name="CH09.MIME"></A>After making the connection, the <tt class=literal>URL</tt> object
+asks the protocol handler to identify the resource's
+MIME type.[5]
+ It does this through a variety of means, but in this case it probably
+just looks at the filename extension
+(<i class=filename>.gif</i>&nbsp;) and determines that the
+MIME type of the data is
+<tt class=literal>image/gif</tt>. The protocol handler then looks for the
+content handler responsible for the <tt class=literal>image/gif</tt> type
+and uses it to construct the right kind of object from the data. The
+content handler returns an <tt class=literal>Image</tt> object, which
+<tt class=literal>getContent()</tt> returns to us as an
+<tt class=literal>Object</tt>; we cast this <tt class=literal>Object</tt> back
+to the <tt class=literal>Image</tt> type so we can work with it.
+
+<blockquote class=footnote>
+<p class=para>[5] 
+MIME stands for Multipurpose Internet Mail
+Extensions. It's a standard design to facilitate multimedia email, but
+it has become more widely used as a way to specify the treatment
+of data contained in a document.
+</blockquote>
+<p class=para>
+In an upcoming section, we'll build a simple content handler. To 
+keep things as simple as possible, our example will produce text as output; 
+the <tt class=literal>URL</tt>'s <tt class=literal>getContent()</tt> 
+method will return this as a <tt class=literal>String</tt> object. 
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="EXJ-CH-9-SECT-5.1">Locating Content Handlers</A></h3>
+
+<p class=para>
+As I said earlier, there's no standard yet for where content
+handlers should be located. However, we're writing code now and
+need to know what package to place our class files in. In turn, this
+determines where to place the class files in the local filesystem. 
+Because we are going to write our own standalone application
+to use our handler, we'll place our classes in a package in our
+local class path and tell Java where they reside. However, we will
+follow the naming scheme that's likely to become the standard. If
+other applications expect to find handlers in different locations
+(either locally or on servers), you'll simply have to repackage
+your class files according to their naming scheme and put them in the
+correct place.
+
+<p class=para>
+Package names translate to path names when Java is searching
+for a class. This holds for locating content-handler classes as well
+as other kinds of classes. For example, on a UNIX-
+or DOS-based system, a class in a package named
+<tt class=literal>net.www.content</tt> would live in a directory with
+<i class=filename>net/www/content/</i> as part of its pathname. To
+allow Java to find handler classes for arbitrary new
+MIME types, content handlers are organized into
+packages corresponding to the basic MIME type
+categories. The handler classes themselves are then named after the
+specific MIME type. This allows Java to map
+MIME types directly to class names.
+
+<p class=para>
+According to the scheme we'll follow, a handler for the
+<tt class=literal>image/gif</tt> MIME type is
+called <tt class=literal>gif</tt> and placed in a package called
+<tt class=literal>net.www.content.image</tt>. The fully qualified name of
+the class would then be <tt class=literal>net.www.content.image.gif</tt>,
+and it would be located in the file
+<i class=filename>net/www/content/image/gif.class</i>, somewhere in the
+local class path or on a server. Likewise, a content handler for the
+<tt class=literal>video/mpeg</tt> MIME type would be
+called <tt class=literal>mpeg</tt>, and there would be an
+<i class=filename>mpeg.class</i> file located (again, on a
+UNIX-/DOS-like filesystem) in a
+<i class=filename>net/www/content/video/</i> directory somewhere in a
+local class path or on a server.
+
+<p class=para>
+Many MIME type names include a dash
+(<tt class=literal>-</tt>), which is illegal in a class name. You should
+convert dashes and other illegal characters into underscores when
+building Java class and package names. Also note that there are no
+capital letters in the class names. This violates the coding
+convention used in most Java source files, in which class names start
+with capital letters. However, capitalization is not significant in
+MIME type names, so it's simpler to name the
+handler classes accordingly. <a href="#EXJ-CH-9-TAB-1">Table 9.1</A>
+shows how some typical MIME types are converted to
+package and class names.[6]
+
+<blockquote class=footnote>
+<p class=para>[6] 
+The "pre-beta 1" release of HotJava has a temporary solution that is
+compatible with the convention described here. In the HotJava
+<i class=filename>properties</i> file, add the line:
+<tt class=literal>java.content.handler.pkgs=net.www.content</tt>.
+</blockquote>
+<p>
+<div class=table>
+<table border>
+<caption><a class="TITLE" name="EXJ-CH-9-TAB-1">Table 9.1: Converting MIME Types to Class and Package Names</A></CAPTION>
+<tr class=row>
+<th align="left">MIME type</TH>
+<th align="left">Package name</TH>
+<th align="left">Class name</TH>
+<th align="left">Class location</TH>
+</TR>
+<tr class=row>
+<td align="left"><tt class=literal>image/gif</tt></TD>
+<td align="left"><tt class=literal>net.www.content.image</tt></TD>
+<td align="left"><tt class=literal>gif</tt></TD>
+<td align="left"><i class=filename>net/www/content/image/</i></TD>
+</TR>
+<tr class=row>
+<td align="left"><tt class=literal>image/jpeg</tt></TD>
+<td align="left"><tt class=literal>net.www.content.image</tt></TD>
+<td align="left"><tt class=literal>jpeg</tt></TD>
+<td align="left"><i class=filename>net/www/content/image/</i></TD>
+</TR>
+<tr class=row>
+<td align="left"><tt class=literal>text/html</tt></TD>
+<td align="left"><tt class=literal>net.www.content.text</tt></TD>
+<td align="left"><tt class=literal>html</tt></TD>
+<td align="left"><i class=filename>net/www/content/text/</i></TD>
+</TR>
+</TABLE>
+<p>
+</DIV>
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="EXJ-CH-9-SECT-5.2">The application/x-tar Handler</A></h3>
+
+<p class=para>
+<a name="CH09.TAR3"></A><a name="CH09.TAR1"></A><a name="CH09.TAR2"></A>In this section, we'll build a simple content handler that reads
+and interprets <i class=command>tar</i> (tape archive)
+files. <i class=command>tar</i> is an archival format widely used in
+the UNIX-world to hold collections of files, along
+with their basic type and attribute information.[7]
+ A <i class=command>tar</i> file is similar to a
+ZIP file, except that it's not compressed. Files in
+the archive are stored sequentially, in flat text or binary with no
+special encoding. In practice, <i class=command>tar</i> files are
+usually compressed for storage using an application like
+UNIX <i class=command>compress</i> or
+GNU <i class=command>gzip</i> and then named with a
+filename extension like <i class=filename>.tar.gz</i> or
+<i class=filename>.tgz</i>.
+
+<blockquote class=footnote>
+<p class=para>[7] 
+There are several slightly different versions of the
+<i class=command>tar</i> format. This content handler understands the
+most widely used variant.
+</blockquote>
+<p class=para>
+Most Web browsers, upon retrieving a <i class=command>tar</i>
+file, prompt the user with a <b>File Save</b>
+dialog. The assumption is that if you are retrieving an archive, you
+probably want to save it for later unpacking and use. We would like to
+instead implement a <i class=command>tar</i> content handler that
+allows an application to read the contents of the archive and give us
+a listing of the files that it contains. In itself, this would not be
+the most useful thing in the world, because we would be left with the
+dilemma of how to get at the archive's contents. However, a more
+complete implementation of our content handler, used in conjunction
+with an application like a Web browser, could generate output that
+lets us select and save individual files within the archive.
+
+<p class=para>
+The code that fetches the <i class=filename>.tar</i> file and lists 
+its contents looks like this: 
+
+<div class=programlisting>
+<p>
+<pre>
+try { 
+    URL listing = 
+        new URL("http://somewhere.an.edu/lynx/lynx2html.tar"); 
+    String s = (String)listing.getContents(); 
+    System.out.println( s ); 
+     ... 
+</PRE>
+</DIV>
+
+<p class=para>
+We'll produce a listing similar to the UNIX
+<i class=command>tar</i> application's output:
+
+<div class=screen>
+<p>
+<pre>
+Tape Archive Listing: 
+      
+0     Tue Sep 28 18:12:47 CDT 1993 lynx2html/ 
+14773 Tue Sep 28 18:01:55 CDT 1993 lynx2html/lynx2html.c 
+470   Tue Sep 28 18:13:24 CDT 1993 lynx2html/Makefile 
+172   Thu Apr 01 15:05:43 CST 1993 lynx2html/lynxgate 
+3656  Wed Mar 03 15:40:20 CST 1993 lynx2html/install.csh 
+490   Thu Apr 01 14:55:04 CST 1993 lynx2html/new_globals.c 
+... 
+</PRE>
+</DIV>
+
+<p class=para>
+Our content handler dissects the file to read the contents and
+generates the listing. The <tt class=literal>URL</tt>'s
+<tt class=literal>getContent()</tt> method returns that information to our
+application as a <tt class=literal>String</tt> object.
+
+<p class=para>
+First we must decide what to call our content handler and where
+to put it. The MIME-type hierarchy classifies the
+<i class=command>tar</i> format as an "application type
+extension." Its proper MIME type is then
+<tt class=literal>application/x-tar</tt>. Therefore, our handler belongs
+to the <tt class=literal>net.www.content.application</tt> package, and
+goes into the class file
+<i class=filename>net/www/content/application/x_tar.class</i>. Note
+that the name of our class is <tt class=literal>x_tar</tt>, rather than
+<tt class=literal>x-tar</tt>; you'll remember the dash is illegal in a
+class name so, by convention, we convert it to an underscore.
+
+<p class=para>
+Here's the code for the content handler; compile it and
+place it in the <i class=filename>net/www/content/application/</i>
+package, somewhere in your class path:
+
+<div class=programlisting>
+<p>
+<pre>
+package net.www.content.application; 
+ 
+import java.net.*; 
+import java.io.*; 
+import java.util.Date; 
+ 
+public class x_tar extends ContentHandler { 
+    static int  
+        RECORDLEN = 512,  
+        NAMEOFF = 0, NAMELEN = 100, 
+        SIZEOFF = 124, SIZELEN = 12, 
+        MTIMEOFF = 136, MTIMELEN = 12; 
+ 
+    public Object getContent(URLConnection uc) throws IOException { 
+        InputStream is = uc.getInputStream(); 
+        StringBuffer output = 
+            new StringBuffer( "Tape Archive Listing:\n\n" ); 
+        byte [] header = new byte[RECORDLEN]; 
+        int count = 0; 
+ 
+        while ( (is.read(header) == RECORDLEN) &amp;&amp; 
+                (header[NAMEOFF] != 0) ) { 
+ 
+            String name = 
+               new String(header, 0, NAMEOFF, NAMELEN).trim(); 
+            String s = new String(header, 0, SIZEOFF, SIZELEN).trim(); 
+            int size = Integer.parseInt(s, 8); 
+            s = new String(header, 0, MTIMEOFF, MTIMELEN).trim(); 
+            long l = Integer.parseInt(s, 8); 
+            Date mtime = new Date( l*1000 ); 
+ 
+            output.append( size + " " + mtime + " " + name + "\n" ); 
+ 
+            count += is.skip( size ) + RECORDLEN; 
+            if ( count % RECORDLEN != 0 ) 
+                count += is.skip ( RECORDLEN - count % RECORDLEN); 
+        } 
+ 
+        if ( count == 0 ) 
+            output.append("Not a valid TAR file\n"); 
+ 
+        return( output.toString() ); 
+    } 
+} 
+</PRE>
+</DIV>
+
+<div class=sect3>
+<h4 class=sect3><a class="TITLE" name="EXJ-CH-9-SECT-5.2.1">The ContentHandler class</A></h4>
+
+<p class=para>
+Our <tt class=literal>x_tar</tt> handler is a subclass of the abstract
+class <tt class=literal>java.net.ContentHandler</tt>. Its job is to
+implement one method: <tt class=literal>getContent()</tt>, which takes as
+an argument a special "protocol connection" object and
+returns a constructed Java <tt class=literal>Object</tt>. The
+<tt class=literal>getContent()</tt> method of the <tt class=literal>URL</tt>
+class ultimately uses this <tt class=literal>getContent()</tt> method when
+we ask for the contents of the URL.
+
+<p class=para>
+The code looks formidable, but most of it's involved with processing the 
+details of the <i class=command>tar</i> format. If we remove these 
+details, there isn't much left: 
+
+<div class=programlisting>
+<p>
+<pre>
+public class x_tar extends ContentHandler { 
+ 
+    public Object getContent( URLConnection uc ) throws IOException { 
+        // get input stream 
+        InputStream is = uc.getInputStream(); 
+ 
+        // read stream and construct object 
+        // ... 
+ 
+        // return the constructed object 
+        return( output.toString() ); 
+    } 
+} 
+</PRE>
+</DIV>
+
+<p class=para>
+That's really all there is to a content handler; it's relatively
+simple.
+
+</DIV>
+
+<div class=sect3>
+<h4 class=sect3><a class="TITLE" name="EXJ-CH-9-SECT-5.2.2">The URLConnection</A></h4>
+
+<p class=para>
+The <tt class=literal>java.net.URLConnection</tt> object that
+<tt class=literal>getContent()</tt> receives represents the protocol
+handler's connection to the remote resource. It provides a
+number of methods for examining information about the
+<tt class=literal>URL</tt> resource, such as header and type fields, and
+for determining the kinds of operations the protocol
+supports. However, its most important method is
+<tt class=literal>getInputStream()</tt>, which returns an
+<tt class=literal>InputStream</tt> from the protocol handler. Reading this
+<tt class=literal>InputStream</tt> gives you the raw data for the object
+the <tt class=literal>URL</tt> addresses. In our case, reading the
+<tt class=literal>InputStream</tt> feeds <tt class=literal>x_tar</tt> the
+bytes of the <i class=command>tar</i> file it's to process.
+
+</DIV>
+
+<div class=sect3>
+<h4 class=sect3><a class="TITLE" name="EXJ-CH-9-SECT-5.2.3">Constructing the object</A></h4>
+
+<p class=para>
+The majority of our <tt class=literal>getContent()</tt> method is devoted
+to interpreting the stream of bytes of the <i class=command>tar</i>
+file and building our output object: the <tt class=literal>String</tt>
+that lists the contents of the <i class=command>tar</i> file. Again,
+this means that this example involves the particulars of reading
+<i class=command>tar</i> files, so you shouldn't fret too much
+about the details.
+
+<p class=para>
+After requesting an <tt class=literal>InputStream</tt> from the
+<tt class=literal>URLConnection</tt>, <tt class=literal>x_tar</tt> loops,
+gathering information about each file. Each archived item is preceded
+by a header that contains attribute and length
+fields. <tt class=literal>x_tar</tt> interprets each header and then skips
+over the remaining portion of the item. It accumulates the results
+(the file listings) in a <tt class=literal>StringBuffer</tt>. (See <a href="ch07_01.htm">Chapter 7, <i>Basic Utility Classes</i></A> for a discussion of
+<tt class=literal>StringBuffer</tt>.)  For each file, we add a line of
+text listing the name, modification time, and size. When the listing
+is complete, <tt class=literal>getContent()</tt> returns the
+<tt class=literal>StringBuffer</tt> as a <tt class=literal>String</tt> object.
+
+<p class=para>
+The main <tt class=literal>while</tt> loop continues as long as
+it's able to read another header record, and as long as the
+record's "name" field isn't full of
+ASCII null values. (The <i class=command>tar</i>
+file format calls for the end of the archive to be padded with an
+empty header record, although most <i class=command>tar</i>
+implementations don't seem to do this.) The
+<tt class=literal>while</tt> loop retrieves the name, size, and
+modification times as character strings from fields in the header. The
+most common <i class=command>tar</i> format stores its numeric values
+in octal, as fixed-length ASCII strings. We extract
+the strings and use <tt class=literal>Integer.parseInt()</tt> to parse
+them.
+
+<p class=para>
+After reading and parsing the header, <tt class=literal>x_tar</tt>
+skips over the data portion of the file and updates the variable
+<tt class=literal>count</tt>, which keeps track of the offset into the
+archive. The two lines following the initial skip account for
+<i class=command>tar</i>'s "blocking" of the data
+records. In other words, if the data portion of a file doesn't fit
+precisely into an integral number of blocks of
+<tt class=literal>RECORDLEN</tt> bytes, <i class=command>tar</i> adds
+padding to make it fit.
+
+<p class=para>
+Whew. Well, as I said, the details of parsing <i class=command>tar</i> 
+files are not really our main concern here. But <tt class=literal>x_tar</tt> 
+does illustrate a few tricks of data manipulation in Java. 
+
+<p class=para>
+It may surprise you that we didn't have to
+provide a constructor; our content handler relies on its default
+constructor. We don't need to provide a constructor because
+there isn't anything for it to do. Java doesn't pass the
+class any argument information when it creates an instance of it. You
+might suspect that the <tt class=literal>URLConnection</tt> object would
+be a natural thing to provide at that point. However, when you are
+calling the constructor of a class that is loaded at run-time, you
+can't pass it any arguments, as we discussed in <a href="ch05_01.htm">Chapter 5, <i>Objects in Java</i></A>.
+
+</DIV>
+
+<div class=sect3>
+<h4 class=sect3><a class="TITLE" name="EXJ-CH-9-SECT-5.2.4">Using our new handler</A></h4>
+
+<p class=para>
+When I began this discussion of content handlers, I showed a brief
+example of how our <tt class=literal>x_tar</tt> content handler would work
+for us. We need to make a few brief additions to that code in order to
+use our new handler and fetch URLs that point to
+<i class=filename>.tar</i> files. Since we're writing a standalone
+application, we're not only responsible for writing handlers that
+obey the package/class naming scheme we described earlier; we are also
+responsible for making our application use the naming scheme.
+
+<p class=para>
+In a standalone application, the mapping between
+MIME types and content-handler class names is done
+by a special <tt class=literal>java.net.ContentHandlerFactory</tt> object
+we must install. The <tt class=literal>ContentHandlerFactory</tt> accepts
+a <tt class=literal>String</tt> containing a MIME type
+and returns the appropriate content handler. It's responsible for
+implementing the naming convention and creating an instance of our
+handler. Note that you don't need a content-handler factory if
+you are writing handlers for use by remote applications; a browser
+like HotJava, that loads content handlers over the Net, has its own
+content-handler factory.
+
+<p class=para>
+To make absolutely clear what's happening, we'll provide a simple 
+factory that knows only about our <tt class=literal>x_tar</tt> handler
+and install it at the beginning of our application: 
+
+<div class=programlisting>
+<p>
+<pre>
+import java.net.*; 
+import java.io.*; 
+ 
+class OurContentHandlerFactory implements ContentHandlerFactory { 
+    
+    public ContentHandler createContentHandler(String mimetype) { 
+        if ( mimetype.equalsIgnoreCase( "application/x-tar" ) ) 
+            return new net.www.content.application.x_tar(); 
+        else  
+            return null; 
+    } 
+} 
+ 
+public class TarURLTest { 
+    public static void main (String [] args) throws Exception { 
+     
+        URLConnection.setContentHandlerFactory(new 
+                      OurContentHandlerFactory() ); 
+ 
+        URL url = new URL( args[0] ); 
+        String s = (String)url.getContent(); 
+        System.out.println( s ); 
+    } 
+} 
+</PRE>
+</DIV>
+
+<p class=para>
+The class <tt class=literal>OurContentHandlerFactory</tt> implements the
+<tt class=literal>ContentHandlerFactory</tt> interface. It recognizes the
+MIME-type <tt class=literal>application/x-tar</tt> and
+returns a new instance of our <tt class=literal>x_tar</tt>
+handler. <tt class=literal>TarURLTest</tt> uses the static method
+<tt class=literal>URLConnection.setContentHandlerFactory()</tt> to install
+our new <tt class=literal>ContentHandlerFactory</tt>. After it's
+installed, our factory is called every time we retrieve the contents
+of a URL object. If it returns a
+<tt class=literal>null</tt> value, Java looks for handlers in a default
+location.[8]
+
+<blockquote class=footnote>
+<p class=para>[8] 
+If we don't install a 
+<tt class=literal>ContentHandlerFactory</tt> (or later, as we'll 
+see a <tt class=literal>URLStreamHandlerFactory</tt> for protocol handlers), 
+Java defaults to searching for a vendor-specific package name. If you have 
+Sun's Java Development Kit, it searches for content handlers in the 
+<tt class=literal>sun.net.www.content</tt> package hierarchy and protocol 
+handler classes in the <tt class=literal>sun.net.www.protocol</tt> package 
+hierarchy. 
+</blockquote>
+<p class=para>
+After installing the factory, <tt class=literal>TarURLTest</tt>
+reads a URL from the command line, opens that
+URL, and lists its contents. Now you have a
+portable <i class=command>tar</i> command that can read its
+<i class=command>tar</i> files from arbitrary locations on the
+Net. I'll confess that I was lazy about exception handling in
+this example. Of course, a real application would need to catch and
+handle the appropriate exceptions; but we already know how to do that.
+
+<p class=para>
+A final design note. Our content handler returned the
+<i class=command>tar</i> listing as a <tt class=literal>String</tt>. I
+don't want to harp on the point, but this isn't the only
+option. If we were writing a content handler to work in the context of
+a Web browser, we might want it to produce some kind of
+HTML object that might display the listing as
+hypertext. Again, knowing the right solution requires that we know
+what kind of object a browser expects to receive, and currently
+that's undefined.
+
+<p class=para>
+In the next section, we'll turn the tables and look at
+protocol handlers. There we'll be building
+<tt class=literal>URLConnection</tt> objects and someone else will have
+the pleasure of reconstituting the data.
+
+</DIV>
+
+</DIV>
+
+</DIV>
+
+
+<div class=htmlnav>
+
+<p>
+<hr align=left width=515>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch09_04.htm"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><a href="index.htm"><img src='gifs/txthome.gif' border=0 alt='Home'></a></td>
+<td width=172 align=right valign=top><a href="ch09_06.htm"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+<tr>
+<td width=172 align=left valign=top>Web Browsers and Handlers</td>
+<td width=171 align=center valign=top><a href="index/idx_0.htm"><img src='gifs/index.gif' alt='Book Index' border=0></a></td>
+<td width=172 align=right valign=top>Writing a Protocol Handler</td>
+</tr>
+</table>
+<hr align=left width=515>
+
+<img src="gifs/smnavbar.gif" usemap="#map" border=0> 
+<map name="map"> 
+<area shape=RECT coords="0,0,108,15" href="../javanut/index.htm" alt="Java in a Nutshell"> 
+<area shape=RECT coords="109,0,200,15" href="../langref/index.htm" alt="Java Language Reference"> 
+<area shape=RECT coords="203,0,290,15" href="../awt/index.htm" alt="Java AWT"> 
+<area shape=RECT coords="291,0,419,15" href="../fclass/index.htm" alt="Java Fundamental Classes"> 
+<area shape=RECT coords="421,0,514,15" href="index.htm" alt="Exploring Java"> 
+</MAP>
+</DIV>
+
+</BODY>
+</HTML>

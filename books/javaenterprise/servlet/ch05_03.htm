@@ -1,0 +1,233 @@
+<html>
+<head>
+<title>Using Persistent Connections (Java Servlet Programming)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jason Hunter and William Crawford">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-391-XE" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Using Persistent Connections">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm" alt="Java Servlet Programming"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch05_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch05_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch05_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch05_01.htm">Chapter 5: Sending HTML Information</a></td><td align="right" valign="top" width="172"><a href="ch05_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch05_04.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">5.3. Using Persistent Connections</h2>
+
+<p>
+<a name="INDEX-926"></a><a name="INDEX-927"></a>
+Persistent connections (sometimes <a name="INDEX-928"></a>called
+"keep-alive" connections) can be used to optimize the way
+servlets return content to the client. To understand how this
+optimization works, you first need to understand how HTTP connections
+work. We'll keep this at a high level and only go as low as is
+necessary to explain the basic idea. The details are well covered in
+Clinton Wong's <em class="emphasis">Web Client Programming
+</em><a name="INDEX-929"></a><a name="INDEX-930"></a>
+(O'Reilly)<em class="emphasis">.</em>
+</p>
+
+<p>When a client, such as a browser, wants to request a web document
+from a server, it begins by establishing a socket connection to the
+server. Over this connection, the client makes its request and then
+receives the server's response. The client indicates it has
+finished its request by sending a blank line; the server, in turn,
+indicates that the response is complete by closing the socket
+connection.
+</p>
+
+<p>So far, so good. But what if the retrieved page contains
+<tt class="literal">&lt;IMG&gt;</tt> tags or
+<tt class="literal">&lt;APPLET&gt;</tt> tags that require the client to
+retrieve more content from the server? Well, another socket
+connection is used. If a page contains 10 graphics along with an
+applet made up of 25 classes, that's 36 connections needed to
+transfer the page. No wonder some people say WWW stands for the World
+Wide Wait! This approach is like ordering a pizza, but making a
+separate phone call for each topping.
+</p>
+
+<p>A better approach is to use the same socket connection to retrieve
+more than one piece of a page, something called a
+<em class="emphasis">persistent connection</em>. The trick with a
+persistent connection is that the client and server must somehow
+agree on where the server's response ends and where the
+client's next request begins. They could try to use a token
+like a blank line, but what if the response itself contains a blank
+line? The way persistent connections work is that the server just
+tells the client how big the response body will be by setting the
+<tt class="literal">Content-Length</tt><a name="INDEX-931"></a><a name="INDEX-932"></a>
+header as part of the response. The client then knows that after that
+much response body, it has control of the socket again.
+</p>
+
+<p>Most servers internally manage the <tt class="literal">Content-Length</tt>
+header for the static files they serve, but do not do the same for
+the servlets they serve. That's left to the servlets
+themselves. A servlet can gain the advantages of a persistent
+connection for its dynamic content by using the
+<tt class="literal">setContentLength()</tt><a name="INDEX-933"></a><a name="INDEX-934"></a>
+method:
+</p>
+
+<blockquote>
+<pre class="programlisting">public void ServletResponse.setContentLength(int len)</pre>
+</blockquote>
+
+<p>This method sets the length (in bytes) of the content being returned
+by the server. In an HTTP servlet, the method sets the HTTP
+<tt class="literal">Content-Length</tt> header. Note that using this method
+is optional. If you use it, however, your servlets will be able to
+take advantage of persistent connections when they are available. The
+client will also be able to display an accurate progress monitor
+during the download.
+</p>
+
+<p>If you do call <tt class="literal">setContentLength()</tt>, there are two
+caveats: a servlet must call this method before sending the response
+body, and the given length must be exact. If it's off by even
+one byte, you will have problems.<a href="#FOOTNOTE-1">[1]</a> This sounds more difficult than it
+really is. The trick is for a servlet to use a
+<tt class="literal">ByteArrayOutputStream</tt> to buffer the output, as
+<a name="INDEX-935"></a>
+shown in <a href="#ch05-35325">Example 5-2</a>.
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-1"></a>
+<p>[1] For example, with
+the Java Web Server, if a servlet sets the length too short, the
+server throws an <tt class="literal">IOException</tt> saying there was a
+"write past end of stream". If a servlet sets the length
+too long, the client stalls as it waits for the rest of the
+response.</p> </blockquote>
+
+<a name="ch05-35325"></a>
+<div class="example">
+<h4 class="objtitle">Example 5-2. A servlet using persistent connections </h4>
+<blockquote>
+<pre class="programlisting">import java.io.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class KeepAlive extends HttpServlet {
+
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+                               throws ServletException, IOException {
+
+    res.setContentType("text/html");
+
+    // Set up a PrintStream built around a special output stream
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream(1024);
+    PrintWriter out = new PrintWriter(bytes, true);  // true forces flushing
+
+    out.println("&lt;HTML&gt;");
+    out.println("&lt;HEAD&gt;&lt;TITLE&gt;Hello World&lt;/TITLE&gt;&lt;/HEAD&gt;");
+    out.println("&lt;BODY&gt;");
+    out.println("&lt;BIG&gt;Hello World&lt;/BIG&gt;");
+    out.println("&lt;/BODY&gt;&lt;/HTML&gt;");
+
+    // Set the content length to the size of the buffer
+    res.setContentLength(bytes.size());
+
+    // Send the buffer
+    bytes.writeTo(res.getOutputStream());
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>Instead of writing to the <tt class="literal">PrintWriter</tt> returned by
+<tt class="literal">getWriter()</tt>, this servlet writes to a
+<tt class="literal">PrintWriter</tt> built around a
+<tt class="literal">ByteArrayOutputStream</tt>. This array grows as
+necessary to accommodate whatever output the servlet sends. When the
+servlet is ready to exit, it sets the content length to be the size
+of the buffer and then sends the contents of the buffer to the
+client. Notice that the bytes are sent using the byte-oriented
+<tt class="literal">ServletOutputStream</tt>. With this simple
+modification, a servlet can take advantage of a persistent
+connection.
+</p>
+
+<p>It is important to note that persistent connections come with a
+price. Buffering all the output and sending it all in one batch
+requires extra memory, and it may delay the time at which a client
+begins receiving data. For servlets with short responses, persistent
+connections make sense, but for servlets with long responses, the
+memory overhead and delay probably outweigh the benefit of opening
+fewer connections.
+</p>
+
+<p>It is also important to note that not all servers and not all clients
+support persistent connections. That said, it's still
+appropriate for a servlet to set its content length. This information
+will be used by those servers that support persistent connections and
+ignored by the others.<a name="INDEX-936"></a><a name="INDEX-937"></a>
+</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch05_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch05_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch05_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch05_04.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">5.2. Sending a Normal Response</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">5.4. HTML Generation</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

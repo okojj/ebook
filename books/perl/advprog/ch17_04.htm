@@ -1,0 +1,541 @@
+<html><head>
+<title>[Chapter 17] 17.4 Jeeves Implementation</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:39:49Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch17_01.htm" title="17. Template-Driven Code Generation"><link rel="prev" href="ch17_03.htm" title="17.3 Jeeves Overview"><link rel="next" href="ch17_05.htm" title="17.5 Sample Specification Parser"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_03.htm" title="17.3 Jeeves Overview"><img src="../gifs/txtpreva.gif" alt="Previous: 17.3 Jeeves Overview" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch17_01.htm" title="17. Template-Driven Code Generation">Chapter 17<br>Template-Driven Code Generation</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_05.htm" title="17.5 Sample Specification Parser"><img src="../gifs/txtnexta.gif" alt="Next: 17.5 Sample Specification Parser" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch17-21991">17.4 Jeeves Implementation</A
+></H2
+><p class="para"><a class="indexterm" name="ch17-idx-977909-0"></A
+>In the following pages, we implement all the components of the Jeeves framework. You may find it helpful to run <kbd class="command">jeeves</KBD
+> for a sample problem and have a copy of the output handy.</P
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-974095">17.4.1 AST Module</A
+></H3
+><p class="para">The <a class="indexterm" name="ch17-idx-977938-0"></A
+>AST module is a very simple library, so we will look at only a few of the more interesting procedures below. </P
+><p class="para">An AST node is a container of properties, so a hash table suits the job perfectly. Each node is given a name for ease of debugging:</P
+><pre class="programlisting">package Ast;
+use strict;
+sub <b class="emphasis.bold">new</B
+> {
+    my ($pkg, $name) = @_;
+    bless {'ast_node_name' =&gt; $name}, $pkg;
+}</PRE
+><p class="para"><kbd class="command">new</KBD
+>, <kbd class="command">add_prop</KBD
+><a class="indexterm" name="ch17-idx-977939-0"></A
+>, and <kbd class="command">add_prop_list</KBD
+> are used by all specification parsers to create AST objects:</P
+><pre class="programlisting">sub <b class="emphasis.bold">add_prop</B
+> {
+    my ($node, $prop_name, $prop_value) = @_;
+    $node-&gt;{$prop_name} = $prop_value;
+}
+sub <b class="emphasis.bold">add_prop_list</B
+> {
+    my ($node, $prop_name, $node_ref) = @_;
+    if (! exists $node-&gt;{$prop_name}) {
+        $node-&gt;{$prop_name} = [];
+    }
+    push (@{$node-&gt;{$prop_name}}, $node_ref);
+}</PRE
+><p class="para"><kbd class="command">add_prop</KBD
+> simply adds a name-value pair to the AST object. <kbd class="command">add_prop_list</KBD
+><a class="indexterm" name="ch17-idx-977940-0"></A
+> creates a list-valued property. The property value is an anonymous array that contains references to other AST nodes. You can have your own list-valued properties, but you should never use them as an argument to <kbd class="command">@foreach</KBD
+> because it assumes that the elements of that list are AST nodes.</P
+><pre class="programlisting">my @saved_values_stack;
+sub <b class="emphasis.bold">visit</B
+> {
+    no strict 'refs';
+    my $node = shift;
+    package main;
+    my ($var, $val, $old_val, %saved_values);
+    while (($var,$val) = each %{$node}) {
+        if (defined ($old_val = $$var)) {
+           $saved_values{$var} = $old_val;
+        }
+        $$var = $val;
+    }
+    push (@saved_values_stack, \%saved_values);
+}</PRE
+><p class="para">The <kbd class="command">visit</KBD
+><a class="indexterm" name="ch17-idx-977941-0"></A
+><a class="indexterm" name="ch17-idx-977941-1"></A
+> and <kbd class="command">bye</KBD
+> methods are used by the intermediate Perl file. <kbd class="command">$node</KBD
+> is the node being visited, so <kbd class="command">%$node</KBD
+> is the corresponding hash table. <kbd class="command">$var</KBD
+> is a property name such as <code class="literal">class_name</CODE
+>, so to check whether a variable such as <kbd class="command">$class_name</KBD
+> already exists, we use symbolic references: <kbd class="command">if</KBD
+> <kbd class="command">defined($$var</KBD
+>). All such variables that existed before are squirreled away into a hash table (<kbd class="command">%saved_values</KBD
+>), which is then pushed into a stack. This stack represents collections of such saved values.</P
+><pre class="programlisting">sub <b class="emphasis.bold">bye</B
+> {
+    my $rh_saved_values = pop(@saved_values_stack);
+    no strict 'refs';
+    package main;
+    my ($var,$val);
+    while (($var,$val) = each %$rh_saved_values) {
+        $$var = $val;
+    }
+}</PRE
+><p class="para"><kbd class="command">bye()</KBD
+> simply pops this stack and restores the global variables to their former values. Incidentally, since <kbd class="command">use</KBD
+> <kbd class="command">strict</KBD
+> doesn't encourage symbolic references, we have to explicitly turn it off for a short while with <kbd class="command">no</KBD
+> <kbd class="command">strict</KBD
+> <kbd class="command">'refs'</KBD
+>.<a class="indexterm" name="ch17-idx-977947-0"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-967470">17.4.2 Template Parser</A
+></H3
+><p class="para"><a class="indexterm" name="ch17-idx-977945-0"></A
+><a class="indexterm" name="ch17-idx-977945-1"></A
+>The template parser supports the directives in <a class="xref" href="#ch17-39818" title="Directives Recognized by Jeeves">Table 17.1</A
+>.</P
+><br><table class="table" border="1" cellpadding="3"><caption class="table"><a class="title" name="ch17-39818">Table 17.1: Directives Recognized by Jeeves</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para"><b class="emphasis.bold">Directive</B
+></P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para"><b class="emphasis.bold">Description</B
+></P
+></TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">@//</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Comment. This line is not output</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">@foreach var [condition]
+@end</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">This loops through each element of <code class="literal">var</CODE
+>  (it is assumed that <code class="literal">var</CODE
+> is an array) and executes the body if the (optional) condition is true. Conditions are simply pieces of embedded Perl code and can be used like this:</P
+><pre class="programlisting">@FOREACH attr_list ($className eq &quot;Test&quot;)</PRE
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">@if @elsif @else @end</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Translates directly to Perl's <kbd class="command">if</KBD
+> statement.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">@openfile filename 
+              [options]</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">All statements following this line are simply sent to this file until another <code class="literal">@OPENFILE</CODE
+> is encountered. Options are: </P
+><p class="para"><kbd class="command">-append</KBD
+>: open the file in append mode</P
+><p class="para"><kbd class="command">-no_overwrite</KBD
+>: do not overwrite the file if it already exists</P
+><p class="para"><kbd class="command">-only_if_different</KBD
+>: overwrites the file only if it is different. Useful in a <kbd class="command">make</KBD
+> environment, where you don't want to unnecessarily touch files.</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><pre class="programlisting">@perl</PRE
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">For embedding Perl code, provided as an escape to a higher power.</P
+><pre class="programlisting">@perl $user_name = $ENV{USER};
+@perl print $user_name;</PRE
+></TD
+></TR
+></TBODY
+></TABLE
+><p class="para">The following template parser code simply translates all template directives to corresponding pieces of Perl code in the intermediate files. Explanations follow each subroutine definition.</P
+><pre class="programlisting">package TemplateParser;
+use strict;</PRE
+><pre class="programlisting"></PRE
+><pre class="programlisting">sub <b class="emphasis.bold">parse</B
+> {
+    # Args : template file, intermediate perl file
+    my ($pkg,$template_file, $inter_file) = @_;
+    unless (open (T, $template_file)) {
+        warn &quot;$template_file : $@&quot;;
+        return 1;
+    }
+    open (I, &quot;&gt; $inter_file&quot;) || 
+        die &quot;Error opening intermediate file $inter_file : $@&quot;;
+    
+    emit_opening_stmts($template_file);
+    my $line;
+    while (defined($line = &lt;T&gt;)) {
+        if ($line !~ /^\s*\@/) { # Is it a command?
+            emit_text($line);
+            next;
+        } 
+        if ($line =~ /^\s*\@OPENFILE\s*(.*)\s*$/i) {
+            emit_open_file ($1);
+        } elsif ($line =~ /^\s*\@FOREACH\s*(\w*)\s*(.*)\s*/i) {
+            emit_loop_begin ($1,$2);
+        } elsif ($line =~ /^\s*\@END/i) {
+            emit_loop_end();
+        } elsif ($line =~ /^\s*\@PERL(.*)/i) {
+            emit_perl(&quot;$1\n&quot;);
+        };
+    }
+    emit_closing_stmts();
+    
+    close(I);
+    return 0;
+}</PRE
+><p class="para">TemplateParser::parse is called by the driver, with the name of the template file. For every line in the template, it checks to see whether that line is a command or ordinary text and calls the appropriate "emit" routine. All emitted code is shown in italics.</P
+><pre class="programlisting">sub <b class="emphasis.bold">emit_opening_stmts</B
+> {
+    my $template_file = shift;
+    emit(&quot;# Created automatically from $template_file&quot;);
+    emit(&lt;&lt;'_EOC_');
+<em class="emphasis">use Ast;</EM
+>
+<em class="emphasis">use JeevesUtil;</EM
+>
+
+<em class="emphasis">$tmp_file = &quot;jeeves.tmp&quot;;</EM
+>
+<em class="emphasis">sub open_file;</EM
+>
+<em class="emphasis">if (! (defined ($ROOT) &amp;&amp; $ROOT)) {</EM
+>
+<em class="emphasis">    die &quot;ROOT not defined \n&quot;;</EM
+>
+<em class="emphasis">}</EM
+>
+
+<em class="emphasis">$file = &quot;&gt; -&quot;;   # Assumes STDOUT, unless @OPENFILE changes it.</EM
+>
+<em class="emphasis">open (F, $file) || die $@;</EM
+>
+<em class="emphasis">$code = &quot;&quot;;</EM
+>
+<em class="emphasis">$ROOT-&gt;visit();</EM
+>
+_EOC_
+}</PRE
+><p class="para">All pieces of code that go into the intermediate file (<em class="emphasis">emitted</EM
+>) are shown in italics. Perl's "<a class="indexterm" name="ch17-idx-977948-0"></A
+>here document" feature is used extensively because we can use quotes and newlines without restrictions. <kbd class="command">emit_opening_statement</KBD
+><a class="indexterm" name="ch17-idx-977950-0"></A
+> visits the syntax tree's root node (the driver makes it available as a global variable called <kbd class="command">$ROOT</KBD
+>). By default, all output from the intermediate file is to standard output until it comes across an <kbd class="command">@openfile</KBD
+> directive.</P
+><pre class="programlisting">sub <b class="emphasis.bold">emit_open_file</B
+> {
+    my $file = shift;
+    my $no_overwrite      = ($file =~ s/-no_overwrite//gi) ? 1 : 0;
+    my $append            = ($file =~ s/-append//gi) ? 1 : 0;
+    my $only_if_different = ($file =~ s/-only_if_different//gi) ? 1 : 0;
+    $file =~ s/\s*//g;
+    emit (&lt;&lt;&quot;_EOC_&quot;);
+# Line $.
+open_file(\&quot;$file\&quot;, $no_overwrite, $only_if_different, $append);
+_EOC_
+}</PRE
+><p class="para"><kbd class="command">emit_open_file</KBD
+><a class="indexterm" name="ch17-idx-977949-0"></A
+> contains the translation for <kbd class="command">@openfile</KBD
+> and simply emits a call to the utility function <em class="emphasis">open_file</EM
+> (discussed later).</P
+><pre class="programlisting">sub <b class="emphasis.bold">emit_loop_begin</B
+> {
+    my $l_name = shift; # Name of the list variable
+    my $condition = shift;
+    my $l_name_i = $l_name . &quot;_i&quot;;
+emit (&lt;&lt;&quot;_EOC_&quot;);
+<code class="replaceable"><i># Line $.</I
+></CODE
+>
+<code class="replaceable"><i>foreach \$$l_name_i (\@\${$l_name}) {</I
+></CODE
+>
+<code class="replaceable"><i>    \$$l_name_i</I
+></CODE
+>-&gt;<code class="replaceable"><i>visit ();</I
+></CODE
+>
+_EOC_
+    if ($condition) {
+        emit (&quot;<code class="replaceable"><i>next if (! ($condition));\n</I
+></CODE
+>&quot;);
+    }
+}
+sub <b class="emphasis.bold">emit_loop_end</B
+> {
+    emit(&lt;&lt;&quot;_EOC_&quot;);
+<code class="replaceable"><i>#Line $.</I
+></CODE
+>
+<code class="replaceable"><i>    Ast-&gt;bye();</I
+></CODE
+>
+<code class="replaceable"><i>}</I
+></CODE
+>
+_EOC_
+}</PRE
+><p class="para">We saw earlier the code generated for a <kbd class="command">@foreach</KBD
+> directive. Note how we manufacture the iterator name and protect certain expressions from getting interpolated. This code can be better understood by looking at the sample output.</P
+><pre class="programlisting">sub <b class="emphasis.bold">emit</B
+> {
+    print I $_[0];
+}
+sub <b class="emphasis.bold">emit_perl</B
+> {
+    emit(<code class="replaceable"><i>$_[0]</I
+></CODE
+>);
+}
+sub <b class="emphasis.bold">emit_text</B
+> {
+    my $text = $_[0];
+    chomp $text;
+    # Escape quotes in the text
+    $text =~ s/&quot;/\\&quot;/g;
+    $text =~ s/'/\\'/g;
+    emit(&lt;&lt;&quot;_EOC_&quot;);
+<code class="replaceable"><i>output(&quot;$text\\n&quot;);</I
+></CODE
+>
+_EOC_
+}
+
+sub <b class="emphasis.bold">emit_closing_stmts</B
+> {
+    emit(&lt;&lt;'_EOC_');
+<code class="replaceable"><i>Ast::bye();</I
+></CODE
+>
+<code class="replaceable"><i>close(F);</I
+></CODE
+>
+<code class="replaceable"><i>unlink ($tmp_file);</I
+></CODE
+>
+<code class="replaceable"><i>sub open_file {</I
+></CODE
+>
+<code class="replaceable"><i>    my ($a_file, $a_nooverwrite, $a_only_if_different, $a_append) = @_;</I
+></CODE
+>
+
+<code class="replaceable"><i>    #First deal with the file previously opened</I
+></CODE
+>
+<code class="replaceable"><i>    close (F);</I
+></CODE
+>
+<code class="replaceable"><i>    if ($only_if_different) {</I
+></CODE
+>
+<code class="replaceable"><i>        if (JeevesUtil::compare ($orig_file, $curr_file) != 0) {</I
+></CODE
+>
+<code class="replaceable"><i>            rename ($curr_file, $orig_file) || </I
+></CODE
+>
+<code class="replaceable"><i>            die &quot;Error renaming $curr_file  to $orig_file&quot;;</I
+></CODE
+>
+<code class="replaceable"><i>        }</I
+></CODE
+>
+<code class="replaceable"><i>    }</I
+></CODE
+>
+<code class="replaceable"><i>    #Now for the new file ...</I
+></CODE
+>
+<code class="replaceable"><i>    $curr_file = $orig_file = $a_file;</I
+></CODE
+>
+<code class="replaceable"><i>    $only_if_different = ($a_only_if_different &amp;&amp; (-f $curr_file)) </I
+></CODE
+>
+<code class="replaceable"><i>                         ? 1 : 0;</I
+></CODE
+>
+<code class="replaceable"><i>    $no_overwrite = ($a_nooverwrite &amp;&amp; (-f $curr_file))  ? 1 : 0;</I
+></CODE
+>
+<code class="replaceable"><i>    $mode =  ($a_append) ? &quot;&gt;&gt;&quot; : &quot;&gt;&quot;;</I
+></CODE
+>
+<code class="replaceable"><i>    if ($only_if_different) {</I
+></CODE
+>
+<code class="replaceable"><i>        unlink ($tmp_file);</I
+></CODE
+>
+<code class="replaceable"><i>        $curr_file = $tmp_file;</I
+></CODE
+>
+<code class="replaceable"><i>    }</I
+></CODE
+>
+<code class="replaceable"><i>    if (! $no_overwrite) {</I
+></CODE
+>
+<code class="replaceable"><i>        open (F, &quot;$mode $curr_file&quot;) || die &quot;could not open $curr_file&quot;;</I
+></CODE
+>
+<code class="replaceable"><i>    }</I
+></CODE
+>
+<code class="replaceable"><i>}</I
+></CODE
+>
+
+<code class="replaceable"><i>sub output {</I
+></CODE
+>
+<code class="replaceable"><i>    print F @_ (! $no_overwrite);</I
+></CODE
+>
+<code class="replaceable"><i>}</I
+></CODE
+>
+<code class="replaceable"><i>1;</I
+></CODE
+>
+_EOC_
+}</PRE
+><p class="para">The <kbd class="command">open_file</KBD
+> and <kbd class="command">output</KBD
+> routines are present in all intermediate code files (for no particular reason&nbsp;- they might as well have been put in the JeevesUtil package). <kbd class="command">open_file</KBD
+> closes the previously opened file. If you say, <kbd class="command">@openfile foo -only_if_different</KBD
+>, the intermediate file dumps the template output into a temporary file, and when it is done, it compares this temporary file to the contents of <kbd class="command">foo</KBD
+>, and overwrites it only if it is different.<a class="indexterm" name="ch17-idx-977952-0"></A
+><a class="indexterm" name="ch17-idx-977952-1"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-972476">17.4.3 Jeeves Driver</A
+></H3
+><p class="para">The <em class="emphasis">jeeves</EM
+><a class="indexterm" name="ch17-idx-977954-0"></A
+> script is merely a driver that first calls the template parser to produce the intermediate file, then calls the input parser (its <kbd class="command">parse()</KBD
+> method, actually) to produce the syntax tree, and finally <code class="literal">eval</CODE
+>s the intermediate file. The template file is recompiled only if it is newer than the intermediate file.</P
+><p class="para"><a class="xref" href="#ch17-39311" title="Jeeves">Example 17.3</A
+> gives the code for <em class="emphasis">jeeves</EM
+>, minus the uninteresting stuff (such as <kbd class="command">process_args()</KBD
+>).</P
+><div class="example"><h4 class="example"><a class="title" name="ch17-39311">Example 17.3: Jeeves</A
+></H4
+><pre class="programlisting">#!/opt/bin/perl
+# process_args initializes the following global variables:
+#   $spec_file     - Name of the input specification (emp.om)
+#   $template_file - Name of the template file (oo.tpl)
+#   $inter_file    - name of the intermediate file 
+#                        (defaults to &quot;${template_file}.pl&quot;
+process_args();  
+#-------------------------------------------------------------------------
+# Parse the template file
+#-------------------------------------------------------------------------
+# Use &quot;require&quot; to allow process_args() to set @INC first
+require 'TemplateParser.pm';
+my $compile_template = 1;
+if ((-e $inter_file) &amp;&amp;
+    (-M $inter_file) &gt;= (-M $template_file)) {
+        $compile_template = 0; # Don't compile if inter-file is newer.
+}
+if ($compile_template) {
+    if (TemplateParser-&gt;parse ($template_file, $inter_file) == 0) {
+        print STDERR (&quot;Translated $template_file to $inter_file\n&quot;)
+           if $verbose;
+    } else {
+        die &quot;Could not parse template file - exiting\n&quot;;
+    }
+}
+#-------------------------------------------------------------------------
+# Parse the input specification file
+#-------------------------------------------------------------------------
+require &quot;${spec_parser}.pm&quot;; $spec_parser-&gt;import;
+$ROOT = $spec_parser-&gt;parse($spec_file);
+print STDERR (&quot;Parsed $spec_file\n&quot;) if $verbose;
+$ROOT-&gt;print() if $debugging;
+#-------------------------------------------------------------------------
+# Eval the intermediate Perl file
+#-------------------------------------------------------------------------
+require &quot;$inter_file&quot;;
+die &quot;$@\n&quot; if $@;
+exit(0);
+
+
+#-------------------------------------------------------------------------
+sub Usage {
+    print STDERR &lt;&lt;&quot;_EOT_&quot;;
+
+Usage: jeeves &lt;options&gt; &lt;specification file&gt;
+ where options are: 
+ -t &lt;template file&gt;            : Name of the template file. 
+                                 Default : &quot;./jeeves.template&quot;
+                                 Default template directory = &quot;.&quot;, which
+                                 can be modified by setenv-ing
+                                 &quot;JEEVESTEMPLATEDIR&quot;
+ -q                            : Quiet Mode
+ -d                            : Set a debugging trace. This is NOT quiet!
+ -s &lt;specification parser&gt;     : Parser module that can parse the input
+                                 specification file
+                                 Default : &quot;oo_schema&quot;
+[-ti &lt;intermediate perl file&gt;] : jeeves translates the template file to
+                               : perl code. Default : &quot;&lt;template&gt;.pl&quot;
+-D var[=value]                 : Define variables on the command line 
+
+The command line can be specified in the envt. variable &quot;JEEVESOPTIONS&quot;.
+
+The pathname to all Jeeves modules can be set in the envt. variable 
+    &quot;JEEVESLIBDIR&quot; (colon-separated);
+_EOT_
+    exit(1);<a class="indexterm" name="ch17-idx-977931-0"></A
+>
+}<a class="indexterm" name="ch17-idx-977913-0"></A
+><a class="indexterm" name="ch17-idx-977913-1"></A
+></PRE
+></DIV
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_03.htm" title="17.3 Jeeves Overview"><img src="../gifs/txtpreva.gif" alt="Previous: 17.3 Jeeves Overview" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_05.htm" title="17.5 Sample Specification Parser"><img src="../gifs/txtnexta.gif" alt="Next: 17.5 Sample Specification Parser" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">17.3 Jeeves Overview</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">17.5 Sample Specification Parser</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

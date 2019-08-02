@@ -1,0 +1,516 @@
+<html><head>
+<title>[Chapter 8] Object Orientation: The Next Few Steps</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:34:30Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="index.htm" title="Advanced Perl Programming"><link rel="prev" href="ch07_06.htm" title="7.6 Resources"><link rel="next" href="ch08_02.htm" title="8.2 Delegation"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_06.htm" title="7.6 Resources"><img src="../gifs/txtpreva.gif" alt="Previous: 7.6 Resources" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 8</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch08_02.htm" title="8.2 Delegation"><img src="../gifs/txtnexta.gif" alt="Next: 8.2 Delegation" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="chapter"><h1 class="chapter"><a class="title" name="ch08-24377">8. Object Orientation: The Next Few Steps</A
+></H1
+><div class="htmltoc"><p><b>Contents:</B
+><br><a class="sect1" href="#ch08-40982" title="8.1 Efficient Attribute Storage">Efficient Attribute Storage</A
+><br><a class="sect1" href="ch08_02.htm" title="8.2 Delegation">Delegation</A
+><br><a class="sect1" href="ch08_03.htm" title="8.3 On Inheritance">On Inheritance</A
+><br><a class="sect1" href="ch08_04.htm" title="8.4 Resources">Resources</A
+></P
+><p></P
+></DIV
+><div class="epigraph" align="right"><p class="para" align="right"><i>No ties bind so strongly as the links of inheritance.</I
+></P
+><p class="attribution" align="right">-&nbsp;Stephen Jay Gould</P
+></DIV
+><p class="para">This chapter is essentially a motley collection of ideas, techniques, and opinions related to Perl objects. I have not attempted to weave these threads too closely. The topics are as follows:</P
+><dl class="variablelist"><dt class="term">Efficient attribute storage</DT
+><dd class="listitem"><p class="para">Search for an alternative way of representing object attributes, instead of hash tables. The two strategies examined in this chapter occupy less space and are faster.</P
+></DD
+><dt class="term">Delegation</DT
+><dd class="listitem"><p class="para">How to use <kbd class="command">AUTOLOAD</KBD
+> to automatically forward method calls.</P
+></DD
+><dt class="term">Inheritance and composition</DT
+><dd class="listitem"><p class="para">What I find objectionable about inheritance, along with alternative ways of structuring classes.</P
+></DD
+></DL
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch08-40982">8.1 Efficient Attribute Storage</A
+></H2
+><p class="para"><a class="indexterm" name="ch08-idx-967979-0"></A
+><a class="indexterm" name="ch08-idx-967979-1"></A
+><a class="indexterm" name="ch08-idx-967979-2"></A
+>Hash tables have traditionally been used for storing object attributes. There are good reasons for doing this:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para"><a class="listitem" name="ch08-pgfId-956671"></A
+>Each attribute is self-describing (that is, the name and type of each attribute are easily obtained from the object), which makes it easy to write readable code. It also helps modules that do automatic object persistence or visualization of objects, without the object's explicit cooperation.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch08-pgfId-956678"></A
+>Each class in an inheritance hierarchy can add attributes freely and independently.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch08-pgfId-961783"></A
+>In fact, each <em class="emphasis">instance</EM
+> (not just the class) can possess a unique set of attributes and can change this set at run time. The artificial intelligence community often uses this <em class="emphasis">slot-</EM
+> or <em class="emphasis">frame</EM
+>-based approach because it adapts itself very well to new pieces of information. </P
+></LI
+></UL
+><p class="para">Of course, not every problem requires this degree of generality. In addition, while Perl's hash tables are fast (within 15% of the speed of arrays) and reasonably compact (key strings are not duplicated), they are not exactly inexpensive. Creating 100 objects means that you have 100 hash tables, each of which tends to optimistically allocate extra space to accommodate future insertions. </P
+><p class="para">This section illustrates two alternate approaches, one using arrays and another using typeglobs. Both approaches are less general than the hash table approach but are faster and leaner. The first is a module called ObjectTemplate developed for this book.[<a class="footnote" href="#ch08-pgfId-966323">1</A
+>] The other uses typeglobs and has seen limited application in some standard CPAN modules, most notably IO and Net. I hesitate to suggest this as an alternative approach because it is way too "hackish," but I present it here to enable you to understand these standard modules.</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch08-pgfId-966323">[1]</A
+> I originally posted a trial version of this approach to <em class="emphasis">comp.lang.perl.misc</EM
+> as a module called ClassTemplate. The version presented here is a significant improvement.</P
+></DIV
+></BLOCKQUOTE
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch08-39245">8.1.1 ObjectTemplate: Attribute Storage Using Arrays</A
+></H3
+><p class="para">The <a class="indexterm" name="ch08-idx-967989-0"></A
+><a class="indexterm" name="ch08-idx-967989-1"></A
+><a class="indexterm" name="ch08-idx-967989-2"></A
+>module presented in this section uses arrays to store attributes (but not the array per object approach). Let us briefly see its usage before moving on to the implementation. </P
+><p class="para">To implement the <kbd class="command">Employee</KBD
+> class, with the attributes "name," "age," and "position," you simply inherit from ObjectTemplate, and supply a list of attribute names to a static method called <i class="function">attributes</I
+> (exported by <kbd class="command">ObjectTemplate</KBD
+>), as follows:</P
+><pre class="programlisting">package Employee;
+use ObjectTemplate;                    # Import ObjectTemplate
+@ISA = qw(ObjectTemplate);             # Inherit from it.
+attributes qw(name age position);      # Declare your attributes</PRE
+><p class="para">That's all. A user of this module can now create <kbd class="command">Employee</KBD
+> objects using a dynamically generated method called <kbd class="command">new</KBD
+> and retrieve and modify attributes using accessor methods (also created automagically):</P
+><pre class="programlisting">use Employee;
+$obj = Employee-&gt;new(
+                     &quot;name&quot; =&gt; &quot;Norma Jean&quot;,
+                     &quot;age&quot;  =&gt; 25
+                    );  # new() created by ObjectTemplate
+$obj-&gt;position(&quot;Actress&quot;);
+print $obj-&gt;name, &quot;:&quot;, $obj-&gt;age, &quot;\n&quot;;</PRE
+><p class="para">Note that Perl permits you to omit the trailing parentheses for any method call in which there is no ambiguity about its usage. Any word following an arrow is automatically treated as a method, as in the preceding case.</P
+><p class="para">ObjectTemplate provides the following features for an inherited class: </P
+><ol class="orderedlist"><li class="listitem"><p class="para"><a class="listitem" name="ch08-pgfId-964716"></A
+>An allocator function called <kbd class="command">new</KBD
+>. This allocates an object blessed into the inherited class. <kbd class="command">new</KBD
+> calls <kbd class="command">initialize</KBD
+>, which in turn can be overridden in the inherited class, as explained earlier. </P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch08-pgfId-964717"></A
+>Accessor methods with the same name as the attributes. These methods are created in the inherited module, and everyone, <em class="emphasis">including the object's own methods</EM
+>, gains access to the attributes only through these methods. This is because ObjectTemplate is the only module that knows how the attributes are stored. For example, </P
+><pre class="programlisting">package Employee;
+sub promote {
+   my $emp = shift;                          # $emp is the object
+   my $current_position = $emp-&gt;position();  # Get attribute
+   my $next_position    = lookup_next_position($current_position);
+   $r_employee-&gt;position($next_position);    # Set attribute
+}</PRE
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch08-pgfId-956860"></A
+>The user package can create its own custom accessor methods with the same naming convention as above; in this case, ObjectTemplate does not generate one automatically. If a custom accessor method wants access to the attribute managed by ObjectTemplate, it can use the <kbd class="command">get_attribute</KBD
+> and <kbd class="command">set_attribute</KBD
+> methods.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch08-pgfId-956829"></A
+><kbd class="command">new()</KBD
+> takes an initializer list, a sequence of attribute name-value pairs.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch08-pgfId-966559"></A
+>ObjectTemplate takes attribute inheritance (<kbd class="command">@ISA</KBD
+>) into account, for both the memory layout, and the accessors. Consider</P
+><pre class="programlisting">package Employee;
+use ObjectTemplate;
+@ISA = qw(ObjectTemplate);
+attributes qw(name age);
+
+package HourlyEmployee;
+@ISA = qw(Employee);
+attributes qw(hourly_wage);</PRE
+><p class="para">In this example, an object of the <kbd class="command">HourlyEmployee</KBD
+> class contains two inherited attributes, <kbd class="command">name</KBD
+> and <kbd class="command">age</KBD
+>, that all employees possess, and <kbd class="command">hourly_wage</KBD
+>, that only hourly employees possess.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch08-pgfId-960132"></A
+>All attributes are scalar-valued, so a multivalued attribute such as <code class="literal">friends</CODE
+> has to be stored as a reference:</P
+><pre class="programlisting">attributes qw(friends);
+$obj-&gt;friends([J'Joe']); # an array reference to the accessor</PRE
+><p class="para">This is of course true of the hash table representation also.</P
+></LI
+></OL
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch08-pgfId-960193">8.1.1.1 ObjectTemplate internals overview</A
+></H4
+><p class="para"><a class="xref" href="#ch08-21796" title="ObjectTemplate's attribute storage scheme">Figure 8.1</A
+> shows how ObjectTemplate organizes object attributes.</P
+><h4 class="figure"><a class="title" name="ch08-21796">Figure 8.1: ObjectTemplate's attribute storage scheme</A
+></H4
+><img class="graphic" src="figs/wpa_0801.gif" alt="Figure 8.1"><p class="para">The data structure is quite simple. Instead of allocating one array or hash per object, ObjectTemplate creates only as many arrays as there are attributes (the columns shown in the figure). Each object is merely a "horizontal slice" across these attribute columns. When <kbd class="command">new()</KBD
+> is called, it allocates a new logical row and inserts each element of the initializer array in the corresponding attribute column at the new row offset. The "object," therefore, is merely a blessed scalar containing that row index. This scheme is more space-efficient than the hash approach,  because it creates so few container arrays (only as many as there are attributes), and it is faster because array accesses are always a little faster than hash accesses.</P
+><p class="para">There's a slight hitch when an object is deleted. Although the corresponding row is logically free, we can't really move up the rest of the rows below, because the other object references (which are indices) and their data will get out of sync. ObjectTemplate therefore reuses deallocated (free) rows by maintaining a per-package "free list" called <code class="literal">@_free</CODE
+>. This is a linked list of all free rows with a scalar <kbd class="command">$_free</KBD
+> pointing to the head of this list. Each element of this list contains the row index of the next free row. When an object is deleted, <kbd class="command">$_free</KBD
+> points to that row, and the corresponding index in the free list points to the previous entry pointed to by <kbd class="command">$_free</KBD
+>. </P
+><p class="para">Since the freed and active rows do not overlap, we take the liberty of using one of the attribute columns (the first one) to hold <kbd class="command">@_free</KBD
+>. This is done using typeglob aliasing. <a class="xref" href="#ch08-32061" title="ObjectTemplate's scheme for managing holes created by deleted objects">Figure 8.2</A
+> shows a snapshot of this structure. </P
+><h4 class="figure"><a class="title" name="ch08-32061">Figure 8.2: ObjectTemplate's scheme for managing holes created by deleted objects</A
+></H4
+><img class="graphic" src="figs/wpa_0802.gif" alt="Figure 8.2"><p class="para">You might have noticed that I'm using the same identifier name, <kbd class="command">_free</KBD
+>, for two variables, <kbd class="command">$_free</KBD
+> and <kbd class="command">@free</KBD
+>. Although I frown on this idea in general, I have used it here for two reasons. First, both are required for the same task; second, one typeglob alias gives us access to both variables in one shot. This is important for performance, as we shall see soon.</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch08-pgfId-966729">8.1.1.2 ObjectTemplate implementation</A
+></H4
+><p class="para">ObjectTemplate uses objects, typeglob aliasing, symbolic references, and <kbd class="command">eval</KBD
+> liberally, so if you understand the code below, you can consider yourself a Perl hacker! One way to pore through this code is to read the descriptions supplied in this section while using the debugger to step through a small example that uses this module. Of course, you don't <em class="emphasis">have</EM
+> to understand the code to use it.</P
+><pre class="programlisting">package ObjectTemplate;
+require Exporter;
+@ObjectTemplate::ISA = qw(Exporter);
+@ObjectTemplate::EXPORT = qw(attributes);
+
+my $debugging = 0; # assign 1 to it to see code generated on the fly 
+
+# Create accessor methods, and new()
+sub <b class="emphasis.bold">attributes</B
+> {
+    my ($pkg) = caller;
+    @{&quot;${pkg}::_ATTRIBUTES_&quot;} = @_;
+    my $code = &quot;&quot;;
+    foreach my $attr (get_attribute_names($pkg)) {
+        # If a field name is &quot;color&quot;, create a global array in the
+        # calling package called @color
+        @{&quot;${pkg}::_$attr&quot;} = ();
+
+        # Define accessor only if it is not already present
+        unless ($pkg-&gt;can(&quot;$attr&quot;)) {
+            $code .= _define_accessor ($pkg, $attr);
+        } 
+    }
+    $code .= _define_constructor($pkg);
+    eval $code;
+    if ($@) {
+       die  &quot;ERROR defining constructor and attributes for '$pkg':&quot; 
+            . &quot;\n\t$@\n&quot; 
+            . &quot;-----------------------------------------------------&quot;
+            . $code;
+    }
+}</PRE
+><p class="para"><kbd class="command">attributes</KBD
+> uses symbolic references to create a global array called <kbd class="command">@_ATTRIBUTES</KBD
+> that remembers the attribute names. This array is then used by <kbd class="command">get_attribute_names</KBD
+> to access all attributes defined in the current package and all its super classes. For each such attribute, <code class="literal">attributes</CODE
+> creates a global array in the current package, as we saw in <a class="xref" href="#ch08-21796" title="ObjectTemplate's attribute storage scheme">Figure 8.1</A
+>. If an accessor has not been defined for that attribute, it calls <kbd class="command">_define_accessor</KBD
+> to generate the method dynamically. Finally, it calls <kbd class="command">_define_constructor</KBD
+> to create the subroutine <kbd class="command">new</KBD
+> directly into the calling package.</P
+><pre class="programlisting">sub <b class="emphasis.bold">_define_accessor</B
+> {
+    my ($pkg, $attr) = @_;
+
+    # This code creates an accessor method for a given
+    # attribute name. This method  returns the attribute value 
+    # if given no args, and modifies it if given one arg.
+    # Either way, it returns the latest value of that attribute
+
+    # qq makes this block behave like a double-quoted string
+    my $code = qq{
+        package $pkg;
+        sub $attr {                                      # Accessor ...
+            \@_ &gt; 1 ? \$_${attr} \[\${\$_[0]}] = \$_[1]  # set
+                    : \$_${attr} \[\${\$_[0]}];          # get
+        }
+        if (!defined \$_free) {
+            # Alias the first attribute column to _free
+            \*_free = \*_$attr;
+            \$_free = 0;
+        };
+
+    };
+    $code;
+}</PRE
+><p class="para"><kbd class="command">_define_accessor</KBD
+> is called for every field name given to <kbd class="command">attributes</KBD
+> and for every attribute found in the module's superclasses. For an attribute called <kbd class="command">age</KBD
+> in the Employee module, for example, it generates the following code:</P
+><pre class="programlisting">package Employee;
+sub age {                                     # Accessor 
+     @_ ? $_age[$$_[0]] = $_[1];              # set
+        : $_age[$$_[0]];                      # get
+}
+if (!defined $_free) {
+    *_free = *_age; # Alias the first attribute column 
+                    #to _free
+    $_free = 0;
+};</PRE
+><p class="para"><kbd class="command">$_[0]</KBD
+> contains the object, and <kbd class="command">$_[1]</KBD
+> contains the attribute value. Therefore <kbd class="command">$$_[0]</KBD
+> contains the row index, and <kbd class="command">$_age[$$_[0]]</KBD
+> contains the value of the age attribute of that object. In addition, <kbd class="command">_define_accessor</KBD
+> aliases <kbd class="command">_free</KBD
+> to <kbd class="command">_age</KBD
+> if the aliases don't already exist. </P
+><pre class="programlisting">sub <b class="emphasis.bold">_define_constructor</B
+> {
+    my $pkg = shift;
+    my $code = qq{
+        package $pkg;
+        sub new {
+            my \$class = shift;
+            my \$inst_id;
+            if (defined(\$_free[\$_free])) {
+                \$inst_id = \$_free;
+                \$_free = \$_free[\$_free];
+                undef \$_free[\$inst_id];
+            } else {
+                \$inst_id = \$_free++;
+            }
+            my \$obj = bless \\\$inst_id, \$class;
+            \$obj-&gt;set_attributes(\@_) if \@_;
+            \$obj-&gt;initialize;
+            \$obj;
+        }
+    };
+    $code;
+}</PRE
+><p class="para"><kbd class="command">_define_constructor</KBD
+> generates code for a constructor called <kbd class="command">new</KBD
+> to be installed in the calling package. <kbd class="command">new</KBD
+> checks the free list, and if it contains rows to spare, it uses the row number from the top of that list. It then <kbd class="command">undef</KBD
+>'s the head of the list, because the free list is aliased to the first attribute column, and we don't want that attribute's assessor picking up garbage values. If the free list does not contain any spare rows, the object is assigned the next logical index. </P
+><pre class="programlisting">sub <b class="emphasis.bold">get_attribute_names</B
+> {
+    my $pkg = shift;
+    $pkg = ref($pkg) if ref($pkg);
+    my @result = @{&quot;${pkg}::_ATTRIBUTES_&quot;};
+    if (defined (@{&quot;${pkg}::ISA&quot;})) {
+        foreach my $base_pkg (@{&quot;${pkg}::ISA&quot;}) {
+           push (@result, get_attribute_names($base_pkg));
+        }
+    }
+    @result;
+}</PRE
+><p class="para"><kbd class="command">get_attribute_names</KBD
+> recurses through the package's <kbd class="command">@ISA</KBD
+> array to fetch all attribute names. This can be used by anyone requiring object meta-data (such as object persistence modules).</P
+><pre class="programlisting"># $obj-&gt;set_attributes (name =&gt; 'John', age =&gt; 23);     
+# Or, $obj-&gt;set_attributes (['age'], [# sub <b class="emphasis.bold">set_attributes</B
+> {
+    my $obj = shift;
+    my $attr_name;
+    if (ref($_[0])) {
+       my ($attr_name_list, $attr_value_list) = @_;
+       my $i = 0;
+       foreach $attr_name (@$attr_name_list) {
+            $obj-&gt;$attr_name($attr_value_list-&gt;[$i++]);
+       }
+    } else {
+       my ($attr_name, $attr_value);
+       while (@_) {
+           $attr_name = shift;
+           $attr_value = shift;
+           $obj-&gt;$attr_name($attr_value);
+       }
+    }
+}</PRE
+><p class="para"><kbd class="command">set_attributes</KBD
+> is given a list of attribute name-value pairs and simply calls the accessor method for each attribute. It can also be called with two parameters; an array of names and an array of values.</P
+><pre class="programlisting"># @attrs = $obj-&gt;get_attributes (qw(name age));
+sub <b class="emphasis.bold">get_attributes</B
+> {
+    my $obj = shift;
+    my (@retval);
+    map $obj-&gt;${_}(), @_;
+}</PRE
+><p class="para"><code class="literal">get_attributes</CODE
+> uses <code class="literal">map</CODE
+> to iterate through all attribute names, setting <kbd class="command">$_</KBD
+> to each name in every iteration. The first part of <kbd class="command">map</KBD
+> simply calls the corresponding accessor method using a symbolic reference. Because of some weird precedence issues, you cannot omit the curly braces in <kbd class="command">${_}</KBD
+>.</P
+><pre class="programlisting">sub <b class="emphasis.bold">set_attribute</B
+> {
+    my ($obj, $attr_name, $attr_value) = @_;
+    my ($pkg) = ref($obj);
+    ${&quot;${pkg}::_$attr_name&quot;}[$$obj] = $attr_value;
+}
+
+sub <b class="emphasis.bold">get_attribute</B
+> {
+    my ($obj, $attr_name, $attr_value) = @_;
+    my ($pkg) = ref($obj);
+    return ${&quot;${pkg}::_$attr_name&quot;}[$$obj];
+}</PRE
+><p class="para">The <kbd class="command">get/set_attribute</KBD
+> pair updates a single attribute. Unlike the earlier pair of methods, this pair does not call an accessor; it updates the attribute directly. We saw earlier that <kbd class="command">attributes</KBD
+> does not attempt to create accessor methods for those that already exist. But if the custom accessors still want to use the storage scheme provided by ObjectTemplate, they can use the <kbd class="command">get/set_attribute</KBD
+> pair. The expression <kbd class="command">${pkg}::_$attr_name</KBD
+> represents the appropriate column attribute, and <kbd class="command">$$obj</KBD
+> represents the logical row. (Recall that the object is simply a reference to an array index.) These methods are clearly not as fast as the generated accessor methods, because they use symbolic references (which involve variable interpolation in a string and an extra hash lookup).</P
+><pre class="programlisting">sub <b class="emphasis.bold">DESTROY</B
+> {
+    # release id back to free list
+    my $obj = $_[0];
+    my $pkg = ref($obj);
+    local *_free = *{&quot;${pkg}::_free&quot;};
+    my $inst_id = $$obj;
+    # Release all the attributes in that row
+    local(*attributes) = *{&quot;${pkg}::_ATTRIBUTES_&quot;};
+    foreach my $attr (@attributes) {
+        undef ${&quot;${pkg}::_$attr&quot;}[$inst_id];
+    }
+    $_free[$inst_id] = $_free;
+    $_free = $inst_id;
+}</PRE
+><p class="para"><kbd class="command">DESTROY</KBD
+> releases all attribute values corresponding to that object. This is necessary because the object is merely a reference to an array index, which, when freed, won't touch the reference counts of any of the attributes. A module defining its own <kbd class="command">DESTROY</KBD
+> method must make sure that it always calls <kbd class="command">ObjectTemplate::DESTROY</KBD
+>. </P
+><pre class="programlisting">sub <b class="emphasis.bold">initialize</B
+> { }; # dummy method, if subclass doesn't define one.</PRE
+><p class="para">Modules are expected to override this method if they want to do specific initialization, in addition to what the automatically generated <kbd class="command">new()</KBD
+> does.</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch08-pgfId-964885">8.1.1.3 Suggested changes to ObjectTemplate</A
+></H4
+><p class="para">There are (at least) two areas that could use considerable improvement. One is that <kbd class="command">get_attributes</KBD
+> and <kbd class="command">set_attributes</KBD
+> are slow because they always call accessor methods, even if they know which accessors are artificially provided. Because <kbd class="command">set_attributes</KBD
+> is called by the automatically generated <kbd class="command">new</KBD
+>, it slows down object construction dramatically. (Using this <kbd class="command">new</KBD
+> without arguments is twice as fast as allocating an anonymous hash, but after invoking <kbd class="command">set_attributes</KBD
+>, it is around three times slower.)</P
+><p class="para">Second, custom accessor methods suffer in speed because they are forced to invoke the other slow pair, <kbd class="command">get_attribute</KBD
+> and <kbd class="command">set_attribute</KBD
+>. Possibly a better alternative is to dynamically generate accessor methods prefixed with an   "_", so that the developer can write normal accessor methods (without the prefix), and also call these private methods.</P
+><p class="para">You might also want to check out the MethodMaker module available on CPAN, and the Class::Template module that is bundled with the standard distribution. These modules also create accessor methods automatically but assume that the object representation is a hash table. If you like the interface these modules provide, you can attempt to merge their interface with the attribute storage scheme of ObjectTemplate.<a class="indexterm" name="ch08-idx-967991-0"></A
+><a class="indexterm" name="ch08-idx-967991-1"></A
+><a class="indexterm" name="ch08-idx-967991-2"></A
+></P
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch08-33159">8.1.2 Attribute Storage Using Typeglobs</A
+></H3
+><p class="para"><a class="indexterm" name="ch08-idx-967993-0"></A
+><a class="indexterm" name="ch08-idx-967993-1"></A
+>This approach, as we mentioned earlier, is not exactly a paragon of readability and is presented here only because it is used in some freely available libraries on CPAN, like the IO and Net distributions. If you don't wish to understand how these modules work, you can easily skip this section without loss of continuity. </P
+><p class="para">We learned from <a class="xref" href="ch03_01.htm" title="Typeglobs and Symbol Tables">Chapter 3, <cite class="chapter">Typeglobs and Symbol Tables</CITE
+></A
+>, that a typeglob contains pointers to different types of values. If we somehow make a typeglob into an object reference, we can treat these value pointers as attributes and access them very quickly. Consider the following <kbd class="command">foo</KBD
+> typeglob:</P
+><pre class="programlisting">${*foo} = &quot;Oh, my!!&quot; ;  # Use the scalar part to store a string
+@{*foo} = (10, 20);     # Use the array part to store an array
+open (foo, &quot;foo.txt&quot;);  # Use it as a filehandle</PRE
+><p class="para">We are able to hang different types of values (at most one of each type) from just one identifier, <kbd class="command">foo</KBD
+>. If we want many such objects, we can use the Symbol module in the Perl library to create references to dynamically created typeglobs:</P
+><pre class="programlisting">use Symbol;
+$obj = Symbol::gensym(); # ref to typeglob </PRE
+><p class="para"><kbd class="command">$obj</KBD
+> contains a reference to a typeglob. The different parts of a typeglob can be individually accessed (by replacing <kbd class="command">foo</KBD
+> with <kbd class="command">$obj</KBD
+>):</P
+><pre class="programlisting">${*$obj} = &quot;Oh, my!!&quot; ;  # Use the scalar part to store a string
+@{*$obj} = (10, 20);     # Use the array part to store an array
+open ($obj, &quot;foo&quot;);      # Use it as a filehandle</PRE
+><p class="para">Clearly, this is a hideous approach for most general objects; if you need another scalar-valued attribute, for example, you have no option but to put it in the hash part of this typeglob. The reason why the IO group of modules uses this hack is that an instance of any of these modules can be treated as a filehandle and passed directly (without dereferencing) to the built-in I/O functions such as <kbd class="command">read</KBD
+> and <kbd class="command">write</KBD
+>. For example:</P
+><pre class="programlisting">$sock = new IO::Socket( ... <code class="replaceable"><i>various parameters</I
+></CODE
+> ...) ;
+print $sock &quot;Hello, are you there&quot;;
+$message = &lt;$sock&gt;;</PRE
+><p class="para">We'll use IO::Socket module extensively in the chapters on networking with sockets.[<a class="footnote" href="#ch08-pgfId-965390">2</A
+>] </P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch08-pgfId-965390">[2]</A
+> You don't have to know the following technique, or how the IO::Socket module is built, to use it.</P
+></DIV
+></BLOCKQUOTE
+><p class="para">Let us build a small module called File to examine this technique in greater detail. This module allows you to open a file and read the next line; in addition, it allows you to put back a line so that the next attempt to read the file returns that line:</P
+><pre class="programlisting">package main;
+$obj = File-&gt;open(&quot;File.pm&quot;);
+print $obj-&gt;next_line();
+<b class="emphasis.bold">$obj-&gt;put_back</B
+>(&quot;------------------------\n&quot;);
+print $obj-&gt;next_line(); # Should print the string put back above
+print $obj-&gt;next_line();</PRE
+><p class="para">Since this code opens the File module itself, it should print the following:</P
+><pre class="programlisting">package File;
+------------------------
+use Symbol;</PRE
+><p class="para">This module uses the scalar part of the typeglob object as a "putback" buffer, the array part of the typeglob to store all the lines read from the file, and the filehandle part of the typeglob to store the filehandle. The implementation of the File module is shown in <a class="xref" href="#ch08-11774" title="File Module, Built Using a Typeglob Representation">Example 8.1</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch08-11774">Example 8.1: File Module, Built Using a Typeglob Representation</A
+></H4
+><pre class="programlisting">package File;
+use Symbol;
+sub open {
+   my ($pkg, $filename) = @_;
+   $obj = gensym();                         # Allocate a typeglob
+   open ($obj, $filename) || return undef;  # Use it as a filehandle
+   bless $obj, $pkg;                        # Upgrade to a File &quot;object&quot;
+}
+
+sub put_back {
+   my ($r_obj, $line) = @_;
+   ${*$r_obj} = $line;                      # The scalar part holds the 
+}                                           # current line
+
+sub next_line {
+   my $r_obj = $_[0]; 
+   my $retval;
+   if (${*$r_obj}) {                        # Check putback buffer
+       $retval = ${*$r_obj};                #   yep, it's got stuff
+       ${*$r_obj} = &quot;&quot;;                     #   empty it.
+   } else {
+       $retval = &lt;$r_obj&gt;;                  #   no. read from file
+       push(@{*$r_obj}, $retval);           #   add to history list.
+   }
+   $retval;
+}<a class="indexterm" name="ch08-idx-968000-0"></A
+><a class="indexterm" name="ch08-idx-968000-1"></A
+>
+1;<a class="indexterm" name="ch08-idx-967986-0"></A
+><a class="indexterm" name="ch08-idx-967986-1"></A
+><a class="indexterm" name="ch08-idx-967986-2"></A
+></PRE
+></DIV
+></DIV
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_06.htm" title="7.6 Resources"><img src="../gifs/txtpreva.gif" alt="Previous: 7.6 Resources" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch08_02.htm" title="8.2 Delegation"><img src="../gifs/txtnexta.gif" alt="Next: 8.2 Delegation" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">7.6 Resources</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">8.2 Delegation</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

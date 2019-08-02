@@ -1,0 +1,740 @@
+<html>
+<head>
+<title>Unix Process Control  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Unix Process Control">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch04_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch04_01.htm">Chapter 4: User Activity</a></td><td align="right" valign="top" width="172"><a href="ch04_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">4.3. Unix Process Control</h2>
+
+
+
+
+
+<p>
+<a name="INDEX-328"></a><a name="INDEX-329"></a>Strategies
+for Unix process control offer another multiple-choice situation.
+Luckily, these choices aren't nearly as complex to introduce as
+those offered by NT. When we speak of process control under Unix,
+we're referring to three operations:</p>
+
+
+
+
+
+<ol>
+<li>
+<p>Enumerating the list of running processes on a machine</p>
+</li>
+<li>
+<p>Changing their priority or process group</p>
+</li>
+<li>
+<p>Terminating the processes</p>
+</li>
+</ol>
+<p>For the final two of these operations, there are Perl functions to do
+the job: <tt class="literal">setpriority( )</tt>, <tt class="literal">setpgrp(
+)</tt>,<tt class="literal"></tt>and <tt class="literal">kill( )</tt>.
+The first one offers us a few options. <a name="INDEX-330"></a><a name="INDEX-331"></a>To list running processes, you can:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>Call an external program like <tt class="command">ps</tt>
+</p>
+</li>
+<li>
+<p>Take a crack at deciphering <em class="filename">/dev/kmem</em>
+</p>
+</li>
+<li>
+<p>Look through the <em class="filename">/proc</em> filesystem</p>
+</li>
+<li>
+<p>Use the <tt class="literal">Proc::ProcessTable</tt> module</p>
+</li>
+</ul>
+<p>Let's discuss each of these approaches. For the impatient
+reader, I'll reveal right now that
+<tt class="literal">Proc::ProcessTable</tt> is my preferred technique, and
+you might just skip directly to the discussion of that module. But I
+recommend reading about the other techniques anyway, since they may
+come in handy in the future.</p>
+
+
+
+
+
+<a name="ch04-6-fm2xml"></a>
+<h3 class="sect2">4.3.1. Calling an External Program </h3>
+
+
+
+
+
+<p>
+<a name="INDEX-332"></a>Common to
+all modern Unix variants is a program called <tt class="command">ps</tt>,
+used to list running processes. However, <tt class="command">ps</tt> is
+found different places in the filesystem on different Unix variants
+and the command-line switches it takes are also not consistent across
+variants. Therein lies one problem with this option: it lacks
+portability.</p>
+
+
+
+
+
+<p>An even more annoying problem is the difficulty in parsing the output
+(which also varies from variant to variant). Here's a snippet
+of output from <tt class="command">ps</tt> on a SunOS machine:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">USER       PID %CPU %MEM   SZ  RSS TT STAT START  TIME COMMAND 
+dnb        385  0.0  0.0  268    0 p4 IW   Jul  2  0:00 /bin/zsh
+dnb      24103  0.0  2.610504 1092 p3 S    Aug 10 35:49 emacs
+dnb        389  0.0  2.5 3604 1044 p4 S    Jul  2 60:16 emacs
+remy     15396  0.0  0.0  252    0 p9 IW   Jul  7  0:01 -zsh (zsh)
+sys        393  0.0  0.0   28    0 ?  IW   Jul  2  0:02 in.identd
+dnb      29488  0.0  0.0   68    0 p5 IW   20:15   0:00 screen
+dnb      29544  0.0  0.4   24  148 p7 R    20:39   0:00 less
+dnb       5707  0.0  0.0  260    0 p6 IW   Jul 24  0:00 -zsh (zsh)
+root     28766  0.0  0.0  244    0 ?  IW   13:20   0:00 -:0 (xdm)</pre>
+</blockquote>
+
+
+
+
+
+<p>Notice the third line. Two of the columns have run together, making
+the parsing of this output an annoying task. It's not
+impossible, just annoying. Some Unix variants are kinder than others
+in this regard, but it is something you may have to take into
+account.</p>
+
+
+
+
+
+<p>The Perl code required for this option is straightforward:
+<tt class="literal">open( )</tt> to run <tt class="command">ps</tt>,
+<tt class="literal">while(&lt;FH&gt;){...}</tt> to read the output, and
+<tt class="literal">split( )</tt>, <tt class="literal">unpack( )</tt>, or
+<tt class="literal">substr( )</tt> to parse it. A recipe for this can be
+found in the <em class="citetitle">Perl Cookbook </em>by Tom Christiansen
+and Nathan Torkington (O'Reilly).</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch04-7-fm2xml"></a>
+<h3 class="sect2">4.3.2. Examining the Kernel Process Structures</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-333"></a>I only mention this option for
+completeness' sake. It is possible to write code that opens up
+a device like <em class="filename">/dev/kmem</em> and accesses the current
+running kernel's memory structures. With this access, you can
+track down the current process table in memory and read it. Given the
+pain involved (taking apart complex binary structures by hand), and
+its extreme non-portability (just a version difference within the
+same operating system is likely to break your program), I'd
+strongly recommend against using this option.</p>
+
+
+
+
+
+<p>If you decide not to heed this advice, you should begin by memorizing
+the Perl documentation for <tt class="literal">pack( )</tt>,
+<tt class="literal">unpack( )</tt>, and the header files for your kernel.
+Open the kernel memory file (often <em class="filename">/dev/kmem</em>),
+then <tt class="literal">read( )</tt> and <tt class="literal">unpack( )</tt>
+to your heart's content. You may find it instructive to look at
+the source for programs like <tt class="command">top</tt> (found at
+ftp://ftp.groupsys.com/pub/top)
+that perform this task using a great deal of C code. Our next option
+offers a slightly better version of this method.<a name="INDEX-334"></a><a name="INDEX-335"></a><a name="INDEX-336"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch04-8-fm2xml"></a>
+<h3 class="sect2">4.3.3. Using the /proc Filesystem</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-337"></a><a name="INDEX-338"></a>One of the more interesting additions
+to Unix found in most of the current variants is the
+<em class="filename">/proc</em> filesystem. This is a magical filesystem
+that has nothing to do with data storage. It provides a file-based
+interface for the running process table of a machine. A
+"directory" named after the process ID appears in this
+filesystem for each running process. In this directory are a set of
+"files" that provide information about that process. One
+of these files can be written to, thus allowing control of this
+process.</p>
+
+
+
+
+
+<p>It is a really clever concept, and that's the good news. The
+bad news is that each Unix vendor/developer team decided to take this
+clever concept and run with it in a different direction. As a result,
+the files found in a <em class="filename">/proc</em> directory are often
+variant-specific, both in name and format. For a description of which
+files are available and what they contain, you will need to see the
+manual pages (usually found in sections 4, 5, or 8) for
+<em class="citetitle">procfs</em> or <em class="citetitle">mount_ procfs</em>
+on your system.</p>
+
+
+
+
+
+<p>The one fairly portable use of the <em class="filename">/proc</em>
+filesystem is the enumeration of running processes. If we want to
+list just the process IDs and their owners, we can use Perl's
+directory and <tt class="literal">lstat( )</tt> operators:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">opendir(PROC,"/proc") or die "Unable to open /proc:$!\n";
+while (defined($_= readdir(PROC))){
+    next if ($_ eq "." or $_ eq "..");
+    next unless /^\d+$/; # filter out any random non-pid files
+    print "$_\t". getpwuid((lstat "/proc/$_")[4])."\n";
+}
+closedir(PROC);</pre>
+</blockquote>
+
+
+
+
+
+<p>If you are interested in more information about a process, you will
+have to open and <tt class="literal">unpack( )</tt> the appropriate
+binary file in the <em class="filename">/proc</em> directories. Common
+names for this file are <em class="filename">status</em> and
+<em class="filename">psinfo</em>. The manual pages cited a moment ago
+should provide details about the C structure found in this file or at
+least a pointer to a C include file that documents this structure.
+Because these are operating system- (and OS version-) specific
+formats, you are still going to run into the program fragility
+mentioned in our previous option.</p>
+
+
+
+
+
+<p>You may be feeling discouraged at this point because all of our
+options so far look like they require code with lots of special
+cases, one for each version of each operating system we wish to
+support. Luckily, we have one more option up our sleeve that may help
+in this regard.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch04-9-fm2xml"></a>
+<h3 class="sect2">4.3.4. Using the Proc::ProcessTable Module</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-339"></a><a name="INDEX-340"></a><a name="INDEX-341"></a>Daniel J.
+Urist (with the help of some volunteers) has been kind enough to
+write a module called <tt class="literal">Proc::ProcessTable</tt> that
+offers a consistent interface to the process table for the major Unix
+variants. It hides the vagaries of the different
+<em class="filename">/proc</em> or <em class="filename">kmem</em>
+implementations for you, allowing you to write relatively portable
+code.</p>
+
+
+
+
+
+<p>Simply load the module, create a
+<tt class="literal">Proc::ProcessTable::Process</tt> object, and run
+methods from that object:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Proc::ProcessTable;
+
+$tobj = new Proc::ProcessTable;</pre>
+</blockquote>
+
+
+
+
+
+<p>This object uses Perl's tied variable functionality to present
+a real-time view of the system. You do not need to call a special
+function to refresh the object; each time you access it, it re-reads
+the process table. This is similar to the <tt class="literal">%Process</tt>
+hash we saw in our <tt class="literal">Mac::Processes</tt> discussion
+earlier in this chapter.</p>
+
+
+
+
+
+<p>To get at this information, you call the object method
+<tt class="literal">table( )</tt>:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$proctable = $tobj-&gt;table(  );</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">table( )</tt> returns a reference to an array with
+members that are references to individual process objects. Each of
+these objects has its own set of methods that returns information
+about that process. For instance, here's how you would get a
+listing of the process IDs and owners:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Proc::ProcessTable;
+
+$tobj = new Proc::ProcessTable;
+$proctable = $tobj-&gt;table(  );
+for (@$proctable){
+    print $_-&gt;pid."\t". getpwuid($_-&gt;uid)."\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>If you want to know which process methods are available on your Unix
+variant, the <tt class="literal">fields( )</tt> method of your
+<tt class="literal">Proc::ProcessTable</tt> object
+(<tt class="literal">$tobj</tt> above) will return a list for you.</p>
+
+
+
+
+
+<p>
+<tt class="literal">Proc::ProcessTable</tt> also adds three other methods
+to each process object, <tt class="literal">kill( )</tt>,
+<tt class="literal">priority( )</tt>, and <tt class="literal">pgrp( )</tt>,
+which are just frontends to the built-in Perl function we mentioned
+at the beginning of this section.</p>
+
+
+
+
+
+<p>To bring us back to the big picture, let's look at some of the
+uses of these process control techniques. We started to examine
+process control in the context of user actions, so let's look
+at a few teeny scripts that focus on these actions. We'll use
+the <tt class="literal">Proc::ProcessTable</tt> on Unix for these examples,
+but these ideas are not operating system specific.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-342"></a>The
+first example is from the documentation for
+<tt class="literal">Proc::ProcessTable</tt>:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Proc::ProcessTable;
+
+$t = new Proc::ProcessTable;
+foreach $p (@{$t-&gt;table}){    
+  if ($p-&gt;pctmem &gt; 95){
+    $p-&gt;kill(9);
+  }             
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>This code will shoot down any processes consuming 95% of that
+machine's memory when run on the Unix variants that provide the
+<tt class="literal">pctmem( )</tt> method (most do). As it stands, this
+code is probably too ruthless to be used in real life. It would be
+much more reasonable to add something like this before the
+<tt class="literal">kill( )</tt> command:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">print "about to nuke ".$p-&gt;pid."\t". getpwuid($p-&gt;uid)."\n";
+print "proceed? (yes/no) ";
+chomp($ans = &lt;&gt;);
+next unless ($ans eq "yes");</pre>
+</blockquote>
+
+
+
+
+
+<p>There's a bit of a race condition here: it is possible that the
+system state will change during delay induced by prompting the user.
+Given that we are only prompting for huge processes, and huge
+processes are those least likely to change state in a short amount of
+time, we're probably fine coding this way. If you wanted to be
+pedantic you would probably collect the list of processes to be
+killed first, prompt for input, and then recheck the state of the
+process table before actually killing the desired processes.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-343"></a>There are times when death is too good
+for a process. Sometimes it is important to notice a process is
+running while it is running so real life action (like "user
+attitude correction") can be taken. For example, at our site we
+have a policy against the use of Internet Relay Chat
+<em class="emphasis">bots</em>. <em class="emphasis">Bots</em> are daemon
+processes that connect to an IRC network of chat servers and perform
+automated actions. Though <em class="emphasis">bots</em> can be used for
+constructive purposes, these days they play a mostly antisocial role
+on IRC. We've also had security breaches come to our attention
+because the first (and often only) thing the intruder has done is put
+up an IRC <em class="emphasis">bot</em> of some sort. As a result, noting
+their presence on our system without killing them is important to
+us.<a name="INDEX-344"></a><a name="INDEX-345"></a>
+</p>
+
+
+
+
+
+<p>
+<a name="INDEX-346"></a>The most common
+<em class="emphasis">bot</em> by far is called <tt class="command">eggdrop</tt>.
+If we wanted to look for this process name being run on our system,
+we could use code like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Proc::ProcessTable;
+
+open(LOG,"&gt;&gt;$logfile") or die "Can't open logfile for append:$!\n";
+
+$t = new Proc::ProcessTable;
+foreach $p (@{$t-&gt;table}){    
+  if ($p-&gt;fname(  ) =~ /eggdrop/i){
+    print LOG time."\t".getpwuid($p-&gt;uid)."\t".$p-&gt;fname(  )."\n";
+  }             
+}
+close(LOG);</pre>
+</blockquote>
+
+
+
+
+
+<p>If you are thinking, "This code is not good enough! All someone
+has to do is rename the eggdrop executable to evade its check,"
+you're absolutely right. We'll take a stab at writing
+less na&amp;#239;ve <em class="emphasis">bot</em>-check code in the very last
+section of this chapter.</p>
+
+
+
+
+
+<p>In the meantime, let's see one more example where Perl assists
+us in managing user processes. So far all of our examples have been
+fairly negative. We've seen code that deals with
+resource-hungry and naughty processes. Let's look at something
+with a sunnier disposition.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-347"></a>There are
+times when a system administrator needs to know which (legitimate)
+programs are being used by users on a system. Sometimes this is
+necessary in the context of software metering where there are legal
+concerns about the number of users running a program concurrently. In
+those cases there is usually a licensing mechanism in place to handle
+the bean counting. Another situation where this knowledge comes in
+handy is that of machine migration. If you are migrating a user
+population from one architecture to another, you'll want to
+make sure all the programs used on the previous architecture are
+available on the new one.</p>
+
+
+
+
+
+<p>One approach to solving this problem involves replacing every non-OS
+binary available to users with a wrapper that first records that a
+particular binary has been run and then actually runs it. This can be
+difficult to implement if there are a large number of binaries. It
+also has the unpleasant side effect of slowing down every program
+invocation.</p>
+
+
+
+
+
+<p>If precision is not important and a rough estimate of which binaries
+are in use will suffice, then we can use
+<tt class="literal">Proc::ProcessTable</tt> to solve this problem as well.
+Here's some code that wakes up every five minutes and surveys
+the current process landscape. It keeps a simple count of all of the
+process names it finds, and is smart enough not to count processes it
+already saw during its last period of wakefulness twice. Every hour
+it prints its findings and starts collecting again. We wait five
+minutes between each run because walking the process table is usually
+a resource-intensive operation and we'd prefer this program add
+as little load to the system as possible:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Proc::ProcessTable;
+
+$interval    = 600; # sleep interval of 5 minutes
+$partofhour  =   0; # keep track of where in hour we are
+
+$tobj = new Proc::ProcessTable; # create new process object
+
+# forever loop, collecting stats every $intervar secs 
+# and dumping them once an hour
+while(1){
+    &amp;collectstats;
+    &amp;dumpandreset if ($partofhour &gt;= 3600);
+    sleep($interval);
+}
+
+# collect the process statistics
+sub collectstats {
+    my($process);
+    foreach $process (@{$tobj-&gt;table}){
+	    
+        # we should ignore ourselves
+        next if ($process-&gt;pid(  ) == $$);
+        
+        # save this process info for our next run
+        push(@last,$process-&gt;pid(),$process-&gt;fname(  ));
+
+        # ignore this process if we saw it last iteration
+        next if ($last{$process-&gt;pid()} eq $process-&gt;fname(  ));
+
+        # else, remember it
+        $collection{$process-&gt;fname(  )}++;
+    }
+    # set the last hash using the current table for our next run
+    %last = @last;
+    $partofhour += $interval;
+}
+
+# dump out the results and reset our counters
+sub dumpandreset{
+    print scalar localtime(time).("-"x50)."\n";
+    for (sort reverse_value_sort keys %collection){
+        write;
+    }
+
+    undef %collection;
+    $partofhour = 0;
+}
+}
+# (reverse) sort by values in %collection and by key name
+sub reverse_value_sort{
+    return $collection{$b} &lt;=&gt; $collection{$a} || $a cmp $b;
+}
+
+format STDOUT =
+@&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;  @&gt;&gt;&gt;&gt;
+$_,             $collection{$_}
+.
+
+format STDOUT_TOP =
+Name            Count
+--------------  -----
+.</pre>
+</blockquote>
+
+
+
+
+
+<p>There are many ways this program could be enhanced. It could track
+processes on a per-user basis (i.e., only recording one instance of a
+program launch per user), collect daily stats, present its
+information as a nice bar graph, and so on. It's just a matter
+of where you want to take it.<a name="INDEX-348"></a><a name="INDEX-349"></a><a name="INDEX-350"></a><a name="INDEX-351"></a><a name="INDEX-352"></a>
+</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch04_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch04_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">4.2. NT/2000 Process Control</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">4.4. Tracking File and Network Operations </td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

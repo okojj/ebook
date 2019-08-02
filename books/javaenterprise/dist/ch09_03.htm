@@ -1,0 +1,1875 @@
+<html>
+<head>
+<title>A Basic Collaborative Infrastructure (Java Distributed Computing)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jim Farley">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-206-9E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="A Basic Collaborative Infrastructure">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm" alt="Java Distributed Computing"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch09_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch09_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch09_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch09_01.htm">Chapter 9: Collaborative Systems</a></td><td align="right" valign="top" width="172"><a href="ch10_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch10_01.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">9.3. A Basic Collaborative Infrastructure</h2>
+
+<p>
+<a name="INDEX-1234"></a>
+Before we explore some collaborative applications, let's take a
+look at a basic collaborative infrastructure implemented using some
+of the concepts presented earlier in this book. We'll build on
+this infrastructure to illustrate the development of various types of
+collaborative systems. The framework that we'll build involves
+a single
+<em class="emphasis">mediator</em><a name="INDEX-1235"></a>
+(the server) handling interactions among multiple
+<em class="emphasis">collaborators</em> (clients). Each collaborator has a
+unique identity, issued by the mediator, and each collaborator can
+either broadcast messages to all of the collaborators registered with
+the mediator, or it can send a message to a single collaborator.
+</p>
+
+<p>One of the first steps in developing a collaborative system is
+deciding what kind of communications scheme is right for you.
+We've discussed several ways to connect remote agents, including
+basic socket communications, message passing, RMI remote objects, and
+CORBA remote objects. To illustrate our basic collaborative system,
+we'll show a version based on RMI and remote objects, and
+another version based on basic message passing.  We'll start
+with the message-passing version, since this will let us look in
+detail at some of the dynamics of a distributed system involving many
+agents working together simultaneously. Then we'll look at ways
+to implement the same collaborative infrastructure using remote
+objects, where the object distribution system assumes responsibility
+for some of the issues we'll see in our message-passing
+version. For those readers only interested in the remote-object
+version, you can skip ahead to the section <a href="#JDP-CH-9-SECT-3.2">Section 9.3.2, "Collaborating with RMI"</a>.  </p>
+
+<a name="JDP-CH-9-SECT-3.1"></a>
+<h3 class="sect2">9.3.1. Building the Infrastructure with Message Passing</h3>
+
+<p>
+<a name="INDEX-1236"></a><a name="INDEX-1237"></a>To build a collaborative
+message-passing system, we'll start by expanding our
+message-passing classes from <a href="ch06_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_01.htm">Chapter 6, "Message-Passing Systems"</a> to handle
+multiple agents passing messages through a single
+<tt class="literal">MessageHandler</tt><a name="INDEX-1238"></a>. In that chapter, the final version of
+our message-passing framework (see <a href="ch06_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_05.htm">Example 9-10</a> and
+<a href="ch06_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_05.htm">Example 9-11</a>) used
+<tt class="literal">MessageHandlers</tt> passing
+<tt class="literal">Messages</tt> to each other. Each
+<tt class="literal">Message</tt> object has an identifier and a set of
+arguments. Each <tt class="literal">MessageHandler</tt> runs in a loop,
+reading messages from the network, constructing
+<tt class="literal">Message</tt> objects from the data received, and
+calling the <tt class="literal">Message</tt>'s
+<tt class="literal">Do()</tt> method to handle the message locally. The
+<tt class="literal">MessageHandler</tt> reconstructs the
+<tt class="literal">Message</tt> from the incoming network data using a
+list of prototype <tt class="literal">Message</tt> objects. The
+identifier for the message is used to pick the right
+<tt class="literal">Message</tt> prototype, a copy of this
+<tt class="literal">Message</tt> is made, and the new copy is told to
+read its arguments from the input data stream. The set of
+<tt class="literal">Message</tt> prototypes serves to define the message
+protocol that the <tt class="literal">MessageHandler</tt> understands,
+and can be updated on the fly if needed.
+</p>
+
+<p>If we look back at <a href="ch09_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch09_01.htm">Figure 9-1</a> and assume that the
+general collaborative system depicted there is implemented using
+message passing, we'll see that a server or an agent in a
+collaborative environment may have to send or receive messages from
+multiple remote agents. Our <tt class="literal">MessageHandler</tt> class
+from <a href="ch06_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_05.htm">Example 9-10</a> only supports point-to-point
+message passing, so if we wanted to use it for a collaborative system
+we would either need to create a <tt class="literal">MessageHandler</tt>
+object for each agent we want to talk to, or we could upgrade the
+<tt class="literal">MessageHandler</tt> to manage multiple network
+connections to agents. In some applications, we may have tens,
+hundreds, or even thousands of agents collaborating with each other,
+so creating an entire <tt class="literal">MessageHandler</tt> object for
+each (in addition to a socket connection and its input and output
+streams) may be too inefficient. Also, in many collaborative
+applications we need to use the same message protocol with every
+agent in the system, so forcing ourselves to replicate the same
+"flavor" of <tt class="literal">Message-Handler</tt> many
+times over doesn't seem to make sense.
+</p>
+
+<p>
+<a href="#JDP-CH-9-EX-1">Example 9-1</a> shows our updated
+<tt class="literal">MessageHandler</tt> class, with support for multiple
+agent connections. Two utility classes have been added to help manage
+agent connections. The <tt class="literal">AgentConnection</tt><a name="INDEX-1239"></a><a name="INDEX-1240"></a> class simply holds a pair of
+input and output streams connected to a remote agent. The
+<tt class="literal">AgentHandler</tt> class takes care of listening to a
+particular agent for asynchronous messages. We'll see exactly
+how the <tt class="literal">AgentHandler</tt> is used as we look at the
+rest of the updated <tt class="literal">MessageHandler</tt> class.
+</p>
+
+<a name="JDP-CH-9-EX-1"></a>
+<div class="example">
+<h4 class="objtitle">Example 9-1. Multi-Agent Message Handler Class</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.Collaborative;
+
+import java.util.Vector;
+import java.util.Hashtable;
+import java.util.Enumeration;
+import java.net.SocketException;
+import java.io.*;
+
+class PeerConnection {
+  public PeerConnection(InputStream i, OutputStream o) {
+    in = i;
+    out = o;
+  }
+  public InputStream in;
+  public OutputStream out;
+}
+
+class PeerHandler implements Runnable {
+  int peerId;
+  MessageHandler handler;
+  public PeerHandler(int id, MessageHandler h) {
+    peerId = id;
+    handler = h;
+  }
+  
+  public void run() {
+    System.out.println("ph: Starting peer handler for peer " + peerId);
+    while (true) {
+      try {
+        Message m = handler.readMsg(peerId);
+        System.out.println("ph: Got a message from peer " + peerId);
+        m.Do(null, null);
+      }
+      catch (IOException e) {}
+    }
+  }
+}
+
+public class MessageHandler implements Runnable
+{
+  // A global MessageHandler, for applications where one central
+  // handler is used.
+  public static MessageHandler current = null;
+
+  Hashtable connections = new Hashtable();
+  Hashtable handlers = new Hashtable();
+  Vector msgPrototypes = new Vector();
+
+  public MessageHandler() {}
+  public MessageHandler(InputStream in, OutputStream out) {
+    addPeer(0, in, out);
+  }
+
+  synchronized public int nextPeerId() {
+    return connections.size();
+  }
+
+  synchronized public Vector getPeerIds() {
+    Vector ids = new Vector();
+    Enumeration e = connections.keys();
+    while (e.hasMoreElements()) {
+      ids.addElement((Integer)e.nextElement());
+    }
+    return ids;
+  }
+
+  synchronized public int addPeer(InputStream i, OutputStream o) {
+    int nextId = nextPeerId();
+    addPeer(nextId, i, o);
+    return nextId;
+  }
+
+  synchronized public void addPeer(int id, InputStream i, OutputStream o) {
+    connections.put(new Integer(id), new PeerConnection(i, o));
+    PeerHandler ph = new PeerHandler(id, this);
+    Thread phThread = new Thread(ph);
+    phThread.start();
+    handlers.put(new Integer(id), phThread);
+  }
+
+  synchronized public boolean removePeer(int id) {
+    boolean success = false;
+    Thread hthread = (Thread)handlers.remove(new Integer(id));
+    if (hthread != null &amp;&amp; connections.remove(new Integer(id)) != null) {
+      hthread.stop();
+      success = true;
+    }
+    
+    return success;
+  }
+
+  synchronized protected PeerConnection getPeer(int id) {
+    return (PeerConnection)connections.get(new Integer(id));
+  }
+
+  public void addMessageType(Message prototype) {
+    msgPrototypes.addElement(prototype);
+  }
+
+  public Message readMsg(int id) throws IOException {
+    Message msg = null;
+
+    PeerConnection conn = getPeer(id);
+    if (conn != null) {
+      try {
+        synchronized (conn.in) {
+          DataInputStream din = new DataInputStream(conn.in);
+          String msgId = din.readUTF();
+          System.out.println("mh: Got message id " + msgId);
+          msg = buildMessage(msgId);
+          if (msg != null) {
+            msg.readArgs(conn.in);
+          }
+          System.out.println("mh: Received complete message" + msg + ".");
+        }
+      }
+      catch (SocketException s) {
+        System.out.println("mm: Lost connection to peer " + id);
+        removePeer(id);
+        msg = null;
+      }
+      catch (Exception e) {
+        msg = null;
+      }
+    }
+
+    return msg;
+  }
+
+  // Send a message to a specific agent.
+  public boolean sendMsg(Message msg, int id) throws IOException {
+    boolean success = false;
+    PeerConnection conn = getPeer(id);
+    if (conn != null) {
+      System.out.println("mh: Trying to lock on peer " + id);
+      try {
+        synchronized (conn.out) {
+          System.out.println("mh: Got lock on peer " + id);
+          DataOutputStream dout = new DataOutputStream(conn.out);
+          System.out.println("mh: Printing message id...");
+          dout.writeUTF(msg.messageID());
+          System.out.println("mh: Printing message args...");
+          msg.writeArgs(conn.out);
+          success = true;
+        }
+      }
+      catch (SocketException s) {
+        System.out.println("mh: Lost connection to peer " + id);
+        removePeer(id);
+        success = false;
+      }
+      catch (Exception e) {
+        success = false;
+      }
+    }
+    return success;
+  }
+
+  // Broadcast a message to all connected agents.
+  public boolean sendMsg(Message msg) throws IOException {
+    Enumeration ids = connections.keys();
+    boolean success = true;
+    while (ids.hasMoreElements()) {
+      Integer id = (Integer)ids.nextElement();
+      System.out.println("mh: Attempting send to peer " + id.intValue());
+      if (!sendMsg(msg, id.intValue()))
+        success = false;
+      else
+        System.out.println("mh: Sent message to peer " + id.intValue());
+    }
+    return success;
+  }
+
+  // Default run() method does nothing...
+  public void run() {}
+
+  protected Message buildMessage(String msgId) {
+    Message msg = null;
+    int numMTypes = msgPrototypes.size();
+    for (int i = 0; i &lt; numMTypes; i++) {
+      Message m = null;
+      synchronized (msgPrototypes) {
+        m = (Message)msgPrototypes.elementAt(i);
+      }
+      if (m.handles(msgId)) {
+        msg = m.newCopy();
+        msg.setId(msgId);
+        break;
+      }
+    }
+    return msg;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>The updated <tt class="literal">MessageHandler</tt> maintains a table of
+agent connections, associating each connection with an ID number. A
+set of methods for adding, removing, and getting agent connections
+has been added to the <tt class="literal">Message-Handler</tt> interface.
+Two <tt class="literal">addAgent()</tt><a name="INDEX-1241"></a>
+methods are provided: the first takes the
+<tt class="literal">InputStream</tt> and
+<tt class="literal">OutputStream</tt> connections to the agent as
+arguments, and assigns the next available ID to the new agent
+connection; the second additionally accepts an ID number that the
+caller wants assigned to the agent. The
+<tt class="literal">removeAgent()</tt> method removes the agent with a
+given ID number. The <tt class="literal">getAgent()</tt> method is
+protected, and is used internally by the
+<tt class="literal">Message-Handler</tt> class to get the
+<tt class="literal">AgentConnection</tt> associated with a particular
+agent.
+</p>
+
+<p>We've also updated the <tt class="literal">MessageHandler</tt> class
+by changing its <tt class="literal">readMsg()</tt> and
+<tt class="literal">sendMsg()</tt> methods so that we can specify which
+agent to talk to. The <tt class="literal">readMsg()</tt> method now
+accepts the ID number of the agent from which to read a message.
+There are now two versions of the <tt class="literal">sendMsg()</tt>
+method. One accepts an ID number, and sends the given message to that
+agent. The other version just takes a <tt class="literal">Message</tt> as
+an argument, and broadcasts the message to all agents the
+<tt class="literal">MessageHandler</tt> is connected to.
+</p>
+
+<p>When a new agent is added to the <tt class="literal">MessageHandler</tt>
+using one of the <tt class="literal">addAgent()</tt> methods, an
+<tt class="literal">AgentConnection</tt> is made to hold the
+<tt class="literal">InputStream</tt> and
+<tt class="literal">OutputStream</tt> connected to the agent, and the
+connection is stored in a <tt class="literal">Hashtable</tt> using the
+agent's ID number as the key.<tt class="literal"></tt><a name="INDEX-1242"></a> Next, an
+<tt class="literal">AgentHandler</tt> is created and given the ID number
+of the new agent, along with a reference to the
+<tt class="literal">MessageHandler</tt>. Then a new thread is created for
+the <tt class="literal">AgentHandler</tt>, and the new thread is started.
+The <tt class="literal">AgentHandler</tt> implements the
+<tt class="literal">Runnable</tt> interface, and its
+<tt class="literal">run()</tt> method is a loop that continuously
+attempts to read messages from its agent, using the
+<tt class="literal">readMsg()</tt><a name="INDEX-1243"></a>
+method on the <tt class="literal">MessageHandler:</tt>
+</p>
+
+<blockquote>
+<pre class="programlisting">  public void run() {
+    System.out.println("ph: Starting peer handler for peer " + peerId);
+    while (true) {
+      try {
+        Message m = handler.readMsg(peerId);
+        m.Do();
+      }
+      catch (IOException e) {}
+    }
+  }</pre>
+</blockquote>
+
+<p>So this new and improved <tt class="literal">MessageHandler</tt> manages
+multiple connections by creating a thread for each agent that can
+asynchronously read messages and act on them. New agents can be added
+to the handler at any time. To support these asynchronous operations,
+the <tt class="literal">MessageHandler</tt> implementation has been
+synchronized in a number of places. The
+<tt class="literal">readMsg()</tt> and
+<tt class="literal">sendMsg()</tt><a name="INDEX-1244"></a>
+methods synchronize on the input and output streams of each agent,
+for example. All of the methods for adding and removing agents from
+the <tt class="literal">MessageHandler</tt> are also synchronized to
+allow asynchronous agent handling.<tt class="literal"></tt><a name="INDEX-1245"></a><a name="INDEX-1246"></a>
+</p>
+
+<p>Now that we have a <tt class="literal">MessageHandler</tt> that can
+support message passing in a collaborative environment, let's
+build our collaborative infrastructure on top of it. We can think of
+collaborative systems as being composed of
+<em class="emphasis">collaborators</em> and
+<em class="emphasis">mediators</em>. Collaborators are the agents that
+work together towards the common goal of the system, and mediators
+serve to facilitate the communications among the collaborators.
+Referring back to <a href="ch09_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch09_01.htm">Figure 9-1</a>, collaborators are the
+agents in the system, and mediators are the servers.
+</p>
+
+<p>Before we delve into details, one of the primary needs of
+collaborative systems is the need to provide an identity for each
+agent in the system, so that transactions can be targeted and traced
+to individual agents. To support this, we have the
+<tt class="literal">Identity</tt><a name="INDEX-1247"></a><a name="INDEX-1248"></a><a name="INDEX-1249"></a> class shown in <a href="#JDP-CH-9-EX-2">Example 9-2</a>. This class consists of a
+<tt class="literal">Properties</tt> list, with methods for getting and
+setting a <tt class="literal">name</tt> property, which is a
+<tt class="literal">String</tt>, and an <tt class="literal">id</tt> property,
+which is an integer. These two properties will be used to identify
+each collaborator in the system. The <tt class="literal">name</tt> property
+is a descriptive name that can be used to specify each collaborator
+in a user interface, for example. The integer <tt class="literal">id</tt>
+is an internal identifier used to tag each collaborator uniquely.
+</p>
+
+<a name="JDP-CH-9-EX-2"></a>
+<div class="example">
+<h4 class="objtitle">Example 9-2. An Identity Class</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.Collaborative;
+
+import java.util.Hashtable;
+import java.io.Serializable;
+
+public class Identity implements Serializable {
+  Hashtable props = new Hashtable();
+
+  public Identity(int id) { props.put("idnum", new Integer(id)); }
+  
+  public boolean equals(Object o) {
+    boolean same = false;
+    if (o != null &amp;&amp; o.getClass() == this.getClass()) {
+      Identity oi = (Identity)o;
+      if (oi == this || 
+           (oi.getId() == this.getId() &amp;&amp;
+             ((oi.getName() == null &amp;&amp; this.getName() == null) ||
+              (oi.getName() != null &amp;&amp; this.getName() != null &amp;&amp;
+               oi.getName().compareTo(this.getName()) == 0)))) {
+        same = true;
+      }
+    }
+    return same;
+  }
+
+  public int    getId() {
+    Integer idNum = (Integer)props.get("idnum");
+    return idNum.intValue();
+  }
+
+  public String getName() { return (String)props.get("name"); }
+  public void   setName(String n) { props.put("name", n); }
+
+  public Object getProperty(Object key) {
+    return props.get(key);
+  }
+  public void   setProperty(Object key, Object val) {
+    props.put(key, val);
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>Additional properties can be added to the property lists of the
+collaborators to further define the identity of an agent in a system,
+or to hold state information related to the collaborative
+application. We've made the <tt class="literal">Identity</tt> class
+implement the <tt class="literal">Serializable</tt> interface, so that
+<tt class="literal">Identity</tt> objects can be passed back and forth
+between agents on the network to tag destination and source agents
+for transactions. This will come in handy whether your system uses
+message passing with <tt class="literal">ObjectInputStream</tt>s and
+<tt class="literal">ObjectOutputStream</tt>s, or RMI with
+<tt class="literal">Identity</tt> object arguments to remote methods.
+Since this class is meant to be serializable, however, any object
+added to the <tt class="literal">Identity</tt> as a property value or
+key, using the <tt class="literal">setProperty()</tt> method, also needs
+to be serializable; all objects that the
+<tt class="literal">Identity</tt> object references at the time that it
+is serialized and sent over the network will also be serialized and
+transmitted.<tt class="literal"></tt><a name="INDEX-1250"></a><a name="INDEX-1251"></a><a name="INDEX-1252"></a>
+</p>
+
+<p>
+<a name="INDEX-1253"></a>A collaborator has some pretty
+basic functional requirements. It needs to have a unique identifier
+in the system, so that messages can be routed to it. It needs to be
+able to connect to mediators, or to other collaborators, to engage in
+communication with them. Finally, it needs to be able to send
+messages and to be notified of incoming messages. <a href="#JDP-CH-9-EX-3">Example 9-3</a> shows a
+<tt class="literal">Collaborator</tt><a name="INDEX-1254"></a> interface that includes these
+abilities.
+</p>
+
+<a name="JDP-CH-9-EX-3"></a>
+<div class="example">
+<h4 class="objtitle">Example 9-3. A Collaborator Interface</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.Collaborative;
+
+import java.util.Properties;
+import java.io.IOException;
+import java.rmi.RemoteException;
+
+public interface Collaborator {
+  public Identity getIdentity();
+
+  // Connect to a mediator - subclasses dictate properties needed
+  public boolean connect(Properties p);
+
+  // Outgoing messages/data
+  public boolean send(String tag, String msg, Identity dst)
+                 throws IOException;
+  public boolean send(String tag, Object data, Identity dst)
+                 throws IOException;
+  public boolean broadcast(String tag, String msg)
+                 throws IOException;
+  public boolean broadcast(String tag, Object data)
+                 throws IOException;
+
+  // Incoming messages/data
+  public boolean notify(String tag, String msg, Identity src)
+                 throws IOException;
+  public boolean notify(String tag, Object data, Identity src)
+                 throws IOException;
+}</pre>
+</blockquote>
+</div>
+
+<p>The
+<tt class="literal">getIdentity()</tt><a name="INDEX-1255"></a>
+method returns an <tt class="literal">Identity</tt> for the
+<tt class="literal">Collaborator</tt>. This <tt class="literal">Identity</tt>
+may be given to the <tt class="literal">Collaborator</tt> when it
+connects to a mediator. The
+<tt class="literal">connect()</tt><a name="INDEX-1256"></a>
+method opens a connection to a remote collaborator or mediator. The
+values in the <tt class="literal">Properties</tt> argument to
+<tt class="literal">connect()</tt> specify how to locate the agent on the
+network. Some collaborators may only require a hostname and port
+number, others may need more information, like a registered name for
+the agent on an RMI server.
+</p>
+
+<p>The <tt class="literal">Collaborator</tt> interface supports sending
+messages with its
+<tt class="literal">send()</tt><a name="INDEX-1257"></a> and
+<tt class="literal">broadcast()</tt><a name="INDEX-1258"></a> methods. These methods accept a
+message in the form of a tag or label string, which says what kind of
+message it is for the receiver, and the message itself, which is
+either a <tt class="literal">String</tt> or a generic
+<tt class="literal">Object</tt>. The <tt class="literal">send()</tt> methods
+also accept an <tt class="literal">Identity</tt> object, which specifies
+whom to send the message to. So a <tt class="literal">Collaborator</tt>
+sends a message to individual agents on the network using the
+<tt class="literal">send()</tt> methods, and it broadcasts messages to
+all of the agents using the <tt class="literal">broadcast()</tt> methods.
+</p>
+
+<p>A <tt class="literal">Collaborator</tt> receives messages through its
+<tt class="literal">notify()</tt><a name="INDEX-1259"></a> methods. There are versions of
+<tt class="literal">notify()</tt> that accept a
+<tt class="literal">String</tt> or an <tt class="literal">Object</tt> as the
+body of the message. The <tt class="literal">notify()</tt> methods also
+have an <tt class="literal">Identity</tt> argument that specifies who
+sent the message. If the sender is unknown, the
+<tt class="literal">Identity</tt> argument will be
+<tt class="literal">null</tt>. When it is notified of the message, the
+<tt class="literal">Collaborator</tt> can react as needed, by adding the
+data in the message to a database, updating its display, or
+responding to the sender of the
+message.<tt class="literal"></tt><a name="INDEX-1260"></a>
+</p>
+
+<p>A <a name="INDEX-1261"></a><a name="INDEX-1262"></a> mediator has an equally simple set of
+tasks. It needs to be able to register new collaborators by providing
+them with unique identifiers, send messages to individual
+collaborators, and broadcast messages to all collaborators that it
+has registered. <a href="#JDP-CH-9-EX-4">Example 9-4</a> shows a
+<tt class="literal">Mediator</tt> interface that supports these things.
+The
+<tt class="literal">newMember()</tt><a name="INDEX-1263"></a><a name="INDEX-1264"></a> method
+generates a unique identifier for a new collaborator. The
+<tt class="literal">removeMember()</tt> method removes the given
+collaborator from the <tt class="literal">Mediator</tt>'s registry.
+The
+<tt class="literal">send()</tt><a name="INDEX-1265"></a> and
+<tt class="literal">broadcast()</tt><a name="INDEX-1266"></a> methods are analogous to the same
+methods on the <tt class="literal">Collaborator</tt> interface. Messages
+can be sent to individual agents using the
+<tt class="literal">send()</tt> methods, and they can be broadcast to all
+agents using the <tt class="literal">broadcast()</tt> methods.
+</p>
+
+<a name="JDP-CH-9-EX-4"></a>
+<div class="example">
+<h4 class="objtitle">Example 9-4. A Mediator Interface</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.Collaborative;
+
+import java.util.Vector;
+import java.io.IOException;
+
+public interface Mediator {
+  public Identity newMember();
+  public boolean  removeMember(Identity i);
+  public Vector   getMembers();
+
+  public boolean send(Identity to, Identity from, String mtag, String msg)
+                 throws IOException;
+  public boolean broadcast(Identity from, String mtag, String msg)
+                 throws IOException;
+  public boolean send(Identity to, Identity from, String mtag, Object data)
+                 throws IOException;
+  public boolean broadcast(Identity from, String mtag, Object data)
+                 throws IOException;
+}</pre>
+</blockquote>
+</div>
+
+<p>We've been careful in designing the
+<tt class="literal">Collaborator</tt> and <tt class="literal">Mediator</tt>
+interfaces to allow for implementing these interfaces using whatever
+communications scheme the application developer chooses. Although the
+methods on the interfaces seem to suggest a message-passing scheme,
+the data in these "messages" could be passed using remote
+methods on RMI objects, or on CORBA implementations of the
+<tt class="literal">Collaborator</tt> and <tt class="literal">Mediator</tt>
+classes.<a name="INDEX-1267"></a><a name="INDEX-1268"></a>
+</p>
+
+<p>With our updated, multi-agent <tt class="literal">MessageHandler</tt>
+class in hand, implementing message-passing versions of the
+<tt class="literal">Collaborator</tt> and <tt class="literal">Mediator</tt>
+interfaces is a pretty simple matter. The
+<tt class="literal">MessageMediator</tt><a name="INDEX-1269"></a> class shown in <a href="#JDP-CH-9-EX-5">Example 9-5</a> is an implementation of the
+<tt class="literal">Mediator</tt> interface that uses a
+<tt class="literal">MessageHandler</tt> to route messages back and forth
+between remote agents. The <tt class="literal">MessageMediator</tt> has a
+<tt class="literal">MessageHandler</tt> to route messages, a
+<tt class="literal">ServerSocket</tt> to accept socket connections from
+remote agents, and a port number that it listens to for connections.
+It also implements the <tt class="literal">Runnable</tt> interface so
+that it can sit in its own thread, listening for asynchronous
+connections from agents. This is the primary function of its
+<tt class="literal">run()</tt> method, where it creates the
+<tt class="literal">ServerSocket</tt> listening to its designated port,
+then loops continuously trying to accept connections over the socket.
+When a new connection is made, a new agent is added to the handler by
+calling its <tt class="literal">addAgent()</tt> method with the input and
+output streams from the <tt class="literal">Socket</tt> that is created
+to the agent. The <tt class="literal">Mediator</tt> creates a unique
+<tt class="literal">Identity</tt> for the agent by calling the
+<tt class="literal">newMember()</tt> method, which creates a new
+<tt class="literal">Identity</tt> and sets its ID number to the next
+available integer. Then a message is sent to the agent containing its
+<tt class="literal">Identity</tt>, so that it can identify itself in
+future messages.
+</p>
+
+<a name="JDP-CH-9-EX-5"></a>
+<div class="example">
+<h4 class="objtitle">Example 9-5. A Mediator Based on Message Passing</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.Collaborative;
+
+import java.lang.Runnable;
+import java.util.Vector;
+import java.util.Enumeration;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.io.IOException;
+
+public class MessageMediator implements Mediator, Runnable {
+  MessageHandler mhandler = new MessageHandler();
+  ServerSocket socket = null;
+  int port = 5009;
+
+  public MessageMediator(int p) {
+    initHandler();
+    port = p;
+  }
+
+  public MessageMediator() {
+    initHandler();
+  }
+
+  protected void initHandler() {
+    // Add the mediator message "prototype" to the handler
+    Message m = new MediatorMessage(this);
+    mhandler.addMessageType(m);
+  }
+
+  public void run() {
+    // Make the server socket
+    try {
+      socket = new ServerSocket(port);
+    }
+    catch (IOException e) {
+      System.out.println("Failed to bind to port " + port);
+      return;
+    }
+
+    System.out.println("Mediator running on port " + port);
+    
+    // Listen for new clients...
+    while (true) {
+      try {
+        Socket clientConn = socket.accept();
+        Identity i = newMember();
+        mhandler.addAgent(i.getId(), clientConn.getInputStream(),
+                          clientConn.getOutputStream());
+        System.out.println("Got new connection...");
+        Message imsg = new Message("identity");
+        imsg.addArg(i);
+        mhandler.sendMsg(imsg, i.getId());
+      }
+      catch (Exception e) {}
+    }
+  }
+
+  public Identity newMember() {
+    int id = mhandler.nextAgentId();
+    Identity i = new Identity(id);
+    return i;
+  }
+
+  public boolean remove(Identity i) {
+    int id = i.getId();
+    boolean success = mhandler.removeAgent(id);
+    return success;
+  }
+
+  public Vector getMembers() {
+    Vector members = new Vector();
+    Vector ids = mhandler.getAgentIds();
+    Enumeration e = ids.elements();
+    while (e.hasMoreElements()) {
+      Integer id = (Integer)e.nextElement();
+      Identity i = new Identity(id.intValue());
+      members.addElement(i);
+    }
+    return members;
+  }
+
+  public boolean send(Identity to, Identity from, String mtag, String s)
+                 throws IOException {
+    boolean success = false;
+    Message msg = new Message(mtag);
+    msg.addArg(from);
+    msg.addArg(s);
+    return mhandler.sendMsg(msg, to.getId());
+  }
+
+  public boolean broadcast(Identity from, String mtag, String s)
+                 throws IOException {
+    System.out.println("mm: Broadcasting message \"" + mtag + s + "\"");
+    Message msg = new Message(mtag);
+    msg.addArg(from);
+    msg.addArg(s);
+    return mhandler.sendMsg(msg);
+  }
+
+  public boolean send(Identity to, Identity from, String mtag, Object o)
+                 throws IOException {
+    Message msg = new Message(mtag);
+    msg.addArg(from);
+    msg.addArg(o);
+    return mhandler.sendMsg(msg, to.getId());
+  }
+
+  public boolean broadcast(Identity from, String mtag, Object o)
+                 throws IOException {
+    Message msg = new Message(mtag);
+    msg.addArg(from);
+    msg.addArg(o);
+    return mhandler.sendMsg(msg);
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>The <tt class="literal">MessageMediator</tt> initializes its
+<a name="INDEX-1270"></a><tt class="literal">MessageHandler</tt> in each of its constructors by
+calling the protected <tt class="literal">initHandler()</tt> method. This
+method adds a <tt class="literal">MediatorMessage</tt> to the
+handler's list of "prototype" messages. The
+<tt class="literal">MediatorMessage</tt><a name="INDEX-1271"></a>, shown in <a href="#JDP-CH-9-EX-6">Example 9-6</a>, keeps a reference to a
+<tt class="literal">Mediator</tt>, and its <tt class="literal">Do()</tt>
+method handles messages by checking the type of message and calling
+the appropriate method on its <tt class="literal">Mediator</tt>. This is
+the only message prototype added to the
+<tt class="literal">MessageHandler</tt>, and its
+<tt class="literal">handles()</tt> method always returns
+<tt class="literal">true</tt>, so all messages received by the
+<tt class="literal">MessageHandler</tt> will be handled by this message.
+If the message has a type of "send," then the next four
+arguments are assumed to be: an <tt class="literal">Identity</tt> object
+specifying the source of the message, another for the destination of
+the message, a <tt class="literal">String</tt> message tag, and a
+<tt class="literal">String</tt> or <tt class="literal">Object</tt> message
+body. These four arguments are passed into a call to the
+<tt class="literal">Mediator</tt>'s <tt class="literal">send()</tt>
+method. If a message with a type of "broadcast" is
+received, then only three arguments are expected: the
+<tt class="literal">Identity</tt> of the sender, a
+<tt class="literal">String</tt> message tag, and a
+<tt class="literal">String</tt> or <tt class="literal">Object</tt> message
+body. These three arguments are passed into the
+<tt class="literal">Mediator</tt>'s
+<tt class="literal">broadcast()</tt> method.
+</p>
+
+<a name="JDP-CH-9-EX-6"></a>
+<div class="example">
+<h4 class="objtitle">Example 9-6. A Mediator Message</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.Collaborative;
+
+import java.io.*;
+import java.util.Vector;
+
+public class MediatorMessage extends Message
+{
+  protected Mediator mediator = null;
+
+  public MediatorMessage(Mediator m) {
+    mediator = m;
+  }
+
+  public MediatorMessage(String mid) {
+    super(mid);
+  }
+
+  public boolean Do()
+  {
+    boolean success = false;
+    
+    try {
+      String mtype = messageID();
+      if (mtype.compareTo("send") == 0) {
+        Identity from = (Identity)getArg(0);
+        Identity to = (Identity)getArg(1);
+        String tag = (String)getArg(2);
+        try {
+          String s = (String)getArg(3);
+          mediator.send(to, from, tag, s);
+          success = true;
+        }
+        catch (ClassCastException cce) {
+          // Argument wasn't a String, so send it as an Object
+          Object oarg = getArg(3);
+          mediator.send(to, from, tag, oarg);
+          success = true;
+        }
+      }
+      else if (mtype.compareTo("broadcast") == 0) {
+        System.out.println("mm: Got broadcast message.");
+        Identity from = (Identity)getArg(0);
+        String tag = (String)getArg(1);
+        System.out.println("mm: tag = \"" + tag + "\"");
+        try {
+          String s = (String)getArg(2);
+          mediator.broadcast(from, tag, s);
+          success = true;
+        }
+        catch (ClassCastException cce) {
+          Object oarg = getArg(2);
+          mediator.broadcast(from, tag, oarg);
+        }
+      }
+    }
+    catch (Exception e) {
+      success = false;
+      System.out.println("mm: Error parsing message.");
+      e.printStackTrace();
+    }
+    return success;
+  }
+
+  // We want to handle all messages.
+  public boolean handles(String msgId) { return true; }
+
+  public Message newCopy() {
+    MediatorMessage copy;
+    if (mediator != null) {
+      // Make a new MediatorMessage with the same Mediator
+      copy = new MediatorMessage(mediator);
+      copy.setId(messageID());
+    }
+    else {
+      copy = new MediatorMessage(messageID());
+    }
+    return copy;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>The remainder of the <tt class="literal">MessageMediator</tt>
+implementation consists of the <tt class="literal">send()</tt> and
+<tt class="literal">broadcast()</tt> methods. These methods simply take
+the arguments passed to them, bundle them into
+<tt class="literal">Messages</tt>, and instruct the
+<tt class="literal">Message-Handler</tt> to send them to the appropriate
+recipients. The <tt class="literal">send()</tt> methods call the
+<tt class="literal">MessageHandler.sendMsg()</tt> method with the ID
+number of the destination agent, while the
+<tt class="literal">broadcast()</tt> methods call the
+<tt class="literal">MessageHandler.send-Msg()</tt> method with no ID
+number; this causes the <tt class="literal">MessageHandler</tt> to send
+the message to all of the agents in its
+list.<tt class="literal"></tt><a name="INDEX-1272"></a>
+</p>
+
+<p>The last piece of our message-passing collaborative system is a
+<tt class="literal">Collaborator</tt> implemented using message passing.
+The <tt class="literal">MessageCollaborator</tt><a name="INDEX-1273"></a><a name="INDEX-1274"></a> shown in <a href="#JDP-CH-9-EX-7">Example 9-7</a> implements the
+<tt class="literal">Collaborator</tt> interface using a
+<tt class="literal">Message-Handler</tt>. Two constructors are provided:
+one with just a name for the collaborator, and the other with a name
+along with the host and port number of a mediator to which to
+connect. Both constructors initialize the
+<tt class="literal">MessageHandler</tt>, and the second version goes on
+to put the host and port number into a
+<tt class="literal">Properties</tt> list and call the
+<tt class="literal">connect()</tt> method to connect to the mediator at
+that network address. The <tt class="literal">initHandler()</tt> method
+simply adds a <tt class="literal">CollaboratorMessage</tt> to the message
+prototype list on the <tt class="literal">MessageHandler</tt>. This
+<tt class="literal">Message</tt> subclass, shown in <a href="#JDP-CH-9-EX-8">Example 9-8</a>, is even simpler than the
+<tt class="literal">MediatorMessage</tt> in <a href="#JDP-CH-9-EX-6">Example 9-6</a>.
+The <tt class="literal">Do()</tt> method takes the message ID, assumes
+that the first argument is the <tt class="literal">Identity</tt> of the
+sender and that the second argument is the body of the message, and
+calls the collaborator's <tt class="literal">notify()</tt> method
+with these arguments. The <tt class="literal">CollaboratorMessage</tt>
+also handles all messages by returning a default of
+<tt class="literal">true</tt> from its <tt class="literal">handles()</tt>
+method.
+</p>
+
+<a name="JDP-CH-9-EX-7"></a>
+<div class="example">
+<h4 class="objtitle">Example 9-7. A Message-Passing Collaborator</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.Collaborative;
+
+import java.io.IOException;
+import java.net.Socket;
+import java.util.Properties;
+
+public class MessageCollaborator implements Collaborator
+{
+  MessageHandler handler = new MessageHandler();
+  Identity id = null;
+  String name;
+
+  public MessageCollaborator(String n) {
+    name = n;
+    initHandler();
+  }
+
+  public MessageCollaborator(String host, int port, String n) {
+    initHandler();
+    name = n;
+    Properties p = new Properties();
+    p.put("host", host);
+    p.put("port", String.valueOf(port));
+    connect(p);
+  }
+
+  protected void initHandler() {
+    handler.addMessageType(new CollaboratorMessage(this));
+  }
+
+  public Identity getIdentity() { return id; }
+
+  public boolean connect(Properties p) {
+    boolean success = false;
+
+    String host = p.getProperty("host");
+    String itmp = p.getProperty("port");
+    if (host != null &amp;&amp; itmp != null) {
+      try {
+        int port = Integer.parseInt(itmp);
+        // Make a socket connection to the mediator.
+        Socket mConn = new Socket(host, port);
+        int pid = handler.addAgent(mConn.getInputStream(),
+                                  mConn.getOutputStream());
+        System.out.println("Got socket to Mediator, id = " + id + "...");
+        // The mediator should send us an identity in a message...
+        Message imsg = handler.readMsg(pid);
+        System.out.println("Got message with id = " + imsg.messageID());
+        if (imsg.messageID().compareTo("identity") == 0) {
+          id = (Identity)imsg.getArg(0);
+          id.setName(name);
+          System.out.println("Got identity from mediator, id = "
+                             + id.getId() + "...");
+          success = true;
+        }
+        else {
+          handler.removeAgent(pid);
+          success = false;
+        }
+      }
+      catch (Exception e) {
+        success = false;
+      }
+    }
+    else {
+      success = false;
+    }
+    return success;
+  }
+
+  public boolean send(String tag, String msg, Identity dst)
+                 throws IOException {
+    boolean success = false;
+    Message m = new Message("send");
+    m.addArg(getIdentity());
+    m.addArg(dst);
+    m.addArg(tag);
+    m.addArg(msg);
+    success = handler.sendMsg(m);
+    return success;
+  }
+
+  public boolean send(String tag, Object data, Identity dst)
+                 throws IOException {
+    boolean success = false;
+    Message m = new Message("send");
+    m.addArg(getIdentity());
+    m.addArg(dst);
+    m.addArg(tag);
+    m.addArg("#OBJ");
+    m.addArg(data);
+    success = handler.sendMsg(m);
+    return success;
+  }
+
+  public boolean broadcast(String tag, String msg)
+                 throws IOException {
+    boolean success = false;
+    Message m = new Message("broadcast");
+    m.addArg(getIdentity());
+    m.addArg(tag);
+    m.addArg(msg);
+    System.out.println("mc: Sending broadcast message \"" + tag + "\"");
+    success = handler.sendMsg(m);
+    System.out.println("mc: success = " + success);
+    return success;
+  }
+
+  public boolean broadcast(String tag, Object data)
+                 throws IOException {
+    boolean success = true;
+    Message m = new Message("broadcast");
+    m.addArg(getIdentity());
+    m.addArg(tag);
+    m.addArg("#OBJ");
+    m.addArg(data);
+    success = handler.sendMsg(m);
+    return success;
+  }
+
+  public boolean notify(String tag, String msg, Identity src)
+                 throws IOException {
+    System.out.println("Received \"" + tag + "\" message \""
+                       + msg + "\" from " + src.getName());
+    return true;
+  }
+
+  public boolean notify(String tag, Object data, Identity src)
+                 throws IOException {
+    System.out.println("Received \"" + tag + "\" object \""
+                       + data + "\" from " + src.getName());
+    return true;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>The <tt class="literal">connect()</tt> method on the
+<tt class="literal">MessageCollaborator</tt> assumes that a host and port
+number will be in the <tt class="literal">Properties</tt> list passed to
+it. These are used to make a socket connection to that address. Once
+the connection is made, the input and output streams from the socket
+are passed to the <tt class="literal">addAgent()</tt> method on the
+<tt class="literal">MessageHandler</tt>. This adds the mediator at the
+other end of the socket to the list of agents in our
+<tt class="literal">MessageHandler</tt>. Since the first thing the
+<tt class="literal">MessageMediator</tt> does is send the collaborator a
+message with its new <tt class="literal">Identity</tt> with the mediator,
+the next step in the <tt class="literal">connect()</tt> method is to read
+the message from the mediator and get our
+<tt class="literal">Identity</tt>. If we fail to get an
+<tt class="literal">Identity</tt> from the mediator, then we remove the
+mediator from the <tt class="literal">MessageHandler</tt> agent list by
+calling its <tt class="literal">removeAgent()</tt>
+method.<tt class="literal"></tt><a name="INDEX-1275"></a><a name="INDEX-1276"></a>
+</p>
+
+<p>The rest of the <tt class="literal">MessageCollaborator</tt> is the
+implementation of the <tt class="literal">send()</tt>,
+<tt class="literal">broadcast()</tt>, and <tt class="literal">notify()</tt>
+methods. These are implemented much the same as on the
+<tt class="literal">MessageMediator</tt>. The <tt class="literal">send()</tt>
+methods bundle the source (the local <tt class="literal">Identity</tt>),
+destination, message type, and message body into a
+<tt class="literal">Message</tt> with an ID of "send," and
+send it to the mediator using the <tt class="literal">sendMsg()</tt>
+method on the <tt class="literal">MessageHandler</tt>. The
+<tt class="literal">broadcast()</tt> methods bundle the source
+<tt class="literal">Identity</tt>, the message type, and the message body
+into a <tt class="literal">Message</tt> with an ID of
+"broadcast," and send it with the
+<tt class="literal">MessageHandler.sendMsg()</tt> method. The
+<tt class="literal">notify()</tt> methods implemented here simply print
+out an indication that a message has been received. Subclasses would
+override these methods to check the message type or body, and react
+accordingly.
+<a name="INDEX-1277"></a>
+</p>
+
+<a name="JDP-CH-9-EX-8"></a>
+<div class="example">
+<h4 class="objtitle">Example 9-8. A Collaborator Message</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.Collaborative;
+
+import java.io.*;
+import java.util.Vector;
+
+public class CollaboratorMessage extends Message
+{
+  protected Collaborator collaborator = null;
+
+  public CollaboratorMessage(Collaborator c) {
+    collaborator = c;
+  }
+
+  public CollaboratorMessage(String mid) {
+    super(mid);
+  }
+
+  public boolean Do()
+  {
+    boolean success = false;
+
+    try {
+      String mtype = messageID();
+      Identity from = (Identity)getArg(0);
+      try {
+        String s = (String)getArg(1);
+        collaborator.notify(mtype, s, from);
+        success = true;
+      }
+      catch (ClassCastException cce) {
+        // Argument isn't a string, so send it as an object
+        Object oarg = getArg(1);
+        collaborator.notify(mtype, oarg, from);
+        success = true;
+      }
+    }
+    catch (Exception e) {
+      success = false;
+    }
+    return success;
+  }
+
+  // We want to handle all messages to the collaborator
+  public boolean handles(String msgId) { return true; }
+
+  public Message newCopy() {
+    CollaboratorMessage copy;
+    if (collaborator != null) {
+      // Make a new CollaboratorMessage with the same Collaborator
+      copy = new CollaboratorMessage(collaborator);
+      copy.setId(messageID());
+    }
+    else {
+      copy = new CollaboratorMessage(messageID());
+    }
+    return copy;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="INDEX-1278"></a>
+
+<p>Our complete message-passing infrastructure allows us to create a
+<tt class="literal">MessageMediator</tt> on a given port number on a
+host. Then any client can connect to the mediator by creating a
+<tt class="literal">MessageCollaborator</tt> using the mediator's
+host and port number, and engage in a collaborative exercise with any
+other agent connected to it using the collaborator's
+<tt class="literal">send()</tt> and <tt class="literal">broadcast()</tt>
+methods. Each connection the <tt class="literal">MessageMediator</tt>
+accepts is serviced in a separate thread by an
+<tt class="literal">AgentHandler</tt>, which listens for messages from
+that agent and tells the <tt class="literal">MessageMediator</tt> to
+route them to the right <tt class="literal">Collaborator</tt>s.
+</p>
+
+<p>If we wanted to support the complete collaborative environment
+depicted in <a href="ch09_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch09_01.htm">Figure 9-1</a>, in addition to each
+<tt class="literal">Mediator</tt> serving multiple
+<tt class="literal">Collaborator</tt>s, we would also want each
+<tt class="literal">Collaborator</tt> to be able to connect to more than
+one <tt class="literal">Mediator</tt>. We may want to have clusters of
+<tt class="literal">Mediator</tt>s serving different portions of the
+overall community. This is a simple extension to the
+<tt class="literal">Collaborator</tt> and
+<tt class="literal">MessageCollaborator</tt><a name="INDEX-1279"></a><a name="INDEX-1280"></a><a name="INDEX-1281"></a> interfaces. First, the
+<tt class="literal">Message-Collaborator</tt> would need to maintain a
+table of mediators that it was connected to, along with their
+identities. The identity of a mediator could be as simple as an ID
+number that the <tt class="literal">MessageCollaborator</tt> generates on
+its own as a unique local identifier for the
+<tt class="literal">Mediator</tt>. A <tt class="literal">Hashtable</tt> could
+be used to store the table of <tt class="literal">Collaborator</tt>s and
+their <tt class="literal">Identity</tt>s. The <tt class="literal">send()</tt>
+and <tt class="literal">broadcast()</tt> methods would need to include a
+new <tt class="literal">Identity</tt> argument, to specify which
+<tt class="literal">Mediator</tt> to route the message through. We may
+also want to add methods to broadcast a message through all available
+<tt class="literal">Mediator</tt>s (e.g., a
+<tt class="literal">broadcastAll()</tt><tt class="literal"></tt><a name="INDEX-1282"></a> method).<a name="INDEX-1283"></a>
+</p>
+
+
+<a name="JDP-CH-9-SECT-3.2"></a>
+<h3 class="sect2">9.3.2. Collaborating with RMI</h3>
+
+<p>
+<a name="INDEX-1284"></a><a name="INDEX-1285"></a>We
+implemented our message-passing version of a collaborative
+infrastructure to demonstrate the communication issues that the
+system needs to handle; now let's see what a version
+implemented in RMI would look like, and what pieces of the puzzle RMI
+handles for us. We'll construct our RMI collaboration system so
+that a <tt class="literal">Mediator</tt> is registered as an RMI server
+object to which remote <tt class="literal">Collaborator</tt>s connect.
+The <tt class="literal">Collaborator</tt>s can then register themselves
+with the <tt class="literal">Mediator</tt> by passing stub references to
+themselves through a remote method call to the
+<tt class="literal">Mediator</tt>. Once the <tt class="literal">Mediator</tt>
+has a stub for the <tt class="literal">Collaborator</tt> objects, and
+each <tt class="literal">Collaborator</tt> has a stub for the
+<tt class="literal">Mediator</tt>, the <tt class="literal">Collaborator</tt>s
+can exchange messages by calling the appropriate method on the
+<tt class="literal">Mediator</tt> stub, which in turn passes the message
+to the appropriate <tt class="literal">Collaborator</tt> by calling the
+<tt class="literal">notify()</tt> method on its stub.
+</p>
+
+<p>First, remember that a remote RMI object must have a stub interface
+that implements the <tt class="literal">java.rmi.Remote</tt> interface,
+and each method on the interface must throw a
+<tt class="literal">java.rmi.RemoteException</tt>. Also, the
+<tt class="literal">Remote</tt> object has to implement the
+<tt class="literal">Remote</tt> interface from the top of its inheritance
+tree (i.e., a remote object cannot implement a
+non-<tt class="literal">Remote</tt> interface). For these reasons, we
+need new versions of our <tt class="literal">Collaborator</tt> and
+<tt class="literal">Mediator</tt> interfaces for the RMI version of our
+system. The <tt class="literal">RMICollaborator</tt><a name="INDEX-1286"></a> interface in <a href="#JDP-CH-9-EX-9">Example 9-9</a> has essentially the same interface as the
+<tt class="literal">Collaborator</tt> from <a href="#JDP-CH-9-EX-3">Example 9-3</a>,
+except that it implements <tt class="literal">java.rmi.Remote</tt>, and
+all methods throw the <tt class="literal">java.rmi.RemoteException</tt>
+in addition to any <tt class="literal">Exceptions</tt> that the original
+<tt class="literal">Collaborator</tt> interface throws.
+</p>
+
+<a name="JDP-CH-9-EX-9"></a>
+<div class="example">
+<h4 class="objtitle">Example 9-9. An RMI Collaborator Interface</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.Collaborative;
+
+import java.rmi.RemoteException;
+import java.io.IOException;
+import java.rmi.Remote;
+import java.util.Properties;
+
+public interface RMICollaborator extends Remote
+{
+  public Identity getIdentity() throws RemoteException;
+
+  // Connect to a mediator - subclasses dictate properties needed
+  public boolean connect(Properties p) throws RemoteException;
+
+  // Outgoing messages/data
+  public boolean send(String tag, String msg, Identity dst)
+                 throws IOException, RemoteException;
+  public boolean send(String tag, Object data, Identity dst)
+                 throws IOException, RemoteException;
+  public boolean broadcast(String tag, String msg)
+                 throws IOException, RemoteException;
+  public boolean broadcast(String tag, Object data)
+                 throws IOException, RemoteException;
+
+  // Incoming messages/data
+  public boolean notify(String tag, String msg, Identity src)
+                 throws IOException, RemoteException;
+  public boolean notify(String tag, Object data, Identity src)
+                 throws IOException, RemoteException;
+}</pre>
+</blockquote>
+</div>
+
+<p>The <tt class="literal">RMIMediator</tt><a name="INDEX-1287"></a> interface in <a href="#JDP-CH-9-EX-10">Example 9-10</a> is adapted in the same way from the
+<tt class="literal">Mediator</tt> interface in <a href="#JDP-CH-9-EX-4">Example 9-4</a>, except that a new
+<tt class="literal">register()</tt> method has been added to allow each
+<tt class="literal">RMICollaborator</tt> to register itself with the
+<tt class="literal">RMIMediator</tt> once it has a stub.
+</p>
+
+<a name="JDP-CH-9-EX-10"></a>
+<div class="example">
+<h4 class="objtitle">Example 9-10. An RMI Mediator Interface</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.Collaborative;
+
+import java.rmi.RemoteException;
+import java.io.IOException;
+import java.rmi.Remote;
+import java.util.Vector;
+
+public interface RMIMediator extends Remote
+{
+  public boolean register(Identity i, RMICollaborator c)
+                 throws RemoteException;
+  public Identity newMember() throws RemoteException;
+  public boolean  remove(Identity i) throws RemoteException;
+  public Vector   getMembers() throws RemoteException;
+
+  public boolean send(Identity to, Identity from, String mtag, String msg)
+                 throws IOException, RemoteException;
+  public boolean broadcast(Identity from, String mtag, String msg)
+                 throws IOException, RemoteException;
+  public boolean send(Identity to, Identity from, String mtag, Object data)
+                 throws IOException, RemoteException;
+  public boolean broadcast(Identity from, String mtag, Object data)
+                 throws IOException, RemoteException;
+}</pre>
+</blockquote>
+</div>
+
+<p>
+<a name="INDEX-1288"></a>
+The implementations of our RMI-based collaborator and mediator are
+surprisingly similar to our message-passing versions. The
+<tt class="literal">RMICollaboratorImpl</tt><a name="INDEX-1289"></a> in <a href="#JDP-CH-9-EX-11">Example 9-11</a> has
+two constructors: one with just a name for the collaborator, the
+other taking a name, a host name, and the name of the remote
+<tt class="literal">RMIMediator</tt> object to lookup. The first
+constructor saves the name within an <tt class="literal">Identity</tt>
+object for the collaborator. The second does the same, then adds the
+host name and remote object name to a property list and calls the
+<tt class="literal">connect()</tt> method. The
+<tt class="literal">connect()</tt> method expects a host name saved as
+the <tt class="literal">host</tt> property in the
+<tt class="literal">Properties</tt> argument, and the name of a remote
+<tt class="literal">RMIMediator</tt> object as the
+<tt class="literal">mediatorName</tt> in the property list. Once it has
+these, the <tt class="literal">connect()</tt> method attempts to retrieve
+a stub to the remote mediator using the
+<tt class="literal">Naming.lookup()</tt> method with a URL constructed
+from the host name and the object name. Once the stub is received,
+the collaborator asks the <tt class="literal">RMIMediator</tt> for a new
+unique <tt class="literal">Identity</tt> by calling its
+<tt class="literal">newMember()</tt> method, then registers itself with
+the mediator by calling its <tt class="literal">register()</tt> method with
+a reference to itself and the new <tt class="literal">Identity</tt>.
+</p>
+
+<a name="JDP-CH-9-EX-11"></a>
+<div class="example">
+<h4 class="objtitle">Example 9-11. Implementation of an RMI Collaborator</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.Collaborative;
+
+import java.io.IOException;
+import java.util.Properties;
+import java.rmi.Naming;
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
+import java.rmi.RMISecurityManager;
+
+public class RMICollaboratorImpl extends UnicastRemoteObject 
+                                 implements RMICollaborator
+{
+  protected Identity id = null;
+  protected RMIMediator mediator = null;
+
+  public RMICollaboratorImpl(String name, String host, String mname)
+         throws RemoteException {
+    id = new Identity(0);
+    id.setName(name);
+    Properties p = new Properties();
+    p.put("host", host);
+    p.put("mediatorName", mname);
+    connect(p);
+  }
+
+  public RMICollaboratorImpl(String name) throws RemoteException {
+    id = new Identity(0);
+    id.setName(name);
+  }
+  
+  public Identity getIdentity() throws RemoteException { return id; }
+
+  public boolean connect(Properties p) throws RemoteException {
+    boolean success = false;
+    String host = p.getProperty("host");
+    String mName = p.getProperty("mediatorName");
+    if (host != null &amp;&amp; mName != null) {
+      try {
+        String url = "rmi://" + host + "/" + mName;
+        System.out.println("looking up " + url);
+        mediator = (RMIMediator)Naming.lookup(url);
+        System.out.println("Got mediator " + mediator);
+        Identity newId = mediator.newMember();
+        mediator.register(newId, this);
+        newId.setName(id.getName());
+        id = newId;
+        success = true;
+      }
+      catch (Exception e) {
+        e.printStackTrace();
+        success = false;
+      }
+    }
+
+    return success;
+  }
+
+  public boolean send(String tag, String msg, Identity dst)
+                 throws IOException, RemoteException {
+    boolean success = false;
+    if (mediator != null) {
+      success = mediator.send(dst, getIdentity(), tag, msg);
+    }
+    return success;
+  }
+
+  public boolean send(String tag, Object data, Identity dst)
+                 throws IOException, RemoteException {
+    boolean success = false;
+    if (mediator != null) {
+      success = mediator.send(dst, getIdentity(), tag, data);
+    }
+    return success;
+  }
+
+  public boolean broadcast(String tag, String msg)
+                 throws IOException, RemoteException {
+    boolean success = false;
+    if (mediator != null) {
+      success = mediator.broadcast(getIdentity(), tag, msg);
+    }
+    return success;
+  }
+
+  public boolean broadcast(String tag, Object data)
+                 throws IOException, RemoteException {
+    boolean success = false;
+    if (mediator != null) {
+      success = mediator.broadcast(getIdentity(), tag, data);
+    }
+    return success;
+  }
+
+  public boolean notify(String tag, String msg, Identity src)
+                 throws IOException, RemoteException {
+    System.out.println("Got message: \"" + tag + " " + msg + "\""
+                       + " from " + src.getName());
+    return true;
+  }
+
+  public boolean notify(String tag, Object data, Identity src)
+                 throws IOException, RemoteException {
+    System.out.println("Got message: \"" + tag + " " + data + "\""
+                       + " from " + src.getName());
+    return true;
+  }
+  
+  public static void main(String argv[]) {
+    // Install a security manager
+    System.setSecurityManager(new RMISecurityManager());
+    try {
+      String name = argv[0];
+      String host = argv[1];
+      String mname = argv[2];
+      Properties props = new Properties();
+      props.put("host", host);
+      props.put("mediatorName", mname);
+      RMICollaboratorImpl c = new RMICollaboratorImpl(name);
+      if (c.connect(props)) {
+        System.out.println("Got mediator...");
+        c.broadcast("msg", "hello world");
+      }
+    }
+    catch (Exception e) {
+      System.out.println("Caught exception:");
+      e.printStackTrace();
+    }
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>Once the stub to the <tt class="literal">RMIMediator</tt> has been
+received, the <tt class="literal">RMICollaboratorImpl</tt> simply calls
+methods on the remote object to implement its
+<tt class="literal">send()</tt> and <tt class="literal">broadcast()</tt>
+methods. The
+<tt class="literal">send()</tt><a name="INDEX-1290"></a> methods call the
+mediator's <tt class="literal">send()</tt> methods with the
+appropriate arguments; the same goes for the
+<tt class="literal">broadcast()</tt><a name="INDEX-1291"></a> methods. Since the calls to
+<tt class="literal">send()</tt> and <tt class="literal">broadcast()</tt> are
+remote method calls, any <tt class="literal">Objects</tt> passed as the
+body of a message to the <tt class="literal">RMIMediator</tt> must
+implement the <tt class="literal">Serializable</tt> interface, or an
+exception will result when the remote methods are called. Again, the
+implementation of the <tt class="literal">notify()</tt> methods simply
+print out some text indicating that a message has been received.
+</p>
+
+<p>The <tt class="literal">RMICollaboratorImpl</tt> interface also includes
+a <tt class="literal">main()</tt> method that demonstrates the use of the
+class with a mediator. The method takes command-line arguments that
+specify the name of the collaborator, the host for the mediator, and
+the name under which the mediator is registered. It creates an
+<tt class="literal">RMICollaboratorImpl</tt> object with the given name,
+then tells it to connect to the mediator registered as an RMI object
+under the given mediator name on the remote host. If it connects
+successfully, then we broadcast a friendly message to the other
+collaborators connected to the
+mediator.<tt class="literal"></tt><a name="INDEX-1292"></a>
+</p>
+
+<p>The <tt class="literal">RMIMediatorImpl</tt><a name="INDEX-1293"></a> in <a href="#JDP-CH-9-EX-12">Example 9-12</a>
+implements our <tt class="literal">RMIMediator</tt> interface. Its
+<tt class="literal">newMember()</tt> method generates a unique
+<tt class="literal">Identity</tt> for a collaborator, while its
+<tt class="literal">register()</tt> method adds its
+<tt class="literal">Identity</tt> and
+<tt class="literal">RMICollaborator</tt> arguments to a table of
+collaborators currently connected to the mediator. The
+<tt class="literal">remove()</tt> method removes the identified
+collaborator from the table of connected clients. The
+<tt class="literal">send()</tt> methods on
+<tt class="literal">RMIMediatorImpl</tt> retrieve the referenced
+<tt class="literal">RMICollaborator</tt> from its internal table, and
+call the <tt class="literal">notify()</tt> method on the collaborator
+with the appropriate arguments. The <tt class="literal">broadcast()</tt>
+methods iterate through all of the
+<tt class="literal">RMICollaborators</tt> in the table, calling each
+one's <tt class="literal">notify()</tt> method with the message
+from the remote <tt class="literal">RMICollaborator</tt>.
+</p>
+
+<a name="JDP-CH-9-EX-12"></a>
+<div class="example">
+<h4 class="objtitle">Example 9-12. Implementation of an RMI Mediator</h4>
+<blockquote>
+<pre class="programlisting">package dcj.util.Collaborative;
+
+import java.util.Vector;
+import java.util.Hashtable;
+import java.util.Enumeration;
+import java.io.IOException;
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
+import java.rmi.RMISecurityManager;
+
+public class RMIMediatorImpl extends UnicastRemoteObject 
+                             implements RMIMediator
+{
+  Hashtable clients = new Hashtable();
+  Vector idList = new Vector();
+
+  public RMIMediatorImpl() throws RemoteException {
+    super();
+  }
+
+  public boolean register(Identity i, RMICollaborator c)
+                 throws RemoteException {
+    System.out.println("Registering member " + i.getId()
+                       + " as " + c.getIdentity().getName());
+    clients.put(i, c);
+    return true;
+  }
+
+  public Identity newMember() throws RemoteException {
+    int max = -1;
+    boolean found = true;
+    Enumerator enum;
+    synchronized (idList) {
+       enum = idList.elements();
+    }
+    while (enum.hasMoreElements()) {
+      Integer i = enum.nextElement();
+      if (i.intValue() &gt; max) {
+        max = i.intValue();
+      }
+    }
+
+    Identity newId = new Identity(max + 1);
+    synchronized (idList) {
+      idList.addElement(newId);
+    }
+    return newId;
+  }
+
+  public boolean remove(Identity i) throws RemoteException {
+    boolean success = true;
+    synchronized (idList, clients) {
+      if (idList.removeElement(i) &amp;&amp; clients.remove(i) != null) {
+        success = true;
+      }
+      else {
+        success = false;
+      }
+    }
+    return success;
+  }
+
+  public Vector getMembers() throws RemoteException {
+    synchronized (idList) {
+      return (Vector)idList.clone();
+    }
+  }
+
+  public boolean send(Identity to, Identity from, String mtag, String msg)
+                 throws IOException, RemoteException {
+    boolean success = false;
+    RMICollaborator c = getMember(to);
+    synchronized (c) {
+      if (c != null) {
+        success = c.notify(mtag, msg, from);
+      }
+    }
+
+    return success;
+  }
+
+  public boolean send(Identity to, Identity from, String mtag, Object data)
+                 throws IOException, RemoteException {
+    boolean success = false;
+    RMICollaborator c = getMember(to);
+    synchronized (c) {
+      if (c != null) {
+        success = c.notify(mtag, data, from);
+      }
+    }
+    return success;
+  }
+
+  public boolean broadcast(Identity from, String mtag, String msg)
+                 throws IOException, RemoteException {
+    System.out.println("Broadcasting...");
+    boolean success = true;
+    Enumeration ids;
+    synchronized (clients) {
+      ids = clients.keys();
+    }
+    RMICollaborator target = null;
+    while (ids.hasMoreElements()) {
+      Identity i = (Identity)ids.nextElement();
+      synchronized (clients) {
+        target = (RMICollaborator)clients.get(i);
+      }
+      synchronized (target) {
+        if (target == null ||
+            !target.notify(mtag, msg, from)) {
+          success = false;
+        }
+      }
+    }
+    return success;
+  }
+
+  public boolean broadcast(Identity from, String mtag, Object data)
+                 throws IOException, RemoteException {
+    boolean success = true;
+    Enumeration ids;
+    synchronized (ids) {
+      ids = clients.keys();
+    }
+    RMICollaborator target = null;
+    while (ids.hasMoreElements()) {
+      Identity i = (Identity)ids.nextElement();
+      synchronized (clients) {
+        target = (RMICollaborator)clients.get(i);
+      }
+      synchronized (target) {
+        if (target == null ||
+            !target.notify(mtag, data, from)) {
+          success = false;
+        }
+      }
+    }
+    return success;
+  }
+
+  protected RMICollaborator getMember(Identity i) {
+    Enumeration ids;
+    synchronized (clients) {
+      ids = clients.keys();
+    }
+    RMICollaborator c = null;
+    Identity tmp;
+    while (c == null &amp;&amp; ids.hasMoreElements()) {
+       tmp = (Identity)ids.nextElement();
+       if (tmp.equals(i)) {
+         synchronized (clients) {
+           c = (RMICollaborator)clients.get(tmp);
+         }
+       }
+    }
+    return c;
+  }
+  
+  public static void main(String argv[]) {
+    // Install a security manager
+    System.setSecurityManager(new RMISecurityManager());
+
+    try {
+      String name = "TheMediator";
+      System.out.println("Registering RMIMediatorImpl as \""
+                         + name + "\"");
+      RMIMediatorImpl mediator = new RMIMediatorImpl();
+      System.out.println("Created mediator, binding...");
+      Naming.rebind(name, mediator);
+      System.out.println("Remote mediator ready...");
+    }
+    catch (Exception e) {
+      System.out.println("Caught exception while registering: " + e);
+    }
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>At the end of the <tt class="literal">RMIMediatorImpl</tt> interface is a
+<tt class="literal">main()</tt> method that can be used to register a
+mediator with a local RMI registry. It just creates an
+<tt class="literal">RMIMediatorImpl</tt> object and binds it with the RMI
+Naming service under the name
+<em class="emphasis">TheMediator</em>.<tt class="literal"></tt><a name="INDEX-1294"></a>
+</p>
+
+<p>If you compare our RMI implementation of a collaborative system to
+our message-passing one, you'll notice that they are fairly
+similar in structure, with the exception that there is no equivalent
+to the <tt class="literal">MessageHandler</tt> in our RMI-based system.
+We don't need one; RMI handles the functionality provided by
+the <tt class="literal">MessageHandler</tt> internally when it marshals,
+transmits, and then unmarshals a remote method call's arguments
+between the
+<tt class="literal">RMICollaborator</tt><a name="INDEX-1295"></a><a name="INDEX-1296"></a> and the
+<tt class="literal">RMIMediator</tt>, and vice versa. It's also
+important to notice that, while the RMI connection between the two
+objects allows for asynchronous remote method calls between the two,
+we need to ensure that the <tt class="literal">RMIMediatorImpl</tt>
+implementation is multithread-safe, so that multiple connected
+<tt class="literal">RMICollaborators</tt> can asynchronously route
+messages by remotely calling its <tt class="literal">send()</tt> and
+<tt class="literal">broadcast()</tt> methods. We do this by synchronizing
+any code segments that directly access the
+<tt class="literal">RMIMediatorImpl</tt>'s data members, including
+the <tt class="literal">RMICollaborator</tt> stub references. By doing
+this, and by including the collaborators among the objects on which
+we synchronize, we ensure that asynchronous methods calls by remote
+agents do not interfere with each other, and we indirectly protect
+the remote
+<tt class="literal">RMICollaboratorImpl</tt><a name="INDEX-1297"></a> from asynchronous method calls
+by synchronizing locally on our stub reference. If we wanted the
+collaborator to have access to multiple mediators, then this measure
+wouldn't help, since each mediator could call methods on the
+collaborator asynchronously with respect to the other
+<tt class="literal">Mediator</tt>s. If this was the case, we would have to
+ensure that the <tt class="literal">RMI-CollaboratorImpl</tt> methods
+were also multithread-safe.<a name="INDEX-1298"></a><a name="INDEX-1299"></a>
+</p>
+
+
+<a name="JDP-CH-9-SECT-3.3"></a>
+<h3 class="sect2">9.3.3. Summary</h3>
+
+<p>The basic collaborative utility that we've built, in both
+message-passing and RMI flavors, can deal with asynchronous handling
+of multiple remote agents by a single mediator. The mediators are
+capable of issuing unique identities to each collaborator that is
+registered with it. And while we've provided a simple interface
+for sending point-to-point or broadcast messages across the system,
+we could implement specialized mediator and collaborator subclasses
+that use a custom interface to communicate.<a name="INDEX-1300"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch09_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch09_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch10_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch10_01.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">9.2. Issues with Collaboration</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">10. Building Collaborative Applications</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

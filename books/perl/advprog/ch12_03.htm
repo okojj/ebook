@@ -1,0 +1,322 @@
+<html><head>
+<title>[Chapter 12] 12.3 Handling Multiple Clients</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:36:55Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch12_01.htm" title="12. Networking with Sockets"><link rel="prev" href="ch12_02.htm" title="12.2 Socket API and IO::Socket"><link rel="next" href="ch12_04.htm" title="12.4 Real-World Servers"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch12_02.htm" title="12.2 Socket API and IO::Socket"><img src="../gifs/txtpreva.gif" alt="Previous: 12.2 Socket API and IO::Socket" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch12_01.htm" title="12. Networking with Sockets">Chapter 12<br>Networking with Sockets</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch12_04.htm" title="12.4 Real-World Servers"><img src="../gifs/txtnexta.gif" alt="Next: 12.4 Real-World Servers" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch12-38133">12.3 Handling Multiple Clients</A
+></H2
+><p class="para"><a class="indexterm" name="ch12-idx-978545-0"></A
+><a class="indexterm" name="ch12-idx-978545-1"></A
+><a class="indexterm" name="ch12-idx-978545-2"></A
+><a class="indexterm" name="ch12-idx-978545-3"></A
+>The fact that <kbd class="command">accept</KBD
+>, <kbd class="command">read</KBD
+>, and <kbd class="command">sysread</KBD
+> are <a class="indexterm" name="ch12-idx-978570-0"></A
+>blocking calls has more implications for the server.[<a class="footnote" href="#ch12-pgfId-975810">1</A
+>] A single-threaded process can invoke only one of these calls at a time, which is fine if there aren't too many clients clamoring for the server's attention <em class="emphasis">and</EM
+> if no client ties the server up for too long a time. The real world is ugly, and you have to resolve this issue. There are three ways of doing this:<ol class="orderedlist"><li class="listitem"><p class="para"><a class="listitem" name="ch12-pgfId-973456"></A
+>Create multiple threads of control (processes or threads) and have each call block in its own thread. </P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch12-pgfId-973457"></A
+>Make these calls only when you are absolutely sure they won't block. We'll call this the "select" approach, because we use the <kbd class="command">select</KBD
+> call to ensure that a socket has something to offer.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch12-pgfId-973468"></A
+>Make these calls nonblocking using <kbd class="command">fcntl</KBD
+> or <kbd class="command">ioctl</KBD
+>. </P
+></LI
+></OL
+></P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch12-pgfId-975810">[1]</A
+> <kbd class="command">accept</KBD
+> blocks until someone tries to connect.</P
+></DIV
+></BLOCKQUOTE
+><p class="para">As we shall see, option 2 should be used in conjunction with option 3 in production systems. In all cases, the client code remains unaffected while we try out these options. </P
+><p class="para">Incidentally, there is a fourth option. Some systems support an asynchronous I/O notification: a <kbd class="command">SIGIO </KBD
+><a class="indexterm" name="ch12-idx-978552-0"></A
+><a class="indexterm" name="ch12-idx-978552-1"></A
+>signal is sent to the process if a specified socket is ready to do I/O. We will not pay attention to this approach because there is no way for a signal handler to know <em class="emphasis">which </EM
+>socket is ready for reading or writing. </P
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch12-pgfId-973352">12.3.1 Multiple Threads of Execution</A
+></H3
+><p class="para"><a class="indexterm" name="ch12-idx-978553-0"></A
+><a class="indexterm" name="ch12-idx-978553-1"></A
+><a class="indexterm" name="ch12-idx-978553-2"></A
+><a class="indexterm" name="ch12-idx-978553-3"></A
+>Perl doesn't have threads yet (at least not officially[<a class="footnote" href="#ch12-pgfId-975868">2</A
+>]), but on Unix and similarly empowered systems, it supports <kbd class="command">fork</KBD
+>, the way to get process-level parallelism. The server process acts as a full-time receptionist: it blocks on <kbd class="command">accept</KBD
+>, and when a connection request comes in, it spawns a child process and goes back to <kbd class="command">accept</KBD
+>. The newly created child process meanwhile has a copy of its parent's environment and shares all open file descriptors. Hence it is able to read from, and write to, the new socket returned by <kbd class="command">accept</KBD
+>. When the child is done with the conversation, it simply exits. Each process is therefore dedicated to its own task and doesn't interfere with the other. The following code shows an example of a forking server:</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch12-pgfId-975868">[2]</A
+> Malcolm Beattie has a working prototype of a threaded Perl interpreter, which will be incorporated into the mainstream in the Perl 5.005 release.</P
+></DIV
+></BLOCKQUOTE
+><pre class="programlisting"># Forking server
+use IO::Socket;
+$SIG{CHLD} = sub {wait ()};
+$main_sock = new IO::Socket::INET (LocalHost =&gt; 'goldengate',
+                                   LocalPort =&gt; 1200,
+                                   Listen    =&gt; 5,
+                                   Proto     =&gt; 'tcp',
+                                   Reuse     =&gt; 1,
+                                  );
+die &quot;Socket could not be created. Reason: $!\n&quot; unless ($sock);
+while ($new_sock = $main_sock-&gt;accept()) {
+    $pid = fork();
+    die &quot;Cannot fork: $!&quot; unless defined($pid);
+    if ($pid == 0) { 
+        # Child process
+        while (defined ($buf = &lt;$new_sock&gt;)) {
+           # do something with $buf ....
+           print $new_sock &quot;You said: $buf\n&quot;;
+        }
+        exit(0);   # Child process exits when it is done.
+    } # else 'tis the parent process, which goes back to accept()
+}
+close ($main_sock);</PRE
+><p class="para">The <kbd class="command">fork</KBD
+><a class="indexterm" name="ch12-idx-978558-0"></A
+> call results in two identical processes&nbsp;- the parent and child&nbsp;- starting from the statement following the <kbd class="command">fork</KBD
+>. The parent gets a positive return value, the process ID (<kbd class="command">$pid</KBD
+>) of the child process. Both processes check this return value and execute their own logic; the main process goes back to <kbd class="command">accept</KBD
+>, and the child process reads a line from the socket and echoes it back to the client.</P
+><p class="para">Incidentally, the <kbd class="command">CHLD</KBD
+><a class="indexterm" name="ch12-idx-978557-0"></A
+><a class="indexterm" name="ch12-idx-978557-1"></A
+> signal has nothing to do with IPC per se. On Unix, when a child process exits (or terminates abnormally), the system gets rid of the memory, files, and other resources associated with it. But it retains a small amount of information (the exit status if the child was able to execute <kbd class="command">exit()</KBD
+>, or a termination status otherwise), just in case the parent uses <kbd class="command">wait</KBD
+><a class="indexterm" name="ch12-idx-978559-0"></A
+><a class="indexterm" name="ch12-idx-978559-1"></A
+> or <kbd class="command">waitpid</KBD
+> to enquire about this status. The terminated child process is also known as a <em class="emphasis">zombie</EM
+> process, and it is always a good thing to remove it using <kbd class="command">wait</KBD
+>; otherwise, the process tables keep filling up with junk. In the preceding code, <kbd class="command">wait</KBD
+> doesn't block, because it is called only when we know for sure that a child process has died&nbsp;- the <kbd class="command">CHLD</KBD
+> signal arranges that for us. Be sure to read the online documentation for quirks associated with signals in general and <kbd class="command">SIGCHLD</KBD
+> in particular.<a class="indexterm" name="ch12-idx-978555-0"></A
+><a class="indexterm" name="ch12-idx-978555-1"></A
+><a class="indexterm" name="ch12-idx-978555-2"></A
+><a class="indexterm" name="ch12-idx-978555-3"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch12-pgfId-974849">12.3.2 Multiplexing Using select</A
+></H3
+><p class="para"><a class="indexterm" name="ch12-idx-978560-0"></A
+><a class="indexterm" name="ch12-idx-978560-1"></A
+>The reason we forked off a different process in the preceding section was to avoid blocking during <kbd class="command">accept</KBD
+>, <kbd class="command">read</KBD
+>, or <kbd class="command">write</KBD
+> for fear of missing out on what is happening on the other sockets. We can instead use the <kbd class="command">select</KBD
+> call, introduced in BSD Unix, that returns control when a socket (any filehandle, in fact) can be read from or written to. This approach allows us to use a single-threaded process&nbsp;- somewhat akin to firing the receptionist and handling all the incoming calls and conversations ourselves.</P
+><p class="para">The interface to the native <kbd class="command">select</KBD
+> call is not very pretty, so we use the <a class="indexterm" name="ch12-idx-978561-0"></A
+><a class="indexterm" name="ch12-idx-978561-1"></A
+>IO::Select wrapper module instead. Consider</P
+><pre class="programlisting">use IO::Socket;
+use IO::Select; 
+$sock1 = new IO::Socket (....);
+$sock2 = new IO::Socket (....);
+$read_set = new IO::Select;
+$read_set-&gt;add($sock1);
+$write_set = new IO::Select;
+$write_set-&gt;add($sock1, $sock2);
+</PRE
+><p class="para">The IO::Select module's <kbd class="command">new</KBD
+> method creates an object representing a collection of filehandles, and <kbd class="command">add</KBD
+> and <kbd class="command">remove</KBD
+> modify this set. The <kbd class="command">select</KBD
+> method (which calls Perl's native <kbd class="command">select</KBD
+> function) accepts three sets of filehandles, or IO::Select objects, which are monitored for readability, writability, and error conditions, respectively. In the preceding snippet of code, we create two such sets&nbsp;- a filehandle can be added to any or all of these sets if you so wish&nbsp;- and supply them to the <kbd class="command">select</KBD
+> method as follows:</P
+><pre class="programlisting">($r_ready, $w_ready, $error) = 
+      IO::Select-&gt;select($read_set, $write_set, $error_set, $timeout);</PRE
+><p class="para"><kbd class="command">select</KBD
+> blocks until an interesting event occurs (one or more filehandles are ready for reading, writing, or reporting an error condition) or the time-out interval has elapsed. At this point, it creates three separate lists of ready filehandles and returns references to them. The time-out is in seconds but can be expressed as a floating-point number to get millisecond resolution.</P
+><p class="para">Let us use this information to implement a program that retrieves messages from one or more clients:</P
+><pre class="programlisting"># Create main socket ($main_socket) as before ...
+# ....
+
+use IO::Select;
+$readable_handles = new IO::Select();
+$readable_handles-&gt;add($main_socket);
+while (1) {  #Infinite loop
+    # select() blocks until a socket is ready to be read or written
+    ($new_readable) = IO::Select-&gt;select($readable_handles,
+                                         undef, undef, 0);
+    # If it comes here, there is at least one handle
+    # to read from or write to. For the moment, worry only about 
+    # the read side.
+    foreach $sock (@$new_readable) {
+        if ($sock == $main_socket) {
+            $new_sock = $sock-&gt;accept();
+            # Add it to the list, and go back to select because the 
+            # new socket may not be readable yet.
+            $readable_handles-&gt;add($new_sock);
+        } else {
+            # It is an ordinary client socket, ready for reading.
+            $buf = &lt;$sock&gt;;
+            if ($buf) {
+                # .... Do stuff with $buf
+            } else {
+                # Client closed socket. We do the same here, and remove
+                # it from the readable_handles list
+                $readable_handles-&gt;remove($sock);
+                close($sock);
+            }
+        }
+    }   
+}</PRE
+><p class="para">We create a listening socket, <kbd class="command">$main_socket</KBD
+>, and configure it to listen on a well-known port. We then add this socket to a newly created IO::Select collection object. When <kbd class="command">select</KBD
+> returns the first time, <kbd class="command">$main_socket</KBD
+> has something to read from (or has an error, a possibility that we ignore for the moment); in other words, it has received a connection request and is guaranteed not to block when <kbd class="command">accept</KBD
+> is called. Now, we are not interested in being blocked if the socket returned from <kbd class="command">accept</KBD
+> has nothing to say, so we add it to the list of filehandles being monitored for readability. When <kbd class="command">select</KBD
+> returns the next time, we know that one of the two sockets is ready for reading (or both are ready). If <kbd class="command">$main_socket</KBD
+> is ready, we repeat the exercise above. If not, we have a socket with something to read. </P
+><p class="para"><kbd class="command">select</KBD
+> also returns if one or more remote sockets are closed. The corresponding sockets on the listening end return 0 when any of the I/O operators are used (0 bytes read or written). The server above removes these sockets from the IO::Select collections to prevent from <kbd class="command">select</KBD
+> returning the same defunct sockets every time.</P
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch12-pgfId-973661">12.3.2.1 Blocking looms again</A
+></H4
+><p class="para"><a class="indexterm" name="ch12-idx-978565-0"></A
+>All we have done in this section is depend on <kbd class="command">select</KBD
+> to tell us that a filehandle is ready for reading or writing before actually attempting to read or write from it. Unfortunately, we still don't know <em class="emphasis">how much</EM
+> data has accumulated in the I/O buffers (for purposes of reading) or how much can be written to it (the other side may be reading slowly, and there's a limit to how much you can pump in from this side). Both <kbd class="command">sysread</KBD
+><a class="indexterm" name="ch12-idx-978599-0"></A
+> and <kbd class="command">syswrite</KBD
+><a class="indexterm" name="ch12-idx-978598-0"></A
+> return the number of bytes actually read or written, so you would have to invoke them in a loop until the entire message is read or written. Once you have drained the buffers (or filled them, as the case may be), there is the very real possibility that it might block the next time you attempt to read or write if the other side doesn't do something quick. One option is to invoke <kbd class="command">select</KBD
+> in every iteration of the loop and proceed only if it confirms the socket's availability. This slows you down when the filehandle <em class="emphasis">can</EM
+> accommodate your read or write requests. Besides, you have to quit the loop anyway when <kbd class="command">select</KBD
+> tells you that a filehandle isn't ready and make the attempt later on when the file descriptor changes state. </P
+><p class="para">For single-threaded programs the next option is to make the filehandle non-blocking. Read on.<a class="indexterm" name="ch12-idx-978563-0"></A
+><a class="indexterm" name="ch12-idx-978563-1"></A
+><a class="indexterm" name="ch12-idx-978563-2"></A
+><a class="indexterm" name="ch12-idx-978563-3"></A
+></P
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch12-pgfId-973651">12.3.3 Nonblocking Filehandles</A
+></H3
+><p class="para"><a class="indexterm" name="ch12-idx-978588-0"></A
+><a class="indexterm" name="ch12-idx-978588-1"></A
+><a class="indexterm" name="ch12-idx-978588-2"></A
+>Any filehandle can be made nonblocking by using the operating-system-specific <kbd class="command">fcntl</KBD
+> or <kbd class="command">ioctl</KBD
+> call, like this:</P
+><pre class="programlisting">use POSIX;
+fcntl($sock, F_SETFL(), O_NONBLOCK());</PRE
+><p class="para">The <a class="indexterm" name="ch12-idx-978589-0"></A
+>Fcntl module (file control) makes the constants in the <i class="filename">fcntl.h</I
+> file available as functions. The <kbd class="command">fcntl</KBD
+> function takes a command like <kbd class="command">F_SETFL</KBD
+><a class="indexterm" name="ch12-idx-978612-0"></A
+> ("set flag") and an argument that is specific to that command. Depending on the operating system, the flag to set nonblocking I/O may also be known as <kbd class="command">O_NDELAY</KBD
+> or <kbd class="command">FNDELAY</KBD
+><a class="indexterm" name="ch12-idx-978613-0"></A
+><a class="indexterm" name="ch12-idx-978613-1"></A
+>. </P
+><p class="para">In any case, once this operation is carried out, <kbd class="command">sysread</KBD
+><a class="indexterm" name="ch12-idx-978603-0"></A
+> and <kbd class="command">syswrite</KBD
+><a class="indexterm" name="ch12-idx-978602-0"></A
+> return <kbd class="command">undef</KBD
+> (not 0) and set <kbd class="command">$!</KBD
+> to <kbd class="command">EAGAIN</KBD
+> (or <kbd class="command">EWOULDBLOCK</KBD
+> on BSD 4.3) if they cannot carry out the operation right away. The following code accounts for these return and error values when reading a socket:</P
+><pre class="programlisting"># Want to read 1024 bytes
+$bytes_to_read = 1024; $msg = '';
+while ($bytes_to_read) {
+    $bytes_read = sysread($sock, $buf, $bytes_to_read);
+    if (defined($bytes_read)) {
+        if ($bytes_read == 0) {
+            # Remote socket closed connection
+            close($sock);
+            last;
+        } else { 
+            $msg .= $buf;
+            $bytes_to_read -= $bytes_read;
+        }
+    } else {
+        if ($! == EAGAIN()) {
+            # Can return to select. Here we choose to 
+            # spin around waiting for something to read.
+        } else {
+            last;
+        }
+    }
+}</PRE
+><p class="para">One simple option is to forget the <kbd class="command">select</KBD
+> call and simply spin around in a polling loop, calling <kbd class="command">read</KBD
+> (or <kbd class="command">sysread</KBD
+>) on each socket (or <kbd class="command">accept</KBD
+> on the main socket) to check whether it has anything to say, or calling <kbd class="command">write</KBD
+> (or <kbd class="command">syswrite</KBD
+>) if <em class="emphasis">we</EM
+> have something to say, without fear that it would block. This approach is a constant drain on the CPU because the process is never idle. You should always strive to build a <em class="emphasis">quiescent </EM
+><a class="indexterm" name="ch12-idx-978593-0"></A
+><a class="indexterm" name="ch12-idx-978593-1"></A
+> [<a class="footnote" href="#ch12-pgfId-975035">3</A
+>] server, in client/server parlance. </P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch12-pgfId-975035">[3]</A
+> "Marked by inactivity or repose," as <em class="emphasis">Webster's Tenth Collegiate Dictionary</EM
+> puts it.</P
+></DIV
+></BLOCKQUOTE
+><p class="para">You might have noticed that we have ignored clients in all these discussion. If a client is willing to block, there is no issue at all, since, unlike the server side, it is not talking to more than one entity. But if it contains a GUI, it clearly cannot afford to block, and we have much the same problem. We will revisit this issue in <a class="xref" href="ch14_01.htm#ch14-14115" title="Introduction to GUIs, Tk, and Perl/Tk">Section 14.1, "Introduction to GUIs, Tk, and Perl/Tk"</A
+>. In a system in which there is no clear delineation between "clients" and "servers"&nbsp;- a cluster of bank computers is an example of such a peer-to-peer system&nbsp;- every process is modeled on the more general server framework described in the preceding pages. </P
+><p class="para">You can now see that all three approaches to creating servers have their individual quirks and failings. The next section introduces us to techniques and strategies used in typical production<a class="indexterm" name="ch12-idx-978591-0"></A
+><a class="indexterm" name="ch12-idx-978591-1"></A
+><a class="indexterm" name="ch12-idx-978591-2"></A
+> servers.<a class="indexterm" name="ch12-idx-978548-0"></A
+><a class="indexterm" name="ch12-idx-978548-1"></A
+><a class="indexterm" name="ch12-idx-978548-2"></A
+><a class="indexterm" name="ch12-idx-978548-3"></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch12_02.htm" title="12.2 Socket API and IO::Socket"><img src="../gifs/txtpreva.gif" alt="Previous: 12.2 Socket API and IO::Socket" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch12_04.htm" title="12.4 Real-World Servers"><img src="../gifs/txtnexta.gif" alt="Next: 12.4 Real-World Servers" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">12.2 Socket API and IO::Socket</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">12.4 Real-World Servers</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

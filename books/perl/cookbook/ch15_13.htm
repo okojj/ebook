@@ -1,0 +1,166 @@
+<html><head>
+<title>Recipe 15.12. Managing the Screen</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:43:24Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch15_01.htm" title="15. User Interfaces"><link rel="prev" href="ch15_12.htm" title="15.11. Editing Input"><link rel="next" href="ch15_14.htm" title="15.13. Controlling Another Program with Expect"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch15_12.htm" title="15.11. Editing Input"><img src="../gifs/txtpreva.gif" alt="Previous: 15.11. Editing Input" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch15_01.htm" title="15. User Interfaces">Chapter 15<br>User Interfaces</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch15_14.htm" title="15.13. Controlling Another Program with Expect"><img src="../gifs/txtnexta.gif" alt="Next: 15.13. Controlling Another Program with Expect" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch15-35549">15.12. Managing the Screen</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch15-pgfId-1107">Problem<a class="indexterm" name="ch15-idx-1000005132-0"></A
+><a class="indexterm" name="ch15-idx-1000005132-1"></A
+></A
+></H3
+><p class="para">You want to control the screen layout or highlighting, detect when special keys are pressed, or present full-screen menus, but you don't want to think about what kind of display device the user has.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch15-pgfId-1113">Solution</A
+></H3
+><p class="para">Use the <a class="indexterm" name="ch15-idx-1000005141-0"></A
+>Curses module from CPAN, which makes use of your native <em class="emphasis">curses </EM
+>(3) library.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch15-pgfId-1119">Description</A
+></H3
+><p class="para">The <em class="emphasis">curses</EM
+> library provides easy access to the full screen display in an efficient and device-independent fashion. (By display, we mean any cursor-addressable monitor.) With Curses, you write high-level code to put data on the logical display, building it up character by character or string by string. When you want output to show up, call the <code class="literal">refresh</CODE
+> function. The library generates output consisting only of the changes on the virtual display since the last call to <code class="literal">refresh</CODE
+>. This is particularly appreciated on a slow connection.</P
+><p class="para">The example program in <a class="xref" href="#ch15-35516" title="rep">Example 15.5</A
+>, called <em class="emphasis">rep</EM
+><a class="indexterm" name="ch15-idx-1000005142-0"></A
+>, demonstrates this. Call it with arguments of the program to run, like any of these:</P
+><pre class="programlisting">% rep ps aux
+% rep netstat
+% rep -2.5 lpq</PRE
+><p class="para">The <em class="emphasis">rep</EM
+> script will repeatedly call the listed command, printing its output to the screen, updating only what has changed since the previous run. This is most effective when the changes between runs are small. It maintains the current date in reverse video at the bottom-right corner of your screen.</P
+><p class="para">By default, <em class="emphasis">rep</EM
+> waits 10 seconds before rerunning the command. You can change this delay period by calling it an optional number of seconds (which can be a decimal number) as shown above when calling <em class="emphasis">lpq</EM
+>. You may also hit any key during the pause for it to run the command right then.</P
+><div class="example"><h4 class="example"><a class="title" name="ch15-35516">Example 15.5: rep</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# rep - screen repeat command
+use strict;
+use Curses;
+
+my $timeout = 10;
+if (@ARGV &amp;&amp; $ARGV[0] =~ /^-(\d+\.?\d*)$/) { 
+    $timeout = $1; 
+    shift; 
+} 
+
+die &quot;usage: $0 [ -timeout ] cmd args\n&quot; unless @ARGV;
+    
+initscr();          # start screen
+noecho();           
+cbreak(); 
+nodelay(1);         # so getch() is non-blocking
+
+$SIG{INT} = sub { done(&quot;Ouch!&quot;) };
+sub done { endwin(); print &quot;@_\n&quot;; exit; }
+
+while (1) {
+    while ((my $key = getch()) ne ERR) {    # maybe multiple keys
+        done(&quot;See ya&quot;) if $key eq 'q' 
+    }
+    my @data = `(@ARGV) 2&gt;&amp;1`;              # gather output+errors
+    for (my $i = 0; $i &lt; $LINES; $i++) {
+        addstr($i, 0, $data[$i] || ' ' x $COLS);
+    } 
+
+    standout();
+    addstr($LINES-1, $COLS - 24, scalar localtime);
+    standend();
+
+    move(0,0); 
+    refresh();                              # flush new output to display
+
+    my ($in, $out) = ('', '');
+    vec($in,fileno(STDIN),1) = 1;           # look for key on stdin 
+    select($out = $in,undef,undef,$timeout);# wait up to this long
+}</PRE
+></DIV
+><p class="para">Curses lets you tell whether the user typed one of the arrow keys or those other funny keys, like <code class="literal">HOME</CODE
+> or <code class="literal">INSERT</CODE
+>. This is normally difficult, because those keys send multiple bytes. With Curses, it's easy:</P
+><pre class="programlisting">keypad(1);                  # enable keypad mode
+$key = getch();
+if ($key eq 'k'     ||      # vi mode
+    $key eq &quot;\cP&quot;   ||      # emacs mode
+    $key eq KEY_UP)         # arrow mode
+{
+    # do something
+} </PRE
+><p class="para">Other Curses functions let you read the text at particular screen coordinates, control highlighting and standout mode, and even manage multiple windows.</P
+><p class="para">The <a class="indexterm" name="ch15-idx-1000006049-0"></A
+>perlmenu module, also from CPAN, is built on top of the lower-level Curses module. It provides high-level access to menus and fill-out forms. Here's a sample form from the perlmenu distribution:</P
+><pre class="programlisting">                      Template Entry Demonstration 
+
+   Address Data Example                                     Record # ___
+
+   Name: [________________________________________________]
+   Addr: [________________________________________________]
+   City: [__________________]          State: [__]       Zip: [\\\\\] 
+
+   Phone: (\\\) \\\-\\\\                            Password: [^^^^^^^^]
+
+   Enter all information available.
+   Edit fields with left/right arrow keys or &quot;delete&quot;.
+   Switch fields with &quot;Tab&quot; or up/down arrow keys.
+   Indicate completion by pressing &quot;Return&quot;.
+   Refresh screen with &quot;Control-L&quot;.
+   Abort this demo here with &quot;Control-X&quot;.</PRE
+><p class="para">The user types in the areas indicated, with regular text indicated by underline fields, numeric data by backslashed fields, and starred-out data with circumflexed fields. This is reminiscent of Perl's formats, except that forms are used for output, not input.<a class="indexterm" name="ch15-idx-1000005134-0"></A
+><a class="indexterm" name="ch15-idx-1000005134-1"></A
+><a class="indexterm" name="ch15-idx-1000005134-2"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch15-pgfId-1269">See Also</A
+></H3
+><p class="para">Your system's <i class="filename">curses </I
+>(3) manpage (if you have it); the documentation for the Curses and the perlmenu modules from CPAN; the section on <a class="olink" href="../prog/ch02_08.htm">"Formats"</A
+> in <a class="olink" href="../prog/ch02_01.htm">Chapter 2</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>, or <i class="filename">perlform </I
+>(1); <a class="xref" href="ch03_11.htm" title="Short Sleeps">Recipe 3.10</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch15_12.htm" title="15.11. Editing Input"><img src="../gifs/txtpreva.gif" alt="Previous: 15.11. Editing Input" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch15_14.htm" title="15.13. Controlling Another Program with Expect"><img src="../gifs/txtnexta.gif" alt="Next: 15.13. Controlling Another Program with Expect" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">15.11. Editing Input</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">15.13. Controlling Another Program with Expect</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

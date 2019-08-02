@@ -1,0 +1,4520 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 2] 2.5 DBMS_SQL Examples</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein, Charles Dye &amp; John Beresniewicz"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T17:45:57Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates-1-56592-375-8E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-375-8E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle Packages"><META
+NAME="DC.Title"
+CONTENT="Oracle Built-in Packages"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch02_01.htm"
+TITLE="2. Executing Dynamic SQL and PL/SQL"><LINK
+REL="prev"
+HREF="ch02_04.htm"
+TITLE="2.4 Tips on Using Dynamic SQL"><LINK
+REL="next"
+HREF="ch03_01.htm"
+TITLE="3. Intersession Communication"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle Built-in Packages"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle Built-in Packages"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch02_04.htm"
+TITLE="2.4 Tips on Using Dynamic SQL"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 2.4 Tips on Using Dynamic SQL"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch02_01.htm"
+TITLE="2. Executing Dynamic SQL and PL/SQL"
+>Chapter 2<BR>Executing Dynamic SQL and PL/SQL</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch03_01.htm"
+TITLE="3. Intersession Communication"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 3. Intersession Communication"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch02-33868"
+>2.5 DBMS_SQL Examples</A
+></H2
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20413-0"
+></A
+>This section contains extended examples of using the DBMS_SQL package.</P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.1"
+>2.5.1 A Generic Drop_Object Procedure</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20422-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20422-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20422-2"
+></A
+>The dynamic SQL of DBMS_SQL allows you to create completely generic modules to manipulate objects in the Oracle7 Server. You can, for instance, write a procedure that drops the specified table, but you can also create a module that will drop whatever kind of object you specify, as shown in this first version of     drop_object:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE PROCEDURE drop_object 
+   (type_in IN VARCHAR2, name_in IN VARCHAR2)
+IS
+   /* Declare and create a cursor to use for the dynamic SQL */
+   cur PLS_INTEGER := DBMS_SQL.OPEN_CURSOR;
+   fdbk PLS_INTEGER;
+BEGIN
+   /* Construct the SQL statement, parse it and execute it. */
+   DBMS_SQL.PARSE 
+      (cur, 'DROP ' || type_in || ' ' || name_in, DBMS_SQL.NATIVE);
+
+   fdbk := DBMS_SQL.EXECUTE (cur);
+   DBMS_SQL.CLOSE_CURSOR (cur);
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Well, that was straightforward enough. But how useful is it? Sure, it lets me execute DDL in PL/SQL, which wasn't possible before. But assuming that I have written this procedure as part of a broader interface to manage database objects from a screen, it is fairly limited. It is, in fact, simply equivalent to a DROP OBJECT statement. Boooring. Why not utilize the flexibility of the PL/SQL language to provide additional productivity, above and beyond the "straight" DDL? Wouldn't it be nice to, for example, drop all packages with names like "STR%" or drop all objects of any type in a schema with a single command?</P
+><P
+CLASS="para"
+>To implement these kinds of requests, I need to let the user pass in wildcarded object names and types. I can then use these values to identify N number of matching objects. Where are these objects defined? In the <A
+CLASS="indexterm"
+NAME="ch02-idx-20426-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20426-1"
+></A
+>USER_OBJECTS or<A
+CLASS="indexterm"
+NAME="ch02-idx-20427-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20427-1"
+></A
+> ALL_OBJECTS data dictionary view. Interestingly, then, in my final version of drop_object, I combine the use of both static and dynamic SQL to add value to the standard DROP OBJECT command:</P
+><P
+CLASS="para"
+></P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20764-0"
+></A
+>dropobj.sp */*
+CREATE OR REPLACE PROCEDURE drop_object 
+   (type_in IN VARCHAR2, name_in IN VARCHAR2)
+IS
+   /* The static cursor retrieving all matching objects */
+   CURSOR obj_cur IS
+      SELECT object_name, object_type
+        FROM user_objects
+       WHERE object_name LIKE UPPER (name_in)
+         AND object_type LIKE UPPER (type_in)
+       ORDER BY object_name;
+   
+   cur PLS_INTEGER := DBMS_SQL.OPEN_CURSOR;
+   fdbk PLS_INTEGER;
+BEGIN
+   /* For each matching object ... */
+   FOR obj_rec IN obj_cur
+   LOOP
+      /* Reusing same cursor, parse and execute the drop statement. */
+      DBMS_SQL.PARSE 
+         (cur, 
+          'DROP ' || obj_rec.object_type || ' ' || obj_rec.object_name, 
+          DBMS_SQL.NATIVE);
+
+      fdbk := DBMS_SQL.EXECUTE (cur);
+   END LOOP;
+   DBMS_SQL.CLOSE_CURSOR (cur);
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Using this enhanced utility, I can now remove all objects in my schema that are used in the Order Entry system with this single command:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec drop_object ('%', 'oe%');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Or I could be more selective and simply drop all tables containing the substring "emp."</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec drop_object ('table', '%emp%');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The drop_object procedure demonstrates the flexiblity and power that PL/SQL can bring to administrative tasks. It also clearly points out the inherent dangers of this power. With drop_object in place, you can remove everything in your schema with one program! Use this procedure&nbsp;-- and any other similar utilities you build&nbsp;-- with the utmost of care.<A
+CLASS="indexterm"
+NAME="ch02-idx-20424-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20424-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20424-2"
+></A
+></P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.2"
+>2.5.2 A Generic Foreign Key Lookup Function</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20428-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20428-1"
+></A
+>I am always looking for ways to cut down on the code I need to write to maintain foreign keys in Oracle-based applications. For all its great features, Oracle Forms&nbsp;-- just like its predecessor, SQL*Forms V3&nbsp;-- does not offer comprehensive support for handling foreign keys. Sure, there is the LOV object and its associated record group, which can be used to look up and validate entries on the screen. This object cannot, however, be used to perform Post-Query lookups of a foreign key's description&nbsp;-- a ubiquitous operation in an application built on a normalized database.</P
+><P
+CLASS="para"
+>This same lookup process could also take place in a report, in a graph, in an embedded C program, and so on. Before the advent of DBMS_SQL, the only solution was to build a function for each separate entity that serves as a foreign key in a table. This function would take the foreign key and return the name or description. The specifications for such functions would look like these,</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION caller_name (caller_id IN caller.caller_id%TYPE) 
+   RETURN VARCHAR2;
+
+FUNCTION company_name (company_id IN company.company_id%TYPE) 
+   RETURN VARCHAR2;
+
+FUNCTION company_type (company_type_cd IN company.company_type_cd%TYPE) 
+   RETURN VARCHAR2;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>and so on, for as many foreign keys as you've got. And every time a new foreign key is added to the mix, you must write a new function. </P
+><P
+CLASS="para"
+>Wouldn't it be just fabulous if you could construct a single generic function using dynamic SQL that would work for all foreign keys? Let's give it a shot. </P
+><P
+CLASS="para"
+>First, what information would I need to pass to this function in order to construct the SQL statement to retrieve the name or description? Here are some possibilities:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+>Foreign key value</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The ID or code of the record we wish to locate.</P
+></DD
+><DT
+CLASS="term"
+>Table name</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The table containing the record identified by the foreign key value.</P
+></DD
+><DT
+CLASS="term"
+>Primary key column name</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The name of the column in the previous table that contains the foreign key value (in this, the "source table" for the foreign key, it is actually the table's primary key).</P
+></DD
+><DT
+CLASS="term"
+>Primary key name or description column name</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The name of the column in the previous table that contains the name or description of the primary key.</P
+></DD
+></DL
+><P
+CLASS="para"
+>These parameters would allow me to construct SQL statements that look like the following:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT caller_nm FROM caller WHERE caller_id = 154
+SELECT call_type_nm FROM call_type WHERE call_type_id = 2</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The steps I need to perform are straightforward: </P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Construct the SQL statement along the lines of the examples.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Fetch the matching record. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Retrieve the value from the cursor and return it to the calling program.</P
+></LI
+></OL
+><P
+CLASS="para"
+>My first version of this function, fk_name, shows a generic function that returns the name and description of a foreign key.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20766-0"
+></A
+>fkname.sf */*
+CREATE OR REPLACE FUNCTION fk_name 
+   (fk_id_in IN INTEGER,
+    fk_table_in IN VARCHAR2, 
+    fk_id_col_in IN VARCHAR2, 
+    fk_nm_col_in IN VARCHAR2)
+RETURN VARCHAR2
+IS
+   /* Declare and obtain a pointer to a cursor */
+   cur INTEGER := DBMS_SQL.OPEN_CURSOR;
+
+   /* Variable to receive feedback from package functions */
+   fdbk INTEGER;
+   /*
+   || The return value of the function. Notice that I have
+   || to hardcode a size in my declaration.
+   */
+   return_value VARCHAR2(100) := NULL;
+BEGIN
+   /* 
+   || Parse the query. I construct most of the SQL statement from
+   || the parameters with concatenation. I also include a single
+   || bind variable for the actual foreign key value.
+   */
+   DBMS_SQL.PARSE 
+      (cur, 
+       'SELECT ' || fk_nm_col_in || 
+       '  FROM ' || fk_table_in ||
+       ' WHERE ' || fk_id_col_in || ' = :fk_value',
+       DBMS_SQL.NATIVE);
+
+   /* Bind the variable with a specific value -- the parameter */
+   DBMS_SQL.BIND_VARIABLE (cur, 'fk_value', fk_id_in);
+
+   /* Define the column in the cursor for the FK name */
+   DBMS_SQL.DEFINE_COLUMN (cur, 1, fk_nm_col_in, 100);
+   /* Execute the cursor, ignoring the feedback */
+   fdbk := DBMS_SQL.EXECUTE (cur);
+
+   /* Fetch the row. If feedback is 0, no match found */
+   fdbk := DBMS_SQL.FETCH_ROWS (cur);
+   IF fdbk &gt; 0
+   THEN
+      /* Found a match. Extract the value/name for the key */
+      DBMS_SQL.COLUMN_VALUE (cur, 1, return_value);
+   END IF;
+   /*
+   || Close the cursor and return the description, which 
+   || could be NULL if no records were fetched.
+   */
+   DBMS_SQL.CLOSE_CURSOR (cur);
+   RETURN return_value;
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I can now use this function in a Post-Query trigger in Oracle Forms, as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>:call.name := 
+   fk_name (:call.caller_id, 'caller', 'caller_id', 'caller_nm');
+
+:call.call_type_ds := 
+   fk_name (:call.call_type_id, 
+            'call_type', 'call_type_id', 'call_type_nm');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Well, that was fun. I now have a generic look-up for foreign keys. Instead of stopping at this point, however, let's explore some ways to improve the functionality and ease of use of this function. Several things caught my eye on the first pass:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The programmer has to type in a lot of information in the parameter list in order to look up the foreign key. One might argue that it is almost as easy to type a SQL statement. While that's not true, I have found that programmers are resistant to using new toys unless their advantage is overwhelming. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The size of the value returned by COLUMN_VALUE is hardcoded at 100 bytes. Any sort of hardcoding is always something to be avoided.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>There is a clear pattern to the names of the tables and columns in the previous examples. The foreign key column is always the table name with an "_ID" suffix. The description column is always the table name with an "_NM" suffix. It seems to me that the function should be able to take advantage of these kinds of naming conventions.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The function assumes that the datatype of the foreign key is INTEGER; I have encountered many tables with VARCHAR2 foreign keys. True, the reasons are usually suspect, but it happens just the same.</P
+></LI
+></UL
+><P
+CLASS="para"
+>Can I change fk_name to handle some of these concerns? I can certainly add a parameter with a maximum name length to use in the call to COLUMN_VALUE. I can support <A
+CLASS="indexterm"
+NAME="ch02-idx-20432-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20432-1"
+></A
+>VARCHAR2 datatypes for foreign keys by placing the function inside a package and overloading the definition of the function. What about all those parameters and the naming conventions? Ideally, I would like to allow a developer to call fk_name with no more information than in the following examples:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>:call.name := fk_name (:call.caller_id, 'caller');
+
+:call.call_type_ds := fk_name (:call.call_type_id, 'call_type');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In this scenario, the function would use the name of the table to generate the names of the key and name columns and stuff them into the SQL statement. Sounds reasonable to me. The second version of fk_name supports default names for these two columns. </P
+><P
+CLASS="para"
+>In this version, the last three parameters have default values. If the user does not specify an ID column name, the default is the table name with the default suffix. The same goes for the fk_name column. If the user includes a value for either of these arguments, then if the value starts with an underscore ( _ ), it will be used as a suffix to the table name. Otherwise, the value will be used as a complete column name. The following table shows how parameter values will be converted inside the program.</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Column</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>to fk_name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Converted Value</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>ID column</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>NULL</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>caller_id</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name column</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>NULL</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>caller_nm</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>ID column</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>caller_number</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>caller_number</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>ID column</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>caller_name</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>caller_name</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>ID column</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>_#</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>caller_#</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name column</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>_fullname</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>caller_fullname</P
+></TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+>Here, then, in Version 2, we have an even more generic function to return foreign key names. </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20768-0"
+></A
+>fkname2.sf */*
+CREATE OR REPLACE FUNCTION fk_name 
+   (fk_id_in IN INTEGER,
+    fk_table_in IN VARCHAR2, 
+    fk_id_col_in IN VARCHAR2 := '_ID', 
+    fk_nm_col_in IN VARCHAR2 := '_NM', 
+    max_length_in IN INTEGER := 100)
+RETURN VARCHAR2
+/* I will not repeat any comments from first version of fk_name. */
+IS
+   /*
+   || Local variables to hold column names, since I must construct
+   || those names based on the values provided. If the column names
+   || are NULL, then fall back on the defaults.
+   */
+   fk_id_column VARCHAR2(60) := NVL (fk_id_col_in, '_ID');
+   fk_nm_column VARCHAR2(60) := NVL (fk_nm_col_in, '_NM');
+
+   cur INTEGER := DBMS_SQL.OPEN_CURSOR;
+   fdbk INTEGER;
+   /*
+   || The return value of the function. Notice that even though one
+   || of the parameters now specifies a maximum size for the return 
+   || value, I still do have to hardcode a size in my declaration.
+   */
+   return_value VARCHAR2(100) := NULL;
+
+   /*---------------------- Local Module ---------------------------*/
+
+   PROCEDURE convert_column (col_name_inout IN OUT VARCHAR2) 
+   /*
+   || Construct the column name. If the argument begins with a &quot;_&quot;,
+   || use as suffix to table name. Otherwise, substitute completely.
+   */
+   IS
+   BEGIN
+      IF SUBSTR (col_name_inout, 1, 1) = '_'
+      THEN
+         col_name_inout := fk_table_in || col_name_inout;
+      ELSE
+         /* Default value on variable declaration already handles it */
+         NULL;
+      END IF;
+   END;
+
+BEGIN
+   /* Convert the column names as necessary based on arguments */
+   convert_column (fk_id_column);
+   convert_column (fk_nm_column);
+
+   /* Parse statement using converted column names */
+   DBMS_SQL.PARSE 
+      (cur, 
+       'SELECT ' || fk_nm_column || 
+       '  FROM ' || fk_table_in ||
+       ' WHERE ' || fk_id_column || ' = :fk_value',
+       DBMS_SQL.NATIVE);
+
+   DBMS_SQL.BIND_VARIABLE (cur, 'fk_value', fk_id_in);
+   DBMS_SQL.DEFINE_COLUMN (cur, 1, fk_nm_column, max_length_in);
+   fdbk := DBMS_SQL.EXECUTE (cur);
+   fdbk := DBMS_SQL.FETCH_ROWS (cur);
+   IF fdbk &gt; 0
+   THEN
+      DBMS_SQL.COLUMN_VALUE (cur, 1, return_value);
+   END IF;
+   DBMS_SQL.CLOSE_CURSOR (cur);
+   RETURN return_value;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>With this new version of fk_name, I can certainly retrieve the caller's name and the call type description without specifying all the columns, assuming that their columns match my conventions.</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Assume that table caller has caller_id and caller_nm columns:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>  :call.name := fk_name (:call.caller_id, 'caller');</PRE
+></BLOCKQUOTE
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Assume that call_type table has call_type_id and call_type_nm columns:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>  :call.call_type_ds := fk_name (:call.call_type_id, 'call_type');</PRE
+></BLOCKQUOTE
+></LI
+></UL
+><P
+CLASS="para"
+>Of course, conventions do not hold so consistently in the real world. In fact, I have found that database administrators and data analysts will often treat an entity like caller, with its caller ID number and caller name, differently from the way they would treat a caller type, with its type code and description. The columns for the caller type table are more likely to be caller_typ_cd and caller_typ_ds. Fortunately, fk_name will still handle this situation as follows:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>A full set of defaults works just fine:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>  :call.name := fk_name (:call.caller_id, 'caller');</PRE
+></BLOCKQUOTE
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Use alternative suffixes for a code table:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>  :call.call_type_ds := 
+  fk_name (:call.call_type_id, 'call_type', '_cd', '_ds');</PRE
+></BLOCKQUOTE
+></LI
+></UL
+><P
+CLASS="para"
+>You might scoff and say, "Why bother providing just the suffixes? Might as well go ahead and provide the full column names." But there is a value to this approach: if the data analysts have adopted standards for their naming conventions of tables and key columns, the fk_name interface supports and reinforces these standards, and avoids supplying redundant information.</P
+><P
+CLASS="para"
+>Is that it, then? Have we gone as far as we can go with fk_name? Surely some of you have looked at those rather simple SELECT statements and thought, "Gee, very few of my lookups actually resemble such queries." I agree. Sometimes you will need to check an additional column on the table, such as a "row active?" flag. You might even have several records, all for the same primary key, but active for different periods. So you should also pass a date against which to check. </P
+><P
+CLASS="para"
+>How can you handle these application-specific situations? When in doubt, just add another parameter!</P
+><P
+CLASS="para"
+>Sure. Why not add a parameter containing either a substitute WHERE clause for the SQL statement, or a clause to be appended to the rest of the default WHERE clause? The specification for fk_name would then change to the following:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20770-0"
+></A
+>fkname3.sf */*
+FUNCTION fk_name  
+   (fk_id_in IN INTEGER,
+    fk_table_in IN VARCHAR2, 
+    fk_id_col_in IN VARCHAR2 := '_ID', 
+    fk_nm_col_in IN VARCHAR2 := '_NM',
+    max_length_in IN INTEGER := 100,
+    where_clause_in IN VARCHAR2 := NULL)
+RETURN VARCHAR2;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The rule for this WHERE clause would be as follows: if the string starts with the keywords AND or OR, then the text is appended to the default WHERE clause. Otherwise, the argument substitutes completely for the default WHERE clause.</P
+><P
+CLASS="para"
+>Rather than repeat the entire body of fk_name, I offer only the modifications necessary to PARSE, and thus effect this change in the following code:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>IF UPPER (where_clause_in) LIKE 'AND%' OR
+   UPPER (where_clause_in) LIKE 'OR%'
+THEN
+   /* Append the additional Boolean expressions to default */
+   where_clause := 
+      ' WHERE ' || fk_id_column || ' = :fk_value ' || where_clause_in; 
+
+ELSIF where_clause_in IS NOT NULL
+THEN
+   /* Substitute completely the WHERE clause */
+   where_clause := ' WHERE ' || where_clause_in; 
+
+ELSE 
+   /* Just stick with default */
+   where_clause := ' WHERE ' || fk_id_column || ' = :fk_value';
+END IF;
+
+/* Now the call to PARSE uses the pre-processed WHERE clause */
+DBMS_SQL.PARSE 
+   (cur, 
+    'SELECT ' || fk_nm_column || '  FROM ' || 
+    fk_table_in || where_clause, DBMS_SQL.NATIVE);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Using this final version of fk_name, I can perform lookups as follows:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Retrieve only the description of the call type if that record is still flagged as active. Notice that I must stick several single quotes together to get the right number of quotes in the evaluated argument passed to fk_name.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>:call.call_type_ds := 
+   fk_name (:call.call_type_id, 'call_type', '_cd', '_ds', 25,
+            'AND row_active_flag = ''Y''');</PRE
+></BLOCKQUOTE
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Retrieve the name of the store kept in the record for the current year. Notice that the ID and name arguments in the call to fk_name are NULL. I have to include values here since I want to provide the WHERE clause, but I will pass NULL and thereby use the default values (without having to know what those defaults are!).</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Only the record for this year should be used */
+year_number := TO_CHAR (SYSDATE, 'YYYY');
+/*
+|| Pass check for year to WHERE clause. */
+:store.description :=
+   fk_name (:store.store_id, 'store_history', NULL, NULL, 60,
+            'AND TO_CHAR (eff_date, ''YYYY'') = ''' ||
+               year_number || '''');</PRE
+></BLOCKQUOTE
+></LI
+></UL
+><P
+CLASS="para"
+>The fragment of the WHERE clause passed to fk_name can be arbitrarily complex, including subselects, correlated subqueries, and a whole chain of conditions joined by ANDs and ORs.<A
+CLASS="indexterm"
+NAME="ch02-idx-20430-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20430-1"
+></A
+></P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.3"
+>2.5.3 A Wrapper for DBMS_SQL .DESCRIBE_COLUMNS</A
+></H3
+><P
+CLASS="para"
+>The <A
+CLASS="indexterm"
+NAME="ch02-idx-20433-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20433-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20433-2"
+></A
+>DESCRIBE_COLUMNS procedure provides a critical feature for those of us writing generic, flexible code based on dynamic SQL. With earlier versions of DBMS_SQL, there was no way to query runtime memory to find out the internal structure of a cursor. Now you can do this with DESCRIBE_COLUMNS, but it is very cumbersome. As shown in the section <A
+CLASS="xref"
+HREF="ch02_03.htm#ch02-21178"
+>Section 2.3.11, "Describing Cursor Columns "</A
+>," you must declare a PL/SQL table, read the cursor structure into that table, and then traverse the table to get the information you need. </P
+><P
+CLASS="para"
+>A much better approach is to write the code to perform these steps <EM
+CLASS="emphasis"
+>once</EM
+> and then encapsulate all that knowledge into a package. Then you can simply call the programs in the package and not have to worry about all the internal data structures and operations that have to be performed. </P
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20437-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20437-1"
+></A
+>You will find an example of this "wrapper" around DESCRIBE_COLUMNS on your companion disk. Here is the specification of that package:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20772-0"
+></A
+>desccols.spp */*
+CREATE OR REPLACE PACKAGE desccols
+IS
+   varchar2_type CONSTANT PLS_INTEGER := 1;
+   number_type CONSTANT PLS_INTEGER := 2;
+   date_type CONSTANT PLS_INTEGER := 12;
+   char_type CONSTANT PLS_INTEGER := 96;
+   long_type CONSTANT PLS_INTEGER := 8;
+   rowid_type CONSTANT PLS_INTEGER := 11;
+   raw_type CONSTANT PLS_INTEGER := 23;
+   mlslabel_type CONSTANT PLS_INTEGER := 106;
+   clob_type CONSTANT PLS_INTEGER := 112;
+   blob_type CONSTANT PLS_INTEGER := 113;
+   bfile_type CONSTANT PLS_INTEGER := 114;
+   
+   PROCEDURE forcur (cur IN INTEGER);
+
+   PROCEDURE show (fst IN INTEGER := 1, lst IN INTEGER := NULL);
+     FUNCTION numcols RETURN INTEGER;
+   FUNCTION nthcol (num IN INTEGER) RETURN DBMS_SQL.DESC_REC;
+END desccols;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Before we look at the implementation of this package, let's explore how you might use it. I declare a set of constants that give names to the various column types. This way, you don't have to remember or place in your code the literal values. Now notice that there are no other data structures defined in the specification. Most importantly, there is no declaration of a PL/SQL table based on DBMS_SQL.<A
+CLASS="indexterm"
+NAME="ch02-idx-20441-0"
+></A
+>DESC_T to hold the description information. That table is instead hidden away inside the package body. You call the desccols.<A
+CLASS="indexterm"
+NAME="ch02-idx-21159-0"
+></A
+>forcur procedure to "describe the columns for a cursor," passing it your cursor ID or handle, to load up that table by calling DESCRIBE_COLUMNS. You then can take any of the following actions against that PL/SQL table of column data:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20450-0"
+></A
+>Show <A
+CLASS="indexterm"
+NAME="ch02-idx-21168-0"
+></A
+>the column information by calling desccols.show (the prototype on disk shows only the column name and column type).</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20443-0"
+></A
+>Retrieve the total number of columns in the table with a call to desccols.<A
+CLASS="indexterm"
+NAME="ch02-idx-21180-0"
+></A
+>numcols.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Retrieve all the information for a specific column by calling the desccols.<A
+CLASS="indexterm"
+NAME="ch02-idx-21184-0"
+></A
+>nthcol function.</P
+></LI
+></UL
+><P
+CLASS="para"
+>The following script defines a cursor, extracts the cursor information with a call to desccols.forcur, and then shows the cursor information:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20774-0"
+></A
+>desccols.tst */*
+DECLARE
+   cur INTEGER := DBMS_SQL.OPEN_CURSOR;
+BEGIN
+   DBMS_SQL.PARSE 
+     (cur, 'SELECT ename, sal, hiredate FROM emp', DBMS_SQL.NATIVE);
+   DBMS_SQL.DEFINE_COLUMN (cur, 1, 'a', 60);
+   DBMS_SQL.DEFINE_COLUMN (cur, 1, 1);
+   DBMS_SQL.DEFINE_COLUMN (cur, 1, SYSDATE);
+   desccols.forcur (cur);
+   desccols.show;
+   DBMS_SQL.CLOSE_CURSOR (cur);
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Here is the output in SQL*Plus:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>Column 1
+ENAME
+1
+Column 2
+SAL
+2
+Column 3
+HIREDATE
+12</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In this next example, I load up the column information, use the nthcol function to get the information about just one column, deposit it in a locally declared record, and then check the column type.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DECLARE
+   cur integer := dbms_sql.open_cursor;
+   rec DBMS_SQL.DESC_REC;
+BEGIN
+   dbms_sql.PARSE 
+      (cur, 'SELECT ename, sal, hiredate FROM emp', DBMS_SQL.NATIVE);
+   DBMS_SQL.DEFINE_COLUMN (cur, 1, 'a', 60);
+   DBMS_SQL.DEFINE_COLUMN (cur, 1, 1);
+   DBMS_SQL.DEFINE_COLUMN (cur, 1, SYSDATE);
+   desccols.forcur (cur);
+   rec := desccols.nthcol (1);
+   IF rec.col_type = desccols.varchar2_type
+   THEN
+      DBMS_OUTPUT.PUT_LINE ('Process as string!');
+   END IF;
+   DBMS_SQL.CLOSE_CURSOR (cur);
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>And I get this output when executed:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>Process as string!</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice how I have shifted from dealing with the low-level details of the DESCRIBE_COLUMNS built-in to manipulating all that data through a clear, easy-to-use API. It is not as though the code you need to write (and you will find in the body of the next package) is all that complicated. But why bother with this code again and again when you can write it once and then just pass in the pointer to the cursor and let the package do all the work?</P
+><P
+CLASS="para"
+>The implementation of the desccols package is straightforward.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20776-0"
+></A
+>desccols.spp */*
+CREATE OR REPLACE PACKAGE BODY desccols
+IS
+   /* Here is the PL/SQL table holding the column information. */
+   desctab DBMS_SQL.DESC_TAB;
+   desccnt PLS_INTEGER;
+   firstrow PLS_INTEGER;
+   lastrow PLS_INTEGER;
+
+   PROCEDURE <A
+CLASS="indexterm"
+NAME="ch02-idx-21153-0"
+></A
+>forcur (cur IN INTEGER)
+   IS
+   BEGIN
+      /* Clear out the PL/SQL table */
+      desctab.DELETE;
+       
+      /* Fill up the PL/SQL table */
+      DBMS_SQL.DESCRIBE_COLUMNS (cur, desccnt, desctab);
+
+      /* Get the first and last row numbers to avoid future lookups */
+      firstrow := desctab.FIRST;
+      lastrow := desctab.LAST;
+   END;
+
+   PROCEDURE <A
+CLASS="indexterm"
+NAME="ch02-idx-21154-0"
+></A
+>show (fst IN INTEGER := 1, lst IN INTEGER := NULL)
+   IS
+   BEGIN
+      IF desccnt &gt; 0
+      THEN
+         /* Show the specified rows. */
+         FOR colind IN 
+            GREATEST (fst, firstrow) .. 
+            LEAST (NVL (lst, lastrow), lastrow)
+         LOOP
+            /* Add additional lines of output as you desire */
+            DBMS_OUTPUT.PUT_LINE ('Column ' || TO_CHAR (colind));
+            DBMS_OUTPUT.PUT_LINE (desctab(colind).col_name);
+            DBMS_OUTPUT.PUT_LINE (desctab(colind).col_type);
+         END LOOP;
+      END IF;
+   END;
+   
+   FUNCTION <A
+CLASS="indexterm"
+NAME="ch02-idx-21155-0"
+></A
+>numcols RETURN INTEGER
+   IS
+   BEGIN
+      RETURN desccnt;
+   END;
+
+   FUNCTION <A
+CLASS="indexterm"
+NAME="ch02-idx-21156-0"
+></A
+>nthcol (num IN INTEGER) RETURN DBMS_SQL.DESC_REC
+   IS
+      retval DBMS_SQL.DESC_REC;
+   BEGIN
+      /* If a valid row number, retrieve that entire record. */
+      IF num BETWEEN firstrow AND lastrow
+      THEN
+         retval := desctab(num);
+      END IF;
+      RETURN retval;
+   END;
+END;<A
+CLASS="indexterm"
+NAME="ch02-idx-20439-0"
+></A
+>
+/<A
+CLASS="indexterm"
+NAME="ch02-idx-20435-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20435-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20435-2"
+></A
+></PRE
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch02-17537"
+>2.5.4 Displaying Table Contents with Method 4 Dynamic SQL</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20452-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20452-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20452-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20452-3"
+></A
+>This section examines the kind of code you need to write to perform dynamic SQL Method 4. Method 4, introduced early in this chapter, supports queries that have a variable (defined only at runtime) number of items in the SELECT list   and/or a variable number of host variables. Here is an example of Method 4 dynamic SQL:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>'SELECT ' || variable_select_list ||
+'  FROM ' || table_name || 
+' WHERE sal &gt; :minsal
+'   AND ' || second_clause ||
+order_by_clause</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice that with this SQL statement, I do not know how many columns or expressions are returned by the query. The names of individual columns are "hidden" in the variable select list. I also do not know the full contents of the WHERE clause; the minsal bind variable is obvious, but what other bind variable references might I find in the second_clause string? As a result of this uncertainty, Method 4 dynamic SQL is the most complicated kind of dynamic query to handle with DBMS_SQL.</P
+><P
+CLASS="para"
+>What's so hard about that? Well, if I am going to use the DBMS_SQL package to execute and fetch from such a query, I need to write and compile a PL/SQL program. Specifically, to parse the SQL statement, I need to define the columns in the cursor with calls to <A
+CLASS="indexterm"
+NAME="ch02-idx-20456-0"
+></A
+>DEFINE_COLUMN&nbsp;-- yet I do not know the list of columns at the time I am writing my code. To execute the query, I must associate values to all of my bind variables (identifiers with a ":" in front of them) by calling <A
+CLASS="indexterm"
+NAME="ch02-idx-20457-0"
+></A
+>BIND_VARIABLE&nbsp;-- yet I do not know the names of those bind variables at the time I write my code. Finally, to retrieve data from the result set of the query I also need to call <A
+CLASS="indexterm"
+NAME="ch02-idx-20458-0"
+></A
+>COLUMN_VALUE for each column. But, again, I do not know the names or datatypes of those columns up front. </P
+><P
+CLASS="para"
+>Sounds challenging, doesn't it? In fact, working with these incredibly dynamic SQL strings requires some interesting string parsing and some even more creative thinking.</P
+><P
+CLASS="para"
+>When would you run into Method 4? It arises when you build a frontend to support <A
+CLASS="indexterm"
+NAME="ch02-idx-20459-0"
+></A
+>ad-hoc query generation by users, or when you want to build a generic <A
+CLASS="indexterm"
+NAME="ch02-idx-20460-0"
+></A
+>report program, which constructs the report format and contents dynamically at runtime. I also encountered it recently when I decided to build a PL/SQL procedure to display the contents of a <A
+CLASS="indexterm"
+NAME="ch02-idx-20466-0"
+></A
+>table&nbsp;-- any table, as specified by the user at runtime. This section explores what it took for me to implement this "in table" procedure. </P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.4.1"
+>2.5.4.1 The "in table" procedural interface</A
+></H4
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20470-0"
+></A
+>Before I dive into the PL/SQL required to create my procedure, I should explore my options. After all, it is certainly very easy for me to build a script in SQL*Plus to display the contents of any table.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT * FROM &amp;1</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I could even spice it up with a variable select list and WHERE clause as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT &amp;1 
+  FROM &amp;2 
+ WHERE &amp;3 
+ ORDER BY &amp;4</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In fact, SQL*Plus is a very flexible, powerful front-end tool for SQL scripts. Yet no matter how fancy I get with substitution parameters in SQL*Plus, this is not code I can run from within PL/SQL. Furthermore, PL/SQL gives me more procedural control over how to specify the data I want to see and how to display the data. Finally, if I use PL/SQL, then I get to play with DBMS_SQL! On the downside, however, from within PL/SQL I must rely on DBMS_OUTPUT (described in <A
+CLASS="xref"
+HREF="ch07_01.htm"
+>Chapter 7, <CITE
+CLASS="chapter"
+>Defining an Application Profile</CITE
+></A
+>) to display my table contents, so I must reckon with the buffer limitations of that built-in package (a maximum of 1,000,000 bytes of data&nbsp;-- you will clearly not use my procedure to display very large quantities of data).</P
+><P
+CLASS="para"
+>So I will use PL/SQL and DBMS_SQL. But before building any code, I need to come up with a specification. How will the procedure be called? What information do I need from my user (a developer, in this case)? What should a user have to type to retrieve the desired output? I want my procedure (which I call "intab" for "in table") to accept the inputs in the following table.</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Parameter</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the table</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Required. Obviously, a key input to this program.</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Maximum length of string displayed</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Optional. Sets an upper limit on the size of string columns. I do not even attempt to do the kind of string wrapping performed in SQL*Plus. Instead, SUBSTR simply truncates the values.</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>WHERE clause</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Optional. Allows you to restrict the rows retrieved by the query. If not specified, all rows are retrieved. You can also use this parameter to pass in ORDER BY and HAVING clauses, since they follow immediately after the where clause.</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Format for date columns</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Optional. Allows you to set the standard format for date displays. The default includes date and time information. When using SQL*Plus, I find it very irritating to constantly have to use TO_CHAR to see the time portion of my date fields.</P
+></TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+>Given these inputs, the specification for my procedure becomes the following:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE intab
+   (table_in IN VARCHAR2,
+    string_length_in IN INTEGER := 20,
+    where_in IN VARCHAR2 := NULL,
+    date_format_in IN VARCHAR2
+       := 'MM/DD/YY HHMISS')</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Here are some examples of calls to intab:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>execute intab ('emp');
+
+execute intab
+   ('emp', 20,  'deptno = ' || v_deptno || ' order by sal');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>These two calls to intab produce the following output:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>execute intab ('emp');
+-----------------------------------------------------------------------------
+                           Contents of emp
+-----------------------------------------------------------------------------
+EMPNO ENAMEJOBMGR  HIREDATESALCOMMDEPTNO
+-----------------------------------------------------------------------------
+7839  KINGPRESIDENT11/17/81 120000500010
+7698  BLAKE MANAGER7839 05/01/81 120000285030
+7782  CLARKMANAGER7839 06/09/81 120000245010
+7566  JONESMANAGER7839 04/02/81 120000297520
+7654  MARTINSALESMAN7698 09/28/81 1200001250    140030
+7499  ALLENSALESMAN7698 02/20/81 1200001600    3000
+7844  TURNERSALESMAN7698 09/08/81 1200001500    0    30
+7900  JAMESCLERK7698 12/03/81 12000095030
+7521  WARDSALESMAN7698 02/22/81 1200001250    500  30
+7902  FORDANALYST7566 12/03/81 120000300020
+7369  SMITHCLERK7902 12/17/80 12000080020
+7788  SCOTTANALYST7566 12/09/82 120000300020
+7876  ADAMSCLERK7788 01/12/83 120000110020
+7934  MILLERCLERK7782 01/23/82 120000130010
+
+execute intab ('emp', 20, 'deptno = 10 order by sal');
+-----------------------------------------------------------------------
+                           Contents of emp
+-----------------------------------------------------------------------
+EMPNO ENAMEJOB       MGR  HIREDATESALCOMMDEPTNO
+-----------------------------------------------------------------------
+7934  MILLERCLERK7782 01/23/82 120000130010
+7782  CLARKMANAGER7839 06/09/81 120000245010
+7839  KINGPRESIDENT11/17/81 120000500010
+</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice that the user does not have to provide any information about the structure of the table. My program will get that information itself&nbsp;-- precisely the aspect of intab that makes it a Method 4 dynamic SQL example. </P
+><P
+CLASS="para"
+>While this version of intab will certainly be useful, I am the first to recognize that there are many other possible enhancements to intab, including:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Supplying a list of only those columns you wish to display. This will bypass the full list of columns for the table (which, as you will see, is extracted from the data dictionary).</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Supplying a list of those columns you wish to <EM
+CLASS="emphasis"
+>exclude</EM
+> from display. If your table has 50 columns, and you don't want to display three of those columns, it's a lot easier to list the three you don't want than the 47 you <EM
+CLASS="emphasis"
+>do</EM
+> want.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Supplying an ORDER BY clause for the output. You <EM
+CLASS="emphasis"
+>could</EM
+> do this through the WHERE clause, but it is certainly more structured to provide a separate input.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Providing a format for numeric data in addition to the date format.</P
+></LI
+></UL
+><P
+CLASS="para"
+>So, yes, there is always more one can do, but this one (yours truly) would like to leave some interesting work for his readers. To encourage you to take my intab and "run with it," I will, in this section, step you through the usage of DBMS_SQL required to implement the intab procedure. (The full program is contained on the companion disk.)</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.4.2"
+>2.5.4.2 Steps for intab construction</A
+></H4
+><P
+CLASS="para"
+>In order to display the contents of a table, follow these steps:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Construct and parse the SELECT statement (using OPEN_CURSOR and PARSE).</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Bind all local variables with their placeholders in the query (using BIND_VARIABLE).</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Define each column in the cursor for this query (using DEFINE_COLUMN).</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Execute and fetch rows from the database (using EXECUTE and FETCH_ROWS).</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Retrieve values from the fetched row and place them into a string for display purposes (using COLUMN_VALUE). Then display that string with a call to the PUT_LINE procedure of the DBMS_OUTPUT package.</P
+></LI
+></OL
+><BLOCKQUOTE
+CLASS="note"
+><P
+CLASS="para"
+><STRONG
+>NOTE:</STRONG
+>  My intab implementation does not currently support bind variables. I assume, in other words, that the where_clause_in argument does not contain any bind variables. As a result, I will not be exploring in detail the code required for step 2.  </P
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.4.3"
+>2.5.4.3 Constructing the SELECT</A
+></H4
+><P
+CLASS="para"
+>In order to extract the data from the table, I have to construct the S<A
+CLASS="indexterm"
+NAME="ch02-idx-20479-0"
+></A
+>ELECT statement. The structure of the query is determined by the various inputs to the procedure (table name, WHERE clause, etc.) and the contents of the data dictionary. Remember that the user does not have to provide a list of columns. Instead, I must identify and extract the list of columns for that table from a data dictionary view. I have decided to use all_tab_columns in intab so the user can view the contents not only of tables he, or she, owns (which are accessible in user_tab_columns), but also any table for which he, or she, has SELECT access.</P
+><P
+CLASS="para"
+>Here is the cursor I use to fetch information about the table's columns:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CURSOR col_cur 
+   (owner_in IN VARCHAR2, 
+    table_in IN VARCHAR2)
+IS
+   SELECT column_name, data_type, 
+          data_length, 
+          data_precision, data_scale
+     FROM all_tab_columns
+    WHERE owner = owner_in
+      AND table_name = table_in;</PRE
+></BLOCKQUOTE
+><DIV
+CLASS="sidebar"
+><H4
+CLASS="sidebar"
+><A
+CLASS="title"
+NAME="ch02-TABLE-20"
+>Using Dot Notation</A
+></H4
+><P
+CLASS="para"
+>Notice that my cursor takes two parameters, owner_in and table_in, but that my program itself only accepts a single table name parameter. Rather than have the user pass this information in as two separate parameters, she can use standard dot notation, as in SCOTT.EMP, and the intab procedure will parse them as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>dot_loc := INSTR (table_nm, '.');
+IF dot_loc &gt; 0
+THEN
+   owner_nm := SUBSTR (table_nm, 1, dot_loc-1);
+   table_nm := SUBSTR (table_nm, dot_loc+1);
+END IF;
+</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>You should always try to make the interface as seamless and intelligent as possible for your users. You should also always try to make use of existing programs to implement your own. In this case (as pointed out to me by Dan Clamage, a technical reviewer), you can also use DBMS_UTILITY.<A
+CLASS="indexterm"
+NAME="ch02-idx-20477-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20477-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20477-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20477-3"
+></A
+>NAME_TOKENIZE to parse this object name.</P
+></DIV
+><P
+CLASS="para"
+>With this column cursor, I extract the name, datatype, and length information for each column in the table. How should I store all of this information in my PL/SQL program? To answer this question, I need to think about how that data will be used. It turns out that I will use it in many ways, for example:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>I will use the column names to build the select list for the query.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>To display the output of a table in a readable fashion, I need to provide a column header that shows the names of the columns over their data. These column names must be spaced out across the line of data in, well, columnar format. So I need the column name and the length of the data for that column.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>To fetch data into a dynamic cursor, I need to establish the columns of the cursor with calls to DEFINE_COLUMN. For this, I need the column datatype and length.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>To extract the data from the fetched row with COLUMN_VALUE, I need to know the datatypes of each column, as well as the number of columns.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>To display the data, I must construct a string containing all the data (using TO_CHAR to convert numbers and dates). Again, I must pad out the data to fit under the column names, just as I did with the header line. </P
+></LI
+></UL
+><P
+CLASS="para"
+>Therefore, I need to work with the column information several times throughout my program, yet I do not want to read repeatedly from the data dictionary. As a result, when I query them out of the all_tab_columns view, I will store the column data in three PL/SQL tables.</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Table</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>colname</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>The name of each column.</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>coltype</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>The datatype of each column, a string describing the datatype.</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>collen</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>The number of characters required to display the column data.</P
+></TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+>So if the third column of the emp table is SAL, then colname(3) = `SAL', coltype(3) = `NUMBER', and collen(3) = 7, and so forth. </P
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20478-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20478-1"
+></A
+>The name and datatype information is stored directly from the data dictionary. When I work with the DBMS_SQL built-ins, however, they do not use the strings describing the datatypes (such as "CHAR" and "DATE"). Instead, DEFINE_COLUMN and COLUMN_VALUE rely on PL/SQL variables to <EM
+CLASS="emphasis"
+>infer</EM
+> the correct datatypes. So I use three local functions, is_string, is_date, and is_number, to help me translate a datatype into the correct variable usage. The is_string function, for example, validates that both CHAR and VARCHAR2 are string datatypes:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION is_string (row_in IN INTEGER) RETURN BOOLEAN
+IS 
+BEGIN
+  RETURN (coltype(row_in) IN ('CHAR', 'VARCHAR2'));
+END;
+</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Figuring out the appropriate number of characters required to fit the column's data (the contents of the collen PL/SQL table) is a bit more complicated.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.4.4"
+>2.5.4.4 Computing column length</A
+></H4
+><P
+CLASS="para"
+>I need to take several different aspects of the column into account:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The length of the column name (you don't want the column length to be smaller than the header). </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The maximum length of the data. If it's a string column, that information is contained in the data_length column of all_tab_columns. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>If it's a number column, that information is contained in the data_precision column of the view (unless the datatype is unconstrained, in which case that information is found in the data_length column).</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>If it's a date column, the number of characters will be determined by the length of the date format mask.</P
+></LI
+></OL
+><P
+CLASS="para"
+>As you can see, the type of data partially determines the type of calculation I perform for the length. Here's the formula for computing a string column's length:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>GREATEST
+  (LEAST (col_rec.data_length, string_length_in), 
+   LENGTH (col_rec.column_name))</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The formula for a numeric column length is as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>GREATEST 
+   (NVL (col_rec.data_precision, col_rec.data_length),
+    LENGTH (col_rec.column_name))</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Finally, here's the formula for a date column length:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>GREATEST (LENGTH (date_format_in), LENGTH (col_rec.column_name))</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I use these formulas inside a cursor FOR loop that sweeps through all the columns for a table (as defined in all_tab_columns). This loop (shown following) fills my PL/SQL tables:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FOR col_rec IN 
+    col_cur (owner_nm, table_nm)
+LOOP
+   /* Construct select list for query. */
+   col_list := col_list || ', ' || col_rec.column_name;
+
+   /* Save datatype and length for calls to DEFINE_COLUMN. */
+   col_count := col_count + 1;
+   colname (col_count) := col_rec.column_name;
+   coltype (col_count) := col_rec.data_type;
+
+   /* Compute the column length with the
+      above formulas in a local module. */
+   collen (col_count) := column_lengths;
+
+   /* Store length and keep running total. */
+   line_length := line_length + v_length + 1;
+
+   /* Construct column header line. */
+   col_header := col_header || ' ' || RPAD (col_rec.column_name, v_length);
+END LOOP;
+</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>When this loop completes, I have constructed the select list, populated my       PL/SQL tables with the column information I need for calls to DEFINE_COLUMN and COLUMN_VALUE, and also created the column header line. Now that was a busy loop!</P
+><P
+CLASS="para"
+>Next step? Construct the WHERE clause. In the following code, I check to see if the "WHERE clause" might actually just be a GROUP BY or ORDER BY clause. In those cases, I'll skip the WHERE part and attach this other information.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>IF where_clause IS NOT NULL
+THEN
+   IF (where_clause NOT LIKE 'GROUP BY%' AND
+       where_clause NOT LIKE 'ORDER BY%')
+   THEN
+      where_clause := 'WHERE ' || LTRIM (where_clause, 'WHERE');
+   END IF;
+END IF;
+</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I have now finished construction of the SELECT statement. Time to parse it, and then construct the various columns in the dynamic cursor object.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.4.5"
+>2.5.4.5 Defining the cursor structure</A
+></H4
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20481-0"
+></A
+>The parse phase is straightforward enough. I simply cobble together the SQL statement from its processed and refined components.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DBMS_SQL.PARSE
+   (cur,
+    'SELECT ' || col_list ||
+    '  FROM ' || table_in || ' ' || where_clause,
+    DBMS_SQL.NATIVE);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Of course, I want to go far beyond parsing. I want to execute this cursor. Before I do that, however, I must give some structure to the cursor. Remember: when you open a cursor, you have merely retrieved a handle to a chunk of memory. When you parse the SQL statement, you have associated a SQL statement with that memory. But as a next step, you must define the columns in the cursor so that it can actually store fetched data.</P
+><P
+CLASS="para"
+>With Method 4 dynamic SQL, this association process is complicated. I cannot "hard-code" the number or type of calls to DEFINE_COLUMN in my program; I do not have all the information until runtime. Fortunately, in the case of intab, I <EM
+CLASS="emphasis"
+>have</EM
+> kept track of each column to be retrieved. Now all I need to do is issue a call to DEFINE_COLUMN for each row defined in my PL/SQL table colname. Before we go through the actual code, here are some reminders about <A
+CLASS="indexterm"
+NAME="ch02-idx-20482-0"
+></A
+>DEFINE_COLUMN.</P
+><P
+CLASS="para"
+>The header for this built-in procedure is as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_SQL.DEFINE_COLUMN
+    (cursor_handle IN INTEGER, 
+    position IN INTEGER, 
+    datatype_in IN DATE|NUMBER|VARCHAR2)</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>There are three things to keep in mind with this built-in: </P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The second argument is a number; DEFINE_COLUMN does not work with column <EM
+CLASS="emphasis"
+>names</EM
+>&nbsp;-- only with the sequential position of the column in the list. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The third argument establishes the datatype of the cursor's column. It does this by accepting an expression of the appropriate type. You do not, in other words, pass a string like "VARCHAR2" to DEFINE_COLUMN. Instead, you would pass a variable defined as VARCHAR2.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>When you are defining a character-type column, you must also specify the maximum length of values retrieved into the cursor.</P
+></LI
+></OL
+><P
+CLASS="para"
+>In the context of intab, the row in the PL/SQL table is the Nth position in the column list. The datatype is stored in the coltype PL/SQL table, but must be converted into a call to DEFINE_COLUMN using the appropriate local variable. These complexities are handled in the following FOR loop:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FOR col_ind IN 1 .. col_count
+LOOP
+  IF is_string (col_ind)
+  THEN
+    DBMS_SQL.DEFINE_COLUMN 
+      (cur, col_ind, string_value, collen (col_ind));
+
+  ELSIF is_number (col_ind)
+  THEN
+    DBMS_SQL.DEFINE_COLUMN (cur, col_ind, number_value);
+
+  ELSIF is_date (col_ind)
+  THEN
+    DBMS_SQL.DEFINE_COLUMN (cur, col_ind, date_value);
+  END IF;
+END LOOP;
+</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>When this loop is completed, I will have called DEFINE_COLUMN for each column defined in the PL/SQL tables. (In my version this is all columns for a table. In your enhanced version, it might be just a subset of all these columns.) I can then execute the cursor and start fetching rows. The execution phase is no different for Method 4 than it is for any of the other simpler methods,</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>fdbk := DBMS_SQL.EXECUTE (cur);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>where fdbk is the feedback returned by the call to EXECUTE. Now for the finale: retrieval of data and formatting for display.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.4.6"
+>2.5.4.6 Retrieving and displaying data</A
+></H4
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20483-0"
+></A
+>I use a cursor FOR loop to retrieve each row of data identified by my dynamic cursor. If I am on the first row, I will display a header (this way, I avoid displaying the header for a query which retrieves no data). For each row retrieved, I build the line and then display it:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>LOOP
+   fdbk := DBMS_SQL.FETCH_ROWS (cur);
+   EXIT WHEN fdbk = 0;
+
+   IF DBMS_SQL.LAST_ROW_COUNT = 1
+   THEN
+      /* We will display the header information here */
+      ...
+   END IF;
+
+   /* Construct the line of text from column information here */
+   ...
+
+   DBMS_OUTPUT.PUT_LINE (col_line);
+END LOOP;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The line-building program is actually a numeric FOR loop in which I issue my calls to COLUMN_VALUE. I call this built-in for each column in the table (information that is stored in&nbsp;-- you guessed it&nbsp;-- my PL/SQL tables). As you can see below, I use my is_* functions to determine the datatype of the column and therefore the appropriate variable to receive the value.</P
+><P
+CLASS="para"
+>Once I have converted my value to a string (necessary for dates and numbers), I pad it on the right with the appropriate number of blanks (stored in the collen  PL/SQL table) so that it lines up with the column headers.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>col_line := NULL;
+FOR col_ind IN 1 .. col_count
+LOOP
+   IF is_string (col_ind)
+   THEN
+      DBMS_SQL.COLUMN_VALUE (cur, col_ind, string_value);
+
+   ELSIF is_number (col_ind)
+   THEN
+      DBMS_SQL.COLUMN_VALUE (cur, col_ind, number_value);
+      string_value := TO_CHAR (number_value);
+
+   ELSIF is_date (col_ind)
+   THEN
+      DBMS_SQL.COLUMN_VALUE (cur, col_ind, date_value);
+      string_value := TO_CHAR (date_value, date_format_in);
+   END IF;
+
+   /* Space out the value on the line
+      under the column headers. */
+   col_line := col_line || ' ' || RPAD (NVL (string_value, ' '),
+      collen (col_ind));
+END LOOP;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>There you have it. A very generic procedure for displaying the contents of a database table from within a PL/SQL program. It all fell pretty smoothly into place once I got the idea of storing my column structures in a set of PL/SQL tables. Drawn on repeatedly, those in-memory tables made it easy to implement Method 4 dynamic SQL&nbsp;-- another example of how taking full advantage of everything PL/SQL has to offer strengthens your ability to implement quickly and cleanly.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.4.7"
+>2.5.4.7 Build those utilities!</A
+></H4
+><P
+CLASS="para"
+>I suppose you could read this section and shrug, thinking: "Well, I don't feel like I have the time to write these kinds of generic utilities." I urge you to reject this line of reasoning. You <EM
+CLASS="emphasis"
+>always</EM
+> have time to create a more generic, generally useful implementation. Any time you spend up-front to craft high-quality, well-designed modules will pay off&nbsp;-- for you personally, and for all others who benefit from your labors.</P
+><P
+CLASS="para"
+>PL/SQL offers endless possibilities for building reusable code, which will save you many hours of development, debugging, and maintenance. The DBMS_SQL package in particular is a veritable gold mine. Dive in and try your hand at dynamic SQL! </P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.4.8"
+>2.5.4.8 Full text of intab procedure</A
+></H4
+><P
+CLASS="para"
+>Because the full intab procedure is so long, I haven't included it here. For the full text of this procedure, see the <I
+CLASS="filename"
+>intab.sp</I
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20779-0"
+></A
+> file on the <A
+CLASS="indexterm"
+NAME="ch02-idx-20472-0"
+></A
+>companion <A
+CLASS="indexterm"
+NAME="ch02-idx-20468-0"
+></A
+>disk.<A
+CLASS="indexterm"
+NAME="ch02-idx-20454-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20454-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20454-2"
+></A
+></P
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.5"
+>2.5.5 Indirect Referencing in PL/SQL</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20484-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20484-1"
+></A
+>I cut my teeth, so to speak, with Oracle software on a product called SQL*Forms. Back around 1987-1989, it was a really hot product for application development, and I was a guru. I wrote recursive triggers. I wrote a debugger for this product so thoroughly lacking in a debugger. I could produce robust forms in little or no time. It was very sad, then, for many of us, when Windows and other GUIs came along, and Oracle Corporation did not keep up. Of course, Oracle Forms has come a long way and is competing well with PowerBuilder and SQL*Windows and Visual Basic. That makes me happy because it has some really neat features, one of which is indirect referencing.</P
+><P
+CLASS="para"
+>Oracle Forms offers two built-ins, the NAME_IN function and the COPY procedure, which allow you to retrieve and set <EM
+CLASS="emphasis"
+>by</EM
+> name the values of variables inside your form. For example, I can set the value of the global variable GLOBAL.right_now to SYSDATE with the following call,</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>COPY (TO_CHAR (SYSDATE), 'global.right_now');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>and I can retrieve the value of that same global with a call to NAME_IN:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>v_date := TO_DATE (NAME_IN ('global.right_now'));</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Some of you might, and should, be saying to yourself, "Well, heck, why not just use the assignment operator," as in,</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>v_date := TO_DATE (:GLOBAL.right_now);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>and you would of course be right&nbsp;-- in this situation. The power of NAME_IN and COPY, however, become clear when instead of using them with "hard-coded" variable names, you construct the name of the variable at runtime. Here is an example:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>COPY (TO_CHAR (SYSDATE), 'global.date_in_year' || TO_CHAR (v_yearnum));</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In this case, the name of the variable to which SYSDATE is assigned is not determined until this line of code is executed and the v_yearnum variable is evaluated. This "indirect reference" to the GLOBAL variable in question offers developers a tremendous amount of flexibility. Indirect referencing will come in most handy when you are building generic utilities in which the very structure of your PL/SQL in-memory data is not defined until runtime. </P
+><P
+CLASS="para"
+>I encountered the need for indirect referencing when building a PL/SQL code generator (now a product called PL/Generator from RevealNet). I wanted to provide a utility that would read a template file and then generate PL/SQL packages from that file. I found that by using indirect referencing, I could make these templates user-extensible. While this is neither the time nor place to really explore the generator technology, the following text shows a fragment of the template file. The square brackets ([ and ]) are used to "tag" template commands. The [IF] command implements "meta-conditional" logic, and that is where my indirect referencing comes into play:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>[IF]myvars.checkstatus
+   IF SQL%ROWCOUNT = 0
+   THEN
+      DBMS_OUTPUT.PUT_LINE ('No records updated!');
+   END IF;
+[ENDIF]</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>That is the code to be processed by PL/Generator. So before I do the generation, I will set the myvars.checkstatus packaged global variable to "T" with a statement like this:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec myvars.checkstatus := 'T';</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>When I run my utility, I employ indirect referencing to "look up" the value of the variable with the name "myvars.checkstatus." That lookup will return TRUE and the check against ROWCOUNT thus will be included in the package that is generated. To accomplish this feat, follow these steps:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Grab the variable name from within the template file.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Use dynamic PL/SQL to evaluate the packaged variable. (Remember: with dynamic SQL, you can only read/modify "global" or package-based data.)</P
+></LI
+></OL
+><P
+CLASS="para"
+>In this section, I will show you how to build a package called <A
+CLASS="indexterm"
+NAME="ch02-idx-20492-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20492-1"
+></A
+>dynvar to perform this kind of dynamic or indirect referencing for string values. You can easily overload the programs in dynvar to support other datatypes. Here is the specification of the package:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20782-0"
+></A
+>dynvar.spp */*
+CREATE OR REPLACE PACKAGE dynvar
+IS
+   PROCEDURE assign (expr_in IN VARCHAR2, var_inout IN OUT VARCHAR2);
+   FUNCTION val (var_in IN VARCHAR2) RETURN VARCHAR2;
+   PROCEDURE copyto (val_in IN VARCHAR2, nm_in IN VARCHAR2)
+   
+END dynvar;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>These three programs function as follows:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+>dynvar.<A
+CLASS="indexterm"
+NAME="ch02-idx-21210-0"
+></A
+>assign</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Assigns a value returned by the expression to the specified variable. This procedure is most helpful when you want to use dynamic PL/SQL to assign a value to a <EM
+CLASS="emphasis"
+>locally declared</EM
+> variable.</P
+></DD
+><DT
+CLASS="term"
+>dynvar.<A
+CLASS="indexterm"
+NAME="ch02-idx-21211-0"
+></A
+>val</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>This is similar to the Oracle Forms NAME_IN function. It retrieves the value currently held by the specified variable. In this case, var_in is a string containing the name of the variable you want to evaluate, not the variable itself.</P
+></DD
+><DT
+CLASS="term"
+>dynvar.<A
+CLASS="indexterm"
+NAME="ch02-idx-21212-0"
+></A
+>copyto</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>This is similar to the Oracle Forms COPY procedure. It "copies" the specified value, which can be an expression, to the variable. In this case, you provide the name of the variable, not a direct reference to the variable.</P
+></DD
+></DL
+><P
+CLASS="para"
+>Here is a demonstration script using all three of these programs:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20784-0"
+></A
+>dynvar.tst */*
+CREATE OR REPLACE PACKAGE TSTVAR
+IS
+    str1 varchar2(2000);
+    str2 varchar2(2000);
+END;
+/
+DECLARE
+   v_pkg CHAR(7) := 'tstvar.';
+   localstr VARCHAR2(100);
+BEGIN
+   dynvar.assign ('abc' || 'def' , localstr); /* Note 1 below */
+   DBMS_OUTPUT.PUT_LINE ('local string set to ' || localstr);
+
+   dynvar.copyto ('abcdefghi', v_pkg || 'str1'); /* Note 2 below */
+   DBMS_OUTPUT.PUT_LINE ('global string set to ' || tstvar.str1);
+
+   DBMS_OUTPUT.PUT_LINE ('value retrieved dynamically ' || 
+      dynvar.val (v_pkg || 'str1')); /* Note 3 below */
+
+   tstvar.str2 := 'tstvar.str1';
+
+   DBMS_OUTPUT.PUT_LINE ('double indirection gets us ' || 
+      dynvar.val (dynvar.val (v_pkg || 'str2'))); /* Note 4 below */
+
+   DBMS_OUTPUT.PUT_LINE ('expression retrieved dynamically ' || 
+      dynvar.val (v_pkg || 'str1' || '|| '' wow!''')); /* Note 5 below */
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This is the output from the program:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; @dynvar.tst
+
+Package created.
+
+local string set to abcdef
+global string set to abcdefghi
+value retrieved dynamically abcdefghi
+double indirection gets us abcdefghi
+expression retrieved dynamically abcdefghi wow!</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Here are some notes on program behavior:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The call to dynvar.assign assigned the concatenated string to the local variable, which is not possible with "normal" dynamic PL/SQL, since the data structures referenced in your dynamic PL/SQL block must be global. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The call to dynvar.copyto copied the string "abcdefghi" to the PL/SQL variable tstvar.str1 <EM
+CLASS="emphasis"
+>indirectly</EM
+>, since the name of the variable was constructed at runtime. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>In the first call to dynvar.val, I construct the name of the variable and pass that to dynvar for processing. It returns "abcdefghi."</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>I then use two levels of indirection to get the value of the tstvar.str1 variable. In this case, I assign to tstvar.str2 the name of its sister variable in the package, tstvar.str1. I then call dynvar.val twice, first to evaluate tstvar.str2 and retrieve the value "tstvar.str1." Then I call dynvar.val to evaluate tstvar.str1 and return the first nine letters of the alphabet.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>In this last call to dynvar.val, I do not pass a variable name. Instead, I pass an expression, a concatenation of the variable with the string "wow." This function doesn't mind in the least. As long as the string you pass is a valid string expression, it will be evaluated and returned.</P
+></LI
+></OL
+><P
+CLASS="para"
+>The following sections show the implementations of the dynvar programs (all found in the <I
+CLASS="filename"
+>dynvar.spp</I
+> file), along with an explanation. A few comments for clarification: in each of these I make use of two variables, cur and fdbk. These are defined at the package level. In addition, to improve performance, I open the cursor when the package is initialized and therefore do not need to open and close it in each program.</P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.5.1"
+>2.5.5.1 Assigning a value</A
+></H4
+><P
+CLASS="para"
+>The dynvar.<A
+CLASS="indexterm"
+NAME="ch02-idx-21218-0"
+></A
+>assign procedure performs a dynamic assignment of a string expression to a string variable. That variable can be either locally or globally (in a package) defined.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE assign (expr_in IN VARCHAR2, var_inout IN OUT VARCHAR2) IS
+BEGIN
+   DBMS_SQL.PARSE (cur, 
+      'BEGIN :var := ''' || expr_in || '''; END;', DBMS_SQL.NATIVE);
+   DBMS_SQL.BIND_VARIABLE (cur, 'var', 'a', 2000);
+   fdbk := DBMS_SQL.EXECUTE (cur);
+   DBMS_SQL.VARIABLE_VALUE (cur, 'var', var_inout);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Here are the basic steps performed in this procedure:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Parse the assignment statement constructed with a bind variable and the expression. (Remember that the cursor was previously opened and remains open for the duration of your session.)</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Bind the variable (even though it is an OUT value) that will receive the value of the expression. The value I bind into it is irrelevant, but dynamic   PL/SQL requires that you call the BIND_VARIABLE procedure for each placeholder in your string.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Execute the PL/SQL block.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Extract the value assigned to the placeholder variable and pass it to the variable you provided in the call to the procedure.</P
+></LI
+></UL
+><P
+CLASS="para"
+>There are several interesting aspects to dynvar.assign:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>In the parse, I construct my assignment string, making sure to enclose the expression within single quotes. I do this because expr_in will be evaluated to a string when it is passed into the procedure. If I do not enclose it in quotes, the PL/SQL compiler will try to interpret the string as <EM
+CLASS="emphasis"
+>code</EM
+> rather than as a literal. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The second argument to dynvar.assign must be declared as IN OUT because,  when I perform the call to the VARIABLE_VALUE procedure, I deposit a new value directly into the variable provided in the call to the procedure. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>When you call dynvar.assign, you pass the actual variable in the second argument, not a string (whether literal or a variable) containing the <EM
+CLASS="emphasis"
+>name</EM
+> of the variable. If you want to assign a value to a variable, but reference the variable by its name, use the dynvar.copyto procedure. </P
+></LI
+></UL
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.5.2"
+>2.5.5.2 Retrieving a value</A
+></H4
+><P
+CLASS="para"
+>The dynvar.<A
+CLASS="indexterm"
+NAME="ch02-idx-21214-0"
+></A
+>val function extracts the value contained in the variable you have named in the argument to this program.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION val (var_in IN VARCHAR2) RETURN VARCHAR2 IS
+   retval VARCHAR2(2000);
+BEGIN
+   DBMS_SQL.PARSE 
+      (cur, 'BEGIN :val := ' || var_in || '; END;', DBMS_SQL.NATIVE);
+   DBMS_SQL.BIND_VARIABLE (cur, 'val', 'a', 2000);
+   fdbk := DBMS_SQL.EXECUTE (cur);
+   DBMS_SQL.VARIABLE_VALUE (cur, 'val', retval);
+   RETURN retval;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Here are the steps performed by dynvar.val:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Parse the assignment string. Notice that in this case I do not surround the var_in value with single quotes. It's not a string expression in this case, but is instead the <EM
+CLASS="emphasis"
+>name</EM
+> of the variable. If you try to use dynvar.val to extract the value of a local, nonpackaged variable, you will receive a compile error.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Bind the placeholder variable. As with assign, the value I bind is irrelevant, since it actually is an OUT placeholder, about to receive the value from the variable name that is passed in.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Execute the dynamic PL/SQL block, extract the value into a <EM
+CLASS="emphasis"
+>local</EM
+> variable (whereas in dynvar.assign, it was extracted directly into the variable you provide), and then return the value.</P
+></LI
+></UL
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.5.3"
+>2.5.5.3 Copying a value to a packaged variable</A
+></H4
+><P
+CLASS="para"
+>The dynvar.<A
+CLASS="indexterm"
+NAME="ch02-idx-21215-0"
+></A
+>copyto procedure copies the value to the variable named in the second argument. This corresponds to Oracle Forms' COPY and allows you to indirectly reference the variable you want to modify.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE copyto (val_in IN VARCHAR2, nm_in IN VARCHAR2) IS
+BEGIN
+   DBMS_SQL.PARSE 
+      (cur, 
+       'BEGIN ' || nm_in || ' := ''' || val_in || '''; END;', 
+       DBMS_SQL.NATIVE);
+   fdbk := DBMS_SQL.EXECUTE (cur);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This procedure constructs and parses the string and then executes; there's not much to it. There is no need to call VARIABLE_VALUE because I do not need to extract any values. I am modifying the named variable right in the execution of the PL/SQL block.</P
+><P
+CLASS="para"
+>I also do not call BIND_VARIABLE, because I have not used any placeholders. Instead, I concatentate directly (into the PL/SQL block) the value I want to assign to the named variable. Why do I do this? Let's examine the consequences of using a placeholder.</P
+><P
+CLASS="para"
+>Suppose my dynamic PL/SQL block were constructed as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>'BEGIN ' || nm_in || ' := :val; END;', </PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>When I bind in my value with a call to DBMS_SQL.BIND_VARIABLE, it is not treated as a literal. For example, if I call dynvar.copyto with the following arguments,</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>dynvar.copyto ('steven''s hairline', 'rapid.retreat');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>then the PL/SQL block I would execute is,</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>BEGIN rapid.retreat := steven's hairline; END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>which would definitely run into compile problems. When I first encountered this problem, I figured that I would embed the :val placeholder inside single quotes to make sure that the value I pass in was treated as literal. My parse statement then looked like this:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DBMS_SQL.PARSE 
+   (cur, 'BEGIN ' || nm_in || ' := '':val''; END;', DBMS_SQL.NATIVE);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>But this would not work; DBMS_SQL did not recognize :val as a placeholder, any longer since it was inside single quotes. Sigh. The only solution was to remove :val, and, instead of using placeholders, simply concatenate the value directly into the string inside single quotes. </P
+><P
+CLASS="para"
+>The dynvar package should get you comfortable with executing dynamic PL/SQL code and also with the concept of indirect referencing. I suggest that you try extending dynvar to support other datatypes (numbers and dates, in particular). See what challenges you encounter. You will definitely need to make some changes to incorporate these different datatypes into your dynamically constructed <A
+CLASS="indexterm"
+NAME="ch02-idx-20494-0"
+></A
+>blocks.<A
+CLASS="indexterm"
+NAME="ch02-idx-20486-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20486-1"
+></A
+></P
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch02-21724"
+>2.5.6 Array Processing with DBMS_SQL</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20499-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20499-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20499-2"
+></A
+>One of the most significant advances for DBMS_SQL in Oracle8 is the support for "array processing" through use of the BIND_ARRAY and DEFINE_ARRAY procedures. Using these procedures, you can greatly speed up dynamic SQL processing that involves multiple rows of data. This section offers some general suggestions and then provides detailed examples of using array processing in DBMS_SQL to perform fetches, queries, and dynamic PL /SQL.</P
+><P
+CLASS="para"
+>In order to take advantage of array processing, you will need to be comfortable with the use of <A
+CLASS="indexterm"
+NAME="ch02-idx-20503-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20503-1"
+></A
+>index-by tables (called <EM
+CLASS="emphasis"
+>PL /SQL tables</EM
+> in Oracle7). These structures are like single-dimension arrays and are described in detail in Chapter 10 of <CITE
+CLASS="citetitle"
+>Oracle PL /SQL Programming</CITE
+>. With this feature under your belt, you are ready to implement array processing with DBMS_SQL. As you do so, keep in mind the following tips: </P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>When you declare index-by tables to be used in DBMS_SQL processing, you must declare them based on one of the DBMS_SQL table TYPES: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>    DBMS_SQL.NUMBER_TABLE
+    DBMS_SQL.VARCHAR2_TABLE 
+    DBMS_SQL.DATE_TABLE 
+    DBMS_SQL.BLOB_TABLE 
+    DBMS_SQL.CLOB_TABLE 
+    DBMS_SQL.BFILE_TABLE </PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Here is an example of declaring a table used to receive multiple pointers to BFILEs from a dynamically constructed query:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>    DECLARE
+       bfiles_list DBMS_SQL.BFILE_TABLE;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>One very significant downside to the approach taken by Oracle to support array processing with DBMS_SQL is that you cannot use index-by tables of records. Instead, you will need to declare individual tables for each of the columns you wish to query or placeholders you wish to put in your SQL statements.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>If you are going to fetch more than one row with a single call to FETCH_ROWS, you must define the columns in that cursor as "array columns." To do this, you must provide an index-by table in the call to DEFINE_ARRAY. The following example shows the steps required to fetch a whole bunch of salaries (up to 100 at a time) from the emp table:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>    DECLARE
+       cur PLS_INTEGER := DBMS_SQL.OPEN_CURSOR;
+       sal_table DBMS_SQL.NUMBER_TABLE;
+    BEGIN
+       DBMS_SQL.PARSE (cur, 'SELECT sal FROM emp', DBMS_SQL.NATIVE);
+       DBMS_SQL.DEFINE_COLUMN (cur, 1, sal_table, 100, 10);
+</PRE
+></BLOCKQUOTE
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>When you call DEFINE_ARRAY, you also can specify the starting row in which data is to be placed when you call DBMS_SQL.COLUMN_VALUE (in the previous example, I specified that the starting row to be 10). This is a little bit odd and worth emphasizing. That fifth argument does not have anything to do with the index-by table you pass as the third argument to DEFINE_ARRAY. It applies to the index-by table that is passed to the call to COLUMN_VALUE (which might or might not actually <EM
+CLASS="emphasis"
+>be</EM
+> the same index-by table). If you don't provide a value for this starting row, values are assigned to the receiving index-by table from row 1. In all cases, the rows are filled sequentially. Why would you <EM
+CLASS="emphasis"
+>not</EM
+> use the default value of 1 for starting row? You might want to preserve the values already stored in the index-by table, and simply add the new rows of data to the table.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>If you want to bind multiple values into a SQL statement, you must call BIND_ARRAY instead of the scalar BIND_VARIABLE procedure. You will do this when you want to modify more than one row in the table with a single DML statement. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>If you are using more than one array or index-by table in a single SQL statement, remember that DBMS_SQL applies a "lowest common denominator" rule. It determines the highest starting row number and the lowest ending row number across all arrays and then uses only those rows between those endpoints in <EM
+CLASS="emphasis"
+>all</EM
+> of the arrays.</P
+></LI
+></UL
+><P
+CLASS="para"
+>The following section shows in more detail how to use array processing in DBMS_SQL to fetch multiple rows with a single call to DBMS_SQL.FETCH_ROWS, update multiple rows of data with multiple bind variables, and manipulate index-by table contents with dynamic PL/SQL.</P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.6.1"
+>2.5.6.1 Using array processing to insert</A
+></H4
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20572-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20572-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20572-2"
+></A
+>There are three different ways to change the contents of a table: INSERT, DELETE, and UPDATE. This section shows examples of the first of these DML statements, INSERT, utilizing the array features of DBMS_SQL. The next two sections show examples of DELETE and UPDATE.</P
+><P
+CLASS="para"
+>The following procedure inserts the contents of a index-by table into a database table using single-row INSERTs (the Version 7 behavior). Notice that I parse once, but bind and execute for each individual row in the index-by table. I do not need to reparse, since I am not changing the SQL statement, only the value I am binding <EM
+CLASS="emphasis"
+>into</EM
+> that SQL statement.</P
+><P
+CLASS="para"
+>Notice also that I first create a package to define two index-by table types. Why do I do this? I am passing in index-by tables as arguments to my insert procedure. The parameter list of the procedure must therefore reference existing index-by table types in order to compile. I could also have put the table type declarations and the procedure into a single package.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20786-0"
+></A
+>dynins.sp */*
+CREATE OR REPLACE PACKAGE mytables
+IS
+   TYPE number_table IS TABLE OF NUMBER INDEX BY BINARY_INTEGER;
+   TYPE varchar2_table IS TABLE OF VARCHAR2(2000) INDEX BY BINARY_INTEGER;
+END;
+/
+CREATE OR REPLACE PROCEDURE instab7 
+   (empnotab IN mytables.number_table, 
+    enametab IN mytables.varchar2_table)
+IS   
+   cur PLS_INTEGER := DBMS_SQL.OPEN_CURSOR;
+   fdbk PLS_INTEGER;
+   totfdbk PLS_INTEGER := 0;
+BEGIN      
+   DBMS_SQL.PARSE (cur,
+      'INSERT INTO emp2 (empno, ename) VALUES (:empno, :ename)',
+      DBMS_SQL.NATIVE);
+
+   FOR emprow IN empnotab.FIRST .. empnotab.LAST
+   LOOP
+      DBMS_SQL.BIND_VARIABLE (cur, 'empno', empnotab(emprow));
+      DBMS_SQL.BIND_VARIABLE (cur, 'ename', enametab(emprow));
+      fdbk := DBMS_SQL.EXECUTE (cur);
+      totfdbk := totfdbk + fdbk;
+   END LOOP; 
+
+   DBMS_OUTPUT.PUT_LINE ('Rows inserted: ' || TO_CHAR (totfdbk));
+
+   DBMS_SQL.CLOSE_CURSOR (cur);
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>How would this implementation change with <A
+CLASS="indexterm"
+NAME="ch02-idx-23473-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-23473-1"
+></A
+>Oracle8? You no longer have to perform separate INSERTs for each of the rows in the index-by table. Instead, you can bind an index-by table directly into the SQL statement. The following version of the instab procedure relies on this new feature. Notice that the FOR LOOP is gone. Instead, I call BIND_ARRAY once for each column in the INSERT statement, passing in the appropriate index-by table. Notice that I must now use the DBMS_SQL table types, whereas in the previous example I created my own index-by table types and used those in the parameter list. </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-23478-0"
+></A
+>dynins.sp */*
+CREATE OR REPLACE PROCEDURE instab8 
+   (empnotab IN DBMS_SQL.NUMBER_TABLE, 
+    enametab IN DBMS_SQL.VARCHAR2_TABLE)
+IS   
+   cur PLS_INTEGER := DBMS_SQL.OPEN_CURSOR;
+   fdbk PLS_INTEGER;
+BEGIN 
+   DBMS_SQL.PARSE (cur,
+      'INSERT INTO emp2 (empno, ename) VALUES (:empno, :ename)',
+      DBMS_SQL.NATIVE);
+
+   DBMS_SQL.BIND_ARRAY (cur, 'empno', empnotab);
+   DBMS_SQL.BIND_ARRAY (cur, 'ename', enametab);
+
+   fdbk := DBMS_SQL.EXECUTE (cur);
+
+   DBMS_OUTPUT.PUT_LINE ('Rows inserted: ' || TO_CHAR (fdbk));
+
+   DBMS_SQL.CLOSE_CURSOR (cur);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>So in this case I end up with less code to write. In other situations, you may have to copy your data from your own index-by tables, perhaps a table or record that is not supported by DBMS_SQL, into the appropriate DBMS_SQL-declared index-by tables before you can call BIND_ARRAY. But putting aside code volume, what about the impact on performance? To compare these two approaches, I wrote the following SQL*Plus script:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20790-0"
+></A
+>dynins.tst */*
+DECLARE
+   timing PLS_INTEGER;
+
+   empnos7 mytables.number_table;
+   enames7 mytables.varchar2_table;
+
+   empnos8 DBMS_SQL.NUMBER_TABLE;
+   enames8 DBMS_SQL.VARCHAR2_TABLE;
+BEGIN
+   /* Load up the index-by tables. */
+   FOR i IN 1 .. &amp;1
+   LOOP
+      empnos&amp;2(i) := 10000 + i;
+      enames&amp;2(i) := 'Eli ' || TO_CHAR (i);
+   END LOOP;
+
+   timing := DBMS_UTILITY.GET_TIME;
+   instab&amp;2 (empnos&amp;2, enames&amp;2);
+   DBMS_OUTPUT.PUT_LINE 
+      ('V&amp;2 style = ' || TO_CHAR (DBMS_UTILITY.GET_TIME - timing));
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Though SQL*Plus is a fairly crude tool, those substitution parameters let you write some clever, concise utilities. In this case, I populate my index-by tables with &amp;1 number of rows&nbsp;-- but the index-by table I fill up depends on the &amp;2 or second argument: the Oracle7 or Oracle8 versions. Once the tables have their data, I pass them to the appropriate version of "instab," and, using DBMS_UTILITY.GET_TIME, display the number of hundredths of seconds that elapsed.</P
+><P
+CLASS="para"
+>I ran this script a number of times to even out the bumps of initial load and parse and so on. The following numbers are representative:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt;  @dynins.tst 1000 7
+Rows inserted: 1000
+V7 style = 90
+SQL&gt;  @dynins.tst 1000 8
+Rows inserted: 1000
+V8 style = 2</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>As you can see, dynamic SQL using arrays or index-by tables will perform significantly better than the single-row processing available in Oracle7. </P
+><P
+CLASS="para"
+>So that's how you do INSERTs: for each column for which you are inserting a value, you must bind in an array or index-by table. You can also mix together scalars and arrays. If, for example, I wanted to insert a set of new employees and make the hiredate the value returned by SYSDATE, the bind steps in my instab8 procedure would be modified as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DBMS_SQL.BIND_ARRAY (cur, 'empno', empnotab);
+DBMS_SQL.BIND_ARRAY (cur, 'ename', enametab);
+DBMS_SQL.BIND_VARIABLE (cur, 'hiredate', SYSDATE);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In other words: two array binds and one scalar bind. The same value returned by SYSDATE is then applied to <EM
+CLASS="emphasis"
+>all</EM
+> rows inserted.<A
+CLASS="indexterm"
+NAME="ch02-idx-20574-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20574-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20574-2"
+></A
+></P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.6.2"
+>2.5.6.2 Using array processing to delete</A
+></H4
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20598-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20598-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20598-2"
+></A
+>The process for deleting multiple rows with a single call to the EXECUTE function is similar to that for INSERTSs: one call to BIND_ARRAY for each placeholder in the SQL statement. With DELETEs, however, the placeholders are in the WHERE clause, and each row in the index-by table is used to identify one or more rows in the database table.</P
+><P
+CLASS="para"
+>The following procedure removes all rows as specified in the array of names. Notice the use of LIKE and UPPER operators to increase the flexibility of the table entries (if that is what you want!).</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20792-0"
+></A
+>dyndel.sp */*
+CREATE OR REPLACE PROCEDURE delemps 
+   (enametab IN DBMS_SQL.VARCHAR2_TABLE)
+IS   
+   cur PLS_INTEGER := DBMS_SQL.OPEN_CURSOR;
+   fdbk PLS_INTEGER;
+BEGIN 
+   DBMS_SQL.PARSE (cur,
+      'DELETE FROM emp WHERE ename LIKE UPPER (:ename)',
+      DBMS_SQL.NATIVE);
+
+   DBMS_SQL.BIND_ARRAY (cur, 'ename', enametab);
+
+   fdbk := DBMS_SQL.EXECUTE (cur);
+
+   DBMS_OUTPUT.PUT_LINE ('Rows deleted: ' || TO_CHAR (fdbk));
+
+   DBMS_SQL.CLOSE_CURSOR (cur);
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The standard emp table contains the following 14 names:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>ADAMS     JAMES     SCOTT
+ALLEN     JONES     SMITH
+BLAKE     KING      TURNER
+CLARK     MARTIN    WARD
+FORD      MILLER    </PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Now let's run the following script:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20794-0"
+></A
+>dyndel.tst */*
+DECLARE
+   empnos8 DBMS_SQL.NUMBER_TABLE;
+   enames8 DBMS_SQL.VARCHAR2_TABLE;
+BEGIN
+   /* Load up the index-by table. */
+   enames8(1) := '%S%';
+   enames8(2) := '%I%';
+
+   delemps (enames8);
+END;
+/
+
+SQL&gt; @dyndel.tst
+Rows deleted: 8</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>And we are then left with the following employees:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>ALLEN       FORD
+BLAKE       TURNER
+CLARK       WARD</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In many situations, you will have the primary key sitting in the row of the index-by table, and the array-based DELETE will simply delete one row of the database table for each row in the array. As you can see from the previous example, however, that is not the only way to use arrays to delete <A
+CLASS="indexterm"
+NAME="ch02-idx-20609-0"
+></A
+>multiple rows.<A
+CLASS="indexterm"
+NAME="ch02-idx-20607-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20607-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20607-2"
+></A
+></P
+><BLOCKQUOTE
+CLASS="note"
+><P
+CLASS="para"
+><STRONG
+>NOTE:</STRONG
+> As you try out these various examples, don't forget to perform ROLLBACKs to restore the data to the original state before continuing or exiting!</P
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.6.3"
+>2.5.6.3 Using array processing to update</A
+></H4
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20616-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20616-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20616-2"
+></A
+>Finally, we have UPDATE statements, where you can have placeholders both in the <A
+CLASS="indexterm"
+NAME="ch02-idx-20660-0"
+></A
+>SET clause and in the <A
+CLASS="indexterm"
+NAME="ch02-idx-20661-0"
+></A
+>WHERE clause. Be careful about how you utilize arrays in updates; the behavior will not always be as you might expect. Here are some different scenarios or combinations and the behaviors I have encountered:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+>Conditions:</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Array placeholder in SET, no placeholders in the WHERE clause.</P
+></DD
+><DT
+CLASS="term"
+>Behavior:</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The value in the <EM
+CLASS="emphasis"
+>last</EM
+> row of the array will be applied to all rows identified by the WHERE clause (or lack of one). All other rows in the array are ignored.</P
+><P
+CLASS="para"
+></P
+></DD
+><DT
+CLASS="term"
+>Conditions:</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Array placeholder in WHERE clause, no placeholders in SET.</P
+></DD
+><DT
+CLASS="term"
+>Behavior:</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>As expected, all rows identified in the WHERE clause have their column values set as determined in the SET statement (all scalar binds or no binds at all).</P
+><P
+CLASS="para"
+></P
+></DD
+><DT
+CLASS="term"
+>Conditions:</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>There are N rows in a SET clause array and M rows in a WHERE clause array, and N is different from M.</P
+></DD
+><DT
+CLASS="term"
+>Behavior:</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The rule of thumb is that smallest number of rows across all arrays are used. So if the SET array has ten rows and the WHERE array has six rows, then only the <EM
+CLASS="emphasis"
+>first</EM
+> six rows of the SET array are used (assuming that both arrays are filled sequentially from same row number).</P
+><P
+CLASS="para"
+></P
+></DD
+><DT
+CLASS="term"
+>Conditions:</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>You use an array in the SET clause. In addition, the WHERE clause uses one or more arrays and is also structured so that each row in the array could identify more than one row of data in the database table (as would be the case with use of a LIKE statement and wildcarded values).</P
+></DD
+><DT
+CLASS="term"
+>Behavior:</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>In this situation, for all database records identified by row N in the WHERE array, the values will be set from row N in the SET array.</P
+></DD
+></DL
+><P
+CLASS="para"
+>Generally, you should think of the arrays in the SET clause as being "correlated" to the arrays in the WHERE clause. This correlation is demonstrated in the following procedure. I use dynamic SQL to update the salaries of employees whose names match the strings provided in the enames table. </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20796-0"
+></A
+>dynupd.sp */*
+CREATE OR REPLACE PROCEDURE updemps 
+   (enametab IN DBMS_SQL.VARCHAR2_TABLE,
+    saltab IN DBMS_SQL.NUMBER_TABLE)
+IS   
+   cur PLS_INTEGER := DBMS_SQL.OPEN_CURSOR;
+   fdbk PLS_INTEGER;
+BEGIN 
+   DBMS_SQL.PARSE (cur,
+      'UPDATE emp SET sal = :sal WHERE ename LIKE UPPER (:ename)',
+      DBMS_SQL.NATIVE);
+
+   DBMS_SQL.BIND_ARRAY (cur, 'sal', saltab);
+   DBMS_SQL.BIND_ARRAY (cur, 'ename', enametab);
+
+   fdbk := DBMS_SQL.EXECUTE (cur);
+
+   DBMS_OUTPUT.PUT_LINE ('Rows updated: ' || TO_CHAR (fdbk));
+
+   DBMS_SQL.CLOSE_CURSOR (cur);
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I then use the following script to test the procedure. Notice that there are four salaries and only two employee names, each of which is actually a wildcarded pattern.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20860-0"
+></A
+>dynupd.tst */*
+DECLARE
+   timing PLS_INTEGER;
+   sals DBMS_SQL.NUMBER_TABLE;
+   enames DBMS_SQL.VARCHAR2_TABLE;
+BEGIN
+   /* Load up the index-by tables. */
+   sals(1) := 1111;
+   sals(2) := 2222;
+   sals(3) := 3333;
+   sals(4) := 4444;
+
+   enames(1) := '%I%'; /* any name containing an I */
+   enames(2) := '%S';  /* any name containing an S */
+
+   updemps (enames, sals);
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>When I run this script, I update nine rows as shown in the following output:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; @dynupd.tst
+Rows updated: 9
+
+ENAME SAL
+---------- ----------
+SMITH2222
+ALLEN1600
+WARD1250
+JONES2222
+MARTIN1111
+BLAKE2850
+CLARK2450
+SCOTT2222
+KING1111
+TURNER1500
+ADAMS2222
+JAMES2222
+FORD3000
+MILLER1111</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>What has happened here? All the employees with an I in their name have a salary of 1111, and all the employees with S in their name have a salary of 2222. If you have both an I and S, as with SMITH, notice that you get the S salary of 2222 and not the I salary of 1111. The salaries of 3333 and 4444 are completely ignored by the procedure, since there are only two rows in the enames table.</P
+><P
+CLASS="para"
+>For a final example of array processing for updates, the following program reads data from a file and performs a batch update of employee salaries, correlating the key value (first column in the file's line) with the new column value (second column in the file's line). </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20802-0"
+></A
+>fileupd.sp */*
+CREATE OR REPLACE PROCEDURE upd_from_file 
+   (loc IN VARCHAR2, file IN VARCHAR2)
+IS
+   /* DBMS_SQL related elements */
+   cur PLS_INTEGER := DBMS_SQL.OPEN_CURSOR;
+   fdbk PLS_INTEGER;
+   empnos DBMS_SQL.NUMBER_TABLE;
+   sals DBMS_SQL.NUMBER_TABLE;
+
+   /UTL_FILE related elements */
+   fid UTL_FILE.FILE_TYPE;
+   v_line VARCHAR2(2000);
+   v_space PLS_INTEGER;
+
+BEGIN
+   /* Load the index-by tables from the file. */
+
+   fid := UTL_FILE.FOPEN (loc, file, 'R');
+
+   BEGIN
+      LOOP
+         UTL_FILE.GET_LINE (fid, v_line);
+         v_space := INSTR (v_line, ' ', 1, 1);
+         empnos (NVL (empnos.LAST, 0) + 1) := 
+            TO_NUMBER (SUBSTR (v_line, 1, v_space-1));
+         sals (NVL (empnos.LAST, 0) + 1) :=
+            TO_NUMBER (SUBSTR (v_line, v_space+1));
+      END LOOP;
+   EXCEPTION
+      WHEN NO_DATA_FOUND
+      THEN
+         UTL_FILE.FCLOSE (fid);
+   END;
+
+   /* Perform the multiple row updates. */
+
+   DBMS_SQL.PARSE (cur, 
+      'UPDATE emp SET sal = :sal WHERE empno = :empno', 
+      DBMS_SQL.NATIVE);
+
+   DBMS_SQL.BIND_ARRAY (cur, 'empno', empnos);
+   DBMS_SQL.BIND_ARRAY (cur, 'sal', sals);
+
+   fdbk := DBMS_SQL.EXECUTE (cur);
+
+   DBMS_SQL.CLOSE_CURSOR (cur);
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>You can run this procedure against the fileupd.dat data file by executing the fileupd.tst script to confirm the results. In this case, each row in the empnos index-by table identifies a specific record in the database; the corresponding row in the sals index-by table is then used in the update of the sal column value. Notice that I need to put the loop that reads the file inside its own block, because the only way to know that I have read the whole file is to call UTL_FILE.GET_LINE until it raises a NO_DATA_FOUND exception (which means "EOF" or end of file).</P
+><P
+CLASS="para"
+>As a final treat, check out the package in the <I
+CLASS="filename"
+>arrayupd.spp</I
+><A
+CLASS="indexterm"
+NAME="ch02-idx-21231-0"
+></A
+> file (and the corresponding <I
+CLASS="filename"
+>arrayupd.tst</I
+><A
+CLASS="indexterm"
+NAME="ch02-idx-21232-0"
+></A
+> test script). It offers a completely dynamic interface allowing array-based updates of any number, date, or string column in any table based on a single integer primary key. For example, using the arrayupd.col procedure, all of the dynamic SQL code in the upd_from_file procedure could be replaced with the following:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>BEGIN
+   ... Load arrays from file as before ...
+
+   /* Then call arrayupd to perform the array-based update. */
+   arrayupd.cols ('emp', 'empno', 'sal', empnos, sals);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>And the really wonderful thing about this overloaded procedure is that while it certainly is not as fast as static UPDATE statements, it competes very nicely and is efficient enough for many applications.<A
+CLASS="indexterm"
+NAME="ch02-idx-20658-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20658-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20658-2"
+></A
+></P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.6.4"
+>2.5.6.4 Using array processing to fetch</A
+></H4
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20664-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20664-1"
+></A
+>For all the value of array processing to update a database table, you are most likely to use BIND_ARRAY and DEFINE_ARRAY to fetch rows from the database and then process them in a front-end application. If the claims of Oracle Corporation about improved <A
+CLASS="indexterm"
+NAME="ch02-idx-20669-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20669-1"
+></A
+>performance of dynamic SQL are true (see <CITE
+CLASS="citetitle"
+>Chapter 10</CITE
+> of <CITE
+CLASS="citetitle"
+>Oracle PL/SQL Programming</CITE
+>), then this array-processing feature of DBMS_SQL could offer a crucial solution to the problem of passing multiple rows of data between the server and the client application through a PL/SQL application.</P
+><P
+CLASS="para"
+>Let's examine how to perform fetches with arrays in DBMS_SQL&nbsp;-- and analyze the performance impact&nbsp;-- by building a package called <A
+CLASS="indexterm"
+NAME="ch02-idx-20696-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20696-1"
+></A
+>empfetch to retrieve employee numbers and names. In the process, I will construct a "wrapper" around this fantastic new technology so that it can be made available in client environments where index-by tables and other Oracle8 features are not available directly.</P
+><P
+CLASS="para"
+>First, the basics of querying into arrays: you must use the DEFINE_ARRAY procedure to define a specific column in the cursor as an array column. When you do this, you also specify the number of rows which are to be fetched in a single call to FETCH_ROWS (or EXECUTE_AND_FETCH). Here, for example, is the code required to set up a cursor to retrieve 100 rows from the orders table:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DECLARE
+   ordernos DBMS_SQL.NUMBER_TABLE;
+   orderdates DBMS_SQL.DATE_TABLE;
+    cur PLS_INTEGER := DBMS_SQL.OPEN_CURSOR
+BEGIN
+   DBMS_SQL.PARSE 
+      (cur, 'SELECT orderno, order_date FROM orders', DBMS_SQL.NATIVE);
+   
+   DBMS_SQL.DEFINE_ARRAY (cur, 1, ordernos, 100, 1);
+   DBMS_SQL.DEFINE_ARRAY (cur, 1, orderdates, 100, 1);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>You then use COLUMN_VALUE to retrieve column values, just as you would with scalar, non-array processing. You simply provide an array to accept the multiple values, and in they come.</P
+><P
+CLASS="para"
+>Moving on to our example, here is the specification for the package to query employee data using dynamic SQL and array processing:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20804-0"
+></A
+>empfetch.spp */*
+CREATE OR REPLACE PACKAGE empfetch
+IS
+   PROCEDURE rows (numrows_in IN INTEGER, 
+      where_clause_in IN VARCHAR2 := NULL,
+      append_rows_in IN BOOLEAN := FALSE);  
+
+   FUNCTION ename_val (row_in IN INTEGER) RETURN emp.ename%TYPE;
+
+   FUNCTION empno_val (row_in IN INTEGER) RETURN emp.empno%TYPE;
+
+   FUNCTION numfetched RETURN INTEGER;
+END empfetch;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The empfetch.<A
+CLASS="indexterm"
+NAME="ch02-idx-21250-0"
+></A
+>rows procedure fetches the specified maximum number of rows from the database, using an optional WHERE clause. You can also request "append rows," which means that the newly fetched rows are appended to employee numbers and names already in the index-by tables. The default behavior is to delete all existing rows in the arrays.</P
+><P
+CLASS="para"
+>Once the rows are loaded with a call to empfetch.rows, you can retrieve the Nth employee name and employee number, as well as find out how many rows were fetched. This is a nice enhancement over normal cursor-based processing: this way, I have random, bidirectional access to my data.</P
+><P
+CLASS="para"
+>Finally, notice that there is no indication in this package specification that I am using dynamic SQL or array processing or index-by tables. These programs are callable from any environment supporting the most basic versions of PL/SQL, from 1.1 in Oracle Developer/2000 Release 1 to any variant of PL/SQL Release 2.X. This is especially important for third-party tools like PowerBuilder, which do not always keep up with the latest enhancements of PL/SQL.<A
+CLASS="indexterm"
+NAME="ch02-idx-20570-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20570-1"
+></A
+></P
+><P
+CLASS="para"
+>Before exploring the implementation of the empfetch package, let's see an example of its use, combined with an analysis of its performance. Once the package compiled, I built a script to compare using static and dynamic SQL to fetch rows from the database table. The <I
+CLASS="filename"
+>empfetch.tst</I
+> script first uses an explicit cursor to fetch all the rows from the emp table and copy the ename and empno column values to local variables. Can't get much leaner than that. I then use the empfetch package to perform the same steps.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/*  Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20864-0"
+></A
+>empfetch.tst */
+DECLARE
+   timing PLS_INTEGER;
+   v_ename emp.ename%TYPE;
+   v_empno emp.empno%TYPE;
+BEGIN
+   /* The static approach */
+   timing := DBMS_UTILITY.GET_TIME;
+   FOR i IN 1 .. &amp;1
+   LOOP
+      DECLARE 
+         CURSOR cur IS SELECT empno, ename FROM emp;
+      BEGIN
+         FOR rec IN cur
+         LOOP
+            v_ename := rec.ename;
+            v_empno := rec.empno;
+         END LOOP;
+      END;
+   END LOOP;
+   DBMS_OUTPUT.PUT_LINE 
+      ('static = ' || TO_CHAR (DBMS_UTILITY.GET_TIME - timing));
+
+   timing := DBMS_UTILITY.GET_TIME;
+   FOR i IN 1 .. &amp;1
+   LOOP
+      /* Fetch all the rows from the table, putting them in arrays
+         maintained inside the package body. */
+      empfetch.rows (20);
+
+      /* For each row fetched, copy the values from the arrays to the
+         local variables by calling the appropriate functions. 
+         Notice that there is no exposure here of the fact that
+         arrays are being used. */
+      FOR i IN 1 .. empfetch.numfetched
+      LOOP
+         v_ename := empfetch.ename_val (i);
+         v_empno := empfetch.empno_val (i);
+      END LOOP;
+   END LOOP;
+   DBMS_OUTPUT.PUT_LINE 
+      ('dynamic = ' || TO_CHAR (DBMS_UTILITY.GET_TIME - timing));
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20687-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20687-1"
+></A
+>And here are the astounding results from execution of this test script:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt;  @empfetch.tst 10
+static = 114
+dynamic = 119
+SQL&gt;  @empfetch.tst 100
+static = 1141
+dynamic = 1167</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In other words, there was virtually no difference in performance between these two approaches. This closeness exceeded my expectations, and is more than one might expect simply from the array processing. My hat is off to the PL/SQL development team! They really <EM
+CLASS="emphasis"
+>have</EM
+> reduced the overhead of executing dynamic SQL and anonymous blocks. </P
+><P
+CLASS="para"
+>You will find the full implementation of the empfetch body in the <I
+CLASS="filename"
+>empfetch.spp</I
+><A
+CLASS="indexterm"
+NAME="ch02-idx-21220-0"
+></A
+> file; later I will show the different elements of the package and offer some observations. First, the following data structures are declared at the package level:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>A cursor for the dynamic SQL. I open the cursor when the package is initialized and keep that cursor allocated for the duration of the session, minimizing memory requirements and maximizing performance.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>     c PLS_INTEGER := DBMS_SQL.OPEN_CURSOR;</PRE
+></BLOCKQUOTE
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Two arrays to hold the employee IDs and the names. Notice that I must use the special table types provided by DBMS_SQL.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>     empno_array DBMS_SQL.NUMBER_TABLE;
+     ename_array DBMS_SQL.VARCHAR2_TABLE;</PRE
+></BLOCKQUOTE
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>A global variable keeping track of the number of rows fetched. I could retrieve this value with the empno.COUNT operator, but this would be misleading if you were appending rows, and it would also entail more overhead than simply storing the value in this variable.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>     g_num_fetched PLS_INTEGER := 0;</PRE
+></BLOCKQUOTE
+></LI
+></OL
+><P
+CLASS="para"
+>Now we will look at the programs that make use of these data structures. First, the rows procedure, which populates the arrays:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE rows (numrows_in IN INTEGER,
+   where_clause_in IN VARCHAR2 := NULL,
+   append_rows_in IN BOOLEAN := FALSE)  
+IS
+   v_start PLS_INTEGER := 1;
+BEGIN
+   IF append_rows_in
+   THEN
+      v_start := 
+         NVL (GREATEST (empno_array.LAST, ename_array.LAST), 0) + 1;
+   ELSE
+      /* Clean out the tables from the last usage. */
+      empno_array.DELETE;
+      ename_array.DELETE;
+   END IF;
+
+   /* Parse the query  with a dynamic WHERE clause */
+   DBMS_SQL.PARSE (c, 
+      'SELECT empno, ename FROM emp WHERE ' || NVL (where_clause_in, '1=1'),
+      DBMS_SQL.NATIVE);
+
+   /* Define the columns in the cursor for this query */
+   DBMS_SQL.DEFINE_ARRAY (c, 1, empno_array, numrows_in, v_start);
+   DBMS_SQL.DEFINE_ARRAY (c, 2, ename_array, numrows_in, v_start);
+
+   /* Execute the query and fetch the rows. */
+   g_num_fetched:= DBMS_SQL.EXECUTE_AND_FETCH (c);
+
+   /* Move the column values into the arrays */
+   DBMS_SQL.COLUMN_VALUE (c, 1, empno_array);
+   DBMS_SQL.COLUMN_VALUE (c, 2, ename_array);
+END;  </PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Areas of interest in this program include:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>I set the starting row for the call to DEFINE_ARRAY according to the append_rows argument. If not appending, I clean out the arrays and start at row 1. If appending, I determine the highest-defined row in both of the arrays and start from the next row.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>If the user does not provide a WHERE clause, I append a trivial "1=1" condition after the WHERE keyword. This is admittedly kludgy and little more than a reflection of this programmer's laziness. The alternative is to do more complex string analysis and concatenation. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Both calls to DBMS_SQL.DEFINE_ARRAY use the same number of rows and the starting row, ensuring that their contents are correlated properly.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+><B
+CLASS="emphasis.bold"
+>I</B
+> execute and fetch with a single line of code. When performing array processing, there is no reason to separate these two steps, unless you will be fetching N number of rows more than once to make sure you have gotten them all.</P
+></LI
+></UL
+><P
+CLASS="para"
+>That takes care of most of the work and complexity of the empfetch package. Let's finish up by looking at the functions that retrieve individual values from the arrays. These are very simple pieces of code; I will show ename_val, but empno_val is almost exactly the same:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION <A
+CLASS="indexterm"
+NAME="ch02-idx-21222-0"
+></A
+>ename_val (row_in IN INTEGER) RETURN emp.ename%TYPE
+IS
+BEGIN
+   IF ename_array.EXISTS (row_in)
+   THEN
+      RETURN ename_array (row_in);
+   ELSE
+      RETURN NULL;
+   END IF;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice that I avoid raising the NO_DATA_FOUND exception by checking whether the row exists before I try to return it.</P
+><P
+CLASS="para"
+>As you can see from empfetch, it doesn't necessarily take lots of code to build a solid encapsulation around internal data structures. From the performance of this package, you can also see that array processing with dynamic SQL offers some new opportunities for building an efficient programmatic interface to your <A
+CLASS="indexterm"
+NAME="ch02-idx-20721-0"
+></A
+>data.<A
+CLASS="indexterm"
+NAME="ch02-idx-20667-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20667-1"
+></A
+> </P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.6.5"
+>2.5.6.5 Using array processing in dynamic PL/SQL </A
+></H4
+><P
+CLASS="para"
+>The first release of Oracle8 (8.0.3) contained a number of bugs relating to the use of array processing in dynamic PL/SQL. The 8.0.4 and 8.0.5 releases, however, fix many (if not all) of these problems. <A
+CLASS="indexterm"
+NAME="ch02-idx-20725-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20725-1"
+></A
+>I offer in this section one example to demonstrate the techniques involved in order to copy the contents of one index table to another index table. You can find another example of array processing with index tables in the next section.</P
+><P
+CLASS="para"
+>The following testarray procedure moves the rows of one index table to another.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+> on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20807-0"
+></A
+>plsqlarray.sp */*
+CREATE OR REPLACE PROCEDURE testarray
+IS
+   cur INTEGER := DBMS_SQL.OPEN_CURSOR;
+   fdbk INTEGER;
+   mytab1 DBMS_SQL.NUMBER_TABLE;
+   mytab2 DBMS_SQL.NUMBER_TABLE;
+BEGIN
+   mytab1 (25) := 100;
+   mytab1 (100) := 1000;
+   mytab2 (25) := -100;
+   mytab2 (100) := -1000;
+   DBMS_SQL.PARSE (cur, 'BEGIN :newtab := :oldtab; END;', DBMS_SQL.NATIVE);
+
+   DBMS_SQL.BIND_ARRAY (cur, 'newtab', mytab2, 25, 100);
+   DBMS_SQL.BIND_ARRAY (cur, 'oldtab', mytab1, 25, 100);
+
+   fdbk := DBMS_SQL.EXECUTE (cur);
+   DBMS_SQL.VARIABLE_VALUE (cur, 'newtab', mytab2);
+
+   DBMS_OUTPUT.PUT_LINE('mytab2(1) := ' || mytab2(1));
+   DBMS_OUTPUT.PUT_LINE('mytab2(2) := ' || mytab2(2));
+   DBMS_OUTPUT.PUT_LINE('mytab2(25) := ' || mytab2(25));
+   DBMS_OUTPUT.PUT_LINE('mytab2(100) := ' || mytab2(100));
+
+   DBMS_SQL.CLOSE_CURSOR (cur);
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice that I must call DBMS_SQL.BIND_VARIABLE twice, once for the "IN" index table (the "old table," mytab1) and once for the "OUT" index table (the "new table," mytab2). Finally, I call DBMS_SQL.VARIABLE_VALUE to transfer the result of the assignment into my local index table.</P
+><P
+CLASS="para"
+>Here are the results from execution of this procedure:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec testarray
+mytab2(1) := -1000
+mytab2(2) := 100
+mytab2(25) := -100
+mytab2(100) := -1000</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Ah! Not quite what we might have expected. This procedure <EM
+CLASS="emphasis"
+>did</EM
+> transfer the contents of mytab1 to mytab2, but it filled rows sequentially in mytab2 starting from row 1&nbsp;-- definitely something to keep in mind when you take advantage of this technology. You might want to DELETE from the index table before the <A
+CLASS="indexterm"
+NAME="ch02-idx-23745-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-23745-1"
+></A
+>copy.<A
+CLASS="indexterm"
+NAME="ch02-idx-20501-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20501-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20501-2"
+></A
+></P
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.7"
+>2.5.7 Using the RETURNING Clause in Dynamic SQL</A
+></H3
+><P
+CLASS="para"
+>One of the many enhancements in Oracle8 is the addition of the <A
+CLASS="indexterm"
+NAME="ch02-idx-20726-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20726-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20726-2"
+></A
+>RETURNING clause to INSERTs, UPDATEs, and DELETEs. You can use the RETURNING clause to retrieve data (or expressions derived from the data) from the rows affected by the DML statement. </P
+><P
+CLASS="para"
+>Here is an example of an INSERT statement that returns the just-generated primary key:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DECLARE
+    mykey emp.empno%TYPE;
+    total_comp NUMBER;
+BEGIN
+   INSERT INTO emp (empno, ename, deptno)
+      VALUES (emp_seq.NEXTVAL, 'Feuerstein', 10)
+      RETURNING empno, sal + NVL (comm, 0) INTO mykey, total_comp;
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>You return data into scalar values when the DML has modified only one row. If the DML modifies more than one row, you can return data into index tables using DBMS_SQL. If you modify more than one row and try to return values into a scalar variable, then you will raise an exception, as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; DECLARE
+        mykey emp.empno%TYPE;
+     BEGIN
+        /* Updating all rows in the table... */
+        UPDATE emp SET sal = 1000 RETURNING empno INTO mykey;
+     END;
+     /
+
+ERROR at line 1:
+ORA-01422: exact fetch returns more than requested number of rows</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>If you are changing more than one row of data and employing the RETURNING clause, you <EM
+CLASS="emphasis"
+>must</EM
+> use DBMS_SQL to pass back those values into an index table. You cannot simply specify an index table in the RETURNING clause with static SQL. If you try this, you will receive the following error:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PLS-00385: type mismatch found at '&lt;index table&gt;' in SELECT...INTO statement</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The rest of this section demonstrates the use of the RETURNING clause for both single- and multiple-row operations from within DBMS_SQL.</P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.7.1"
+>2.5.7.1 RETURNING from a single-row insert</A
+></H4
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20730-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20730-1"
+></A
+>Suppose that you want to insert a row into a table with the primary key generated from a sequence, and then return that sequence value to the calling program. In this example, I will create a table to hold notes (along with a sequence and an index, the latter to show the behavior when an INSERT fails):</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/*Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20809-0"
+></A
+>insret.sp */*
+CREATE TABLE note (note_id NUMBER, text VARCHAR2(500));
+CREATE UNIQUE INDEX note_text_ind ON note (text);
+CREATE SEQUENCE note_seq;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I then build a procedure around the INSERT statement for this table:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20868-0"
+></A
+>insret.sp */*
+CREATE OR REPLACE PROCEDURE ins_note
+   (text_in IN note.text%TYPE, note_id_out OUT note.note_id%TYPE)
+IS
+   cur INTEGER := DBMS_SQL.OPEN_CURSOR;
+   fdbk INTEGER;
+   v_note_id note.note_id%TYPE;
+BEGIN
+   DBMS_SQL.PARSE (cur,
+      'INSERT INTO note (note_id, text) ' ||
+      '  VALUES (note_seq.NEXTVAL, :newtext) ' ||
+      '  RETURNING note_id INTO :newid',
+      DBMS_SQL.NATIVE);
+
+   DBMS_SQL.BIND_VARIABLE (cur, 'newtext', text_in);
+   DBMS_SQL.BIND_VARIABLE (cur, 'newid', v_note_id);
+
+   fdbk := DBMS_SQL.EXECUTE (cur);
+   DBMS_SQL.VARIABLE_VALUE (cur, 'newid', v_note_id);
+   note_id_out := v_note_id;
+
+   DBMS_SQL.CLOSE_CURSOR (cur);
+EXCEPTION
+   WHEN OTHERS
+   THEN
+      DBMS_OUTPUT.PUT_LINE ('Note insert failure:');
+      DBMS_OUTPUT.PUT_LINE (SQLERRM);
+END;                           
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>These operations should be familiar to you by this time. Here are the steps to perform:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Open a cursor and then parse the INSERT statement. Notice that I reference the next value of the sequence right in the VALUES list. The RETURNING clause passes the primary key, note_id, into a placeholder.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Bind both the incoming text value and the outgoing primary key. (I am not really binding a value in the second call to DBMS_SQL.BIND_VARIABLE, but I have to perform the bind step anyway.)</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Execute the cursor and retrieve the primary key from the bind variable in the RETURNING clause. Notice that I pass back the value into a local variable, which is then copied to the OUT argument. Otherwise, I would need to define the note_id_out parameter as an IN OUT parameter. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>I include an exception section to display any errors that might arise.</P
+></LI
+></OL
+><P
+CLASS="para"
+>The following anonymous block tests this procedure by inserting a row and then trying to insert it again:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20870-0"
+></A
+>insret.sp */*
+DECLARE
+   myid note.note_id%TYPE;
+BEGIN
+   ins_note ('Note1', myid);
+   DBMS_OUTPUT.PUT_LINE ('New primary key = ' || myid);
+   myid := NULL;
+   ins_note ('Note1', myid);
+EXCEPTION
+   WHEN OTHERS
+   THEN
+      NULL;
+END;
+/
+</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Here is the result:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; @insret.sp
+New primary key = 41
+
+Note insert failure:
+ORA-00001: unique constraint (SCOTT.NOTE_TEXT_IND) violated</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The same technique and steps can be used for using the RETURNING clause in UPDATEs and DELETEs when affecting single rows. Let's now take a look at the slightly more complex scenario: changing multiple rows of data and returning values from those rows.<A
+CLASS="indexterm"
+NAME="ch02-idx-20732-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20732-1"
+></A
+></P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch02-SECT-5.7.2"
+>2.5.7.2 RETURNING from a multiple-row delete</A
+></H4
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch02-idx-23580-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-23580-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-23580-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-23580-3"
+></A
+>I want to use dynamic SQL to provide a generic delete mechanism for tables with single integer primary keys. You provide the name of the table, the name of the primary key, and the WHERE clause. I do the delete. But such a general utility will never be used unless it can be trusted, unless its actions can be confirmed. That is where the RETURNING clause comes into play.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-23582-0"
+></A
+>delret.sp */*
+CREATE OR REPLACE PROCEDURE delret 
+   (tab_in IN VARCHAR2,
+    pkey_in IN VARCHAR2, 
+    where_in IN VARCHAR2,
+    pkeys_out OUT DBMS_SQL.NUMBER_TABLE)
+IS
+   cur INTEGER := DBMS_SQL.OPEN_CURSOR;
+   delstr VARCHAR2(2000) := 
+      'DELETE FROM ' || tab_in || ' WHERE ' || where_in ||
+      ' RETURNING ' || pkey_in || ' INTO :idarray';
+   fdbk INTEGER;
+   v_pkeys DBMS_SQL.NUMBER_TABLE;
+BEGIN
+   DBMS_OUTPUT.PUT_LINE ('Dynamic Delete Processing: ');
+   DBMS_OUTPUT.PUT_LINE (delstr);
+
+   DBMS_SQL.PARSE (cur, delstr, DBMS_SQL.NATIVE);
+   DBMS_SQL.BIND_ARRAY (cur, 'idarray', v_pkeys);
+
+   fdbk := DBMS_SQL.EXECUTE (cur);
+   DBMS_SQL.VARIABLE_VALUE (cur, 'idarray', v_pkeys);
+   pkeys_out := v_pkeys;
+
+   DBMS_SQL.CLOSE_CURSOR (cur);
+EXCEPTION
+   WHEN OTHERS
+   THEN
+      DBMS_OUTPUT.PUT_LINE ('Dynamic Delete Failure:');
+      DBMS_OUTPUT.PUT_LINE (SQLERRM);
+END;                           
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In this program, I construct the DELETE statement and save it to a local variable. I do this so that I can display the string for confirmation purposes and then parse it without duplicating the code. I will go to great lengths (and do so on a regular basis) to avoid even the slightest repetition of code.</P
+><P
+CLASS="para"
+>When I bind, I call DBMS_SQL.BIND_ARRAY instead of DBMS_SQL.BIND_VARIABLE so that I can retrieve an entire list of values. My call to DBMS_SQL.VARIABLE_VARIABLE performs the retrieval, and I close the cursor. The following anonymous block exercises my generic "delete and return" procedure. Notice that since I am returning an index table, I must always declare such a table to hold the values.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch02-idx-20873-0"
+></A
+>delret.sp */*
+DECLARE
+   v_pkeys DBMS_SQL.NUMBER_TABLE;
+BEGIN
+   delret ('emp', 'empno', 'deptno = 10', v_pkeys);
+   IF v_pkeys.COUNT &gt; 0
+   THEN
+      FOR ind IN v_pkeys.FIRST .. v_pkeys.LAST
+      LOOP
+         DBMS_OUTPUT.PUT_LINE ('Deleted ' || v_pkeys(ind));
+      END LOOP;
+   END IF;
+   ROLLBACK;
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Here are the results from execution of the <A
+CLASS="indexterm"
+NAME="ch02-idx-20738-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20738-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20738-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20738-3"
+></A
+>previous <A
+CLASS="indexterm"
+NAME="ch02-idx-20728-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20728-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch02-idx-20728-2"
+></A
+>script:<A
+CLASS="indexterm"
+NAME="ch02-idx-20420-0"
+></A
+></P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>Dynamic Delete Processing:
+DELETE FROM emp WHERE deptno = 10 RETURNING empno INTO :idarray
+Deleted 7782
+Deleted 7839
+Deleted 7934 <A
+CLASS="indexterm"
+NAME="ch02-idx-19565-0"
+></A
+></PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch02_04.htm"
+TITLE="2.4 Tips on Using Dynamic SQL"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 2.4 Tips on Using Dynamic SQL"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle Built-in Packages"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle Built-in Packages"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch03_01.htm"
+TITLE="3. Intersession Communication"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 3. Intersession Communication"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>2.4 Tips on Using Dynamic SQL</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>3. Intersession Communication</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

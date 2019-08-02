@@ -1,0 +1,173 @@
+<html><head>
+<title>Recipe 17.1. Writing a TCP Client</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:21Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch17_01.htm" title="17. Sockets"><link rel="prev" href="ch17_01.htm" title="17.0. Introduction"><link rel="next" href="ch17_03.htm" title="17.2. Writing a TCP Server"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_01.htm" title="17.0. Introduction"><img src="../gifs/txtpreva.gif" alt="Previous: 17.0. Introduction" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch17_01.htm" title="17. Sockets">Chapter 17<br>Sockets</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_03.htm" title="17.2. Writing a TCP Server"><img src="../gifs/txtnexta.gif" alt="Next: 17.2. Writing a TCP Server" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch17-42449">17.1. Writing a TCP Client</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-110">Problem<a class="indexterm" name="ch17-idx-1000004679-0"></A
+><a class="indexterm" name="ch17-idx-1000004679-1"></A
+><a class="indexterm" name="ch17-idx-1000004679-2"></A
+></A
+></H3
+><p class="para">You want to connect to a socket on a remote machine.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-116">Solution</A
+></H3
+><p class="para">This solution assumes you're using the Internet to communicate. For TCP-like communication within a single machine, see <a class="xref" href="ch17_07.htm" title="Using UNIX Domain Sockets">Recipe 17.6</A
+>.</P
+><p class="para">Either use the standard (as of 5.004) <a class="indexterm" name="ch17-idx-1000004680-0"></A
+>IO::Socket::INET class:</P
+><pre class="programlisting">use IO::Socket;
+
+$socket = IO::Socket::INET-&gt;new(PeerAddr =&gt; $remote_host,
+                                PeerPort =&gt; $remote_port,
+                                Proto    =&gt; &quot;tcp&quot;,
+                                Type     =&gt; SOCK_STREAM)
+    or die &quot;Couldn't connect to $remote_host:$remote_port : $@\n&quot;;
+
+# ... do something with the socket
+print $socket &quot;Why don't you call me anymore?\n&quot;;
+
+$answer = &lt;$socket&gt;;
+
+# and terminate the connection when we're done
+close($socket);</PRE
+><p class="para">or create a socket by hand for better control:</P
+><pre class="programlisting">use Socket;
+
+# create a socket
+socket(TO_SERVER, PF_INET, SOCK_STREAM, getprotobyname('tcp'));
+
+# build the address of the remote machine
+$internet_addr = inet_aton($remote_host)
+    or die &quot;Couldn't convert $remote_host into an Internet address: $!\n&quot;;
+$paddr = sockaddr_in($remote_port, $internet_addr);
+
+# connect
+connect(TO_SERVER, $paddr)
+    or die &quot;Couldn't connect to $remote_host:$remote_port : $!\n&quot;;
+
+# ... do something with the socket
+print TO_SERVER &quot;Why don't you call me anymore?\n&quot;;
+
+# and terminate the connection when we're done
+close(TO_SERVER);</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-194">Discussion</A
+></H3
+><p class="para">While coding this by hand requires a lot of steps, the IO::Socket::INET class wraps them all in a convenient constructor. The important things to know are where you're going (the PeerAddr and PeerPort parameters) and how you're getting there (the Type parameter). IO::Socket::INET tries to determine these things from what you've given it. It deduces Proto from the Type and Port if possible, and assumes <code class="literal">tcp</CODE
+> otherwise.</P
+><p class="para">PeerAddr is a string containing either a hostname (<code class="literal">&quot;www.oreilly.com&quot;</CODE
+>) or an IP address (<code class="literal">&quot;204.148.40.9&quot;</CODE
+>). PeerPort is an integer, the port number to connect to. You can embed the port number in the address by giving an address like <code class="literal">&quot;www.oreilly.com:80&quot;</CODE
+>. Type is the kind of socket to create: SOCK_DGRAM for datagrams, or SOCK_STREAM for streams.</P
+><p class="para">If you want a SOCK_STREAM connection to a port on a particular machine with no other options, pass a single string to <code class="literal">IO::Socket::INET-&gt;new</CODE
+> consisting of the hostname and port separated by a colon:</P
+><pre class="programlisting">$client = IO::Socket::INET-&gt;new(&quot;www.yahoo.com:80&quot;)
+    or die $@;</PRE
+><p class="para">If an error occurs, IO::Socket::INET will return <code class="literal">undef</CODE
+> and <code class="literal">$@</CODE
+> (<em class="emphasis">not</EM
+> <code class="literal">$!</CODE
+>) will be set to the error message.</P
+><pre class="programlisting">$s = IO::Socket::INET-&gt;new(PeerAddr =&gt; &quot;Does not Exist&quot;,
+                           Peerport =&gt; 80,
+                           Type     =&gt; SOCK_STREAM )
+    or die $@;</PRE
+><p class="para">If your packets are disappearing into a network void, it can take a while for your inability to connect to a port to be recognized. You can decrease this time by specifying a <code class="literal">Timeout</CODE
+> parameter to <code class="literal">IO::Socket::INET-&gt;new()</CODE
+>:</P
+><pre class="programlisting">$s = IO::Socket::INET-&gt;new(PeerAddr =&gt; &quot;bad.host.com&quot;,
+                           PeerPort =&gt; 80,
+                           Type     =&gt; SOCK_STREAM,
+                           Timeout  =&gt; 5 )
+    or die $@;</PRE
+><p class="para">If you do this, though, there's no way to tell from <code class="literal">$!</CODE
+> or <code class="literal">$@</CODE
+> whether you couldn't connect or whether you timed out. Sometimes it's better to set it up by hand instead of using a module.</P
+><p class="para"><a class="indexterm" name="ch17-idx-1000004916-0"></A
+>INADDR_ANY is a special address, meaning "listen on any interface." If you want to restrict it to a particular IP address, add a <code class="literal">LocalAddr</CODE
+> parameter to your call to <code class="literal">IO::Socket::INET-&gt;new.</CODE
+> If coding by hand code, do this:</P
+><pre class="programlisting">$inet_addr = inet_aton(&quot;208.146.240.1&quot;);
+$paddr     = sockaddr_in($port, $inet_addr);
+bind(SOCKET, $paddr)         or die &quot;bind: $!&quot;;</PRE
+><p class="para">If you know only the name, do this:</P
+><pre class="programlisting">$inet_addr = gethostbyname(&quot;www.yahoo.com&quot;)
+                            or die &quot;Can't resolve www.yahoo.com: $!&quot;;
+$paddr     = sockaddr_in($port, $inet_addr);
+bind(SOCKET, $paddr)        or die &quot;bind: $!&quot;;<a class="indexterm" name="ch17-idx-1000004682-0"></A
+><a class="indexterm" name="ch17-idx-1000004682-1"></A
+><a class="indexterm" name="ch17-idx-1000004682-2"></A
+></PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-250">See Also</A
+></H3
+><p class="para">The 
+<a class="olink" href="../prog/ch03_151.htm">&#13;<code class="literal">socket</CODE
+></A
+>, 
+<a class="olink" href="../prog/ch03_007.htm">&#13;<code class="literal">bind</CODE
+></A
+>, 
+<a class="olink" href="../prog/ch03_020.htm">&#13;<code class="literal">connect</CODE
+></A
+>, and 
+<a class="olink" href="../prog/ch03_048.htm">&#13;<code class="literal">gethostbyname</CODE
+></A
+> functions in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlfunc </I
+>(1); the documentation for the standard Socket, IO::Socket, and Net::hostent modules; the section on 
+<a class="olink" href="../prog/ch06_02.htm#PERL2-CH-6-SECT-2.4.1">&#13;"Internet TCP Clients and Servers"
+</A
+> in <a class="olink" href="../prog/ch06_01.htm">Chapter 6</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlipc </I
+>(1); <cite class="citetitle">Unix Network Programming</CITE
+>, by W. Richard Stevens, published by Prentice Hall (1992); <a class="xref" href="ch17_03.htm" title="Writing a TCP Server">Recipe 17.2</A
+>; <a class="xref" href="ch17_04.htm" title="Communicating over TCP">Recipe 17.3</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_01.htm" title="17.0. Introduction"><img src="../gifs/txtpreva.gif" alt="Previous: 17.0. Introduction" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_03.htm" title="17.2. Writing a TCP Server"><img src="../gifs/txtnexta.gif" alt="Next: 17.2. Writing a TCP Server" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">17.0. Introduction</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">17.2. Writing a TCP Server</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

@@ -1,0 +1,704 @@
+<!doctype html public "-//ORA//DTD CD HTML 3.2//EN">
+<html>
+<head>
+<title>[Chapter 5] 5.5 Some Hints About Object Design</TITLE>
+<meta name="author" content="Larry Wall, Tom Christiansen, and Randal Schwartz">
+<meta name="date" content="Mon Mar 17 13:10:35 1997">
+<meta name="form" content="html">
+<meta name="metadata" content="dublincore.0.1">
+<meta name="objecttype" content="book part">
+<meta name="otheragent" content="gmat dbtohtml">
+<meta name="publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="source" content="SGML">
+<meta name="subject" content="Perl">
+<meta name="title" content="Programming Perl, Second Edition">
+<!-- JavaScript: pathcont.js -->
+
+</HEAD>
+<body bgcolor="#FFFFFF">
+
+<div class=htmlnav>
+<h1><img src="gifs/smbanner.gif" alt="Programming Perl, Second Edition"></H1>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch05_04.htm"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><b>Chapter 5</b></td>
+<td width=172 align=right valign=top><a href="ch06_01.htm"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+</table>
+<!-- JavaScript: prev.js -->
+&nbsp;
+<!-- JavaScript: next.js -->
+<hr align=left width=515>
+</DIV>
+<div class=sect1>
+<h2 class=sect1><a class="TITLE" name="PERL2-CH-5-SECT-5">5.5 Some Hints About Object Design</A></h2>
+
+<p class=para>
+In this section we present a collection of tricks, hints, and code
+examples derived from various sources.  We hope to whet your curiosity
+about such things as the use of instance variables and the mechanics of
+object and class relationships.  You can ignore these things when you're
+merely using a class, but when you're implementing a class, you have to
+pay more attention to what you're doing, and why.
+
+<p class=para>
+You needn't feel bound by the particular styles and idioms you see here,
+but you should be thinking about the underlying principles.
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-5.1">Object-Oriented Scaling Tips</A></h3>
+
+<p class=para>
+The following guidelines will help you design a class that can be
+transparently used as a base class by another class.
+
+<p>
+<ol class=orderedlist>
+<li class=listitem>Do not attempt to verify that the type of <tt class=literal>$self</tt> is the class
+you're in.  That'll break if the class is inherited, when the type of
+<tt class=literal>$self</tt> is valid but its package isn't what you expect.  See rule 5.
+
+<div class=programlisting>
+<p>
+<pre>
+package Some_Class;
+sub some_method {
+    my $self = shift;
+    unless (ref($self) eq "Some_Class") {          # WRONG
+        croak "I'm not a Some_Class anymore!";
+    }
+    unless (ref $self) {                           # better
+        croak "bad method call";
+    }
+}
+</PRE>
+</DIV>
+
+<p class=para>
+<p>
+<li class=listitem>If an object-oriented (<tt class=literal>-&gt;</tt>) or indirect-object syntax was used, then the
+object is probably the correct type and there's no need to become paranoid
+about it.  Perl isn't a paranoid language anyway.  If people subvert the
+object-oriented or indirect-object syntax by calling a method directly as
+an ordinary function, or vice versa, then they probably know what
+they're doing and you should let them do it.
+
+<p>
+<li class=listitem>Use the two-argument form of <a href="ch03_02.htm#PERL2-CMD-BLESS">bless</A>.  Let a derived class (subclass)
+use your constructor.  See the section on "Inheriting a Constructor".
+
+<p>
+<li class=listitem>The derived class is allowed to know things about its immediate base
+class (superclass); the base class is allowed to know nothing about a
+derived class.
+
+<p>
+<li class=listitem>Don't be trigger-happy with inheritance, which should generally be used
+to represent only the "is-a" relationship.  One of the "has-a"
+relationships (implying some sort of aggregation) is often more
+appropriate.  See the later sections on "Containment", "Implementation", and
+"Delegation".
+
+<p>
+<li class=listitem>The object is the namespace.  Make package globals accessible via the
+object.  That means you should include a reference to any package data
+inside the object somewhere, instead of having the method
+guess where to look for it.
+See the section on "Class Context and the Object".
+
+<p>
+<li class=listitem>Indirect-object syntax is certainly less noisy, but it is also prone to
+ambiguities which can cause difficult-to-find bugs.  Allow people to use
+the sure-thing object-oriented syntax, even if you don't like it.  On the
+other hand, allow people to use the indirect-object syntax when it
+increases clarity.  Don't impose artificial house rules in either direction.
+
+<p>
+<li class=listitem>Do not use the ordinary subroutine call syntax on a method.  You're
+going to be bitten someday.  Someone might move that method into a base
+class and your code will be broken.  On top of that, you're feeding the
+paranoia mentioned in rule 2.
+
+<p>
+<li class=listitem>Don't assume you know the home package of a method.  You're making it
+difficult for someone to override that method.  See the later section "Thinking
+of Code Reuse".
+
+<p>
+</OL>
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-5.2">Instance Variables</A></h3>
+
+<p class=para>
+<a name="CH05.INST"></A>An anonymous array or anonymous hash can be used to hold instance
+variables.  (The hashes fare better in the face of inheritance.)
+We'll also show you some nice interactions with named parameters.
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+package HashInstance;
+sub new {
+    my $type   = shift;
+    my %params = @_;
+    my $self   = {};
+    $self-&gt;{High} = $params{High};
+    $self-&gt;{Low}  = $params{Low};
+    return bless $self, $type;
+}
+package ArrayInstance;
+sub new {
+    my $type   = shift;
+    my %params = @_;
+    my $self   = [];
+    $self-&gt;[0] = $params{Left};
+    $self-&gt;[1] = $params{Right};
+    return bless $self, $type;
+}
+package main;
+$a = HashInstance-&gt;new( High =&gt; 42, Low =&gt; 11 );
+print "High=$a-&gt;{High}\n";
+print "Low=$a-&gt;{Low}\n";
+$b = ArrayInstance-&gt;new( Left =&gt; 78, Right =&gt; 40 );
+print "Left=$b-&gt;[0]\n";
+print "Right=$b-&gt;[1]\n";
+</PRE>
+</DIV>
+
+<p class=para>
+This demonstrates how object references act like ordinary references if
+you use them like ordinary references, as you often do within the class
+definitions.  Strictly speaking, we're cheating here on the principle of
+<i class=emphasis>encapsulation</I> when we dereference <tt class=literal>$a</tt> and <tt class=literal>$b</tt>
+outside of their class definitions.  But hey, the classes didn't provide
+access methods, so there's a bit of blame on both sides.
+
+<p class=para>
+Besides, most of the rest of these examples cheat too.
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-5.3">Scalar Instance Variables</A></h3>
+
+<p class=para>
+An anonymous scalar can be used when only one instance variable is needed.
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+package ScalarInstance;
+sub new {
+    my $type = shift;
+    my $self;
+    $self = shift;
+    return bless \$self, $type;
+}
+package main;
+$a = ScalarInstance-&gt;new( 42 );
+print "a=$$a\n";
+</PRE>
+</DIV>
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-5.4">Instance Variable Inheritance</A></h3>
+
+<p class=para>
+This example demonstrates how one might inherit instance variables from
+a base class for inclusion in the new class.  This requires calling the
+base class's constructor and adding one's own instance variables to the
+new object.  Note that you're pretty much forced to use a hash if you
+want to do inheritance, since you can't have a reference to multiple
+types at the same time.  A hash allows you to extend your object's little
+namespace in arbitrary directions, unlike an array, which can only be
+extended at the end.  So, for example, your base class
+might use the first five elements of your array, but the various derived classes
+might start fighting over who owns the sixth element.  So use a hash
+instead, like this:
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+package Base;
+sub new {
+    my $type = shift;
+    my $self = {};
+    $self-&gt;{buz} = 42;
+    return bless $self, $type;
+}
+package Derived;
+@ISA = qw( Base );
+sub new {
+    my $type = shift;
+    my $self = Base-&gt;new;
+    $self-&gt;{biz} = 11;
+    return bless $self, $type;
+}
+package main;
+$a = Derived-&gt;new;
+print "buz = ", $a-&gt;{buz}, "\n";
+print "biz = ", $a-&gt;{biz}, "\n";
+</PRE>
+</DIV>
+
+<p class=para>
+You still have to be careful that two derived classes don't pick the same
+name in the object's namespace, but that's an easier problem than trying
+to make the same array element hold different values simultaneously.
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-5.5">Containment (the "Has-a" Relationship)</A></h3>
+
+<p class=para>
+The following demonstrates how one might implement the "contains"
+relationship between objects.  This is closely related to the "uses"
+relationship we show later.
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+package Inner;
+sub new {
+    my $type = shift;
+    my $self = {};
+    $self-&gt;{buz} = 42;
+    return bless $self, $type;
+}
+package Outer;
+sub new {
+    my $type = shift;
+    my $self = {};
+    $self-&gt;{Inner} = Inner-&gt;new;
+    $self-&gt;{biz} = 11;
+    return bless $self, $type;
+}
+package main;
+$a = Outer-&gt;new;
+print "buz = ", $a-&gt;{Inner}-&gt;{buz}, "\n";
+print "biz = ", $a-&gt;{biz}, "\n";
+</PRE>
+</DIV>
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-5.6">Overriding Base Class Methods</A></h3>
+
+<p class=para>
+The following example demonstrates how to override a base class method
+within a derived class, and then call the overridden method anyway.  The
+<tt class=literal>SUPER</tt> pseudoclass allows the programmer to call an overridden base
+class (superclass) method without actually knowing where that method is
+defined.[18]
+
+<blockquote class=footnote>
+<p class=para>[18] 
+This is not to be confused with the mechanism mentioned earlier for
+overriding Perl's built-in functions, which aren't object methods, and so
+aren't overridden by inheritance.  You call overridden built-ins via the
+pseudopackage <tt class=literal>CORE</tt> rather than the pseudopackage <tt class=literal>SUPER</tt>.
+</blockquote>
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+package Buz;
+sub goo { print "here's the goo\n" }
+package Bar;
+@ISA = qw( Buz );
+sub google { print "google here\n" }
+package Baz;
+sub mumble { print "mumbling\n" }
+package Foo;
+@ISA = qw( Bar Baz );
+sub new {
+    my $type = shift;
+    return bless [], $type;
+}
+sub grr { print "grumble\n" }
+sub goo {
+    my $self = shift;
+    $self-&gt;SUPER::goo();
+}
+sub mumble {
+    my $self = shift;
+    $self-&gt;SUPER::mumble();
+}
+sub google {
+    my $self = shift;
+    $self-&gt;SUPER::google();
+}
+package main;
+$foo = Foo-&gt;new;
+$foo-&gt;mumble;
+$foo-&gt;grr;
+$foo-&gt;goo;
+$foo-&gt;google;
+</PRE>
+</DIV>
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-5.7">Implementation (the "Uses" Relationship)</A></h3>
+
+<p class=para>
+This example demonstrates an interface for the SDBM_File class.  This creates a
+"uses" relationship between our class and the SDBM_File class.
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+package MyDBM;
+require SDBM_File;
+require Tie::Hash;
+@ISA = qw( Tie::Hash );
+sub TIEHASH {
+    my $type = shift;
+    my $ref  = SDBM_File-&gt;new(@_);
+    return bless {dbm =&gt; $ref}, $type;
+}
+sub FETCH {
+    my $self = shift;
+    my $ref  = $self-&gt;{dbm};
+    $ref-&gt;FETCH(@_);
+}
+sub STORE {
+    my $self = shift;
+    if (defined $_[0]){
+        my $ref = $self-&gt;{dbm};
+        $ref-&gt;STORE(@_);
+    } else {
+        die "Cannot STORE an undefined key in MyDBM\n";
+    }
+}
+package main;
+use Fcntl qw( O_RDWR O_CREAT );
+tie %foo, "MyDBM", "sdbmfile1", O_RDWR|O_CREAT, 0640;
+$foo{Fred} = 123;
+print "foo-Fred = $foo{Fred}\n";
+tie %bar, "MyDBM", "sdbmfile2", O_RDWR|O_CREAT, 0640;
+$bar{Barney} = 456;
+print "bar-Barney = $bar{Barney}\n";
+</PRE>
+</DIV>
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-5.8">Thinking of Code Reuse</A></h3>
+
+<p class=para>
+<a name="CH05.CODE1"></A><a name="CH05.CODE2"></A>When we think of code reuse, we often fall into the habit of thinking
+that new code will always reuse old code.  But one strength of
+object-oriented languages is the ease with which old code can use new
+code, as long as you don't introduce spurious relationships that mess
+things up.  The following examples will demonstrate first how one can
+hinder code reuse and then how one can promote code reuse.
+
+<p class=para>
+This first example illustrates a class that uses a fully qualified
+method call to access the "private" method <tt class=literal>BAZ()</tt>.  We'll show that it
+is impossible to override the <tt class=literal>BAZ()</tt> method.
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+package FOO;
+sub new {
+    my $type = shift;
+    return bless {}, $type;
+}
+sub bar {
+    my $self = shift;
+    $self-&gt;FOO::private::BAZ;
+}
+package FOO::private;
+sub BAZ {
+    print "in BAZ\n";
+}
+package main;
+$a = FOO-&gt;new;
+$a-&gt;bar;
+</PRE>
+</DIV>
+
+<p class=para>
+Now we try to override the <tt class=literal>BAZ()</tt> method.  We would like
+<tt class=literal>FOO::bar()</tt> to call <tt class=literal>GOOP::BAZ()</tt>, but this cannot happen
+because <tt class=literal>FOO::bar()</tt> explicitly calls <tt class=literal>FOO::private::BAZ()</tt>.
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+package FOO;
+sub new {
+    my $type = shift;
+    return bless {}, $type;
+}
+sub bar {
+    my $self = shift;
+    $self-&gt;FOO::private::BAZ;
+}
+package FOO::private;
+sub BAZ {
+    print "in BAZ\n";
+}
+package GOOP;
+@ISA = qw( FOO );
+sub new {
+    my $type = shift;
+    return bless {}, $type;
+}
+sub BAZ {
+    print "in GOOP::BAZ\n";
+}
+package main;
+$a = GOOP-&gt;new;
+$a-&gt;bar;
+</PRE>
+</DIV>
+
+<p class=para>
+To create reusable code we must modify class <tt class=literal>FOO</tt>, flattening class
+<tt class=literal>FOO::private</tt>.  The next example shows a reusable class <tt class=literal>FOO</tt>
+which allows the method <tt class=literal>GOOP::BAZ()</tt> to be used in place of
+<tt class=literal>FOO::BAZ()</tt>.
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+package FOO;
+sub new {
+    my $type = shift;
+    return bless {}, $type;
+}
+sub bar {
+    my $self = shift;
+    $self-&gt;BAZ;
+}
+sub BAZ {
+    print "in BAZ\n";
+}
+package GOOP;
+@ISA = qw( FOO );
+sub new {
+    my $type = shift;
+    return bless {}, $type;
+}
+sub BAZ {
+    print "in GOOP::BAZ\n";
+}
+package main;
+$a = GOOP-&gt;new;
+$a-&gt;bar;
+</PRE>
+</DIV>
+
+<p class=para>
+The moral of the story is that generic interfaces are by nature not
+very private.  Some languages go to great lengths to define various
+levels of privacy.  Perl goes to great lengths not to.
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-5.9">Class Context and the Object</A></h3>
+
+<p class=para>
+Use the object to solve package and class context problems.  Everything a
+method needs should be available via the object or should be passed as a
+parameter to the method.
+
+<p class=para>
+A class will sometimes have static or global data to be used by the
+methods.  A derived class may want to override that data and replace it with new
+data.  When this happens, the base class may not know how to find the new
+copy of the data.
+
+<p class=para>
+This problem can be solved by using the object to define the context of
+the method.  Let the method look in the object for a reference to the
+data.  The alternative is to force the method to go hunting for the data
+("Is it in my class, or in a derived class?  Which derived class?"), and
+this can be inconvenient and will lead to hackery.  It is better to just
+let the object tell the method where the data is located.
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+package Bar;
+%fizzle = ( Password =&gt; 'XYZZY' );
+sub new {
+    my $type = shift;
+    my $self = {};
+    $self-&gt;{fizzle} = \%fizzle;
+    return bless $self, $type;
+}
+</PRE>
+</DIV>
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+sub enter {
+    my $self = shift;
+    # Don't try to guess if we should use %Bar::fizzle
+    # or %Foo::fizzle.  The object already knows which
+    # we should use, so just ask it.
+    #
+    my $fizzle = $self-&gt;{fizzle};
+
+    print "The word is ", $fizzle-&gt;{Password}, "\n";
+}
+package Foo;
+@ISA = qw( Bar );
+%fizzle = ( Password =&gt; 'Rumple' );
+sub new {
+    my $type = shift;
+    my $self = Bar-&gt;new;
+    $self-&gt;{fizzle} = \%fizzle;
+    return bless $self, $type;
+}
+package main;
+$a = Bar-&gt;new;
+$b = Foo-&gt;new;
+$a-&gt;enter;
+$b-&gt;enter;
+</PRE>
+</DIV>
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-5.10">Inheriting a Constructor</A></h3>
+
+<p class=para>
+An inheritable constructor should use the two-argument form of <a href="ch03_02.htm#PERL2-CMD-BLESS">bless</A>,
+which allows blessing directly into a specified class.  Notice in this
+example that the object will be a <tt class=literal>BAR</tt> not a <tt class=literal>FOO</tt>, even
+though the constructor is in class <tt class=literal>FOO</tt>.
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+package FOO;
+sub new {
+    my $type = shift;
+    my $self = {};
+    return bless $self, $type;
+}
+sub baz {
+    print "in FOO::baz()\n";
+}
+package BAR;
+@ISA = qw(FOO);
+sub baz {
+    print "in BAR::baz()\n";
+}
+package main;
+$a = BAR-&gt;new;
+$a-&gt;baz;
+</PRE>
+</DIV>
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-5.11">Delegation (the "Passes-the-Buck-to" Relationship)</A></h3>
+
+<p class=para>
+Some classes, such as SDBM_File, cannot be effectively subclassed because
+they create foreign objects.  Such a class can be extended with some sort of
+aggregation technique such as the "uses" relationship mentioned
+earlier in this chapter.  Or
+you can use delegation.
+
+<p class=para>
+The following example demonstrates delegation using an <tt class=literal>AUTOLOAD</tt>
+function to perform message-forwarding.  This allows the MyDBM
+object to behave exactly like an SDBM_File object without having to
+predefine all the possible methods that might be invoked.  As usual, the
+MyDBM class can still modify the behavior by adding custom <tt class=literal>FETCH</tt>
+and <tt class=literal>STORE</tt> methods, since the <tt class=literal>AUTOLOAD</tt> is only invoked on missing
+methods.
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+package MyDBM;
+require SDBM_File;
+require Tie::Hash;
+@ISA = qw(Tie::Hash);
+sub TIEHASH {
+    my $type = shift;
+    my $ref = SDBM_File-&gt;new(@_);
+    return bless {delegate =&gt; $ref}, $type;
+}
+sub AUTOLOAD {
+    my $self = shift;
+    # The Perl interpreter places the name of the
+    # message in a variable called $AUTOLOAD.
+    # DESTROY messages should never be propagated.
+    return if $AUTOLOAD =~ /::DESTROY$/;
+    # Remove the package name.
+    $AUTOLOAD =~ s/^MyDBM:://;
+    # Pass the message to the delegate.
+    $self-&gt;{delegate}-&gt;$AUTOLOAD(@_);
+}
+package main;
+use Fcntl qw( O_RDWR O_CREAT );
+tie %number, "MyDBM", "oddnumbers", O_RDWR|O_CREAT, 0666;
+$number{beast} = 666;
+</PRE>
+</DIV>
+
+<p class=para>
+As we say on the Net, "Hope this helps."
+
+</DIV>
+
+</DIV>
+
+
+<div class=htmlnav>
+<p>
+<hr align=left width=515>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch05_04.htm"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><a href="index.htm"><img src="gifs/txthome.gif" alt="Home" border=0></a></td>
+<td width=172 align=right valign=top><a href="ch06_01.htm"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+<tr>
+<td width=172 align=left valign=top>Using Tied Variables</td>
+<td width=171 align=center valign=top><a href="index/idx_0.htm">Book Index</a></td>
+<td width=172 align=right valign=top>Social Engineering</td>
+</tr>
+</table>
+
+<!-- JavaScript: prev.js -->
+&nbsp;
+<!-- JavaScript: next.js -->
+</DIV>
+</BODY>
+</HTML>

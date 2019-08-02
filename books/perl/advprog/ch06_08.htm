@@ -1,0 +1,122 @@
+<html><head>
+<title>[Chapter 6] 6.8 Accessing the Symbol Table</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:33:24Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch06_01.htm" title="6. Modules"><link rel="prev" href="ch06_07.htm" title="6.7 Autoloading"><link rel="next" href="ch06_09.htm" title="6.9 Language Comparisons"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch06_07.htm" title="6.7 Autoloading"><img src="../gifs/txtpreva.gif" alt="Previous: 6.7 Autoloading" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch06_01.htm" title="6. Modules">Chapter 6<br>Modules</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch06_09.htm" title="6.9 Language Comparisons"><img src="../gifs/txtnexta.gif" alt="Next: 6.9 Language Comparisons" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch06-29376">6.8 Accessing the Symbol Table</A
+></H2
+><p class="para"><a class="indexterm" name="ch06-idx-960853-0"></A
+><a class="indexterm" name="ch06-idx-960853-1"></A
+>Perl has a number of features that permit introspection, chief among them the ability to get information about the contents of the symbol table. This property is sometimes called <i class="firstterm">reflection</I
+><a class="indexterm" name="ch06-idx-960865-0"></A
+> or <em class="emphasis">introspection</EM
+>. </P
+><p class="para">Reflection makes it easy to write system-level tools such as debuggers and profilers. We will also use this property in <a class="xref" href="ch11_01.htm" title="Implementing Object Persistence">Chapter 11, <cite class="chapter">Implementing Object Persistence</CITE
+></A
+>, to develop a module that can transparently dump an object's data to a file or a database (and subsequently restore it) without having to write any application-specific code.</P
+><p class="para">We saw earlier in this chapter that each package gets its own symbol table (also called <i class="firstterm">stash</I
+><a class="indexterm" name="ch06-idx-960864-0"></A
+>, short for "symbol table hash"). Perl makes these stashes available as regular associative arrays. The stash for a package named Foo can be accessed by using the hash called <kbd class="command">%Foo::</KBD
+>. The <kbd class="command">main</KBD
+> package is available as <kbd class="command">%main::</KBD
+>, or simply as <kbd class="command">%::</KBD
+>. In fact, all other packages' hash tables are available from the <kbd class="command">main</KBD
+> stash (<kbd class="command">%main::</KBD
+> hence points to itself), as illustrated in <a class="xref" href="#ch06-18264" title="Packages' stashes are available in main's namespace">Figure 6.1</A
+>.</P
+><h4 class="figure"><a class="title" name="ch06-18264">Figure 6.1: Packages' stashes are available in main's namespace</A
+></H4
+><img class="graphic" src="figs/wpa_0601.gif" alt="Figure 6.1"><p class="para">Iterating through the all the symbolic names inside a package is simple:</P
+><pre class="programlisting">foreach $name (keys %main::) {
+    print &quot;$name, \n&quot;; 
+}</PRE
+><p class="para">As we saw earlier, each of these symbolic names maps to a typeglob, which itself points to one or more values (one or more of each type: scalar, array, hash, subroutine, filehandle, format name, or directory handle). Unfortunately, there's no direct way to find out which values actually exist. <a class="xref" href="#ch06-23892" title="Dumping All Symbols in a Package">Example 6.2</A
+> shows a way to dump all the variables in a given package and also demonstrates a way to find out which values exist for a given typeglob.</P
+><div class="example"><h4 class="example"><a class="title" name="ch06-23892">Example 6.2: Dumping All Symbols in a Package</A
+></H4
+><pre class="programlisting">package DUMPVAR;
+sub dumpvar {
+    my ($packageName) = @_;
+    local (*alias);             # a local typeglob
+    # We want to get access to the stash corresponding to the package
+    # name
+    *stash = *{&quot;${packageName}::&quot;};  # Now %stash is the symbol table
+    $, = &quot; &quot;;                        # Output separator for print
+    # Iterate through the symbol table, which contains glob values
+    # indexed by symbol names.
+    while (($varName, $globValue) = each %stash) {
+        print &quot;$varName ============================= \n&quot;;
+        *alias = $globValue;
+        if (defined ($alias)) {
+            print &quot;\t \$$varName $alias \n&quot;;
+        } 
+        if (defined (@alias)) {
+            print &quot;\t \@$varName @alias \n&quot;;
+        } 
+        if (defined (%alias)) {
+            print &quot;\t \%$varName &quot;,%alias,&quot; \n&quot;;
+        }
+     }
+}</PRE
+></DIV
+><p class="para">This snippet of a code illustrates how to use <kbd class="command">DUMPVAR</KBD
+>:</P
+><pre class="programlisting">package XX;
+$x = 10;
+@y = (1,3,4);
+%z = (1,2,3,4, 5, 6);
+$z = 300;
+DUMPVAR::dumpvar(&quot;XX&quot;); </PRE
+><p class="para">This prints:</P
+><pre class="programlisting">x =============================
+         $x 10
+y =============================
+         @y 1 3 4
+z =============================
+         $z 300
+         %z  1 2 3 4 5 6</PRE
+><p class="para"><kbd class="command">dumpvar()</KBD
+> works by creating an alias to each typeglob successively and then enumerating each type to see whether that value is defined. It is important to realize that it merely dumps the global data at the topmost level, because anonymous data structures hanging off various references are not dumped at all.<a class="indexterm" name="ch06-idx-960856-0"></A
+><a class="indexterm" name="ch06-idx-960856-1"></A
+><a class="indexterm" name="ch06-idx-960856-2"></A
+><a class="indexterm" name="ch06-idx-960856-3"></A
+></P
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch06_07.htm" title="6.7 Autoloading"><img src="../gifs/txtpreva.gif" alt="Previous: 6.7 Autoloading" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch06_09.htm" title="6.9 Language Comparisons"><img src="../gifs/txtnexta.gif" alt="Next: 6.9 Language Comparisons" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">6.7 Autoloading</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">6.9 Language Comparisons</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

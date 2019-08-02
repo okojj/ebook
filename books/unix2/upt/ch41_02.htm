@@ -1,0 +1,551 @@
+<html><head><title>[Chapter 41] 41.2 stty and All That Stuff </TITLE
+><meta name="DC.title" content="UNIX Power Tools"><meta name="DC.creator" content="Jerry Peek, Tim O'Reilly &amp; Mike Loukides"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1998-08-04T21:51:49Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-260-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch41_01.htm" webstripperlinkwas="ch41_01.htm" title="41. Terminal and Serial Line Settings"><link rel="prev" href="ch41_01.htm" webstripperlinkwas="ch41_01.htm" title="41.1 Delving a Little Deeper "><link rel="next" href="ch41_03.htm" webstripperlinkwas="ch41_03.htm" title="41.3 Find Out Terminal Settings with stty "></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" alt="UNIX Power Tools" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,58" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/upt/index.htm" alt="UNIX Power Tools"><area shape="RECT" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="jobjects/fsearch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch41_01.htm" webstripperlinkwas="ch41_01.htm" title="41.1 Delving a Little Deeper "><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous: 41.1 Delving a Little Deeper " border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 41<br>Terminal and Serial Line Settings</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch41_03.htm" webstripperlinkwas="ch41_03.htm" title="41.3 Find Out Terminal Settings with stty "><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next: 41.3 Find Out Terminal Settings with stty " border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="UPT-ART-1140">41.2 stty and All That Stuff </A
+></H2
+><p class="para">[...all that <i class="filename">useful</I
+> stuff!
+This article has a lot of good background for understanding how
+communications works between the UNIX host and your terminal or window.
+Chris has been in the business since way back; there's lots of
+interesting history in here, too.
+You might want a copy of your system's <i class="filename">stty</I
+> manual page close by
+while you read this article. -JP]</P
+><div class="msgset"><div class="msgentry"><div class="msg"><div class="msgtext"><p class="para"><b class="msgentry.role">Q:</B
+>  What is <em class="emphasis">stty</EM
+> all about? Why does it have so many options?</P
+></DIV
+></DIV
+></DIV
+><div class="msgentry"><div class="msg"><div class="msgtext"><p class="para"><b class="msgentry.role">A:</B
+>  Serial ports&nbsp;- indeed, computer communications in general&nbsp;- are a
+tangled and complicated area. The demands made for serial
+port communication, and hence the support for it in UNIX systems, began
+simply, but then grew in raging, uncontrolled bursts.</P
+></DIV
+></DIV
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="UPT-ART-1140-SECT-1.1">41.2.1 How We Made It This Far (Back?) </A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-45390"></A
+><a class="indexterm" name="AUTOID-45392"></A
+><a class="indexterm" name="AUTOID-45394"></A
+><a class="indexterm" name="AUTOID-45396"></A
+><a class="indexterm" name="AUTOID-45398"></A
+>Originally, UNIX ran on a small machine that talked only to
+<em class="emphasis">teletypes</EM
+>, or <em class="emphasis">ttys</EM
+> for short. The UNIX kernel had to
+collect up input lines, allowing minor corrections&nbsp;- erasing
+the previous character and killing (erasing wholly) the input
+line&nbsp;- and translating a few &quot;special&quot; characters for controlling
+programs. Teletypes were printers, incapable of erasing, so
+the erase and kill characters were just ordinary printing
+characters, namely <code class="literal">#</CODE
+> and <code class="literal">@</CODE
+>. The original special characters
+were CTRL-d (for end-of-file), DEL (to interrupt), and CTRL-\ (to
+quit). The kernel also mapped input RETURN codes to the newline
+character, so that users could push the big RETURN key, on teletypes
+that had those.</P
+><p class="para"><a class="indexterm" name="AUTOID-45405"></A
+><a class="indexterm" name="AUTOID-45408"></A
+><a class="indexterm" name="AUTOID-45410"></A
+><a class="indexterm" name="AUTOID-45413"></A
+><a class="indexterm" name="AUTOID-45415"></A
+>These teletypes had some peculiarities. In particular, they used a
+moving print head (or <em class="emphasis">carriage</EM
+>), and this print head took a
+noticeable amount of time to return from the right margin 
+to the left. If sent continuous printing text, a teletype could smear
+characters all over the paper during a carriage return.
+[1]
+The UNIX
+kernel therefore had to allow for a delay after a carriage return. At
+the same time, the kernel did &quot;output processing&quot; by changing
+newlines to the teletype's carriage return and linefeed codes, if
+necessary.
+[2]
+A few teletypes allowed only uppercase characters, and
+UNIX grew support for these as well. UNIX did get away without
+something common to other operating systems, however: UNIX systems
+assumed that all teletypes were &quot;full duplex&quot; and used &quot;remote
+echo.&quot; This meant, in essence, that both the teletype and the UNIX
+system could send to each other at the same time; and the teletype
+would not print what you typed until told to do so by the UNIX host.
+[3]</P
+><blockquote class="footnote"><p class="para">[1] This is an exaggeration. Printing during a carriage return was
+occasionally used as a diagnostic for checking the motor speed. The
+character printed during the return was supposed to appear exactly
+halfway along the line.</P
+><p class="para">[2] Some teletypes really processed a newline as a &quot;new line,&quot; i.e., a
+carriage return and linefeed, but most left this up to the host
+computer.</P
+><p class="para">[3] <a class="indexterm" name="AUTOID-45425"></A
+><a class="indexterm" name="AUTOID-45427"></A
+>Full duplex/remote echo and half duplex/local echo tended to go
+together. In particular, a half duplex system&nbsp;- which was not the
+same as a simplex system&nbsp;- had to have local echo to avoid being
+annoying to use. Fortunately, this is irrelevant today. The concept
+of &quot;duplex&quot; has fallen by the wayside, and everything is full
+duplex, or at least simulates it internally.</P
+></BLOCKQUOTE
+><p class="para"><a class="indexterm" name="AUTOID-45430"></A
+>UNIX also had to provide a way for special applications, such as
+<span class="link">UUCP (<a class="linkend" href="ch01_33.htm" webstripperlinkwas="ch01_33.htm" title="UNIX Networking and Communications ">1.33</A
+>)</SPAN
+>,
+to get input characters without any processing. This was the so-called
+raw mode. The kernel service was all-or-nothing: in raw mode,
+every input and output character was left alone, and passed directly&nbsp;- and immediately&nbsp;- to the application. In &quot;cooked&quot; mode, the
+kernel did input and output translations and delays.</P
+><p class="para"><a class="indexterm" name="AUTOID-45434"></A
+><a class="indexterm" name="AUTOID-45436"></A
+><a class="indexterm" name="AUTOID-45438"></A
+><a class="indexterm" name="AUTOID-45440"></A
+>Along with the ability to set raw or cooked mode, the kernel allowed
+changing each of the
+<span class="link">special characters (<a class="linkend" href="ch05_09.htm" webstripperlinkwas="ch05_09.htm" title="Setting Your Erase, Kill, and Interrupt Characters ">5.9</A
+>)</SPAN
+>
+and allowed control of some of
+the simpler aspects of the serial port interface, such as parity and
+baud rate.
+[4]
+The baud rate, perhaps better called the bit rate, of the
+original teletype was 110 bits per second (bps), or 11 characters per
+second. (The machines really did print exactly 11 times each second,
+with one possibility being quietly to print nothing.) Early computer
+modems ran at 110 and 300 baud, and there were a standard set of serial
+port speeds: 50, 75, 110, 134.5, 150, 200, 300, 600, 1200, 1800, 2400,
+4800, and even 9600 bps, which was considered terribly fast. UNIX
+systems used serial cards with two additional &quot;external control&quot;<a class="indexterm" name="AUTOID-45446"></A
+>
+rates labeled A and B; these became <em class="emphasis">exta</EM
+> and <em class="emphasis">extb</EM
+>. Some UNIX
+systems still support exactly (and only) these rates, and tie <em class="emphasis">exta</EM
+>
+to 19200 bps and <em class="emphasis">extb</EM
+> to 38400 bps.</P
+><blockquote class="footnote"><p class="para">[4] Parity is used for error checking. Parity is simply the number
+of &quot;1&quot; bits. If you have the value 1001001, and even parity, the
+parity bit should be 1, because 1001001 has three 1 bits&nbsp;- an odd
+number&nbsp;- and adding another 1 makes this even. If the parity bit
+fails to match, at least one bit is wrong. It could, of course, be
+the parity bit itself. Moreover, with a <em class="emphasis">tty</EM
+> port, there may not be
+anything you can do to fix the error&nbsp;- most UNIX kernels just drop
+the bad input character&nbsp;- but the check is available.</P
+></BLOCKQUOTE
+><p class="para"><a class="indexterm" name="AUTOID-45453"></A
+><a class="indexterm" name="AUTOID-45455"></A
+>Eventually, teletype printers began to be displaced. First there came
+so-called glass ttys-CRT displays that tried to act just like a
+teletype&nbsp;- and then smarter terminals, ones that could (gasp) move a
+cursor around the screen, and edit the display in place. These used
+special control and escape codes to do the editing. They also provided
+the opportunity to write full-screen editors. UNIX had to evolve to
+adapt to these new constraints. Unfortunately, by this time there were
+two main branches of UNIX. One would eventually become 4BSD, or
+Berkeley UNIX; the other was to become System V.</P
+><p class="para">The goals for both systems were similar, and thus both wound up with
+comparable approaches. Berkeley UNIX, however, attempted both to
+retain backwards compatibility and to provide a nice user interface,
+while the original System V system discarded compatibility in favor of
+efficiency and a &quot;complete&quot; interface&nbsp;- one that allowed doing
+everything a serial port could do.</P
+><p class="para"><a class="indexterm" name="AUTOID-45460"></A
+><a class="indexterm" name="AUTOID-45462"></A
+><a class="indexterm" name="AUTOID-45464"></A
+>Berkeley UNIX thus acquired <em class="emphasis">three</EM
+> terminal modes. It retained the
+original <em class="emphasis">raw</EM
+> and <em class="emphasis">cooked</EM
+> modes, and added a new one called
+<em class="emphasis">cbreak.</EM
+>
+[5]
+In cbreak mode, some input processing was done, but
+most characters were sent on to the application as they arrived. Since
+the kernel was not collecting lines, the erase and line-kill characters
+were unneeded; these were sent on unchanged. Most of the process
+control characters&nbsp;- interrupt, quit, and a new <em class="emphasis">stop</EM
+> or <em class="emphasis">suspend</EM
+>
+code&nbsp;- were still interpreted. To allow users to type these codes, a
+new &quot;literal next&quot; or &quot;quote&quot; character was introduced. Berkeley
+UNIX also added more output processing, including a special translation
+option for certain Hazeltine Corporation displays and features such as
+proper tab handling, output flush, and word erase.</P
+><blockquote class="footnote"><p class="para">[5] <a class="indexterm" name="AUTOID-45472"></A
+>This <em class="emphasis">cbreak</EM
+> mode has sometimes been referred to as &quot;half-baked.&quot;</P
+></BLOCKQUOTE
+><p class="para"><a class="indexterm" name="AUTOID-45479"></A
+><a class="indexterm" name="AUTOID-45481"></A
+><a class="indexterm" name="AUTOID-45483"></A
+><a class="indexterm" name="AUTOID-45485"></A
+><a class="indexterm" name="AUTOID-45487"></A
+><a class="indexterm" name="AUTOID-45489"></A
+><a class="indexterm" name="AUTOID-45491"></A
+>The System V base, on the other hand, dropped the idea of raw mode
+entirely. Instead, this system provided an individual control for each
+option. The <em class="emphasis">icanon</EM
+> option, for instance, controlled whether input
+lines were to be collected or &quot;canonicalized.&quot; The <em class="emphasis">isig</EM
+> option
+controlled signals: when off, the <em class="emphasis">interrupt</EM
+> (DEL, or in modern systems,
+CTRL-c) and <em class="emphasis">quit</EM
+> characters were just ordinary characters. The
+<em class="emphasis">inpchk</EM
+> option controlled input parity checking, and so forth.
+Similarly, output processing had individual flags: <em class="emphasis">ocrnl</EM
+> for
+carriage return-newline control, <em class="emphasis">opost</EM
+> for output processing in
+general. By turning everything off individually, an application could
+get the same effect as the old system's raw mode. The kernel also
+allowed control over the number of data bits in each serial frame, the
+number of stop bits, and so forth.
+[6]
+Thus, while Berkeley UNIX had nice
+line editing, it was incapable of attaching to five-bit Baudot systems.
+System V lacked the user interface features, but could talk to almost
+anything.</P
+><blockquote class="footnote"><p class="para">[6] Different systems use anything from five to nine bits in a
+serial-port &quot;byte.&quot; Most people, however, do not need to care
+about all this. Most systems just use eight bits, either as seven
+data bits and a parity check, or as eight data bits without parity.
+Thus, most people can ignore these options, and stick with either
+&quot;seven bits, even parity&quot; or &quot;eight bits, no parity.&quot;</P
+></BLOCKQUOTE
+><p class="para"><a class="indexterm" name="AUTOID-45503"></A
+><a class="indexterm" name="AUTOID-45505"></A
+><a class="indexterm" name="AUTOID-45507"></A
+>Since then, the world has become simpler in one way&nbsp;- those old
+printing teletypes are gone nearly everywhere, for instance&nbsp;- but 
+more complicated in another. These days, many computers use
+bitmapped displays rather than individual remote terminals. UNIX
+systems support networking, and use windowing systems such as the
+<span class="link">X Window System (<a class="linkend" href="ch01_31.htm" webstripperlinkwas="ch01_31.htm" title="The X Window System ">1.31</A
+>)</SPAN
+>.
+These in turn bring a myriad of options, window
+managers, look-and-feel, and so on. But they all have one thing in
+common: to run old applications, each window or network login must
+provide a <em class="emphasis">virtual terminal</EM
+> interface. UNIX systems generally do this
+with <em class="emphasis">pseudo teletypes</EM
+> or
+<span class="link"><em class="emphasis">pty</EM
+>s (<a class="linkend" href="ch41_08.htm" webstripperlinkwas="ch41_08.htm" title="ptys and Window Systems ">41.8</A
+>)</SPAN
+>.
+Each <em class="emphasis">pty</EM
+> exists to emulate a
+display terminal, which in turn is mainly pretending to be a teletype
+printer. (Sometimes one has to wonder where the progress lies.)</P
+><p class="para"><a class="indexterm" name="AUTOID-45516"></A
+>A POSIX standardization committee has settled on a standard
+interface, both at the UNIX kernel level and for the <em class="emphasis">stty</EM
+>
+command.  Most UNIX systems, including Berkeley UNIX,
+have moved to embrace this standard. While it leaves a few loose
+ends&nbsp;- mainly for reasons involving backwards compatibility for System
+V-it allows systems both the flexibility of the System V interface
+and the features of the Berkeley approach. This means that while
+windows and networks may be emulating ancient teletypes, at least
+they are all doing it in the same way.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="UPT-ART-1140-SECT-1.2">41.2.2 Handling Most Characters </A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-45522"></A
+><a class="indexterm" name="AUTOID-45525"></A
+>With all that as background, let's take a look at what happens to an
+input character, from the time you type it until an
+application can react. The details may vary&nbsp;- often wildly&nbsp;- depending
+on your system and whether you are using a window, a terminal, a
+network, or some combination of all three, but the overall idea is the
+same. For simplicity, we will assume you have an ordinary terminal.
+We will call this &quot;the terminal&quot; and the kernel's idea of it &quot;the
+tty.&quot;</P
+><p class="para"><a class="indexterm" name="AUTOID-45529"></A
+><a class="indexterm" name="AUTOID-45531"></A
+><a class="indexterm" name="AUTOID-45533"></A
+><a class="indexterm" name="AUTOID-45535"></A
+>Suppose you type the letter <em class="emphasis">x</EM
+>. The terminal sends the
+<span class="link">ASCII code (<a class="linkend" href="ch51_03.htm" webstripperlinkwas="ch51_03.htm" title="ASCII Characters: Listing and Getting Values ">51.3</A
+>)</SPAN
+>
+for a lowercase X (120) to the UNIX kernel's tty. The kernel then
+looks at the <em class="emphasis">tty</EM
+> state. Assume for the sake of discussion that the tty
+is in cooked or icanon mode, and that none of the special
+characters has been set to <em class="emphasis">x</EM
+>. Then the letter <code class="literal">x</CODE
+> is placed in
+an input buffer and echoed back to the terminal, causing an <code class="literal">x</CODE
+> to be
+displayed on your screen. But if you really wanted to type a <em class="emphasis">c</EM
+>,
+you would now type your
+<span class="link">erase character (<a class="linkend" href="ch05_09.htm" webstripperlinkwas="ch05_09.htm" title="Setting Your Erase, Kill, and Interrupt Characters ">5.9</A
+>)</SPAN
+>
+(usually CTRL-h, BACKSPACE,
+or DELETE, which may or may not all be the same or all different,
+depending on your particular terminal or keyboard). The code for this
+character will also be sent to the tty; this time it will match your
+erase character. The kernel will then remove the last character from
+the input buffer. Since this&nbsp;- a lowercase X&nbsp;- is an ordinary printing
+character, the kernel will send a single backspace, or the sequence
+&quot;backspace space backspace,&quot; to the terminal. This will generally back
+the cursor up over the character and then erase it from the screen.
+(On a POSIX system, you get the latter by setting 
+<em class="emphasis">echoe</EM
+> mode.) Finally, when you type RETURN or
+ENTER, your terminal sends an ASCII code 13. Since <em class="emphasis">icrnl</EM
+> is set, the
+kernel changes this to 10 (newline), which it then echoes to the
+terminal. Since <em class="emphasis">onlcr</EM
+> is set, this sends both a code 13 (carriage
+return) and a 10 (linefeed) to the terminal. The kernel sees that 10
+is a newline, wraps up the collected buffer, and passes it on to
+whatever application is currently reading from the tty.</P
+><p class="para"><a class="indexterm" name="AUTOID-45549"></A
+>If you turn off <em class="emphasis">icanon</EM
+> (or turn on <em class="emphasis">cbreak</EM
+>), the kernel takes any
+partially collected buffer and passes those characters to the
+application, then passes on each ordinary input character as it comes
+in. The kernel still echoes input back to the terminal. If you turn
+off the <em class="emphasis">echo</EM
+> flag in the tty, the kernel will stop doing echoing.
+This is how a full-screen editor like <em class="emphasis">vi</EM
+> works: it turns off
+<em class="emphasis">icanon</EM
+>, turns off <em class="emphasis">echo</EM
+>, and turns off some, but not all, of the
+special
+characters. The <em class="emphasis">vi</EM
+> program can then do its own echoing, so that when
+you type <code class="literal">i</CODE
+> to go into insert mode, no <code class="literal">i</CODE
+> appears on your
+terminal.</P
+><p class="para">One of several difficult areas involves turning <em class="emphasis">icanon</EM
+> back on. In
+particular, there may be some characters you typed at the terminal
+while <em class="emphasis">icanon</EM
+> was off. These reached the tty, which packaged them up
+and sent them off to an application. The application may not have read
+them yet, but as far as the <em class="emphasis">tty</EM
+> is concerned, they are gone. Thus, you
+may not be able to recover them for your current input line. Older
+Berkeley UNIX systems are able to handle this case, but System V
+systems that use the STREAMS interface are not. As long as your system
+is fast enough, though, you will never notice, because applications
+will always turn <em class="emphasis">icanon</EM
+> on before you can type anything at the
+terminal.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="UPT-ART-1140-SECT-1.3">41.2.3 What About TABs? </A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-45568"></A
+><a class="indexterm" name="AUTOID-45570"></A
+>Tabs are another difficult issue. The history here predates computing;
+typewriter tabs are sometimes used as the &quot;right&quot; model.
+Nonetheless, different terminals behave differently, and different
+people make different assumptions about how tabs should work. The
+ASCII code for TAB, code 9, is intended to move the cursor right to the
+next tabstop. But where <em class="emphasis">is</EM
+> that? Moreover, once the cursor has
+gone there, how does the kernel move it back if you decided to erase
+the tab?</P
+><p class="para">Many UNIX kernels can be told to expand tabs. When they do this, they
+set the tabstops at every eight characters. This is where they think
+tabstops belong. That is, if you print a newline, two ordinary
+letters, and a tab, the tab will turn into six spaces. If a <em class="emphasis">tty</EM
+> is in
+icanon/cooked mode, and is expanding tabs, it can &quot;unexpand&quot; them
+to backspace over the tab. Berkeley kernels will do this, and it
+works fairly well. They can get it wrong, however, under certain
+conditions. For instance, if you set the <em class="emphasis">tty</EM
+> to pass tabs unmodified,
+and if the terminal itself puts tabstops at every ten
+characters&nbsp;- this would be the proper setting for dealing with a
+DEC-10, for instance&nbsp;- the kernel <em class="emphasis">tty</EM
+> code will put out fewer
+backspaces than needed.</P
+><p class="para"><a class="indexterm" name="AUTOID-45579"></A
+><a class="indexterm" name="AUTOID-45582"></A
+><a class="indexterm" name="AUTOID-45585"></A
+>Even if the terminal sets its tabstops at eight, the kernel's <em class="emphasis">tty</EM
+> code
+and the terminal can get different ideas of the current cursor column.
+Most Berkeley kernels count control codes as &quot;ordinary&quot; output
+characters, for instance, even though those characters are likely to
+have no effect on the cursor, or might even move it to an arbitrary
+position. To help prevent <em class="emphasis">input</EM
+> control characters from goofing up
+backspacing, Berkeley kernels can echo them as two-character
+sequences. For instance, CTRL-g will normally echo as <code class="literal">^G</CODE
+>. Erasing
+such a control character works properly: the <em class="emphasis">tty</EM
+> code puts out <em class="emphasis">two</EM
+>
+backspaces, <em class="emphasis">two</EM
+> spaces, and two more backspaces. Erasing more
+characters, possibly including a TAB, then still works. This &quot;control
+echo&quot; can be switched on and off individually as well.</P
+><p class="para"><a class="indexterm" name="AUTOID-45594"></A
+>In addition to carriage return delays, which exist to allow time
+for the teletype's print carriage to move left, some UNIX systems
+also support tab delays, for more or less the same reason. Like
+return-delays, these are pretty much outmoded and useless. The
+POSIX standard leaves room for both kinds of delay, but does not
+mandate either one. You may see them in <em class="emphasis">stty</EM
+> output, as <em class="emphasis">cr2</EM
+>,
+<em class="emphasis">cr3</EM
+>, <em class="emphasis">tab1</EM
+>, and the like, but your system's default is probably
+&quot;no delay,&quot; and few people are likely to change this deliberately.</P
+><p class="para">Article
+<a class="xref" href="ch41_04.htm" webstripperlinkwas="ch41_04.htm" title="How UNIX Handles TAB Characters ">41.4</A
+>
+has some higher-level information about TABs.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="UPT-ART-1140-SECT-1.4">41.2.4 Flow Control (We Hope) </A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-45605"></A
+><a class="indexterm" name="AUTOID-45607"></A
+><a class="indexterm" name="AUTOID-45609"></A
+><a class="indexterm" name="AUTOID-45611"></A
+><a class="indexterm" name="AUTOID-45613"></A
+><a class="indexterm" name="AUTOID-45615"></A
+>Finally, flow control&nbsp;- avoiding lost input and output characters&nbsp;- is
+perhaps the dirtiest swamp of all. Most of the terminals built in the
+1980s support, and at higher speeds require, something called
+\h'-1p'<em class="emphasis">XON/XOFF</EM
+> flow control. Here, when the terminal falls behind in
+printing characters, it shouts &quot;stop!&quot; by sending an XOFF
+character&nbsp;- ASCII code 19, or CTRL-s&nbsp;- to the UNIX system. If the
+UNIX machine does not stop soon enough, some text will be lost. When
+the terminal is ready for more, it sends a &quot;go&quot; character&nbsp;- an XON,
+ASCII code 17, or CTRL-q. These were never intended as a general
+flow control mechanism&nbsp;- on some of the original teletypes, they turned
+the paper tape punch off and on&nbsp;- but they have that meaning now.
+Unfortunately, most terminals also allow users to type CTRL-s and
+CTRL-q, but they provide no way to distinguish between the terminal
+yelling &quot;stop&quot; and the user pushing CTRL-s. The result is a
+constant battle between people who want to use CTRL-s and computer
+systems that want to take it for themselves.</P
+><p class="para">Other systems, notably HP-based systems, use something called <em class="emphasis">ENQ/ACK</EM
+>
+flow control. Here the terminal and the host system must agree up-front on a minimum buffer size. Then either system is allowed to send
+that many characters to the other, after which it must stop and wait
+for a &quot;go-ahead&quot; signal. Each system requests such a signal by
+sending an &quot;enquire&quot;: ASCII code 5, or CTRL-e. When the listening
+system encounters the ENQ, and is ready for more, it sends an
+acknowledgement: ASCII code 6, or CTRL-f. This system is superior
+to the XON/XOFF system in one way, as it never has problems with a
+busy system failing to stop immediately on command, but it still does
+not prevent users from typing CTRL-e and CTRL-f. Moreover, it
+is not implemented on most UNIX systems.</P
+><p class="para"><a class="indexterm" name="AUTOID-45621"></A
+><a class="indexterm" name="AUTOID-45623"></A
+><a class="indexterm" name="AUTOID-45626"></A
+>A third method of flow control, and the most reliable where it is
+available, is the so-called <em class="emphasis">out of band</EM
+> approach. &quot;Out of band&quot;
+simply means that users cannot accidentally simulate it by typing
+control characters. Out of band control can be done in software,
+using something similar to HP's ENQ/ACK and some encoding tricks,
+but in practice, most UNIX machines that support any kind of out
+of band flow control use something called either &quot;hardware flow
+control&quot; or &quot;<em class="emphasis">RTS/CTS</EM
+> flow control.&quot; (This can be implemented
+with no special hardware at all on many systems, so the latter name
+is better.)</P
+><p class="para"><a class="indexterm" name="AUTOID-45631"></A
+><a class="indexterm" name="AUTOID-45633"></A
+>With RTS/CTS flow control, two existing serial-cable wires, RTS and
+CTS, are &quot;taken over.&quot; (RTS and CTS-which stand for Request to
+Send and Clear to Send respectively&nbsp;- were originally intended for use
+with half duplex modems. Since half duplex modems are today merely
+museum pieces, this is a sensible approach, but it does violate the
+RS232 standard.) RTS at the terminal is cross-connected to CTS at the
+host computer, and vice versa. The terminal and the computer both
+assert RTS whenever they are ready to receive data, and wait for CTS
+before sending. Unfortunately, not enough systems implement this, and
+of those that do, many get it wrong.
+[7]
+Thus, while RTS/CTS flow
+control offers the possibility of working perfectly, you cannot count
+on it. Still, it is worth looking for an <em class="emphasis">rts/cts</EM
+> option in your
+UNIX's <em class="emphasis">stty</EM
+>.</P
+><blockquote class="footnote"><p class="para">[7] For instance, on Sun workstations, RTS/CTS is supported in
+hardware, but the particular Zilog chip that does this also uses
+the DCD (Data Carrier Detect) line to control the receiver. Thus,
+if you set <em class="emphasis">stty crtscts</EM
+>, you cannot tell a modem to dial out,
+because DCD is off. It is possible to work around this, but only
+with control over both the hardware and the UNIX kernel.</P
+></BLOCKQUOTE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="UPT-ART-1140-SECT-1.5">41.2.5 Then What? </A
+></H3
+><p class="para">If you think this is complicated, just hope you never have to deal with
+synchronous transmission, RS422, DIN connectors, lightning strike
+protection, and many of the other hardware and electrical aspects that
+surround computer communications. Getting two arbitrary computers to
+talk to each other can be excessively difficult. Here again, standards
+come to the rescue. If everything you have is proper RS232-
+<span class="link">modulo (<a class="linkend" href="glossary.htm#UPT-ART-1010" webstripperlinkwas="glossary.htm#UPT-ART-1010" title="Glossary">52.9</A
+>)</SPAN
+>,
+perhaps, RTS/CTS flow control&nbsp;- and POSIX, things should usually go
+smoothly.</P
+></DIV
+><div class="sect1info"><p class="SECT1INFO">- <span class="authorinitials">CT</SPAN
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch41_01.htm" webstripperlinkwas="ch41_01.htm" title="41.1 Delving a Little Deeper "><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous: 41.1 Delving a Little Deeper " border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/upt/index.htm" title="UNIX Power Tools"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="UNIX Power Tools" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch41_03.htm" webstripperlinkwas="ch41_03.htm" title="41.3 Find Out Terminal Settings with stty "><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next: 41.3 Find Out Terminal Settings with stty " border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">41.1 Delving a Little Deeper </TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" webstripperlinkwas="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">41.3 Find Out Terminal Settings with stty </TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#map" border="0" alt="The UNIX CD Bookshelf Navigation"><map name="map"><area shape="RECT" coords="0,0,73,21" href="../index.html" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/index.html" alt="The UNIX CD Bookshelf"><area shape="RECT" coords="74,0,163,21" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/upt/index.htm" alt="UNIX Power Tools"><area shape="RECT" coords="164,0,257,21" href="../unixnut/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/unixnut/index.htm" alt="UNIX in a Nutshell"><area shape="RECT" coords="258,0,321,21" href="../vi/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/vi/index.htm" alt="Learning the vi Editor"><area shape="RECT" coords="322,0,378,21" href="../sedawk/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/sedawk/index.htm" alt="sed &amp; awk"><area shape="RECT" coords="379,0,438,21" href="../ksh/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/ksh/index.htm" alt="Learning the Korn Shell"><area shape="RECT" coords="439,0,514,21" href="../lrnunix/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/lrnunix/index.htm" alt="Learning the UNIX Operating System"></MAP
+></DIV
+></BODY
+></HTML
+>

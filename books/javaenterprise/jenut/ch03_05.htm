@@ -1,0 +1,282 @@
+<html>
+<head>
+<title>Dynamically Loaded Classes (Java Enterprise in a Nutshell)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David Flanagan, Jim Farley, William Crawford and Kristopher Magnusson">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-483-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Dynamically Loaded Classes">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm" alt="Java Enterprise in a Nutshell"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_01.htm">Chapter 3: Remote Method Invocation</a></td><td align="right" valign="top" width="172"><a href="ch03_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_06.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY --><h2 class="sect1">3.5. Dynamically Loaded Classes</h2>
+<p>
+<a name="INDEX-678"></a><a name="INDEX-679"></a>
+The RMI runtime system has a dynamic class-loading facility that
+loads the classes it needs while executing remote method calls. In
+some situations, you don't need to worry much about how your
+application classes are obtained by the various agents in an RMI
+application. This is especially true if you have direct access to all
+hosts involved in the distributed system (i.e., if you can install
+your application classes in the local <tt class="literal">CLASSPATH</tt> for
+each machine participating in the application). For instance, when
+discussing the earlier <tt class="literal">Account</tt> example, I assumed
+that all the relevant classes (<tt class="literal">Account</tt>,
+<tt class="literal">AccountImpl</tt>, stub, and skeleton classes) were
+installed on both the client and the server. However, if your
+distributed application involves remote agents running on hosts that
+are not directly under your control, you need to understand how RMI
+loads classes at runtime, so you can ensure that each remote agent can
+find the classes it needs in order to run.</p>
+<p>As with any Java application, the Java runtime system is
+responsible for loading the classes needed to initiate an RMI
+<a name="INDEX-680"></a><a name="INDEX-681"></a><a name="INDEX-682"></a>
+session. Starting an interaction with a remote object means loading
+the RMI API classes themselves, as well as the base interface for the
+remote object and the stub class for the remote interface. On the
+server side, the skeleton class for the remote object and the actual
+implementation class need to be loaded in order to run the server
+object that is being remotely exported. </p>
+<p>The classes that are referenced directly by a given Java class
+are normally loaded by the same class loader that loaded the class
+itself. So, in an RMI client that does a <tt class="literal">Naming</tt>
+lookup to find a remote object, the stub interface for the remote
+object is loaded using the class loader for the class doing the
+lookup. If the RMI client is a Java application (started using the
+<em class="emphasis">java</em> command to invoke the
+<tt class="literal">main()</tt> method on an object), the default (local)
+class loader tries to find the remote interface locally, from the
+<a name="INDEX-683"></a><a name="INDEX-684"></a>
+local <tt class="literal">CLASSPATH</tt>. If the RMI client is an applet
+loaded in a web page, the <tt class="literal">AppletClassLoader</tt> tries
+to look for the remote interface on the applet's host, in the
+codebase of the applet. </p>
+<p>
+<a name="INDEX-685"></a><a name="INDEX-686"></a><a name="INDEX-687"></a>
+The RMI runtime system provides its own class loader, the
+<tt class="literal">RMIClassLoader</tt>, to augment the default class
+loading process I just described. The
+<tt class="literal">RMIClassLoader</tt> loads stubs and skeleton classes for
+remote interfaces, as well as the classes for objects used as remote
+method arguments or return values. These classes usually aren't
+explicitly referenced by your RMI application itself, but they are
+needed by the RMI runtime system for generating remote references and
+marshalling/unmarshalling method arguments and return values. </p>
+<p>When it's loading the bytecodes for class definitions, the RMI runtime system first attempts to use the default class loader for the local context (i.e., an <tt class="literal">AppletClassLoader</tt> for an applet or the system class loader for a Java application). If the referenced class isn't found using the default local class loader, the <tt class="literal">RMIClassLoader</tt> tries to load the class bytecodes remotely according to the procedures explained next.</p>
+<a name="ch03-pgfid-960944"></a>
+<h3 class="sect2">3.5.1. Configuring Clients and Servers for Remote Class Loading</h3>
+<p>
+<a name="INDEX-688"></a><a name="INDEX-689"></a><a name="INDEX-690"></a><a name="INDEX-691"></a>
+When the RMI runtime system marshals a remote object stub,
+method argument, or return value, it encodes a URL in the marshaled
+bytestream to tell the process on the receiving end of the stream
+where to look for the class file for the marshaled object. If the
+<a name="INDEX-692"></a><a name="INDEX-693"></a><a name="INDEX-694"></a>
+
+class for the object being marshaled was loaded by a nondefault class
+loader (e.g., the <tt class="literal">AppletClassLoader</tt> or the
+<tt class="literal">RMIClassLoader</tt>), the codebase of that class loader
+is encoded in the marshaled stream. If the class was loaded by the
+default class loader from the local <tt class="literal">CLASSPATH</tt>, the
+<a name="INDEX-695"></a>
+value of the <tt class="literal">java.rmi.server.codebase</tt> property for
+the Java VM marshalling the object is sent in the stream. This property
+is not set by default in the Java VM, so you need to make sure that
+it's set to a URL that points to the location of the necessary
+class files. One way to do this is to include a command-line argument
+when starting the Java VM, as in:</p>
+<blockquote>
+<pre class="programlisting">
+% java -Djava.rmi.server.codebase=http://objhost.org/classes/<em class="replaceable">RMIProcess</em>
+</pre>
+</blockquote>
+<p>Here we're starting a Java process with its codebase set
+to <em class="emphasis">http://objhost.org/classes /</em>. This means that
+any remote process that needs to load classes for objects received
+from this process during an RMI session should use this HTTP URL in
+order to find them (if the classes can't be found on the local
+<tt class="literal">CLASSPATH</tt>, that is). This applies either if
+<em class="replaceable">RMIProcess</em> is serving remote objects itself
+through an RMI registry or if <em class="replaceable">RMIProcess</em> is
+passing objects into methods it is calling on other remote objects. In
+the first case, a remote client that needs to load the stub classes
+for the objects exported by <em class="replaceable">RMIProcess</em> uses
+the codebase to find these classes. In the second case, a remote
+process uses the codebase to load the classes for method arguments
+that <em class="replaceable">RMIProcess</em> is passing into remote
+method calls it makes.</p>
+<p>
+<a name="INDEX-696"></a><a name="INDEX-697"></a>
+If an RMI runtime system is trying to unmarshal an object stub,
+method argument, or return value and it doesn't find the class
+using the default class loader (e.g., the system class loader, which
+looks on the local <tt class="literal">CLASSPATH</tt> first), the
+<tt class="literal">RMIClassLoader</tt> can use the URL in the marshal
+stream to look for the class bytecodes remotely. The
+<tt class="literal">RMIClassLoader</tt> takes the URL from the marshaled
+bytestream and opens a URL connection to the specified host to load
+the needed classes. If both the local class search and this remote URL
+search fail to find the required classes, the unmarshal operation
+generates an exception, and the remote method call fails. </p>
+<p>
+<a name="INDEX-698"></a><a name="INDEX-699"></a>
+Note that in order for a Java runtime system to even attempt to
+load classes remotely, it has to have a security manager installed
+that allows remote class loading. The
+<a name="INDEX-700"></a><tt class="literal">java.rmi.RMISecurityManager</tt> can be used for
+this. In both your RMI object server and clients, include the
+following line before any RMI calls:</p>
+<blockquote>
+<pre class="programlisting">
+System.setSecurityManager(new RMISecurityManager());</pre>
+</blockquote>
+<p>If you don't set the security manager, the Java VM is
+allowed to look for classes only locally, and your RMI calls will work
+only if all of the required classes can be found on the local
+<tt class="literal">CLASSPATH</tt>.</p>
+<p>
+<a name="INDEX-701"></a><a name="INDEX-702"></a>
+Another issue with dynamically loading remote classes is that the default Java security policy doesn't allow all the networking operations required to resolve a class from a remote host. So, if you have an RMI client or server that needs to resolve classes remotely, you need to use a policy file that opens up network permissions to allow this. I'm not going to go into the details of network policies here or the syntax of the security policy file,<a href="#FOOTNOTE-2">[2]</a> but you will need to add the following line to the policy file on the RMI client:</p>
+<blockquote class="footnote">
+<a name="FOOTNOTE-2"></a>
+<p>[2]For details on Java security policies and policy files, see <em class="citetitle">Java Security</em>, by Scott Oaks (O'Reilly).</p>
+</blockquote>
+
+<blockquote>
+<pre class="programlisting">permission java.net.SocketPermission "objhost.org", "accept,connect";</pre>
+</blockquote>
+
+
+<p>This line gives the RMI object server <em class="emphasis">objhost.org</em> the permission to  open connections to the local machine. This is needed to bypass the stricter rules imposed by the <tt class="literal">RMISecurityManager</tt>. Once you've made a modified policy file, you can specify it on the
+command line when you start your RMI process, in a similar way to
+setting the codebase property:</p>
+<blockquote>
+<pre class="programlisting">
+% java -Djava.security.policy=mypolicy.txt <em class="replaceable">RMIProcess</em>
+</pre>
+</blockquote>
+<p>As a simple example, suppose we want to use our earlier
+<tt class="literal">Account</tt> example to export an
+<tt class="literal">Account</tt> object on one host and access that
+<tt class="literal">Account</tt> on another host where the only class
+available locally is the <tt class="literal">Account</tt> interface class itself. On the server, we start an RMI registry<a href="#FOOTNOTE-3">[3]</a> and run the <tt class="literal">RegAccount</tt> class as before,
+but since we want remote clients to be able to load the stub classes
+remotely, we need to set the codebase property to where the clients
+can find these classes:</p>
+<blockquote class="footnote">
+<a name="FOOTNOTE-3"></a>
+<p>[3]<a name="INDEX-703"></a><a name="INDEX-704"></a>
+Note that in order for the RMI registry to recognize and pass along the codebase property you specify, it has to be started in such a way that it can't find any of the remotely loaded classes on its <tt class="literal">CLASSPATH</tt>. So start your RMI registry with a <tt class="literal">CLASSPATH</tt> that doesn't include the stub/skeleton classes, etc., then run your RMI server with a <tt class="literal">CLASSPATH</tt> that includes all required classes.</p>
+</blockquote>
+<blockquote>
+<pre class="programlisting">
+% java -Djava.server.rmi.codebase=http://objhost.org/classes/ RegAccount
+Registered account.</pre>
+</blockquote>
+<p>We've setting the codebase to <em class="emphasis">http://objhost.org/classes/</em>, so we have to make sure that an HTTP server is running on the <em class="emphasis">objhost.org</em> machine and that the necessary class files (e.g., the <tt class="literal">AccountImpl</tt> stub class) are in the <em class="emphasis">classes</em> directory of that HTTP server's document root. </p>
+<p>Now we can run the <tt class="literal">AccountClient</tt> class on the remote client as before, but the client's host machine doesn't have the stub class for the <tt class="literal">Account</tt> remote object available locally. When the <tt class="literal">AccountClient</tt> tries to look up the remote <tt class="literal">Account</tt> object, we want the stub class to be loaded remotely. Two simple changes to our
+<a name="INDEX-705"></a><tt class="literal">Account</tt> example make this possible. First, add a line to the <tt class="literal">AccountClient main()</tt> method that sets the <tt class="literal">RMISecurityManager</tt>, in order to allow for remote class loading:</p>
+<blockquote>
+<pre class="programlisting">
+import java.rmi.Naming;
+import java.rmi.RMISecurityManager;
+
+public class AccountClient {
+  public static void main(String argv[]) {
+    try {
+      // Set the RMI security manager, 
+      // in case we need to load remote classes
+      System.setSecurityManager(new RMISecurityManager());
+
+      // Lookup account object
+      Account jimAcct = (Account)Naming.lookup("rmi://objhost.org/JimF");
+      .
+      .
+      .</pre>
+</blockquote>
+<p>
+<a name="INDEX-706"></a>
+The other change is to use a more lenient policy file when running <tt class="literal">AccountClient</tt> so the necessary network operations can be performed. Again, I won't discuss the syntax of the policy file here, but assuming we've put the required policy settings into a file named <em class="emphasis">rmipolicy.txt</em>, we can start the client like so:</p>
+<blockquote>
+<pre class="programlisting">
+% java -Djava.security.policy=rmipolicy.txt AccountClient
+Deposited 12,000 into account owned by JimF
+Balance now totals: 12000.0</pre>
+</blockquote>
+<a name="ch03-pgfid-968839"></a>
+<h3 class="sect2">3.5.2. Loading Classes from Applets</h3>
+<p>
+<a name="INDEX-707"></a><a name="INDEX-708"></a>
+
+Virtually all the steps I just outlined for running an RMI client to allow it to remotely load classes apply to applets as well. The only difference is that the classes for applets are loaded using an <tt class="literal">AppletClassLoader</tt>, which checks the applet's codebase for any classes required to run the applet. The default security policy for applets already allows for remote loading of classes, since this is how an applet works in the first place, so there's no need to change the security policy when using RMI within an applet. All you need to do to ensure that the applet finds the remote interface and stub class for the RMI object is to put them in the server directory that corresponds to the applet's codebase.</p>
+<a name="INDEX-709"></a>
+<a name="INDEX-710"></a>
+<a name="INDEX-711"></a>
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch03_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_06.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">3.4. Accessing Remote Objects as a Client</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">3.6. Remote Object Activation</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

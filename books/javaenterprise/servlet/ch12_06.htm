@@ -1,0 +1,372 @@
+<html>
+<head>
+<title>HTML Forms (Java Servlet Programming)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jason Hunter and William Crawford">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-391-XE" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="HTML Forms">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm" alt="Java Servlet Programming"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch12_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch12_05.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch12_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch12_01.htm">Chapter 12: Internationalization</a></td><td align="right" valign="top" width="172"><a href="ch12_07.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch12_07.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">12.6. HTML Forms</h2>
+
+<p>Managing
+<a name="INDEX-2212"></a><a name="INDEX-2213"></a>HTML forms
+requires a little extra work and a few special tricks when
+you're dealing with localized content. To understand the
+problem, imagine this situation. An HTML form is sent as part of a
+Japanese page. It asks the user for his name, which he enters as a
+string of Japanese characters. How is that name submitted to the
+servlet? And, more importantly, how can the servlet read it?
+</p>
+
+<p>The answer to the first question is that all HTML form data is sent
+as a sequence of bytes. Those bytes are an encoded representation of
+the original characters. With Western European languages, the
+encoding is the default,
+<a name="INDEX-2214"></a><a name="INDEX-2215"></a>ISO-8859-1, with one byte per
+character. For other languages, there can be other encodings.
+Browsers tend to encode form data using the same encoding that was
+applied to the page containing the form. Thus, if the Japanese page
+mentioned was encoded using Shift_JIS, the submitted form data would
+also be encoded using Shift_JIS. Note, however, that if the page did
+not specify a charset and the user had to manually choose Shift_JIS
+encoding for viewing, many browsers stubbornly submit the form data
+using ISO-8859-1.<a href="#FOOTNOTE-5">[5]</a>
+Generally, the encoded byte string contains a large number of special
+bytes that have to be URL-encoded. For example, if we assume the
+Japanese form sends the user's name using a GET request, the
+resulting URL might look like this:
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-5"></a>
+<p>[5] For more information on the
+internationalization of HTML and HTML forms, see RFC 2070 at
+<a href="http://www.ietf.org/rfc/rfc2070.txt">http://www.ietf.org/rfc/rfc2070.txt</a><a name="INDEX-2216"></a><a name="INDEX-2217"></a><a name="INDEX-2218"></a>.</p> </blockquote>
+
+<blockquote>
+<pre class="programlisting">http://<em class="emphasis">server</em>:<em class="emphasis">port</em>/servlet/NameHandler?name=%8CK%8C%B4%90%B3%8E%9F</pre>
+</blockquote>
+
+<p>The answer to the second question, how can a servlet read the
+submitted information, is a bit more complicated. A servlet has two
+choices. First, a servlet can leave the form data in its raw encoded
+format, treating it essentially like a sequence of bytes--with
+each byte awkwardly stored as a character in the parameter string.
+This tactic is useful only if the servlet does not need to manipulate
+the data and can be sure that the data is output only to the same
+user using the same charset. Alternatively, a servlet can convert the
+form data from its native encoded format to a Java-friendly Unicode
+string. This allows the servlet to freely manipulate the text and
+output the text using alternate charsets. There is one problem with
+this plan, however. Browsers currently provide no information to
+indicate which encoding was used on the form data. Browsers may
+provide that information in the future (using the
+<tt class="literal">Content-Type</tt> header in a POST, most likely), but
+for now, the servlet is left responsible for tracking that
+information.
+</p>
+
+<a name="ch12-15-fm2xml"></a>
+<h3 class="sect2">12.6.1. The Hidden Charset</h3>
+
+<p>The commonly accepted technique for tracking the charset of submitted
+form data is to use a <a name="INDEX-2219"></a><a name="INDEX-2220"></a>hidden charset form field.<a href="#FOOTNOTE-6">[6]</a> Its value should be set to the charset
+of the page in which it is contained. Then, any servlet receiving the
+form can read the value of the charset field and know how to decode
+the submitted form data.
+</p>
+<blockquote class="footnote">
+<a name="FOOTNOTE-6"></a>
+<p>[6]Hidden form fields, if you remember, were first discussed in
+<a href="ch07_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch07_01.htm">Chapter 7, "Session Tracking"</a>, where they were used for session
+tracking.</p> </blockquote>
+
+<p>
+<a href="#ch12-33841">Example 12-11</a> demonstrates this technique with a form
+generator that sets the charset to match the charset of the page.
+Here's an English resource bundle that might accompanying the
+servlet, stored as <em class="filename">CharsetForm_en.properties</em>:
+</p>
+
+<blockquote>
+<pre class="programlisting">title=CharsetForm
+header=&lt;H1&gt;Charset Form&lt;/H1&gt;
+prompt=Enter text: </pre>
+</blockquote>
+
+<p>And here's a Japanese resource, to be stored as
+<em class="filename">CharsetForm_ja.properties</em>:
+</p>
+
+<blockquote>
+<pre class="programlisting">title=CharsetForm
+header=&lt;H1&gt;\u6587\u5b57\u30bb\u30c3\u30c8\u30fb\u30d5\u30a9\u30fc\u30e0&lt;/H1&gt;
+prompt=\u30c6\u30ad\u30b9\u30c8\u3092\u5165\u529b\u3057\u3066\u304f\u3060\
+\u3055\u3044 </pre>
+</blockquote>
+
+<p>A screen shot of the Japanese version is shown in <a href="#ch12-20752">Figure 12-6</a>.
+</p>
+
+<a name="ch12-33841"></a>
+<div class="example">
+<h4 class="objtitle">Example 12-11. Saving the charset in a hidden form field </h4>
+<blockquote>
+<pre class="programlisting">import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+import com.oreilly.servlet.LocaleNegotiator;
+import com.oreilly.servlet.ServletUtils;
+
+public class CharsetForm extends HttpServlet {
+
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+                               throws ServletException, IOException {
+    try {
+      String bundleName = "CharsetForm";
+      String acceptLanguage = req.getHeader("Accept-Language");
+      String acceptCharset = req.getHeader("Accept-Charset");
+
+      LocaleNegotiator negotiator =
+        new LocaleNegotiator(bundleName, acceptLanguage, acceptCharset);
+
+      Locale locale = negotiator.getLocale();
+      String charset = negotiator.getCharset();
+      ResourceBundle bundle = negotiator.getBundle();  // may be null
+
+      res.setContentType("text/html; charset=" + charset);
+      res.setHeader("Content-Language", locale.getLanguage());
+      res.setHeader("Vary", "Accept-Language");
+
+      PrintWriter out = res.getWriter();
+
+      if (bundle != null) {
+        out.println("&lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;");
+        out.println(bundle.getString("title"));
+        out.println("&lt;/TITLE&gt;&lt;/HEAD&gt;");
+        out.println("&lt;BODY&gt;");
+        out.println(bundle.getString("header"));
+        out.println("&lt;FORM ACTION=/servlet/CharsetAction METHOD=get&gt;");
+        out.println("&lt;INPUT TYPE=hidden NAME=charset value=" + charset + "&gt;");
+        out.println(bundle.getString("prompt"));
+        out.println("&lt;INPUT TYPE=text NAME=text&gt;");
+        out.println("&lt;/FORM&gt;");
+        out.println("&lt;/BODY&gt;&lt;/HTML&gt;");
+      }
+      else {
+        out.println("Bundle could not be found.");
+      }
+    }
+    catch (Exception e) {
+      log(ServletUtils.getStackTraceAsString(e));
+    }
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="ch12-20752"></a>
+<div class="figure">
+<img alt="figure" src="figs/jsp_1206.gif" webstripperlinkwas="figs/jsp_1206.gif"></div>
+<h4 class="objtitle">Figure 12-6. A Japanese form, with the user entering text</h4>
+
+<p>The servlet responsible for handling the submitted form is shown in
+<a href="#ch12-31215">Example 12-12</a>. This servlet reads the submitted text
+and converts it to Unicode, then outputs the characters using the
+UTF-8 encoding. As a bonus, it also displays the received string as a
+Unicode escape string, showing what you would have to enter in a Java
+source file or resource bundle to create the same output. This lets
+the servlet act as a web-based native charset to Unicode string
+translator. Sample output is shown in <a href="#ch12-39097">Figure 12-7</a>.
+</p>
+
+<a name="ch12-31215"></a>
+<div class="example">
+<h4 class="objtitle">Example 12-12. Receiving the charset in a hidden form field </h4>
+<blockquote>
+<pre class="programlisting">import java.io.*;
+import java.text.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class CharsetAction extends HttpServlet {
+
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+                               throws ServletException, IOException {
+    try {
+      res.setContentType("text/plain; charset=UTF-8");
+      PrintWriter out = res.getWriter();
+
+      String charset = req.getParameter("charset");
+
+      // Get the text parameter
+      String text = req.getParameter("text");
+
+      // Now convert it from an array of bytes to an array of characters.
+      // Do this using the charset that was sent as a hidden field.
+      // Here we bother to read only the first line.
+      BufferedReader reader = new BufferedReader(
+        new InputStreamReader(new StringBufferInputStream(text), charset));
+      text = reader.readLine();
+
+      out.println("Received charset: " + charset);
+      out.println("Received text: " + text);
+      out.println("Received text (escaped): " + toUnicodeEscapeString(text));
+    }
+    catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+
+  public void doPost(HttpServletRequest req, HttpServletResponse res)
+                                throws ServletException, IOException {
+    doGet(req, res);
+  }
+
+  private static String toUnicodeEscapeString(String str) {
+    // Modeled after the code in java.util.Properties.save()
+    StringBuffer buf = new StringBuffer();
+    int len = str.length();
+    char ch;
+    for (int i = 0; i &lt; len; i++) {
+      ch = str.charAt(i);
+      switch (ch) {
+        case '\\': buf.append("\\\\"); break;
+        case '\t': buf.append("\\t"); break;
+        case '\n': buf.append("\\n"); break;
+        case '\r': buf.append("\\r"); break;
+    
+        default:
+          if (ch &gt;= ' ' &amp;&amp; ch &lt;= 127) {
+            buf.append(ch);
+          }
+          else {
+            buf.append('\\');
+            buf.append('u');
+            buf.append(toHex((ch &gt;&gt; 12) &amp; 0xF));
+            buf.append(toHex((ch &gt;&gt;  8) &amp; 0xF));
+            buf.append(toHex((ch &gt;&gt;  4) &amp; 0xF));
+            buf.append(toHex((ch &gt;&gt;  0) &amp; 0xF));
+          }
+      }
+    }
+    return buf.toString();
+  }
+
+  private static char toHex(int nibble) {
+    return hexDigit[(nibble &amp; 0xF)];
+  }
+
+  private static char[] hexDigit = {
+    '0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'
+  };
+}</pre>
+</blockquote>
+</div>
+
+<a name="ch12-39097"></a>
+<div class="figure">
+<img alt="figure" src="figs/jsp_1207.gif" webstripperlinkwas="figs/jsp_1207.gif"></div>
+<h4 class="objtitle">Figure 12-7. Handling a Japanese form</h4>
+
+<p>The most interesting part of this servlet is the bit that receives
+and converts the submitted text.
+</p>
+
+<blockquote>
+<pre class="programlisting">String text = req.getParameter("text");
+BufferedReader reader = new BufferedReader(
+  new InputStreamReader(new StringBufferInputStream(text), charset));
+text = reader.readLine();</pre>
+</blockquote>
+
+<p>The first line receives the text in its raw format. Although
+it's stored as a <tt class="literal">String</tt>, it's not a
+true <tt class="literal">String</tt>. Each character in the
+<tt class="literal">String</tt> stores one byte of the encoded text. The
+second and third lines wrap the text with a
+<tt class="literal">StringBufferInputStream</tt>, an
+<tt class="literal">InputStreamReader</tt>, and a
+<tt class="literal">BufferedReader</tt>. The decoding happens with the
+<tt class="literal">InputStreamReader</tt>, whose constructor accepts the
+encoding specified by the charset field. Finally, the
+<tt class="literal">BufferedReader</tt> wraps around the
+<tt class="literal">InputStreamReader</tt> for convenience. This lets us
+receive the text one line at a time, as shown in the fourth line.
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch12_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch12_05.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch12_07.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch12_07.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">12.5. Dynamic Language Negotiation</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">12.7. Receiving Multilingual Input</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

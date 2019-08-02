@@ -1,0 +1,507 @@
+<html>
+<head>
+<title>Tying Hashes (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Tying Hashes">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch14_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch14_01.htm">Chapter 14: Tied Variables</a></td><td align="right" valign="top" width="172"><a href="ch14_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">14.3. Tying Hashes</h2>
+
+<p>
+<a name="INDEX-2720"></a><a name="INDEX-2721"></a><a name="INDEX-2722"></a><a name="INDEX-2723"></a><a name="INDEX-2724"></a><a name="INDEX-2725"></a>
+A class implementing a tied hash should define eight methods.
+<tt class="literal">TIEHASH</tt> constructs new objects.  <tt class="literal">FETCH</tt> and <tt class="literal">STORE</tt> access the
+key/value pairs.  <tt class="literal">EXISTS</tt> reports whether a key is present in the
+hash, and <tt class="literal">DELETE</tt> removes a key along with its associated value.<a href="#FOOTNOTE-2">[2]</a><tt class="literal">CLEAR</tt> empties the hash by deleting all
+key/value pairs. <tt class="literal">FIRSTKEY</tt> and <tt class="literal">NEXTKEY</tt> iterate over the key/value
+pairs when you call <tt class="literal">keys</tt>, <tt class="literal">values</tt>, or <tt class="literal">each</tt>.  And as usual, if
+you want to perform particular actions when the object is deallocated,
+you may define a <tt class="literal">DESTROY</tt> method.  (If this seems like a lot of
+methods, you didn't read the last section on arrays attentively.
+In any event, feel free to inherit the default methods from the
+standard <tt class="literal">Tie::Hash</tt> module, redefining only the interesting ones.
+Again, <tt class="literal">Tie::StdHash</tt> assumes the implementation is also a hash.)
+<a name="INDEX-2726"></a><a name="INDEX-2727"></a>
+</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-2"></a>
+<p>[2] Remember that Perl
+distinguishes between a key not existing in the hash and a key
+existing in the hash but having a corresponding value of <tt class="literal">undef</tt>.  The
+two possibilities can be tested with <tt class="literal">exists</tt> and <tt class="literal">defined</tt>,
+respectively.</p>
+
+</blockquote>
+
+<p>For example, suppose you want to create a hash where every
+time you assign a value to a key, instead of overwriting
+the previous contents, the new value is appended to an array
+of values.  That way when you say:
+<blockquote>
+<pre class="programlisting">$h{$k} = "one";
+$h{$k} = "two";</pre>
+</blockquote>
+
+It really does:
+<blockquote>
+<pre class="programlisting">push @{ $h{$k} }, "one";
+push @{ $h{$k} }, "two";</pre>
+</blockquote>
+
+That's not a very complicated idea, so you should be able to use a
+pretty simple module.  Using <tt class="literal">Tie::StdHash</tt> as a base class, it
+is.  Here's a <tt class="literal">Tie::AppendHash</tt> that does just that:
+<blockquote>
+<pre class="programlisting">package Tie::AppendHash;
+use Tie::Hash;
+our @ISA = ("Tie::StdHash");
+sub STORE {
+    my ($self, $key, $value) = @_;
+    push @{$self-&gt;{key}}, $value;
+}
+1;</pre>
+</blockquote>
+</p>
+
+
+<h3 class="sect2">14.3.1. Hash-Tying Methods</h3>
+
+<p>
+<a name="INDEX-2728"></a><a name="INDEX-2729"></a>
+Here's an example of an interesting tied-hash class: it gives you a
+hash representing a particular user's dot files (that is, files whose
+names begin with a period, which is a naming convention for
+initialization files under Unix). You index into the hash with the
+name of the file (minus the period) and get back that dot file's
+contents. For example:
+<blockquote>
+<pre class="programlisting">use DotFiles;
+tie %dot, "DotFiles";
+if ( $dot{profile} =~ /MANPATH/ or
+     $dot{login}   =~ /MANPATH/ or
+     $dot{cshrc}   =~ /MANPATH/    ) {
+    print "you seem to set your MANPATH\n";
+}</pre>
+</blockquote>
+
+Here's another way to use our tied class:
+<blockquote>
+<pre class="programlisting"># Third argument is the name of a user whose dot files we will tie to.
+tie %him, "DotFiles", "daemon";
+foreach $f (keys %him) {
+    printf "daemon dot file %s is size %d\n", $f, length $him{$f};
+}</pre>
+</blockquote>
+
+In our <tt class="literal">DotFiles</tt> example we implement the object as a regular hash
+containing several important fields, of which only the <tt class="literal">{CONTENTS}</tt>
+field will contain what the user thinks of as the hash.  Here are the
+object's actual fields:</p>
+
+<a name="perl3-tab-dotfilehash"></a>
+<table border="1">
+
+<tr>
+<th>Field</th>
+<th>Contents</th>
+</tr>
+
+
+
+
+<tr>
+<td><tt class="literal">USER</tt></td>
+<td>Whose dot files this object represents.</td>
+</tr>
+
+<tr>
+<td><tt class="literal">HOME</tt></td>
+<td>Where those dot files live.</td>
+</tr>
+
+<tr>
+<td><tt class="literal">CLOBBER</tt></td>
+<td>Whether we are allowed to change or remove those dot files.</td>
+</tr>
+
+<tr>
+<td><tt class="literal">CONTENTS</tt></td>
+<td>The hash of dot file names and content mappings.</td>
+</tr>
+
+
+</table>
+<p>Here's the start of <em class="emphasis">DotFiles.pm</em>:
+<blockquote>
+<pre class="programlisting">package DotFiles;
+use Carp;
+sub whowasi { (caller(1))[3] . "()" }
+my $DEBUG = 0;
+sub debug { $DEBUG = @_ ? shift : 1 }</pre>
+</blockquote>
+
+For our example, we want to be able to turn on debugging output to
+help in tracing during development, so we set up <tt class="literal">$DEBUG</tt> for that. We also keep one convenience
+function around internally to help print out warnings: <tt class="literal">whowasi</tt>
+returns the name of the function that called the current function
+(<tt class="literal">whowasi</tt>'s "grandparent" function).</p>
+
+<p>Here are the methods for the <tt class="literal">DotFiles</tt> tied hash:</p>
+
+<dl>
+<dt>
+<b><em class="replaceable">CLASSNAME</em><tt class="literal">-&gt;TIEHASH(</tt><em class="replaceable">LIST</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>Here's the <tt class="literal">DotFiles</tt> constructor:
+<blockquote>
+<pre class="programlisting">sub TIEHASH {
+    my $self   = shift;
+    my $user   = shift || $&gt;;
+    my $dotdir = shift || "";
+
+    croak "usage: @{[ &amp;whowasi ]} [USER [DOTDIR]]" if @_;
+
+    $user = getpwuid($user) if $user =~ /^\d+$/;
+    my $dir = (getpwnam($user))[7]
+            or croak "@{ [&amp;whowasi] }: no user $user";
+    $dir .= "/$dotdir" if $dotdir;
+
+    my $node = {
+        USER        =&gt; $user,
+        HOME        =&gt; $dir,
+        CONTENTS    =&gt; {},
+        CLOBBER     =&gt; 0,
+    };
+
+    opendir DIR, $dir
+            or croak "@{[&amp;whowasi]}: can't opendir $dir: $!";
+    for my $dot ( grep /^\./ &amp;&amp; -f "$dir/$_", readdir(DIR)) {
+        $dot =~ s/^\.//;
+        $node-&gt;{CONTENTS}{$dot} = undef;
+    }
+    closedir DIR;
+
+    return bless $node, $self;
+}</pre>
+</blockquote>
+
+It's probably worth mentioning that if you're going to apply file
+tests to the values returned by the above <tt class="literal">readdir</tt>, you'd better
+prepend the directory in question (as we do).  Otherwise, since no
+<tt class="literal">chdir</tt> was done, you'd likely be testing the wrong file.</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;FETCH(</tt><em class="replaceable">KEY</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>This method implements reading an element from the tied hash. It takes one argument after the object: the key
+whose value we're trying to fetch.  The key is a string, and you can
+do anything you like with it (consistent with its being a string).</p>
+
+<p>Here's the fetch for our <tt class="literal">DotFiles</tt> example:
+<blockquote>
+<pre class="programlisting">sub FETCH {
+    carp &amp;whowasi if $DEBUG;
+    my $self = shift;
+    my $dot = shift;
+    my $dir = $self-&gt;{HOME};
+    my $file = "$dir/.$dot";
+
+    unless (exists $self-&gt;{CONTENTS}-&gt;{$dot} || -f $file) {
+        carp "@{[&amp;whowasi]}: no $dot file" if $DEBUG;
+        return undef;
+    }
+
+    # Implement a cache.
+    if (defined $self-&gt;{CONTENTS}-&gt;{$dot}) {
+        return $self-&gt;{CONTENTS}-&gt;{$dot};
+    } else {
+        return $self-&gt;{CONTENTS}-&gt;{$dot} = `cat $dir/.$dot`;
+    }
+}</pre>
+</blockquote>
+<a name="INDEX-"></a>
+We cheated a little by running the Unix <em class="emphasis">cat</em>(1) command, but it would
+be more portable (and more efficient) to open the file
+ourselves.  On the other hand, since dotfiles are a Unixy concept,
+we're not that concerned.  Or shouldn't be.  Or something...</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;STORE(</tt><em class="replaceable">KEY</em><tt class="literal">,</tt> <em class="replaceable">VALUE</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>This method does the dirty work whenever an element in the tied hash is
+set (written).  It takes two arguments after the object: the
+key under which we're storing the new value, and the value itself.</p>
+
+<p>For our <tt class="literal">DotFiles</tt> example, we won't let users overwrite a file without
+first invoking the <tt class="literal">clobber</tt> method on the original object returned by
+<tt class="literal">tie</tt>:
+<blockquote>
+<pre class="programlisting">sub STORE {
+    carp &amp;whowasi if $DEBUG;
+    my $self  = shift;
+    my $dot   = shift;
+    my $value = shift;
+    my $file  = $self-&gt;{HOME} . "/.$dot";
+
+    croak "@{[&amp;whowasi]}: $file not clobberable"
+        unless $self-&gt;{CLOBBER};
+
+    open(F, "&gt; $file") or croak "can't open $file: $!";
+    print F $value;
+    close(F);
+}</pre>
+</blockquote>
+If someone wants to clobber something, they can say:
+<blockquote>
+<pre class="programlisting">$ob = tie %daemon_dots, "daemon";
+$ob-&gt;clobber(1);
+$daemon_dots{signature} = "A true daemon\n";</pre>
+</blockquote>
+
+But they could alternatively set <tt class="literal">{CLOBBER}</tt> with <tt class="literal">tied</tt>:
+<blockquote>
+<pre class="programlisting">tie %daemon_dots, "DotFiles", "daemon";
+tied(%daemon_dots)-&gt;clobber(1);</pre>
+</blockquote>
+
+or as one statement:
+<blockquote>
+<pre class="programlisting">(tie %daemon_dots, "DotFiles", "daemon")-&gt;clobber(1);</pre>
+</blockquote>
+
+The <tt class="literal">clobber</tt> method is simply:
+<blockquote>
+<pre class="programlisting">sub clobber {
+    my $self = shift;
+    $self-&gt;{CLOBBER} = @_ ? shift : 1;
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;DELETE(</tt><em class="replaceable">KEY</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>This method handles requests to remove an element from the hash.  If
+your emulated hash uses a real hash somewhere, you can just call
+the real <tt class="literal">delete</tt>.  Again, we'll be careful to check whether the
+user really wants to clobber files:
+<blockquote>
+<pre class="programlisting">sub DELETE   {
+    carp &amp;whowasi if $DEBUG;
+    my $self = shift;
+    my $dot = shift;
+    my $file = $self-&gt;{HOME} . "/.$dot";
+    croak "@{[&amp;whowasi]}: won't remove file $file"
+        unless $self-&gt;{CLOBBER};
+    delete $self-&gt;{CONTENTS}-&gt;{$dot};
+    unlink $file or carp "@{[&amp;whowasi]}: can't unlink $file: $!";
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;CLEAR</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a>
+This method is run when the whole hash needs to be cleared, usually
+by assigning the empty list to it. In our example, that would remove all the user's dot files!  It's such a
+dangerous thing that we'll require <tt class="literal">CLOBBER</tt> to be set higher than <tt class="literal">1</tt>
+before this can happen:
+<blockquote>
+<pre class="programlisting">sub CLEAR {
+    carp &amp;whowasi if $DEBUG;
+    my $self = shift;
+    croak "@{[&amp;whowasi]}: won't remove all dotfiles for $self-&gt;{USER}"
+        unless $self-&gt;{CLOBBER} &gt; 1;
+    for my $dot ( keys %{$self-&gt;{CONTENTS}}) {
+        $self-&gt;DELETE($dot);
+    }
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;EXISTS(</tt><em class="replaceable">KEY</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a>
+This method runs when the user invokes the <tt class="literal">exists</tt> function on
+a particular hash.  In our example, we'll look at the <tt class="literal">{CONTENTS}</tt> hash
+element to find the answer:
+<blockquote>
+<pre class="programlisting">sub EXISTS   {
+    carp &amp;whowasi if $DEBUG;
+    my $self = shift;
+    my $dot  = shift;
+    return exists $self-&gt;{CONTENTS}-&gt;{$dot};
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;FIRSTKEY</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a><a name="INDEX-"></a><a name="INDEX-"></a><a name="INDEX-"></a>
+This method is called when the user begins to iterate through the
+hash, such as with a <tt class="literal">keys</tt>, <tt class="literal">values</tt>, or <tt class="literal">each</tt> call.  By calling
+<tt class="literal">keys</tt> in a scalar context, we reset its internal state to ensure
+that the next <tt class="literal">each</tt> used in the <tt class="literal">return</tt> statement will get the
+first key.
+<blockquote>
+<pre class="programlisting">sub FIRSTKEY {
+    carp &amp;whowasi if $DEBUG;
+    my $self = shift;
+    my $temp = keys %{$self-&gt;{CONTENTS}};
+    return scalar each %{$self-&gt;{CONTENTS}};
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;NEXTKEY(</tt><em class="replaceable">PREVKEY</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>This method is the iterator for a <tt class="literal">keys</tt>, <tt class="literal">values</tt>, or <tt class="literal">each</tt>
+function.  <em class="replaceable">PREVKEY</em> is the last key accessed, which Perl knows
+to supply.  This is useful if the <tt class="literal">NEXTKEY</tt> method needs to know
+its previous state to calculate the next state.</p>
+
+<p>For our example, we are using a real hash to represent the tied hash's
+data, except that this hash is stored in the hash's <tt class="literal">CONTENTS</tt> field
+instead of in the hash itself.  So we can just rely on Perl's <tt class="literal">each</tt>
+iterator:
+<blockquote>
+<pre class="programlisting">sub NEXTKEY  {
+    carp &amp;whowasi if $DEBUG;
+    my $self = shift;
+    return scalar each %{ $self-&gt;{CONTENTS} }
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;DESTROY</tt></b>
+</dt>
+<dd>
+<p>This method is triggered when a tied hash's object is about to be
+deallocated.  You don't really need it except for debugging and extra
+cleanup.  Here's a very simple version:
+<blockquote>
+<pre class="programlisting">sub DESTROY  {
+    carp &amp;whowasi if $DEBUG;
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+</dl>
+
+<p>
+</p>
+
+<p>Now that we've given you all those methods, your homework is to go back
+and find the places we interpolated <tt class="literal">@{[&amp;whowasi]}</tt> and replace
+them with a simple tied scalar named <tt class="literal">$whowasi</tt> that does the same thing.</p>
+
+<a name="INDEX-2730"></a><a name="INDEX-2731"></a><a name="INDEX-2732"></a>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch14_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch14_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">14.2. Tying Arrays</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">14.4. Tying Filehandles</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

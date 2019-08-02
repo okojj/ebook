@@ -1,0 +1,819 @@
+<!doctype html public "-//ORA//DTD CD HTML 3.2//EN">
+<html>
+<head>
+<title>[Chapter 8] 8.3 Efficiency</TITLE>
+<meta name="author" content="Larry Wall, Tom Christiansen, and Randal Schwartz">
+<meta name="date" content="Fri Aug 29 18:47:21 1997">
+<meta name="form" content="html">
+<meta name="metadata" content="dublincore.0.1">
+<meta name="objecttype" content="book part">
+<meta name="otheragent" content="gmat dbtohtml">
+<meta name="publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="source" content="SGML">
+<meta name="subject" content="Perl">
+<meta name="title" content="Programming Perl, Second Edition">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+</HEAD>
+<body bgcolor="#FFFFFF">
+
+<div class=htmlnav>
+<h1><a href='index.html'><img src="gifs/smbanner.gif" alt="Programming Perl, Second Edition" border=0></a></H1>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch08_02.html"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 8<br>Other Oddments</FONT></B></TD>
+<td width=172 align=right valign=top><a href="ch08_04.html"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+</table>
+
+&nbsp;
+<hr align=left width=515>
+</DIV>
+<div class=sect1>
+<h2 class=sect1><a class="TITLE" name="PERL2-CH-8-SECT-3">8.3 Efficiency</A></h2>
+
+<p class=para>
+<a name="CH08.PERF1"></A>While most of the work of programming may be simply getting a program
+working properly, you may find yourself wanting more bang for the buck
+out of your Perl program.  Perl's rich set of operators, datatypes, and
+control constructs are not necessarily intuitive when it comes to speed
+and space optimization.  Many trade-offs were made during Perl's design,
+and such decisions are buried in the guts of the code.  In general, the
+shorter and simpler your code is, the faster it runs, but there are
+exceptions.  This section attempts to help you make it work just a wee
+bit better.
+
+<p class=para>
+(If you want it to work a lot better, you can play with the new Perl-to-C
+translation modules, or rewrite your inner loop as a C extension.)
+
+<p class=para>
+You'll note that sometimes optimizing for time may cost you in space or
+programmer efficiency (indicated by conflicting hints below).  Them's
+the breaks.  If programming were easy, they wouldn't need something as
+complicated as a human being to do it, now would they?
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-8-SECT-3.1">Time Efficiency</A></h3>
+
+<ul class=itemizedlist>
+<li class=listitem>Use hashes instead of linear searches.
+For example, instead of searching through <tt class=literal>@keywords</tt> to see if
+<b>$_</b> is a keyword, construct a hash with:
+
+<div class=programlisting>
+<p>
+<pre>
+my %keywords;
+for (@keywords) {
+    $keywords{$_}++;
+}
+</PRE>
+</DIV>
+
+<p class=para>
+Then, you can quickly tell if <b>$_</b> contains a keyword by testing
+<tt class=literal>$keyword{$_}</tt> for a non-zero value.
+
+<p>
+<li class=listitem> 
+Avoid subscripting when a <b>foreach</b> or list operator will do.  Subscripting
+sometimes forces conversion from floating point to integer, and
+there's often a better way to do it.  Consider using <b>foreach</b>, <a href="ch03_02.html#PERL2-CMD-SHIFT">shift</A>,
+and <a href="ch03_02.html#PERL2-CMD-SPLICE">splice</A> operations.  Consider saying
+<tt class=literal>use integer</tt>.  
+
+<p>
+<li class=listitem>Avoid <a href="ch03_02.html#PERL2-CMD-GOTO">goto</A>.
+It scans outward from your current location for the indicated label.
+
+<p>
+<li class=listitem>Avoid <a href="ch03_02.html#PERL2-CMD-PRINTF">printf</A> if <a href="ch03_02.html#PERL2-CMD-PRINT">print</A> will work.
+Quite apart from the extra overhead of <a href="ch03_02.html#PERL2-CMD-PRINTF">printf</A>, some
+implementations have field length limitations that <a href="ch03_02.html#PERL2-CMD-PRINT">print</A> gets
+around.
+
+<p>
+<li class=listitem>Avoid <b>$&amp;</b>, <b>$</b><tt class=literal>`</tt>, 
+and <b>$</b><tt class=literal>'</tt>.
+Any occurrence in your program causes all matches to save the searched
+string for possible future reference.  (However, once you've blown it, it
+doesn't hurt to have more of them.)
+
+<p>
+<li class=listitem>Avoid using <a href="ch03_02.html#PERL2-CMD-EVAL">eval</A> on a string.  An <a href="ch03_02.html#PERL2-CMD-EVAL">eval</A> of a string (not of a
+<tt class=replaceable><i>BLOCK</i></tt>) forces recompilation every time through.  The
+Perl parser is pretty fast for a parser, but that's not saying much.  Nowadays
+there's almost always a better way to do what you want anyway.  In particular,
+any code that uses <a href="ch03_02.html#PERL2-CMD-EVAL">eval</A> merely to construct
+variable names is obsolete, since you can now do the same directly using
+symbolic references:
+
+<div class=programlisting>
+<p>
+<pre>
+${$pkg . '::' . $varname} = &amp;{ "fix_" . $varname }($pkg);
+</PRE>
+</DIV>
+
+<p class=para>
+<p>
+<li class=listitem>Avoid string <a href="ch03_02.html#PERL2-CMD-EVAL">eval</A> inside a loop.
+Put the loop into the <a href="ch03_02.html#PERL2-CMD-EVAL">eval</A> instead, to avoid redundant
+recompilations of the code.  See the <a href="ch03_02.html#PERL2-CMD-STUDY">study</A> operator
+in <a href="ch03_01.html">Chapter 3, <i>Functions</i></A> for an example of this.
+
+<p>
+<li class=listitem> 
+Avoid run-time-compiled patterns. Use the
+<tt class=literal>/</tt><tt class=replaceable><i>pattern</i></tt><tt class=literal>/o</tt>
+(once only) pattern modifier to avoid pattern recompilation when the
+pattern doesn't change over the life of the process.
+For patterns that change
+occasionally, you can use the fact that a null pattern refers back to
+the previous pattern, like this:
+
+<div class=programlisting>
+<p>
+<pre>
+"foundstring" =~ /$currentpattern/;        # Dummy match (must succeed).
+while (&lt;&gt;) {
+    print if //;
+}
+</PRE>
+</DIV>
+
+<p class=para>
+You can also use <a href="ch03_02.html#PERL2-CMD-EVAL">eval</A> to recompile a subroutine that does the match (if
+you only recompile occasionally).
+
+<p>
+<li class=listitem>Short-circuit alternation is often faster than the corresponding
+regular expression.  So:
+
+<div class=programlisting>
+<p>
+<pre>
+print if /one-hump/ || /two/;
+</PRE>
+</DIV>
+
+<p class=para>
+is likely to be faster than:
+
+<div class=programlisting>
+<p>
+<pre>
+print if /one-hump|two/;
+</PRE>
+</DIV>
+
+<p class=para>
+at least for certain values of one-hump and two.
+This is because the optimizer likes to hoist certain simple matching
+operations up into higher parts of the syntax tree and do very fast
+matching with a Boyer-Moore algorithm.  A complicated pattern defeats
+this.
+
+<p>
+<li class=listitem>Reject common cases early with <tt class=literal>next if</tt>.
+As with simple regular expressions, the optimizer likes this.  And it just
+makes sense to avoid unnecessary work.  You can typically discard comment
+lines and blank lines even before you do a <b>split</b> or <b>chop</b>:
+
+<div class=programlisting>
+<p>
+<pre>
+while (&lt;&gt;) {
+    next if /^#/;
+    next if /^$/;
+    chop;
+    @piggies = split(/,/);
+    ...
+}
+</PRE>
+</DIV>
+
+<p class=para>
+<p>
+<li class=listitem> 
+Avoid regular expressions with many quantifiers, or with big
+<tt class=literal>{</tt><tt class=replaceable><i>m,n</i></tt><tt class=literal>}</tt>
+numbers on parenthesized expressions.  Such patterns can result in
+exponentially slow backtracking behavior unless the quantified
+subpatterns match on their first "pass".  
+
+<p>
+<li class=listitem>Try to maximize the length of any non-optional literal strings in
+regular expressions.  This is counterintuitive, but longer patterns
+often match faster than shorter patterns.  That's because the
+optimizer looks for constant strings and hands them off to a
+Boyer-Moore search, which benefits from longer strings.  Compile your
+pattern with the <tt class=literal>-Dr</tt> debugging switch to see what
+Perl thinks the longest literal string is.
+
+<p>
+<li class=listitem>Avoid expensive subroutine calls in tight loops.
+There is overhead associated with calling subroutines, especially when
+you pass lengthy parameter lists, or return lengthy values.  In
+increasing order of desperation, try passing values by reference,
+passing values as dynamically scoped globals, inlining the subroutine,
+or rewriting the whole loop in C.
+
+<p>
+<li class=listitem>Avoid <a href="ch03_02.html#PERL2-CMD-GETC">getc</A> for anything but single-character terminal I/O.
+In fact, don't use it for that either.  Use <a href="ch03_02.html#PERL2-CMD-SYSREAD">sysread</A>.
+
+<p>
+<li class=listitem>Use <a href="ch03_02.html#PERL2-CMD-READDIR">readdir</A> rather than <tt class=literal>&lt;*&gt;</tt>.
+To get all the non-dot files within a directory, say something like:
+
+<div class=programlisting>
+<p>
+<pre>
+opendir(DIR,".");
+@files = sort grep(!/^\./, readdir(DIR));
+closedir(DIR);
+</PRE>
+</DIV>
+
+<p class=para>
+<p>
+<li class=listitem>Avoid frequent <a href="ch03_02.html#PERL2-CMD-SUBSTR">substr</A> on long strings.
+
+<p>
+<li class=listitem>Use <a href="ch03_02.html#PERL2-CMD-PACK">pack</A> and <a href="ch03_02.html#PERL2-CMD-UNPACK">unpack</A> 
+instead of multiple <a href="ch03_02.html#PERL2-CMD-SUBSTR">substr</A>
+invocations.
+
+<p>
+<li class=listitem>Use <a href="ch03_02.html#PERL2-CMD-SUBSTR">substr</A> as an lvalue rather than
+concatenating substrings. For example, to replace the fourth through sixth
+characters of <tt class=literal>$foo</tt> with the contents of the variable
+<tt class=literal>$bar</tt>, don't do:
+
+<div class=programlisting>
+<p>
+<pre>
+$foo = substr($foo,0,3) . $bar . substr($foo,6);
+</PRE>
+</DIV>
+
+<p class=para>
+Instead, simply identify the part of the string to be replaced,
+and assign into it, as in:
+
+<div class=programlisting>
+<p>
+<pre>
+substr($foo,3,3) = $bar;
+</PRE>
+</DIV>
+
+<p class=para>
+But be aware that if <tt class=literal>$foo</tt> is a huge string, and <tt class=literal>$bar</tt>
+isn't exactly <tt class=literal>3</tt> characters long, this can do a lot of copying too.
+
+<p>
+<li class=listitem>Use <tt class=literal>s///</tt> rather than concatenating substrings.
+This is especially true if you can replace one constant with another of
+the same size.  This results in an in-place substitution.
+
+<p>
+<li class=listitem>Use modifiers and equivalent <b>and</b> and 
+<b>or</b>, instead of
+full-blown conditionals.
+Statement modifiers and logical operators avoid the overhead of entering
+and leaving a block.  They can often be more readable too.
+
+<p>
+<li class=listitem>Use <tt class=literal>$foo = $a || $b || $c</tt>.
+This is much faster (and shorter to say) than:
+
+<div class=programlisting>
+<p>
+<pre>
+if ($a) {
+    $foo = $a;
+}
+elsif ($b) {
+    $foo = $b;
+}
+elsif ($c) {
+    $foo = $c;
+}
+</PRE>
+</DIV>
+
+<p class=para>
+Similarly, set default values with:
+
+<div class=programlisting>
+<p>
+<pre>
+$pi ||= 3;
+</PRE>
+</DIV>
+
+<p class=para>
+<p>
+<li class=listitem>Group together any tests that want the same initial string.
+When testing a string for various prefixes in anything resembling a
+switch structure, put together all the <tt class=literal>/^a/</tt> patterns, all the
+<tt class=literal>/^b/</tt> patterns, and so on.
+
+<p>
+<li class=listitem>Don't test things you know won't match.
+Use <a href="ch03_02.html#PERL2-CMD-LAST">last</A> or <b>elsif</b> 
+to avoid falling through to the next
+case in your switch statement.
+
+<p>
+<li class=listitem>Use special operators like <a href="ch03_02.html#PERL2-CMD-STUDY">study</A>, logical string operations,
+<tt class=literal>unpack 'u'</tt> and <tt class=literal>pack '%'</tt> formats.
+
+<p>
+<li class=listitem>Beware of the tail wagging the dog.
+Misstatements resembling <tt class=literal>(&lt;STDIN&gt;)[0]</tt> and <tt class=literal>0
+.. 2000000</tt> can
+cause Perl much unnecessary work.  In accord with UNIX philosophy, Perl
+gives you enough rope to hang yourself.
+
+<p>
+<li class=listitem>Factor operations out of loops. The Perl optimizer does not attempt to
+remove invariant code from loops. It expects you to exercise some sense.
+
+<p>
+<li class=listitem>Slinging strings can be faster than slinging arrays.
+
+<p>
+<li class=listitem>Slinging arrays can be faster than slinging strings.
+It all depends on whether you're going to reuse the strings or arrays,
+and on which operations you're going to perform.  Heavy modification of each
+element implies that arrays will be better, and occasional modification of
+some elements implies that strings will be better.  But you just have to
+try it and see.
+
+<p>
+<li class=listitem><a href="ch03_02.html#PERL2-CMD-MY">my</A> variables are normally 
+faster than <a href="ch03_02.html#PERL2-CMD-LOCAL">local</A> variables.
+
+<p>
+<li class=listitem>Sorting on a manufactured key array may be faster than using a fancy sort
+subroutine.
+A given array value may participate in several sort comparisons, so if
+the sort subroutine has to do much recalculation, it's better to
+factor out that calculation to a separate pass before the actual sort.
+
+<p>
+<li class=listitem><tt class=literal>tr/abc//d</tt> is faster than <tt class=literal>s/[abc]//g</tt>.
+
+<p>
+<li class=listitem><a href="ch03_02.html#PERL2-CMD-PRINT">print</A>
+with a comma separator may be faster than concatenating strings.
+For example:
+
+<div class=programlisting>
+<p>
+<pre>
+print $fullname{$name} . " has a new home directory " .
+    $home{$name} . "\n";
+</PRE>
+</DIV>
+
+<p class=para>
+has to glue together the two hashes and the two
+fixed strings before passing them to the low-level print routines, whereas:
+
+<div class=programlisting>
+<p>
+<pre>
+print $fullname{$name}, " has a new home directory ",
+    $home{$name}, "\n";
+</PRE>
+</DIV>
+
+<p class=para>
+doesn't.  On the other hand, depending on the values and the architecture,
+the concatenation may be faster.  Try it.
+
+<p>
+<li class=listitem>Prefer <tt class=literal>join(``, ...)</tt> to a series of concatenated strings.
+Multiple concatenations may cause strings to be copied back and
+forth multiple times.  The <a href="ch03_02.html#PERL2-CMD-JOIN">join</A> operator avoids this.
+
+<p>
+<li class=listitem><a href="ch03_02.html#PERL2-CMD-SPLIT">split</A> on a fixed string is generally faster than 
+<a href="ch03_02.html#PERL2-CMD-SPLIT">split</A> on a
+pattern.
+That is, use <tt class=literal>split(/ /,...)</tt> rather than
+<tt class=literal>split(/ +/,...)</tt> if you know there will only be one space.
+However, the patterns <tt class=literal>/\s+/</tt>, <tt class=literal>/^/</tt> and <tt class=literal>/ /</tt> are
+specially optimized, as is the <a href="ch03_02.html#PERL2-CMD-SPLIT">split</A> on whitespace.
+
+<p>
+<li class=listitem>Pre-extending an array or string can save some time.
+As strings and arrays grow, Perl extends them by allocating a new copy
+with some room for growth and copying in the old value.  Pre-extending a
+string with the <b>x</b> operator or an array by setting <tt class=literal>$#array</tt>
+can prevent this occasional overhead, as well as minimize memory
+fragmentation.
+
+<p>
+<li class=listitem>Don't <a href="ch03_02.html#PERL2-CMD-UNDEF">undef</A> long strings and arrays if they'll be reused for the
+same purpose.
+This helps prevent reallocation when the string or array must be re-extended.
+
+<p>
+<li class=listitem>Prefer <tt class=literal>`\0` x 8192</tt> over <tt class=literal>unpack(`x8192`,())</tt>.
+
+<p>
+<li class=listitem><tt class=literal>system(`mkdir...`)</tt> may be faster on multiple directories if
+<i class=emphasis>mkdir</I> (2) isn't available.
+
+<p>
+<li class=listitem>Avoid using <a href="ch03_02.html#PERL2-CMD-EOF">eof</A> if return values will already indicate it.
+
+<p>
+<li class=listitem>Cache entries from passwd and group (and so on) that are apt to be reused.
+For example, to cache the return value from <a href="ch03_02.html#PERL2-CMD-GETHOSTBYADDR">gethostbyaddr</A> when
+you are converting numeric addresses (like <tt class=literal>198.112.208.11</tt>) to names
+(like "www.ora.com"), you can use something like:
+
+<div class=programlisting>
+<p>
+<pre>
+sub numtoname {
+    local($_) = @_;
+    unless (defined $numtoname{$_}) {
+        local(@a) = gethostbyaddr(pack('C4', split(/\./)),2);
+        $numtoname{$_} = @a &gt; 0 ? $a[0] : $_;
+    }
+    $numtoname{$_};
+}
+</PRE>
+</DIV>
+
+<p class=para>
+<p>
+<li class=listitem>Avoid unnecessary system calls.
+Operating system calls tend to be rather expensive.  So for example,
+don't call the <a href="ch03_02.html#PERL2-CMD-TIME">time</A> operator when a cached value of <tt class=literal>$now</tt>
+would do.  Use the special <b>_</b> filehandle to avoid unnecessary
+<i class=emphasis>stat</I> (2) calls.  On some systems, even a minimal system call may
+execute a thousand instructions.
+
+<p>
+<li class=listitem>Avoid unnecessary <a href="ch03_02.html#PERL2-CMD-SYSTEM">system</A> calls.
+The <a href="ch03_02.html#PERL2-CMD-SYSTEM">system</A> operator has to fork a subprocess and execute the
+program you specify.  Or worse, execute a shell to execute the program
+you specify.  This can easily execute a million instructions.
+
+<p>
+<li class=listitem>Worry about starting subprocesses, but only if they're frequent.
+Starting a single <i class=emphasis>pwd</I>, <i class=emphasis>hostname</I>, or <i class=emphasis>find</I> process isn't
+going to hurt you much--after all, a shell starts subprocesses all day
+long.  We do occasionally encourage the toolbox approach, believe it or not.
+
+<p>
+<li class=listitem>Keep track of your working directory yourself rather than calling
+<i class=emphasis>pwd</I> repeatedly.
+(A package is provided in the standard library for this.
+See the Cwd module in <a href="ch07_01.html">Chapter 7, <i>The Standard Perl Library</i></A>.)
+
+<p>
+<li class=listitem>Avoid shell metacharacters in commands--pass lists to <a href="ch03_02.html#PERL2-CMD-SYSTEM">system</A> and
+<a href="ch03_02.html#PERL2-CMD-EXEC">exec</A> where appropriate.
+
+<p>
+<li class=listitem>Set the sticky bit on the Perl interpreter on machines without demand paging.
+<div class=programlisting>
+<p>
+<pre>
+chmod +t /usr/bin/perl
+</PRE>
+</DIV>
+
+<p>
+<li class=listitem>Using defaults doesn't make your program faster.
+
+<p>
+</UL>
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-8-SECT-3.2">Space Efficiency</A></h3>
+
+<ul class=itemizedlist>
+<li class=listitem>Use <a href="ch03_02.html#PERL2-CMD-VEC">vec</A> for compact integer array storage.
+
+<p>
+<li class=listitem>Prefer numeric values over string values--they require little additional
+space over that allocated for the scalar header structure.
+
+<p>
+<li class=listitem>Use <a href="ch03_02.html#PERL2-CMD-SUBSTR">substr</A> to store constant-length strings in a longer string.
+
+<p>
+<li class=listitem>Use the Tie::SubstrHash module for very compact storage of a hash array,
+if the key and value lengths are fixed.
+
+<p>
+<li class=listitem>Use <tt class=literal>_ _END_ _</tt> and the <tt class=literal>DATA</tt>
+filehandle to avoid storing program data as both a string and an array.
+
+<p>
+<li class=listitem>Prefer <a href="ch03_02.html#PERL2-CMD-EACH">each</A> to <a href="ch03_02.html#PERL2-CMD-KEYS">keys</A> where order doesn't matter.
+
+<p>
+<li class=listitem>Delete or <a href="ch03_02.html#PERL2-CMD-UNDEF">undef</A> globals that are no longer in use.
+
+<p>
+<li class=listitem>Use some kind of DBM to store hashes.
+
+<p>
+<li class=listitem>Use temp files to store arrays.
+
+<p>
+<li class=listitem>Use pipes to offload processing to other tools.
+
+<p>
+<li class=listitem>Avoid list operations and file slurps.
+
+<p>
+<li class=listitem>Avoid using <tt class=literal>tr///</tt>, each of which must store a translation
+table of 256 short integers (not characters, since we have to remember
+which characters are to be deleted).
+
+<p>
+<li class=listitem>Don't unroll your loops or inline your subroutines.
+
+<p>
+</UL>
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-8-SECT-3.3">Programmer Efficiency</A></h3>
+
+<ul class=itemizedlist>
+<li class=listitem>Use defaults.
+
+<p>
+<li class=listitem>Use funky shortcut command-line switches like
+<b>-a, -n, -p, -s, -i</b>.
+
+<p>
+<li class=listitem>Use <b>for</b> to mean <b>foreach</b>.
+
+<p>
+<li class=listitem>Sling UNIX commands around with backticks.
+
+<p>
+<li class=listitem>Use <tt class=literal>&lt;*&gt;</tt> and such.
+
+<p>
+<li class=listitem>Use run-time-compiled patterns.
+
+<p>
+<li class=listitem>Use patterns with lots of <tt class=literal>*</tt>, <tt class=literal>+</tt>,
+and <tt class=literal>{}</tt>.  
+
+<p>
+<li class=listitem>Sling whole arrays and slurp entire files.
+
+<p>
+<li class=listitem>Use <a href="ch03_02.html#PERL2-CMD-GETC">getc</A>.
+
+<p>
+<li class=listitem>Use <b>$&amp;</b>, <b>$</b><tt class=literal>`</tt>, and <b>$</b><tt class=literal>'</tt>.
+
+<p>
+<li class=listitem>Don't check error values on <a href="ch03_02.html#PERL2-CMD-OPEN">open</A>, since
+<tt class=literal>&lt;</tt><tt class=replaceable><i>HANDLE</i></tt><tt class=literal>&gt;</tt>
+and <tt class=literal>print</tt> <tt class=replaceable><i>HANDLE</i></tt> will simply
+no-op when given an invalid handle.  
+
+<p>
+<li class=listitem>Don't <a href="ch03_02.html#PERL2-CMD-CLOSE">close</A> your files--they'll be
+closed on the next <a href="ch03_02.html#PERL2-CMD-OPEN">open</A>.
+
+<p>
+<li class=listitem>Pass subroutine arguments as globals.
+
+<p>
+<li class=listitem>Don't name your subroutine parameters.
+You can access them directly as
+<tt class=literal>$_[</tt><tt class=replaceable><i>EXPR</i></tt><tt class=literal>]</tt>.
+
+<p>
+<li class=listitem>Use whatever you think of first.
+
+<p>
+</UL>
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-8-SECT-3.4">Maintainer Efficiency</A></h3>
+
+<ul class=itemizedlist>
+<li class=listitem>Don't use defaults.
+
+<p>
+<li class=listitem>Use <b>foreach</b> to mean <b>foreach</b>.
+
+<p>
+<li class=listitem>Use meaningful loop labels with <a href="ch03_02.html#PERL2-CMD-NEXT">next</A> and <a href="ch03_02.html#PERL2-CMD-LAST">last</A>.
+
+<p>
+<li class=listitem>Use meaningful variable names.
+
+<p>
+<li class=listitem>Use meaningful subroutine names.
+
+<p>
+<li class=listitem>Put the important thing first on the line using <b>and</b>, <b>or</b>,
+and statement modifiers.
+
+<p>
+<li class=listitem>Close your files as soon as you're done with them.
+
+<p>
+<li class=listitem>Use packages, modules, and classes to hide your implementation details.
+
+<p>
+<li class=listitem>Pass arguments as subroutine parameters.
+
+<p>
+<li class=listitem>Name your subroutine parameters using <a href="ch03_02.html#PERL2-CMD-MY">my</A>.
+
+<p>
+<li class=listitem>Parenthesize for clarity.
+
+<p>
+<li class=listitem>Put in lots of (useful) comments.
+
+<p>
+<li class=listitem>Write the script as its own POD document.
+
+<p>
+</UL>
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-8-SECT-3.5">Porter Efficiency</A></h3>
+
+<ul class=itemizedlist>
+<li class=listitem>Wave a handsome tip under his nose.
+
+<p>
+<li class=listitem>Avoid functions that aren't implemented everywhere.
+You can use <a href="ch03_02.html#PERL2-CMD-EVAL">eval</A> tests to see what's available.
+
+<p>
+<li class=listitem>Don't expect native float and double to <a href="ch03_02.html#PERL2-CMD-PACK">pack</A> and <a href="ch03_02.html#PERL2-CMD-UNPACK">unpack</A> on
+foreign machines.
+
+<p>
+<li class=listitem>Use network byte order when sending binary data over the network.
+
+<p>
+<li class=listitem>Don't send binary data over the network.
+
+<p>
+<li class=listitem>Check <b>$]</b> to see if the current version supports all the features
+you use.
+
+<p>
+<li class=listitem>Don't use <b>$]</b>: use <a href="ch03_02.html#PERL2-CMD-REQUIRE">require</A> with a version number.
+
+<p>
+<li class=listitem>Put in the <tt class=literal>eval exec</tt> hack even if you don't use it.
+
+<p>
+<li class=listitem>Put the <tt class=literal>#!/usr/bin/perl</tt> line in even if you don't use it.
+
+<p>
+<li class=listitem>Test for variants of UNIX commands.
+Some <i class=emphasis>find</I>s can't handle <i class=emphasis>-xdev</I>, for example.
+
+<p>
+<li class=listitem>Avoid variant UNIX commands if you can do it internally.
+UNIX commands don't work too well on MS-DOS or VMS.
+
+<p>
+<li class=listitem>Use the Config module or the <b>$^O</b> variable to find out what kind of
+machine you're running on.
+
+<p>
+<li class=listitem>Put all your scripts and manpages into a single NFS filesystem that's
+mounted everywhere.
+
+<p>
+</UL>
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-8-SECT-3.6">User Efficiency</A></h3>
+
+<ul class=itemizedlist>
+<li class=listitem>Avoid forcing prompt order--pop users into their favorite editor with a form.
+
+<p>
+<li class=listitem>Better yet, use a GUI like the Perl Tk extension, where users can control the order of events.
+
+<p>
+<li class=listitem>Put up something for users to read while you continue doing work.
+
+<p>
+<li class=listitem>Use autoloading so that the program <i class=emphasis>appears</I> to run faster.
+
+<p>
+<li class=listitem>Give the option of helpful messages at every prompt.
+
+<p>
+<li class=listitem>Give a helpful usage message if users don't give correct input.
+
+<p>
+<li class=listitem>Display the default action at every prompt, and maybe a few alternatives.
+
+<p>
+<li class=listitem>Choose defaults for beginners.  Allow experts to change the defaults.
+
+<p>
+<li class=listitem>Use single character input where it makes sense.
+
+<p>
+<li class=listitem>Pattern the interaction after other things the user is familiar with.
+
+<p>
+<li class=listitem>Make error messages clear about what needs fixing.  Include all
+pertinent information such as filename and <tt class=literal>errno</tt>, like this:
+
+<div class=programlisting>
+<p>
+<pre>
+open(FILE, $file) or die "$0: Can't open $file for reading: $!\n";
+</PRE>
+</DIV>
+
+<p class=para>
+<p>
+<li class=listitem>Use <a href="ch03_02.html#PERL2-CMD-FORK">fork</A> and <a href="ch03_02.html#PERL2-CMD-EXIT">exit</A> 
+to detach when the rest of the script is batch processing.
+
+<p>
+<li class=listitem>Allow arguments to come either from the command line or via standard
+input.
+
+<p>
+<li class=listitem>Use text-oriented network protocols.
+
+<p>
+<li class=listitem>Don't put arbitrary limitations into your program.
+
+<p>
+<li class=listitem>Prefer variable-length fields over fixed-length fields.
+
+<p>
+<li class=listitem>Be vicariously lazy.
+
+<p>
+<li class=listitem>Be nice.
+
+<p>
+</UL>
+</DIV>
+
+</DIV>
+
+
+<div class=htmlnav>
+
+<p>
+<hr align=left width=515>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch08_02.html"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><a href="index.html"><img src='gifs/txthome.gif' border=0 alt='Home'></a></td>
+<td width=172 align=right valign=top><a href="ch08_04.html"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+<tr>
+<td width=172 align=left valign=top>Common Goofs for Novices</td>
+<td width=171 align=center valign=top><a href="index/idx_0.html"><img src='gifs/index.gif' alt='Book Index' border=0></a></td>
+<td width=172 align=right valign=top>Programming with Style</td>
+</tr>
+</table>
+<hr align=left width=515>
+
+<img src="gifs/smnavbar.gif" usemap="#map" border=0> 
+<map name="map"> 
+<area shape="Rect" coords="0,0,45,20" href="../html/index.html" alt="HTML: The Definitive Guide">
+<area shape="Rect" coords="46,0,164,37" href="../cgi/index.html" alt="CGI Programming">
+<area shape="Rect" coords="163,0,248,32" href="../jscript/index.html" alt="JavaScript: The Definitive Guide">
+<area shape="Rect" coords="247,0,371,44" href="index.html" alt="Programming Perl">
+<area shape="Rect" coords="371,0,524,46" href="../webnut/index.html" alt="WebMaster in a Nutshell">
+</MAP>
+</DIV>
+
+</BODY>
+</HTML>

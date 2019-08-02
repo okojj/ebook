@@ -1,0 +1,525 @@
+<html>
+<head>
+<title>Making a Thread (Java Distributed Computing)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jim Farley">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-206-9E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Making a Thread">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm" alt="Java Distributed Computing"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch04_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch04_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch04_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch04_01.htm">Chapter 4: Threads</a></td><td align="right" valign="top" width="172"><a href="ch04_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch04_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">4.2. Making a Thread</h2>
+
+<p>
+<a name="INDEX-496"></a>
+The choice between extending the <tt class="literal">Thread</tt> class or
+implementing the <tt class="literal">Runnable</tt> interface with your
+application objects is sometimes not an obvious one. It's also
+usually not very important. Essentially, the difference between the
+two classes is that a <tt class="literal">Thread</tt> is supposed to
+represent <em class="emphasis">how</em> a thread of control runs (its
+priority level, the name for the thread), and a
+<tt class="literal">Runnable</tt> defines <em class="emphasis">what</em> a
+thread runs. In both cases, defining a subclass usually involves
+implementing the <tt class="literal">run()</tt> method to do whatever
+work you want done in the separate thread of control.
+</p>
+
+<p>Most of the time we want to specify what runs in a thread, so in most
+cases you may want to implement the <tt class="literal">Runnable</tt>
+interface. With a <tt class="literal">Runnable</tt> subclass, you can use
+the same object with different types of <tt class="literal">Thread</tt>
+subclasses, depending on the application. You might use your
+implementation of <tt class="literal">Runnable</tt> inside a standard
+<tt class="literal">Thread</tt> in one case, and in another you might run
+it in a subclass of <tt class="literal">Thread</tt> that sends a notice
+across the network when it's started.
+</p>
+
+<p>On the other hand, directly extending <tt class="literal">Thread</tt> can
+make your classes slightly easier to use. You just create one of your
+<tt class="literal">Thread</tt> subclasses and run it, instead of
+creating a <tt class="literal">Runnable</tt> subclass, putting into
+another <tt class="literal">Thread</tt>, and running it. Also, if your
+application objects are subclasses of <tt class="literal">Thread</tt>,
+then you can access them directly by asking the system for the
+current thread, or the threads in the current thread group, etc. Then
+you can cast the object to its subclass and call specialized methods
+on it, maybe to ask it how far it's gotten on whatever task you
+gave it.
+</p>
+
+<p>In the next sections we'll look at how to both implement
+<tt class="literal">Runnable</tt> and extend <tt class="literal">Thread</tt>
+to make an object that executes in an independent thread. We'll
+return to our <tt class="literal">Solver</tt> example, making it usable
+in a multithreaded agent within a distributed system. The examples in
+this section will use fairly basic network communications, based on
+sockets and I/O streams, but the concepts extend pretty easily to
+distributed object scenarios.<a name="INDEX-497"></a><a name="INDEX-498"></a>
+</p>
+
+<a name="JDP-CH-4-SECT-2.1"></a>
+<h3 class="sect2">4.2.1. Implementing Runnable</h3>
+
+<p>
+<a name="INDEX-499"></a><a name="INDEX-500"></a><a name="INDEX-501"></a>Suppose we wanted to make an
+implementation of our <tt class="literal">Solver</tt> interface (from
+<a href="ch03_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch03_04.htm">Example 4-1</a>) that was runnable within a thread. We
+may want to wrap the solver with a multithreaded server so that
+multiple clients can submit <tt class="literal">ProblemSet</tt>s. In this
+case, there isn't really a compelling reason to extend the
+<tt class="literal">Thread</tt> class with the functionality of our
+<tt class="literal">Solver</tt>, since we don't have any special
+requirements on how the thread is run. So we would probably choose to
+implement the <tt class="literal">Runnable</tt> interface with the
+<tt class="literal">RunnableSolver</tt><a name="INDEX-502"></a> class shown in <a href="#JDP-CH-4-EX-2">Example 4-1</a>.
+</p>
+
+<a name="JDP-CH-4-EX-2"></a>
+<div class="example">
+<h4 class="objtitle">Example 4-1. A Solver Runnable Within a Thread</h4>
+<blockquote>
+<pre class="programlisting">package dcj.examples;
+
+import java.lang.Runnable;
+import java.io.*;
+
+//
+// RunnableSolver - An implementation of Solver that can be used as the
+//                  the body of a Thread.
+//
+
+public class RunnableSolver implements Runnable, Solver {
+  // Protected implementation variables
+  protected ProblemSet currProblem = null;
+  protected OutputStream clientOut = null; // Destination for solutions
+  protected InputStream clientIn = null;   // Source of problems
+  
+  // Constructors
+  public RunnableSolver(InputStream cin, OutputStream cout) {
+    super();
+    clientIn = cin;
+    clientOut = cout;
+  }
+  
+  public boolean Solve() {
+    boolean success = true;
+    SimpleCmdInputStream sin = new SimpleCmdInputStream(clientIn);
+    String inStr = null;
+    try {
+      System.out.println("Reading from client...");
+      inStr = sin.readString();
+    }
+    catch (IOException e) {
+      System.out.println("Error reading data from client.");
+      return false;
+    }
+    
+    if (inStr.compareTo("problem") == 0) {
+      try {
+        inStr = sin.readString();
+      }
+      catch (IOException e) {
+        System.out.println("Error reading data from client.");
+        return false;
+      }
+            
+      System.out.println("Got \"" + inStr + "\" from client.");
+      double problem = Double.valueOf(inStr).doubleValue();
+      ProblemSet p = new ProblemSet();
+      p.Value(problem);
+      success = Solve(p);
+    }
+    else {
+      System.out.println("Error reading problem from client.");
+      return false;
+    }
+    
+    return success;
+  }
+  
+  public boolean Solve(ProblemSet s) {
+    boolean success = true;
+    
+    if (s == null) {
+      System.out.println("No problem to solve.");
+      return false;
+    }
+    
+    System.out.println("Problem value = " + s.Value());
+    
+    // Solve problem here...
+    try {
+      s.Solution(Math.sqrt(s.Value()));
+    }
+    catch (ArithmeticException e) {
+      System.out.println("Badly-formed problem.");
+      success = false;
+    }
+    
+    System.out.println("Problem solution = " + s.Solution());
+    System.out.println("Sending solution to output...");
+    
+    // Write the solution to the designated output destination
+    try {
+      DataOutputStream dout = new DataOutputStream(clientOut);
+      dout.writeChars("solution=" + s.Solution() + "\n");
+    }
+    catch (IOException e) {
+      System.out.println("Error writing results to output.");
+      success = false;
+    }
+    
+    return success;
+  }
+  
+  public boolean Problem(ProblemSet s) {
+    currProblem = s;
+    return true;
+  }
+  
+  public boolean Iterations(int dummy) {
+    // Not used on this solver
+    return false; 
+  }
+  
+  public void PrintResults(OutputStream os) {
+    PrintStream pos = new PrintStream(os);
+    pos.println("Problem solution: " + currProblem.Solution());
+  }
+  
+  public void run() {
+    Solve();
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>Here are the critical features to note about the
+<tt class="literal">RunnableSolver</tt> in <a href="#JDP-CH-4-EX-2">Example 4-1</a>:
+</p>
+
+<dl>
+<dt>
+<b>Constructor with input/output stream arguments</b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-503"></a><a name="INDEX-504"></a>The
+constructor defined for <tt class="literal">RunnableSolver</tt> takes an
+<tt class="literal">InputStream</tt> and an
+<tt class="literal">OutputStream</tt> as arguments. These will be used by
+the solver to read the problem to be solved and to write out the
+results of the solver. The input/output streams could be attached to
+an active agent/client over a socket or pipe, or they might be
+connected to static data source/destinations like files, databases,
+etc.
+</p>
+</dd>
+
+<dt>
+<b>Implementations of Solve() methods from Solver interface</b>
+</dt>
+<dd>
+<p>The <tt class="literal">RunnableSolver</tt> implementation of
+<tt class="literal">Solve()</tt> first attempts to read the problem to be
+solved from its input stream. If successful, it calls the overridden
+<tt class="literal">Solve()</tt> method with the
+<tt class="literal">ProblemSet</tt> as the argument. The
+<tt class="literal">Solve(ProblemSet)</tt> implementation solves the
+problem, then writes the results to the solver's output stream.
+</p>
+</dd>
+
+<dt>
+<b>Implementation of run() method from Runnable</b>
+</dt>
+<dd>
+<p>The <tt class="literal">RunnableSolver</tt>'s
+<tt class="literal">run()</tt> method simply calls
+<tt class="literal">Solve()</tt> to solve the current problem.
+</p>
+</dd>
+
+</dl>
+
+<p>All together, the <tt class="literal">RunnableSolver</tt> class provides
+a <tt class="literal">Solver</tt> that can be created with connections to
+just about any kind of "client," and then wrapped with a
+<tt class="literal">Thread</tt> and run. The <tt class="literal">run()</tt>
+method calls <tt class="literal">Solve()</tt>, which reads the problem
+from the client, solves it, and writes the result to the
+client.<tt class="literal"></tt><a name="INDEX-505"></a>
+</p>
+
+<p>To demonstrate its use in action, <a href="#JDP-CH-4-EX-3">Example 4-2</a> shows
+a <tt class="literal">RunnableSolveServer</tt><a name="INDEX-506"></a><a name="INDEX-507"></a> class that extends our
+<tt class="literal">SimpleServer</tt> class from <a href="ch01_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch01_01.htm">Chapter 1, "Introduction"</a>. The <tt class="literal">RunnableSolverServer</tt>
+accepts connections from remote clients, and assigns a
+<tt class="literal">RunnableSolver</tt> to solve each client's
+problem. It creates a solver with the input and output streams from
+the socket connection to the client, then wraps the solver in a
+thread and starts the thread.
+</p>
+
+<a name="JDP-CH-4-EX-3"></a>
+<div class="example">
+<h4 class="objtitle">Example 4-2. A Server for the Runnable Solver</h4>
+<blockquote>
+<pre class="programlisting">package dcj.examples;
+
+import java.io.*;
+import java.net.*;
+
+class RunnableSolverServer extends SimpleServer {
+  public RunnableSolverServer() { super(3000); }
+  public RunnableSolverServer(int port) { super(port); }
+  
+  public static void main(String argv[]) {
+    int port = 3000;
+    if (argv.length &gt; 0) {
+      try {
+        port = Integer.parseInt(argv[0]);
+      }
+      catch (NumberFormatException e) {
+        System.err.println("Bad port number given.");
+        System.err.println("   Using default port.");
+      }
+    }
+    
+    RunnableSolverServer server = new RunnableSolverServer(port);
+    System.out.println("RunnableSolverServer running on port " + port);
+    server.run();
+  }
+
+  // Override SimpleServer's serviceClient() method to spawn Solver threads
+  // on each client connection.
+  public void serviceClient(Socket clientConn) {
+    InputStream inStream = null;
+    OutputStream outStream = null;
+    
+    try {
+      inStream = clientConn.getInputStream();
+      outStream = clientConn.getOutputStream();
+    }
+    catch (IOException e) {
+      System.out.println(
+        "RunnableSolverServer: Error getting I/O streams.");
+      System.exit(1);
+    }
+
+    RunnableSolver s = new RunnableSolver(inStream, outStream);
+    Thread t = new Thread(s);
+    t.start();
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="INDEX-508"></a>
+<a name="INDEX-509"></a>
+
+<p>
+<a href="#JDP-CH-4-EX-4">Example 4-3</a> shows
+<tt class="literal">RunnableSolverClient</tt><a name="INDEX-510"></a><a name="INDEX-511"></a>, a sample client to the
+<tt class="literal">RunnableSolverServer</tt>. It simply makes a socket
+connection to the <tt class="literal">RunnableSolverServer</tt>'s
+host and port, writes the problem to the socket's output
+stream, and waits for the answer on the input stream.
+</p>
+
+<a name="JDP-CH-4-EX-4"></a>
+<div class="example">
+<h4 class="objtitle">Example 4-3. A Client for the Runnable Solver</h4>
+<blockquote>
+<pre class="programlisting">package dcj.examples;
+
+import java.lang.*;
+import java.net.*;
+import java.io.*;
+
+public class RunnableSolverClient extends SimpleClient {
+  ProblemSet problem;
+  
+  public RunnableSolverClient(String host, int port, double pval) {
+    super(host, port);
+    problem = new ProblemSet();
+    problem.Value(pval);
+  }
+
+  public static void main(String argv[]) {
+    if (argv.length &lt; 3) {
+      System.out.println(
+         "Usage: java RunnableSolverClient [host] [port] [problem]");
+      System.exit(1);
+    }
+    
+    String host = argv[0];
+    int port = 3000;
+    double pval = 0;
+    try {
+      port = Integer.parseInt(argv[1]);
+      pval = Double.valueOf(argv[2]).doubleValue();
+    }
+    catch (NumberFormatException e) {
+      System.err.println("Bad port number or problem value given.");
+    }
+    
+    RunnableSolverClient client = 
+      new RunnableSolverClient(host, port, pval);
+    System.out.println("Attaching client to " + host + ":" + port + "...");
+    client.run();
+  }
+  
+  public void run() {
+    try {
+      OutputStreamWriter wout =
+        new OutputStreamWriter(serverConn.getOutputStream());
+      BufferedReader rin = new BufferedReader(
+        new InputStreamReader(serverConn.getInputStream()));
+
+      // Send a problem...
+      wout.write("problem " + problem.Value() + " ");
+      // ...and read the solution
+      String result = rin.readLine();
+    }
+    catch (IOException e) {
+      System.out.println("RunnableSolverClient: " + e);
+      System.exit(1);
+    }
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>We've reused some classes from <a href="ch01_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch01_01.htm">Chapter 1, "Introduction"</a> to
+implement our <tt class="literal">RunnableSolverServer</tt> and
+<tt class="literal">RunnableSolverClient</tt>. The
+<tt class="literal">RunnableSolverServer</tt> is an extension of our
+<tt class="literal">SimpleServer</tt>, which simply overrides the
+<tt class="literal">serviceClient()</tt> method to attach a
+<tt class="literal">RunnableSolver</tt> to the client socket. The
+<tt class="literal">RunnableSolverClient</tt> is an extension of the
+<tt class="literal">SimpleClient</tt>. This allows us to use the
+constructor of <tt class="literal">SimpleClient</tt> to establish the
+socket connection to the server. All we need to do is provide a new
+implementation of the <tt class="literal">main()</tt> method that accepts
+an additional argument (the problem to be solved), and override the
+<tt class="literal">run()</tt> method from
+<tt class="literal">SimpleClient</tt> to do the required communication
+with the <tt class="literal"></tt><a name="INDEX-512"></a><a name="INDEX-513"></a> server.<a name="INDEX-514"></a><a name="INDEX-515"></a><a name="INDEX-516"></a>
+</p>
+
+
+<a name="JDP-CH-4-SECT-2.2"></a>
+<h3 class="sect2">4.2.2. Extending Thread</h3>
+
+<p>
+<a name="INDEX-517"></a>
+Making <tt class="literal"></tt><a name="INDEX-518"></a> a <tt class="literal">Solver</tt>
+subclass that extends <tt class="literal">Thread</tt> requires just a few
+minor changes to our <tt class="literal">Runnable</tt> version. The same
+<tt class="literal">run()</tt> method can be used on our
+<tt class="literal">Thread</tt> subclass as on the
+<tt class="literal">RunnableSolver</tt>, but in this case it's
+overriding the <tt class="literal">run()</tt> from
+<tt class="literal">Thread</tt> rather than from
+<tt class="literal">Runnable</tt>.
+</p>
+
+<p>To make our multithreaded server work with the
+<tt class="literal">Thread</tt>-derived <tt class="literal">Solver</tt>, we
+only have to change its <tt class="literal">serviceClient()</tt>
+implementation slightly. Rather than creating a
+<tt class="literal">RunnableSolver</tt> and wrapping a thread around it,
+a <tt class="literal">Thread</tt>-derived <tt class="literal">Solver</tt>
+acts as both the <tt class="literal">Solver</tt> and the thread, so we
+only need to create one for the incoming client, then
+<tt class="literal">start()</tt> it:
+</p>
+
+<blockquote>
+<pre class="programlisting">ThreadSolver ts = new ThreadSolver(inStream, outStream);
+ts.start();</pre>
+</blockquote>
+
+<p>Our client will work with the <tt class="literal">Thread</tt>-derived
+<tt class="literal">Solver</tt> without changes. It just wants to connect
+to a <tt class="literal">Solver</tt> over a socket--it doesn't
+care if the Solver is running as a <tt class="literal">Thread</tt>, or
+running inside another <tt class="literal">Thread</tt>.<a name="INDEX-519"></a><a name="INDEX-520"></a><a name="INDEX-521"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch04_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch04_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch04_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch04_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">4.1. Thread and Runnable</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">4.3. Managing Threads at Runtime</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

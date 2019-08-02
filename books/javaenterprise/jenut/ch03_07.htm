@@ -1,0 +1,259 @@
+<html>
+<head>
+<title>RMI and Native Method Calls (Java Enterprise in a Nutshell)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David Flanagan, Jim Farley, William Crawford and Kristopher Magnusson">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-483-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="RMI and Native Method Calls">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm" alt="Java Enterprise in a Nutshell"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_06.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_01.htm">Chapter 3: Remote Method Invocation</a></td><td align="right" valign="top" width="172"><a href="ch03_08.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_08.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY --><h2 class="sect1">3.7. RMI and Native Method Calls</h2>
+<p>
+<a name="INDEX-813"></a><a name="INDEX-814"></a><a name="INDEX-815"></a><a name="INDEX-816"></a>
+
+As I mentioned at the beginning of this chapter, RMI is a Java-only
+  remote object scheme, so it doesn't provide a direct
+  connection between objects implemented in different languages, like
+  CORBA does. But, using Java's Native Interface API, it is
+  possible to wrap existing C or C++ code with a Java interface and
+  then export this interface remotely through RMI. </p>
+
+<p>To demonstrate, let's suppose we have some (legacy) native
+  code that implements a service we want to export through RMI to
+  remote clients. We can create an implementation of our
+  <tt class="literal">ThisOrThatServer</tt> interface that uses this native
+  code to implement the <tt class="literal">doSomething()</tt> method on our
+  remote interface. The implementation for a
+  <tt class="literal">NativeThisOrThatServerImpl</tt> is shown in <a href="#ch03-42317">Example 3-6</a>. The only significant difference between this
+  implementation and our original
+  <tt class="literal">ThisOrThatServerImpl</tt> is that the
+  <tt class="literal">doSomething()</tt> method is declared native, so the
+  method body is left empty. </p>
+
+<a name="ch03-42317"></a>
+<div class="example">
+<h4 class="objtitle">Example 3-6. Remote Object Using a Native Method Implementation</h4>
+<blockquote>
+<pre class="programlisting">
+import java.rmi.server.UnicastRemoteObject;
+import java.rmi.RemoteException;
+
+public class NativeThisOrThatServerImpl
+  extends UnicastRemoteObject implements ThisOrThatServer {
+
+  public NativeThisOrThatServerImpl() throws RemoteException {}
+
+  // Remotely-accessible methods
+  public String doThis(String todo) throws RemoteException {
+    return doSomething("this", todo);
+  }
+
+  public String doThat(String todo) throws RemoteException {
+    return doSomething("that", todo);
+  }
+
+  // Natively-implemented method
+  native private String doSomething(String what, String todo);
+}</pre>
+</blockquote>
+</div>
+<p>
+<a name="INDEX-817"></a>
+We can compile this RMI class and generate the stubs and skeletons for it using the RMI compiler, just like with our other RMI examples. But once this is done, we need to provide a native implementation for the <tt class="literal">doSomething()</tt> method. To start, we can generate a C/C++ header file for the native method using the <em class="emphasis">javah</em> tool:</p>
+<blockquote>
+<pre class="programlisting">
+% javah -jni -d . NativeThisOrThatServerImpl</pre>
+</blockquote>
+<p>The <tt class="literal">-jni</tt> option tells the <em class="emphasis">javah</em> tool
+<a name="INDEX-818"></a>
+ to generate JNI-compliant header files (as opposed to header files based on the earlier native method interface that shipped with Java 1.0). Invoking this command generates a JNI C/C++ header file that looks something like the following:</p>
+<blockquote>
+<pre class="programlisting">
+/* DO NOT EDIT THIS FILE - it is machine generated */
+#include &lt;jni.h&gt;
+/* Header for class NativeThisOrThatServerImpl */
+#ifndef _Included_NativeThisOrThatServerImpl
+#define _Included_NativeThisOrThatServerImpl
+#ifdef __cplusplus
+extern "C" {
+#endif
+/*
+ * Class: NativeThisOrThatServerImpl
+ * Method:    doSomething
+ * Signature: (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_NativeThisOrThatServerImpl_doSomething
+  (JNIEnv *, jobject, jstring, jstring);
+#ifdef __cplusplus
+}
+#endif
+#endif</pre>
+</blockquote>
+<p>
+<a name="INDEX-819"></a>
+The only details worth noting in this header file are the inclusion of the <em class="filename">jni.h</em> header file, which is provided with the Java SDK, and the single method declaration. The <em class="filename">jni.h</em> header file provides declarations and definitions for all of the data structures and utility methods provided by the JNI API. The method declaration has a signature that corresponds to the native method declared on our Java class. When you invoke the <tt class="literal">doSomething()</tt> method on the <tt class="literal">NativeThisOrThatServerImpl</tt>, the Java VM looks for a native method that matches this signature. </p>
+<p>Now all we need to do is implement the C/C++ function declared in our JNI-generated header file. This is where we tie our Java method to some legacy native code. In this case, suppose the native code is wrapped up in a single C/C++ function
+<a name="INDEX-820"></a>
+ called <tt class="literal">doSomethingNative()</tt>. This function is available in a native library on the server platform (e.g., a DLL file on Windows or a shared library on Unix). We want to use our Java method to invoke this native function, so we can implement the <tt class="literal">Java_NativeThisOrThatServerImpl_doSomething()</tt> function along these lines:</p>
+<blockquote>
+<pre class="programlisting">
+#include &lt;jni.h&gt;
+#include "NativeThisOrThatServerImpl.h"
+#include "nativeDoSomething.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+/*
+ * Native implementation for method doSomething() on class
+ * NativeThisOrThatServerImpl.
+ */
+JNIEXPORT jstring JNICALL Java_NativeThisOrThatServerImpl_doSomething
+  (JNIEnv * env, jobject me, jstring what, jstring todo) {
+  // Convert the Java strings to native strings
+  const char* whatStr = (*env)-&gt;GetStringUTFChars(env, what, 0);
+  const char* todoStr = (*env)-&gt;GetStringUTFChars(env, todo, 0);
+
+  // Call the native method
+  char* result = doSomethingNative(whatStr, todoStr);
+
+  // Convert result back to Java string
+  jstring res = (*env)-&gt;NewStringUTF(env, result);
+  return res;
+}
+#ifdef __cplusplus
+}
+#endif
+#endif</pre>
+</blockquote>
+<p>
+<a name="INDEX-821"></a><a name="INDEX-822"></a>
+The first part of the function just converts the Java strings
+  (passed in as C <tt class="literal">jstring</tt> data structures) into
+  native <tt class="literal">char*</tt> strings. Then it passes the string
+  arguments into the native <tt class="literal">doSomethingNative()</tt>
+  function, converts the result back into a
+  <tt class="literal">jstring</tt>, and returns it. The JNI system handles
+  the conversion of the <tt class="literal">jstring</tt> into a Java
+  <tt class="literal">String</tt> object in the VM environment. </p>
+<p>Once we compile this C/C++ code (linking with the native library
+  that contains the <tt class="literal">doSomethingNative()</tt> function),
+  we can export remote <tt class="literal">NativeThisOrThatServerImpl</tt>
+  objects. Then remote clients can call the
+  <tt class="literal">doThis()</tt> or <tt class="literal">doThat()</tt>
+  methods. These remote method calls in turn cause the invocation of
+  native code on the server, when the object implementation calls its
+  native <tt class="literal">doSomething()</tt> method. </p>
+
+<p>
+<a name="INDEX-823"></a><a name="INDEX-824"></a><a name="INDEX-825"></a>
+
+Note that in order for the server object to find its native
+  method, the native library containing the
+  <tt class="literal">doSomethingNative()</tt> function has to be loaded
+  into the server object's VM using the
+<a name="INDEX-826"></a><tt class="literal">System.loadLibrary()</tt> method. You can do this in
+  the application code that uses the native method or by adding a
+  static initializer to the class, 
+
+
+you can have the library loaded
+  automatically when the <tt class="literal">NativeThisOrThatServerImpl</tt>
+  class is referenced:</p>
+<blockquote>
+<pre class="programlisting">static { System.loadLibrary("methods"); }</pre>
+</blockquote>
+<p>The <tt class="literal">System.loadLibrary()</tt> method automatically converts the library name that you provide to a platform-specific file name. So if the previous example is run on a Solaris machine, the Java VM looks for a library file named <em class="emphasis">libmethods.so</em>. On a Windows machine, it looks for <em class="emphasis">methods.dll</em>.</p>
+<a name="ch03-pgfid-964717"></a>
+<h3 class="sect2">3.7.1. RMI with JNI Versus CORBA</h3>
+<p>
+<a name="INDEX-827"></a><a name="INDEX-828"></a><a name="INDEX-829"></a>
+There are pros and cons to using RMI and JNI to export legacy
+native code using Java remote objects, as opposed to using CORBA. With
+CORBA, a CORBA object implemented in the same language as the native
+code (C/C++ for our example) is created and exported on the
+<a name="INDEX-830"></a><a name="INDEX-831"></a>
+server. Remote Java clients can get a Java stub to this CORBA object
+using JavaIDL, or any third-party Java CORBA implementation (see
+<a href="ch04_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch04_01.htm">Chapter 4, "Java IDL"</a> for details). </p>
+<p>
+<a name="INDEX-832"></a>
+One obvious advantage of the CORBA approach is that you
+don't need to have Java on the server. Since this is presumably
+a legacy server, perhaps a mainframe of some sort, finding a stable
+Java VM and development kit for the platform may be a problem. If a
+Java implementation isn't available or if installing additional
+software on the legacy server isn't desirable, CORBA is your
+only option.</p>
+<p>
+<a name="INDEX-833"></a>
+An advantage of the RMI/JNI approach is that you're running Java at both ends of the remote communication and avoiding the use of CORBA entirely. CORBA is a very rich distributed object API, but it may be overkill for your application. Using the simpler RMI API and keeping your code development strictly in Java (with some minimal C/C++ to interface to the legacy code) might be an advantage to you in this case.</p>
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_06.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch03_08.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_08.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">3.6. Remote Object Activation</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">3.8. RMI over IIOP</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

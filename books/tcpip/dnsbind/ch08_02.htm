@@ -1,0 +1,402 @@
+<html><head>
+<title>[Chapter 8] 8.2 Adding More Name Servers</TITLE>
+<meta name="DC.title" content="DNS &amp; BIND"><meta name="DC.creator" content="Cricket Liu &amp; Paul Albitz"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-01-06T18:33:23Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-512-2" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch08_01.htm" title="8. Growing Your Domain"><link rel="prev" href="ch08_01.htm" title="8.1 How Many Name Servers?"><link rel="next" href="ch08_03.htm" title="8.3 Registering Name Servers"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="DNS &amp; BIND" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="DNS &amp; BIND"><area shape="RECT" coords="467,0,514,18" href="../search/dsrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch08_01.htm" title="8.1 How Many Name Servers?"><img src="../gifs/txtpreva.gif" alt="Previous: 8.1 How Many Name Servers?" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 8<br>Growing Your Domain</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch08_03.htm" title="8.3 Registering Name Servers"><img src="../gifs/txtnexta.gif" alt="Next: 8.3 Registering Name Servers" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="AUTOID-8612">8.2 Adding More Name Servers</A
+></H2
+><p class="para"><a class="indexterm" name="DNS3-IDX-8-ADDING-NAME-SERVERS"></A
+><a class="indexterm" name="DNS3-IDX-8-NAME-SERVERS-ADDING-AND-DELETING"></A
+>When you need to create new name servers for your domain, the simplest
+recourse is to add slaves.  You already know how&nbsp;- we went over it
+in <a class="xref" href="ch04_01.htm" title="Setting Up BIND">Chapter 4</A
+>&nbsp;- and once you've set one slave up,
+cloning it is a piece of cake.  But you can run into trouble
+indiscriminately adding slaves.</P
+><p class="para">If you run a large number of slave servers for a zone, the
+primary master name server can take quite a beating just keeping up
+with the slaves' polling to check that their data are current. There
+are a number of courses of action to take for this problem:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para">Make more primary master name servers.</P
+></LI
+><li class="listitem"><p class="para">Increase the refresh interval so that the slaves don't check so
+often.</P
+></LI
+><li class="listitem"><p class="para">Direct some of the slave name servers to load from other slave
+name servers.</P
+></LI
+><li class="listitem"><p class="para">Create caching-only name servers (described later).</P
+></LI
+><li class="listitem"><p class="para">Create <span class="quote">"partial-slave"</SPAN
+> name servers (also described
+later).</P
+></LI
+></UL
+><div class="sect2"><h3 class="sect2"><a class="title" name="AUTOID-8635">8.2.1 Primary Master and Slave Servers</A
+></H3
+><p class="para"><a class="indexterm" name="DNS3-IDX-8-PRIMARY-NAME-SERVERS-ADDING"></A
+><a class="indexterm" name="DNS3-IDX-8-RDIST-COMMAND"></A
+><a class="indexterm" name="DNS3-IDX-8-DISTFILE-FILE"></A
+><a class="indexterm" name="DNS3-IDX-8-SLAVE-SECONDARY-NAME-SERVERS-ADDING"></A
+>Creating more primaries will mean extra work for you, since you have
+to keep the db files synchronized manually. Whether or not this is
+preferable to your other alternatives is your call. You can use tools
+like <kbd class="command">rdist</KBD
+> to simplify the process of distributing
+the files. A <i class="filename">distfile</I
+> to synchronize files
+between primaries might be as simple as the following[6]</P
+><blockquote class="footnote"><p class="para">[6] The file <kbd class="command">rdist</KBD
+> reads to find out which files
+to update.</P
+></BLOCKQUOTE
+><blockquote class="screen"><pre class="screen">dup-primary:
+
+# copy named.boot file to dup'd primary
+
+/etc/named.conf  -&gt; wormhole
+    install ;
+
+# copy contents of /usr/local/named (db files, etc.) to dup'd primary
+
+/usr/local/named -&gt; wormhole
+    install ;</PRE
+></BLOCKQUOTE
+><p class="para">or for multiple primaries:</P
+><blockquote class="screen"><pre class="screen">dup-primary:
+
+primaries =  ( wormhole carrie )
+/etc/named.conf  -&gt; {$primaries}
+    install ;
+
+/usr/local/named -&gt; {$primaries}
+    install ;</PRE
+></BLOCKQUOTE
+><p class="para">You can even have <kbd class="command">rdist</KBD
+> trigger your name
+server's reload using the<a class="indexterm" name="AUTOID-8658"></A
+>
+<i class="option">special</I
+> option by adding lines like:</P
+><blockquote class="screen"><pre class="screen">special /usr/local/named/* &quot;kill -HUP `cat /etc/named.pid`&quot; ;
+special /etc/named.conf &quot;kill -HUP `cat /etc/named.pid`&quot; ;</PRE
+></BLOCKQUOTE
+><p class="para">These tell <kbd class="command">rdist</KBD
+> to execute the quoted
+command if any of the files change.</P
+><p class="para">Increasing your name servers'<a class="indexterm" name="AUTOID-8665"></A
+>
+refresh interval is another option. This slows down the propagation of
+new information, however. In some cases, this is not a problem. If you
+rebuild your <span class="acronym">DNS</SPAN
+> data with <kbd class="command">h2n</KBD
+>
+only once each day at 1 a.m.  (run from <kbd class="command">cron</KBD
+>) and
+then allow six hours for the data to distribute, all the slaves will
+be current by 7 a.m.[7] That may be acceptable to your user population. See the
+section called <span class="quote">"Changing Other <span class="acronym">SOA</SPAN
+>
+Values"</SPAN
+> later in this chapter for more detail.</P
+><blockquote class="footnote"><p class="para">[7] And, of course, if you're using <span class="acronym">BIND</SPAN
+> 8's
+<span class="acronym">NOTIFY</SPAN
+>, they'll catch up much sooner than
+that.</P
+></BLOCKQUOTE
+><p class="para">You can even have some of your slaves load from other slaves.<a class="indexterm" name="AUTOID-8677"></A
+>
+Slave name servers <em class="emphasis">can</EM
+> load zone data from other
+slave name servers instead of loading from a primary name server. The
+slave name server can't tell if it is loading from a primary or
+another slave. It's only important that the name server serving the
+zone transfer is authoritative for the zone.  There's no trick to
+configuring this. Instead of specifying the <span class="acronym">IP</SPAN
+>
+address of the primary in the slave's conf file, you simply specify
+the <span class="acronym">IP</SPAN
+> address of another slave.</P
+><p class="para">Here are the contents of the file <i class="filename">named.conf</I
+>:</P
+><blockquote class="screen"><pre class="screen">// this slave updates from wormhole, another
+// slave
+zone &quot;movie.edu&quot; {
+                type slave;
+                file &quot;db.movie&quot;;
+                masters { 192.249.249.1; };
+};</PRE
+></BLOCKQUOTE
+><p class="para">For a <span class="acronym">BIND</SPAN
+> 4 server, this would look slightly
+different.</P
+><p class="para">Here are the contents of the file <i class="filename">named.boot</I
+>:</P
+><blockquote class="screen"><pre class="screen">; this slave updates from wormhole, another slave
+secondary   movie.edu   192.249.249.1   db.movie</PRE
+></BLOCKQUOTE
+><p class="para">When you go to this second level of distribution, though, it can
+take up to twice as long for the data to percolate from the primary
+name server to all the slaves. Remember that the <i class="firstterm">refresh
+interval</I
+> is the period after which the slave servers will
+check to make sure that their zone data are still current.  Therefore,
+it can take the first-level slave servers the entire refresh interval
+before they get their copy of the zone files from the primary master
+server. Similarly, it can take the second-level slave servers the
+entire refresh interval to get their copy of the files from the
+first-level slave servers. The propagation time from the primary
+master server to all of the slave servers can therefore be twice the
+refresh interval.</P
+><p class="para">One way to avoid this to use <span class="acronym">BIND</SPAN
+> 8's
+<span class="acronym">NOTIFY</SPAN
+> feature.  This is on by default, and will
+trigger zone transfers soon after the zone is updated on the primary
+master.  Unfortunately, it only works on version 8
+<span class="acronym">BIND</SPAN
+> slaves.[8]</P
+><blockquote class="footnote"><p class="para">[8] And, incidentally, on the Microsoft <span class="acronym">DNS</SPAN
+>
+Server.</P
+></BLOCKQUOTE
+><p class="para">If you decide to configure your network with two (or more) tiers
+of slave servers, be careful to avoid updating loops. If we were to
+configure <i class="systemitem.sitename">wormhole</I
+> to update
+from <i class="systemitem.sitename">diehard</I
+>, and then we
+accidentally configured <i class="systemitem.sitename">diehard</I
+> to update from <i class="systemitem.sitename">wormhole</I
+>, neither would ever get data
+from the primary. They would merely check their out-of-date serial
+numbers against each other, and perpetually decide that they were both
+up-to-date.<a class="indexterm" name="AUTOID-8705"></A
+><a class="indexterm" name="AUTOID-8706"></A
+><a class="indexterm" name="AUTOID-8707"></A
+><a class="indexterm" name="AUTOID-8708"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="AUTOID-8709">8.2.2 Caching-Only Servers</A
+></H3
+><p class="para">Creating<a class="indexterm" name="AUTOID-8712"></A
+><a class="indexterm" name="AUTOID-8715"></A
+>
+<i class="firstterm">caching-only name servers</I
+> is another
+alternative when you need more servers. Caching-only name servers are
+name servers not authoritative for any domains (except <i class="systemitem.sitename">0.0.127.in-addr.arpa</I
+>).  The name doesn't
+imply that primary and slave name servers don't cache&nbsp;- they
+do. The name means that the <em class="emphasis">only</EM
+> function this
+server performs is looking up data and caching them. As with primary
+and slave name servers, a caching-only name server needs a
+<i class="filename">db.cache</I
+> file and a
+<i class="filename">db.127.0.0</I
+> file. The
+<i class="filename">named.conf</I
+> file for a caching-only server
+contains these lines:</P
+><blockquote class="screen"><pre class="screen">options {
+                directory &quot;/usr/local/named&quot;;                                                   // or your data directory
+};
+
+zone &quot;0.0.127.in-addr.arpa&quot; {
+                type master;
+                file &quot;db.127.0.0&quot;;
+};
+
+zone . {
+                type hint;
+                file &quot;db.cache&quot;;
+};</PRE
+></BLOCKQUOTE
+><p class="para">On a <span class="acronym">BIND</SPAN
+> 4 server, the
+<i class="filename">named.boot</I
+> file looks like this:</P
+><blockquote class="screen"><pre class="screen">directory /usr/local/named  ; or your data directory
+
+primary 0.0.127.in-addr.arpa  db.127.0.0  ; for loopback address
+cache   .                     db.cache</PRE
+></BLOCKQUOTE
+><p class="para">A caching-only name server can look up names inside and outside
+your zone, as can primary and slave name servers. The difference is
+that when a caching-only name server initially looks up a name within
+your zone, it ends up asking one of the primary or slave name servers
+for your zone for the answer. A primary or slave would answer the same
+question out of its authoritative data. Which primary or slave does
+the caching-only server ask? As with name servers outside of your
+domain, it finds out which name servers serve your zone from the name
+server for your parent zone. Is there any way to prime a caching-only
+name server's cache so it knows which hosts run primary and slave name
+servers for your zone? No, there isn't.  You can't use
+<i class="filename">db.cache</I
+>&nbsp;- the <i class="filename">db.cache</I
+>
+file is only for <em class="emphasis">root</EM
+> name server hints.</P
+><p class="para">A caching-only name server's real value comes after it builds up
+its cache. Each time it queries an authoritative name server and
+receives an answer, it caches the records in the answer. Over time,
+the cache will grow to include the information most often requested by
+the resolvers querying the caching-only name server. And you avoid the
+overhead of zone transfers&nbsp;- a caching-only name server doesn't
+need to do them.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="AUTOID-8734">8.2.3 Partial-Slave Servers</A
+></H3
+><p class="para">In between a caching-only name server and a slave name server is
+another variation: a name server that is a slave for only a few of the
+local zones. We call this a<a class="indexterm" name="DNS3-IDX-8-PARTIAL-SLAVE-NAME-SERVERS"></A
+><a class="indexterm" name="DNS3-IDX-8-NAME-SERVERS-PARTIAL-SLAVE-SERVERS"></A
+><a class="indexterm" name="DNS3-IDX-8-SLAVE-SECONDARY-NAME-SERVERS-PARTIAL-SLAVE-SERVERS"></A
+>
+<i class="firstterm">partial-slave name server</I
+> (and probably nobody
+else does). Suppose <i class="systemitem.sitename">movie.edu</I
+>
+had twenty class C networks (and a corresponding twenty <i class="systemitem.sitename">in-addr.arpa</I
+> zones).  Instead of creating
+a slave server for all 21 zones (all the <i class="systemitem.sitename">in-addr.arpa</I
+> subdomains plus <i class="systemitem.sitename">movie.edu</I
+>), we could create a
+partial-slave server for <i class="systemitem.sitename">movie.edu</I
+> and only those <i class="systemitem.sitename">in-addr.arpa</I
+> zones the host itself is
+in. If the host had two network interfaces, then its name server would
+be a slave for three zones: <i class="systemitem.sitename">movie.edu</I
+> and the two <i class="systemitem.sitename">in-addr.arpa</I
+> zones.</P
+><p class="para">Let's say we scare up the hardware for another name
+server. We'll call the new host <i class="systemitem.sitename">zardoz.movie.edu</I
+>, with
+<span class="acronym">IP</SPAN
+> addresses 192.249.249.9 and 192.253.253.9. We'll
+create a partial-slave name server on <i class="systemitem.sitename">zardoz</I
+>, with this
+<i class="filename">named.conf</I
+> file:</P
+><blockquote class="screen"><pre class="screen">options {
+                directory &quot;/usr/local/named&quot;;
+};
+
+zone &quot;movie.edu&quot; {
+                type slave;
+                file &quot;db.movie&quot;;
+                masters { 192.249.249.3; };
+};
+
+zone &quot;249.249.192.in-addr.arpa&quot; {
+                type slave;
+                file &quot;db.192.249.249&quot;;
+                masters { 192.249.249.3; };
+
+zone &quot;253.253.192.in-addr.arpa&quot; {
+                type slave;
+                file &quot;db.192.253.253&quot;;
+                masters { 192.249.249.3; };
+};
+
+zone &quot;0.0.127.in-addr.arpa&quot;;
+                type master;
+                file &quot;db.127.0.0&quot;;
+};
+
+zone . {
+                type hint;
+                file &quot;db.cache&quot;;
+};</PRE
+></BLOCKQUOTE
+><p class="para">For a <span class="acronym">BIND</SPAN
+> 4 server, the
+<i class="filename">named.boot</I
+> file would look like this:</P
+><blockquote class="screen"><pre class="screen">directory   /usr/local/named
+secondary   movie.edu                192.249.249.3 db.movie
+secondary   249.249.192.in-addr.arpa 192.249.249.3 db.192.249.249
+secondary   253.253.192.in-addr.arpa 192.249.249.3 db.192.253.253
+primary     0.0.127.in-addr.arpa     db.127.0.0
+cache       .                        db.cache</PRE
+></BLOCKQUOTE
+><p class="para">This server is a slave for <i class="systemitem.sitename">movie.edu</I
+> and only two of the 20
+<i class="systemitem.sitename">in-addr.arpa</I
+> zones. A
+<span class="quote">"full"</SPAN
+> slave would have 21 different
+<i class="structfield">zone</I
+> statements in
+<i class="filename">named.conf</I
+>.</P
+><p class="para">What's so useful about a partial-slave name server? They're not
+much work to administer, because their <i class="filename">named.conf</I
+>
+files don't change much. On a server authoritative for all the
+<i class="systemitem.sitename">in-addr.arpa</I
+> zones, we'd need
+to add and delete <i class="systemitem.sitename">in-addr.arpa</I
+> zones (and their
+corresponding entries in <i class="filename">named.conf</I
+>) as
+our network changed. That can be a surprising amount of work on a
+large network.</P
+><p class="para">A partial slave can still answer most of the queries it
+receives, though. Most of these queries will be for data in the
+<i class="systemitem.sitename">movie.edu</I
+> and two <i class="systemitem.sitename">in-addr.arpa</I
+> zones.  Why? Because most of
+the hosts querying the name server are on the two networks it's
+connected to, 192.249.249 and 192.253.253. And those hosts probably
+communicate primarily with other hosts on their own network. This
+generates queries for data within the <i class="systemitem.sitename">in-addr.arpa</I
+> zone that corresponds to the
+local<a class="indexterm" name="AUTOID-8779"></A
+><a class="indexterm" name="AUTOID-8780"></A
+><a class="indexterm" name="AUTOID-8781"></A
+>
+network.<a class="indexterm" name="AUTOID-8782"></A
+><a class="indexterm" name="AUTOID-8783"></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch08_01.htm" title="8.1 How Many Name Servers?"><img src="../gifs/txtpreva.gif" alt="Previous: 8.1 How Many Name Servers?" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="DNS &amp; BIND"><img src="../gifs/txthome.gif" alt="DNS &amp; BIND" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch08_03.htm" title="8.3 Registering Name Servers"><img src="../gifs/txtnexta.gif" alt="Next: 8.3 Registering Name Servers" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">8.1 How Many Name Servers?</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">8.3 Registering Name Servers</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.htm" title="The Networking CD Bookshelf">Library Home</A
+> | <a href="index.htm" title="DNS &amp; BIND">DNS &amp; BIND</A
+> | <a href="../tcpip/index.htm" title="TCP/IP Network Administration">TCP/IP</A
+> | <a href="../sendmail/index.htm" title="sendmail">sendmail</A
+> | <a href="../smdref/index.htm" title="sendmail Desktop Reference">sendmail Reference</A
+> | <a href="../firewall/index.htm" title="Building Internet Firewalls">Firewalls</A
+> | <a href="../puis/index.htm" title="Practical UNIX &amp; Internet Security">Practical Security</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

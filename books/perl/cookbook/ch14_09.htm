@@ -1,0 +1,117 @@
+<html><head>
+<title>Recipe 14.8. Storing Complex Data in a DBM File</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:42:57Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch14_01.htm" title="14. Database Access"><link rel="prev" href="ch14_08.htm" title="14.7. Treating a Text File as a Database Array"><link rel="next" href="ch14_10.htm" title="14.9. Persistent Data"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch14_08.htm" title="14.7. Treating a Text File as a Database Array"><img src="../gifs/txtpreva.gif" alt="Previous: 14.7. Treating a Text File as a Database Array" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch14_01.htm" title="14. Database Access">Chapter 14<br>Database Access</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch14_10.htm" title="14.9. Persistent Data"><img src="../gifs/txtnexta.gif" alt="Next: 14.9. Persistent Data" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch14-18811">14.8. Storing Complex Data in a DBM File</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch14-pgfId-1014">Problem<a class="indexterm" name="ch14-idx-1000004991-0"></A
+><a class="indexterm" name="ch14-idx-1000004991-1"></A
+><a class="indexterm" name="ch14-idx-1000004991-2"></A
+></A
+></H3
+><p class="para">You want values in a DBM file to be something other than scalars. For instance, you use a hash of hashes in your program and want to store them in a DBM file for other programs to access, or you want them to persist across process runs.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch14-pgfId-1020">Solution</A
+></H3
+><p class="para">Use the CPAN module MLDBM to values more complex values than strings and numbers.</P
+><pre class="programlisting">use MLDBM 'DB_File';
+tie(%HASH, 'MLDBM', [... other DBM arguments]) or die $!;</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch14-pgfId-1030">Discussion</A
+></H3
+><p class="para">MLDBM uses Data::Dumper (see <a class="xref" href="ch11_15.htm" title="Transparently Persistent Data Structures">Recipe 11.14</A
+>) to convert data structures to and from strings so that they can be stored in a DBM file. It doesn't store references, instead it stores the data that the references refer to:</P
+><pre class="programlisting"># %hash is a tied hash
+$hash{&quot;Tom Christiansen&quot;} = [ &quot;book author&quot;, 'tchrist@perl.com' ];          
+$hash{&quot;Tom Boutell&quot;} = [ &quot;shareware author&quot;, 'boutell@boutell.com' ];
+
+# names to compare
+$name1 = &quot;Tom Christiansen&quot;;
+$name2 = &quot;Tom Boutell&quot;;
+
+$tom1 = $hash{$name1};      # snag local pointer
+$tom2 = $hash{$name2};      # and another           
+
+print &quot;Two Toming: $tom1 $tom2\n&quot;;
+
+<code class="userinput"><b><code class="replaceable"><i>Tom Toming: ARRAY(0x73048) ARRAY(0x73e4c)</I
+></CODE
+></B
+></CODE
+></PRE
+><p class="para">Each time MLDBM retrieves a data structure from the DBM file, it generates a new copy of that data. To compare data that you retrieve from a MLDBM database, you need to compare the values within the structure:</P
+><pre class="programlisting">if ($tom1-&gt;[0] eq $tom2-&gt;[0] &amp;&amp;
+    $tom1-&gt;[1] eq $tom2-&gt;[1]) {
+    print &quot;You're having runtime fun with one Tom made two.\n&quot;;
+} else {
+    print &quot;No two Toms are ever alike.\n&quot;;
+}</PRE
+><p class="para">This is more efficient than:</P
+><pre class="programlisting">if ($hash{$name1}-&gt;[0] eq $hash{$name2}-&gt;[0] &amp;&amp;     # INEFFICIENT
+    $hash{$name1}-&gt;[1] eq $hash{$name2}-&gt;[1]) {
+    print &quot;You're having runtime fun with one Tom made two.\n&quot;;
+} else {
+    print &quot;No two Toms are ever alike.\n&quot;;
+}</PRE
+><p class="para">Each time we say <code class="literal">$hash{...}</CODE
+>, the DBM file is consulted. The inefficient code above accesses the database four times, whereas the code using the temporary variables <code class="literal">$tom1</CODE
+> and <code class="literal">$tom2</CODE
+> only accesses the database twice.</P
+><p class="para">Current limitations of Perl's <code class="literal">tie</CODE
+> mechanism prevent you from storing or modifying parts of a MLDBM value directly:</P
+><pre class="programlisting">$hash{&quot;Tom Boutell&quot;}-&gt;[0] = &quot;Poet Programmer&quot;;      # WRONG</PRE
+><p class="para">Always get, change, and set pieces of the stored structure through a temporary variable:</P
+><pre class="programlisting">$entry = $hash{&quot;Tom Boutell&quot;};                      # RIGHT
+$entry-&gt;[0] = &quot;Poet Programmer&quot;;
+$hash{&quot;Tom Boutell&quot;} = $entry;</PRE
+><p class="para">If MLDBM uses a database with size limits on values, like SDBM, you'll quickly hit those limits. To get around this, use GDBM_File or DB_File, which don't limit the size of keys or values. DB_File is the better choice because it is byte-order neutral, which lets the database be shared between both big- and little-endian architectures.<a class="indexterm" name="ch14-idx-1000004996-0"></A
+><a class="indexterm" name="ch14-idx-1000004996-1"></A
+><a class="indexterm" name="ch14-idx-1000004996-2"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch14-pgfId-1108">See Also</A
+></H3
+><p class="para">The documentation for the Data::Dumper, MLDBM, and Storable modules from CPAN; <a class="xref" href="ch11_14.htm" title="Storing Data Structures to Disk">Recipe 11.13</A
+>; <a class="xref" href="ch14_10.htm" title="Persistent Data">Recipe 14.9</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch14_08.htm" title="14.7. Treating a Text File as a Database Array"><img src="../gifs/txtpreva.gif" alt="Previous: 14.7. Treating a Text File as a Database Array" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch14_10.htm" title="14.9. Persistent Data"><img src="../gifs/txtnexta.gif" alt="Next: 14.9. Persistent Data" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">14.7. Treating a Text File as a Database Array</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">14.9. Persistent Data</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

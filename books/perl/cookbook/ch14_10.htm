@@ -1,0 +1,142 @@
+<html><head>
+<title>Recipe 14.9. Persistent Data</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:42:59Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch14_01.htm" title="14. Database Access"><link rel="prev" href="ch14_09.htm" title="14.8. Storing Complex Data in a DBM File"><link rel="next" href="ch14_11.htm" title="14.10. Executing an SQL Command Using DBI and DBD"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch14_09.htm" title="14.8. Storing Complex Data in a DBM File"><img src="../gifs/txtpreva.gif" alt="Previous: 14.8. Storing Complex Data in a DBM File" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch14_01.htm" title="14. Database Access">Chapter 14<br>Database Access</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch14_11.htm" title="14.10. Executing an SQL Command Using DBI and DBD"><img src="../gifs/txtnexta.gif" alt="Next: 14.10. Executing an SQL Command Using DBI and DBD" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch14-37320">14.9. Persistent Data</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch14-pgfId-1118">Problem<a class="indexterm" name="ch14-idx-1000005000-0"></A
+><a class="indexterm" name="ch14-idx-1000005000-1"></A
+><a class="indexterm" name="ch14-idx-1000005000-2"></A
+></A
+></H3
+><p class="para">You want your variables to retain their values between calls to your program.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch14-pgfId-1124">Solution</A
+></H3
+><p class="para">Use a MLDBM to store the values between calls to your program:</P
+><pre class="programlisting">use MLDBM 'DB_File';
+
+my ($VARIABLE1,$VARIABLE2);
+my $Persistent_Store = '/projects/foo/data';
+BEGIN {
+    my %data;
+    tie(%data, 'MLDBM', $Persistent_Store)
+        or die &quot;Can't tie to $Persistent_Store : $!&quot;;
+    $VARIABLE1 = $data{VARIABLE1};
+    $VARIABLE2 = $data{VARIABLE2};
+    # ...
+    untie %data;
+}
+END {
+    my %data;
+    tie (%data, 'MLDBM', $Persistent_Store)
+        or die &quot;Can't tie to $Persistent_Store : $!&quot;;
+    $data{VARIABLE1} = $VARIABLE1;
+    $data{VARIABLE2} = $VARIABLE2;
+    # ...
+    untie %data;
+}</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch14-pgfId-1174">Discussion</A
+></H3
+><p class="para">An important limitation of MLDBM is that you can't add to or alter the structure in the reference without assignment to a temporary variable. We do this in the sample program in <a class="xref" href="#ch14-12839" title="mldbm-demo">Example 14.6</A
+>, assigning to <code class="literal">$array_ref</CODE
+> before we <code class="literal">push</CODE
+>. You simply can't do this:</P
+><pre class="programlisting">push(@{$db{$user}}, $duration);</PRE
+><p class="para">For a start, MLDBM doesn't allow it. Also, <code class="literal">$db{$user}</CODE
+> might not be in the database (the array reference isn't automatically created as it would be if <code class="literal">%db</CODE
+> weren't tied to a DBM file). This is why we test <code class="literal">exists</CODE
+> <code class="literal">$db{$user}</CODE
+> when we give <code class="literal">$array_ref</CODE
+> its initial value. We're creating the empty array for the case where it doesn't already exist.</P
+><div class="example"><h4 class="example"><a class="title" name="ch14-12839">Example 14.6: mldbm-demo</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch14-idx-1000005001-0"></A
+>mldbm_demo - show how to use MLDBM with DB_File
+
+use MLDBM &quot;DB_File&quot;;
+
+$db = &quot;/tmp/mldbm-array&quot;;
+
+tie %db, 'MLDBM', $db
+  or die &quot;Can't open $db : $!&quot;;
+
+while(&lt;DATA&gt;) {
+    chomp;
+    ($user, $duration) = split(/\s+/, $_);
+    $array_ref = exists $db{$user} ? $db{$user} : [];
+    push(@$array_ref, $duration);
+    $db{$user} = $array_ref;
+}
+
+foreach $user (sort keys %db) {
+    print &quot;$user: &quot;;
+    $total = 0;
+    foreach $duration (@{ $db{$user} }) {
+        print &quot;$duration &quot;;
+        $total += $duration;
+    }
+        print &quot;($total)\n&quot;;
+    }
+
+__END__
+gnat        15.3
+tchrist     2.5
+jules       22.1
+tchrist     15.9
+gnat        8.7<a class="indexterm" name="ch14-idx-1000005003-0"></A
+><a class="indexterm" name="ch14-idx-1000005003-1"></A
+><a class="indexterm" name="ch14-idx-1000005003-2"></A
+></PRE
+></DIV
+><p class="para">Newer versions of MLDBM allow you to select not just the database module (we recommend DB_File), but also the serialization module (we recommend Storable). Previous versions limited you to Data::Dumper for serializing, which is slower than Storable. Here's how you use DB_File with Storable:</P
+><pre class="programlisting">use MLDBM qw(DB_File Storable);</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch14-pgfId-1252">See Also</A
+></H3
+><p class="para">The documentation for the Data::Dumper, MLDBM, and Storable modules from CPAN; <a class="xref" href="ch11_14.htm" title="Storing Data Structures to Disk">Recipe 11.13</A
+>; <a class="xref" href="ch14_09.htm" title="Storing Complex Data in a DBM File">Recipe 14.8</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch14_09.htm" title="14.8. Storing Complex Data in a DBM File"><img src="../gifs/txtpreva.gif" alt="Previous: 14.8. Storing Complex Data in a DBM File" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch14_11.htm" title="14.10. Executing an SQL Command Using DBI and DBD"><img src="../gifs/txtnexta.gif" alt="Next: 14.10. Executing an SQL Command Using DBI and DBD" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">14.8. Storing Complex Data in a DBM File</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">14.10. Executing an SQL Command Using DBI and DBD</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

@@ -1,0 +1,199 @@
+<html><head>
+<title>Recipe 7.21. Program: netlock</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:37:37Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch07_01.htm" title="7. File Access"><link rel="prev" href="ch07_21.htm" title="7.20. Copying Filehandles"><link rel="next" href="ch07_23.htm" title="7.22. Program: lockarea"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_21.htm" title="7.20. Copying Filehandles"><img src="../gifs/txtpreva.gif" alt="Previous: 7.20. Copying Filehandles" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch07_01.htm" title="7. File Access">Chapter 7<br>File Access</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch07_23.htm" title="7.22. Program: lockarea"><img src="../gifs/txtnexta.gif" alt="Next: 7.22. Program: lockarea" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch07-27900">7.21. Program: netlock</A
+></H2
+><p class="para"><a class="indexterm" name="ch07-idx-1000009802-0"></A
+><a class="indexterm" name="ch07-idx-1000009802-1"></A
+><a class="indexterm" name="ch07-idx-1000009802-2"></A
+><a class="indexterm" name="ch07-idx-1000009802-3"></A
+>When locking files, we recommend that you use <code class="literal">flock</CODE
+><a class="indexterm" name="ch07-idx-1000009809-0"></A
+> when possible. However, on some systems, <code class="literal">flock</CODE
+>'s locking strategy is not reliable. For example, the person who built Perl on your system configured <code class="literal">flock</CODE
+> to use a version of file locking that didn't even try to work over the Net, or you're on the increasingly rare system where no <code class="literal">flock</CODE
+> emulation exists at all.</P
+><p class="para">The following program and module provide a basic implementation of a file locking mechanism. Unlike a normal <code class="literal">flock</CODE
+>, with this module you lock file <em class="emphasis">names</EM
+>, not file descriptors.</P
+><p class="para">Thus, you can use it to lock directories, domain sockets, and other non-regular files. You can even lock files that don't exist yet. It uses a directory created at the same level in the directory structure as the locked file, so you must be able to write to the enclosing directory of the file you wish to lock. A sentinel file within the lock directory contains the owner of the lock. This is also useful with <a class="xref" href="ch07_09.htm" title="Modifying a File in Place with Temporary File">Recipe 7.8</A
+>, because you can lock the filename even though the file that has that name changes.</P
+><p class="para">The <code class="literal">nflock</CODE
+> function takes one or two arguments. The first is the pathname to lock; the second is the optional amount of time to wait for the lock. The function returns true if the lock is granted, false if the timeout expired, and raises an exception should various improbable events occur, like being unable to write the directory.</P
+><p class="para">Set the <code class="literal">$File::LockDir::Debug</CODE
+> variable to true to make the module emit messages if it stalls waiting for a lock. If you forget to free a lock and try to exit the program, the module will remove them for you. This won't happen if your program is sent a signal it doesn't trap.</P
+><p class="para"><a class="xref" href="#ch07-24667" title="drivelock">Example 7.9</A
+> shows a driver program to demonstrate the <a class="indexterm" name="ch07-idx-1000011418-0"></A
+>File::LockDir module.</P
+><div class="example"><h4 class="example"><a class="title" name="ch07-24667">Example 7.9: drivelock</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch07-idx-1000011430-0"></A
+>drivelock - demo File::LockDir module
+use strict;
+use File::LockDir;
+$SIG{INT} = sub { die &quot;outta here\n&quot; };
+$File::LockDir::Debug = 1;
+my $path = shift                            or die &quot;usage: $0 &lt;path&gt;\n&quot;;
+unless (nflock($path, 2)) {
+    die &quot;couldn't lock $path in 2 seconds\n&quot;;
+}
+sleep 100;
+nunflock($path);</PRE
+></DIV
+><p class="para">The module itself is shown in <a class="xref" href="#ch07-18887" title="File::LockDir">Example 7.10</A
+>. For more on building your own modules, see <a class="xref" href="ch12_01.htm" title="Packages, Libraries, and Modules">Chapter 12, <cite class="chapter">Packages, Libraries, and Modules</CITE
+></A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch07-18887">Example 7.10: File::LockDir</A
+></H4
+><pre class="programlisting">package File::LockDir;
+# module to provide very basic filename-level
+# locks.  No fancy systems calls.  In theory,
+# directory info is sync'd over NFS.  Not
+# stress tested.
+
+use strict;
+
+use Exporter;
+use vars qw(@ISA @EXPORT);
+@ISA      = qw(Exporter);
+@EXPORT   = qw(nflock nunflock);
+
+use vars qw($Debug $Check);
+$Debug  ||= 0;  # may be predefined
+$Check  ||= 5;  # may be predefined
+
+use Cwd;
+use Fcntl;
+use Sys::Hostname;
+use File::Basename;
+use File::stat;
+use Carp;
+
+my %Locked_Files = ();
+
+# usage: nflock(FILE; NAPTILL)
+sub nflock($;$) {
+    my $pathname = shift;
+    my $naptime  = shift || 0;
+    my $lockname = name2lock($pathname);
+    my $whosegot = &quot;$lockname/owner&quot;;
+    my $start    = time();
+    my $missed   = 0;
+    local *OWNER;
+
+    # if locking what I've already locked, return
+    if ($Locked_Files{$pathname}) {
+        carp &quot;$pathname already locked&quot;;
+        return 1
+    }
+
+    if (!-w dirname($pathname)) {
+        croak &quot;can't write to directory of $pathname&quot;;
+    }
+
+    while (1) {
+        last if mkdir($lockname, 0777);
+        confess &quot;can't get $lockname: $!&quot; if $missed++ &gt; 10
+                        &amp;&amp; !-d $lockname;
+        if ($Debug) {{
+            open(OWNER, &quot;&lt; $whosegot&quot;) || last; # exit &quot;if&quot;!
+            my $lockee = &lt;OWNER&gt;;
+            chomp($lockee);
+            printf STDERR &quot;%s $0\[$$]: lock on %s held by %s\n&quot;,
+                scalar(localtime), $pathname, $lockee;
+            close OWNER;
+        }}
+        sleep $Check;
+        return if $naptime &amp;&amp; time &gt; $start+$naptime;
+    }
+    sysopen(OWNER, $whosegot, O_WRONLY|O_CREAT|O_EXCL)
+                            or croak &quot;can't create $whosegot: $!&quot;;
+    printf OWNER &quot;$0\[$$] on %s since %s\n&quot;,
+            hostname(), scalar(localtime);
+    close(OWNER)                
+        or croak &quot;close $whosegot: $!&quot;;
+    $Locked_Files{$pathname}++;
+    return 1;
+}
+
+# free the locked file
+sub nunflock($) {
+    my $pathname = shift;
+    my $lockname = name2lock($pathname);
+    my $whosegot = &quot;$lockname/owner&quot;;
+    unlink($whosegot);
+    carp &quot;releasing lock on $lockname&quot; if $Debug;
+    delete $Locked_Files{$pathname};
+    return rmdir($lockname);
+}
+
+# helper function
+sub name2lock($) {
+    my $pathname = shift;
+    my $dir  = dirname($pathname);
+    my $file = basename($pathname);
+    $dir = getcwd() if $dir eq '.';
+    my $lockname = &quot;$dir/$file.LOCKDIR&quot;;
+    return $lockname;
+}
+
+# anything forgotten?
+END {
+    for my $pathname (keys %Locked_Files) {
+        my $lockname = name2lock($pathname);
+        my $whosegot = &quot;$lockname/owner&quot;;
+        carp &quot;releasing forgotten $lockname&quot;;
+        unlink($whosegot);
+        return rmdir($lockname);
+    }
+}
+
+1;<a class="indexterm" name="ch07-idx-1000011670-0"></A
+><a class="indexterm" name="ch07-idx-1000011670-1"></A
+><a class="indexterm" name="ch07-idx-1000011670-2"></A
+><a class="indexterm" name="ch07-idx-1000011670-3"></A
+></PRE
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_21.htm" title="7.20. Copying Filehandles"><img src="../gifs/txtpreva.gif" alt="Previous: 7.20. Copying Filehandles" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch07_23.htm" title="7.22. Program: lockarea"><img src="../gifs/txtnexta.gif" alt="Next: 7.22. Program: lockarea" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">7.20. Copying Filehandles</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">7.22. Program: lockarea</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

@@ -1,0 +1,2828 @@
+<html>
+<head>
+<title>Log Analysis  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Log Analysis">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch09_04.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch09_01.htm">Chapter 9: Log Files</a></td><td align="right" valign="top" width="172"><a href="ch09_06.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">9.5. Log Analysis</h2>
+
+
+
+
+
+<p>
+<a name="INDEX-936"></a><a name="INDEX-937"></a>Some
+system administrators never get past the rotation phase in their
+relationship with their log files. As long as the necessary
+information exists on disk when it is needed for debugging, they
+never put any thought into using their log file information for any
+other purpose. I'd like to suggest that this is a shortsighted
+view, and that a little log file analysis can go a long way.
+We're going to look at a few approaches you can use for
+performing log file analysis in Perl, starting with the most simple
+and getting more complex as we go along.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-938"></a>Most of
+the examples in this section use Unix log files for demonstration
+purposes, since the average Unix system has more log files than
+sample systems from either of the other two operating systems put
+together, but the approaches offered here are not OS-specific.</p>
+
+
+
+
+
+<a name="ch09-7-fm2xml"></a>
+<h3 class="sect2">9.5.1. Stream Read-Count</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-939"></a>The easiest approach is the simple
+"read-and-count." We read through a stream of log data,
+looking for interesting data, and increment a counter when we find
+it. Here's a simple example, which counts the number of times a
+machine has rebooted based on the contents of a Solaris 2.6
+<em class="filename">wtmpx</em> file:<a href="#FOOTNOTE-4">[4]</a>
+</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-4"></a>
+<p>[4]<em class="filename">wtmpx
+</em>is a file that uses an extended form of the
+<em class="filename">u</em>/<em class="filename">wtmp </em>format. It was
+designed to record events without some of the field length
+constraints of the classic format (e.g., 16-character remote
+hostnames). Under Solaris, each login/logout is logged to both
+<em class="filename">wtmp </em>and <em class="filename">wtpmx</em>.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># template for Solaris 2.6 wtmpx, see the pack(  ) doc 
+# for more information
+$template = "A32 A4 A32 l s s2 x2 l2 l x20 s A257 x"; 
+
+# determine the size of a record
+$recordsize = length(pack($template,(  )));
+# open the file
+open(WTMP,"/var/adm/wtmpx") or die "Unable to open wtmpx:$!\n";
+
+# read through it one record at a time
+while (read(WTMP,$record,$recordsize)) {
+    ($ut_user,$ut_id,$ut_line,$ut_pid,$ut_type,$ut_e_termination,
+     $ut_e_exit,$tv_sec,$tv_usec,$ut_session,$ut_syslen,$ut_host)=
+       unpack($template,$record);
+
+    if ($ut_line eq "system boot"){
+        print "rebooted ".scalar localtime($tv_sec)."\n";
+        $reboots++;
+    }
+}
+
+close(WTMP);
+print "Total reboots: $reboots\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<a name="INDEX-940"></a>Let's extend this methodology
+and see an example of statistics gathering using the Windows NT Event
+Log facility. As mentioned before, NT has a well-developed and fairly
+sophisticated system-logging mechanism. This sophistication makes it
+a bit trickier for the beginning Perl programmer. We'll have to
+use some Win32-specific Perl module routines to get at the basic log
+information.</p>
+
+
+
+
+
+<p>NT programs and operating system components log their activities by
+posting "events" to one of several different event logs.
+These events are recorded by the OS with basic information like when
+the event was posted, which program or OS function is posting the
+event, what kind of event (informational or something more serious)
+is being posted, etc.</p>
+
+
+
+
+
+<p>Unlike Unix, the actual description of the event, or log message, is
+not actually stored with the event entry. Instead, an EventID is
+posted to the log. This EventID contains a reference to a specific
+message compiled into a program library (<em class="filename">.dll</em> ).
+Retrieving a log message given an EventID is tricky. The process
+involves looking up the proper library in the Registry and loading
+the library by hand. Luckily, the current version of
+<tt class="literal">Win32::EventLog</tt> performs this process for us
+automatically (see
+<tt class="literal">$Win32::EventLog::GetMessageText</tt> in our first
+<tt class="literal">Win32::Eventlog</tt> example earlier, <a href="ch09_02.htm#ch09-47266">Section 9.2.3, "Using the OS's Logging API"</a>.</p>
+
+
+
+
+
+<p>For our next example, we're going to generate some simple
+statistics on the number of entries currently in the
+<em class="emphasis">System</em> log, where they have come from, and their
+level of severity. We'll write this program in a slightly
+different manner than the first NT logging example in this chapter.</p>
+
+
+
+
+
+<p>Our first step is to load the <tt class="literal">Win32::EventLog</tt>
+module that contains the glue between Perl and the Win32 event log
+routines. We then initialize a hash table that will be used to
+contain the results of our calls to the log-reading routines. Perl
+would normally take care of this for us, but sometimes it is good to
+add code like this for the benefit of others who will be reading the
+program. Finally, we set up a small list of event types that we will
+use later for printing statistics:
+<a name="INDEX-941"></a><a name="INDEX-942"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::EventLog;
+
+my %event=('Length',NULL,
+           'RecordNumber',NULL, 
+           'TimeGenerated',NULL,
+           'TimeWritten',NULL, 
+           'EventID',NULL, 
+           'EventType',NULL,  
+           'Category',NULL,
+           'ClosingRecordNumber',NULL,
+           'Source',NULL, 
+           'Computer',NULL,
+           'Strings',NULL,
+           'Data',NULL,); 
+
+# partial list of event types, i.e., Type 1 is "Error",
+# 2 is "Warning", etc.
+@types = ("","Error","Warning","","Information");</pre>
+</blockquote>
+
+
+
+
+
+<p>Our next step is to open up the <em class="emphasis">System</em> event
+log. The <tt class="literal">Open( )</tt> places an
+<em class="emphasis">EventLog</em> handle into
+<tt class="literal">$EventLog</tt> that we can use as our connection to
+this particular log:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Win32::EventLog::Open($EventLog,'System','') 
+  or die "Could not open System log:$^E\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>Once we have this handle, we can use it to retrieve the number of
+events in the log and the number of the oldest record:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$EventLog-&gt;Win32::EventLog::GetNumber($numevents);
+$EventLog-&gt;Win32::EventLog::GetOldest($oldestevent);</pre>
+</blockquote>
+
+
+
+
+
+<p>We use this information as part of our first <tt class="literal">Read(
+)</tt> statement, which positions us to the place in the log
+right before the first record. This is the equivalent of
+<tt class="literal">seek( )</tt>ing to the beginning of a file:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$EventLog-&gt;Win32::EventLog::Read((EVENTLOG_SEEK_READ |
+                                  EVENTLOG_FORWARDS_READ),
+                                  $numevents + $oldestevent, $event);</pre>
+</blockquote>
+
+
+
+
+
+<p>And then from here on in, it is a simple loop to read each log entry
+in turn. The <tt class="literal">EVENTLOG_SEQUENTIAL_READ</tt> flag says
+"continue reading from the position of the last record
+read." The <tt class="literal">EVENTLOG_FORWARDS_READ</tt> flag moves
+us forward in chronological order.<a href="#FOOTNOTE-5">[5]</a> The third argument to <tt class="literal">Read(
+)</tt> is the record offset, in this case 0, because we want to
+pick up right where we left off. As we read each record, we record
+its <tt class="literal">Source</tt> and <tt class="literal">EventType</tt> in a
+hash table of counters.</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-5"></a>
+<p>[5]Here's
+another place where the Win32 event log routines are more flexible
+than usual. Our code could have moved to the to the end of the log
+and read backwards in time if we wanted to do that for some
+reason.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># loop through all of the events, recording the number of 
+# Source and EventTypes
+for ($i=0;$i&lt;$numevents;$i++) {
+    $EventLog-&gt;Read((EVENTLOG_SEQUENTIAL_READ | 
+                     EVENTLOG_FORWARDS_READ),  
+                     0, $event);
+    $source{$event-&gt;{Source}}++;
+    $types{$event-&gt;{EventType}}++;
+}
+
+# now print out the totals
+print "--&gt;Event Log Source Totals:\n";
+for (sort keys %source) {
+    print "$_: $source{$_}\n";
+}
+print "-"x30,"\n";
+print "--&gt;Event Log Type Totals:\n";
+for (sort keys %types) {
+    print "$types[$_]: $types{$_}\n";
+}
+print "-"x30,"\n";
+print "Total number of events: $numevents\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>My results look like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">--&gt; Event Log Source Totals:
+Application Popup: 4
+BROWSER: 228
+DCOM: 12
+Dhcp: 12
+EventLog: 351
+Mouclass: 6
+NWCWorkstation: 2
+Print: 27
+Rdr: 12
+RemoteAccess: 108
+SNMP: 350
+Serial: 175
+Service Control Manager: 248
+Sparrow: 5
+Srv: 201
+msbusmou: 162
+msi8042: 3
+msinport: 162
+mssermou: 151
+qic117: 2
+------------------------------
+--&gt; Event Log Type Totals:
+Error: 493
+Warning: 714
+Information: 1014
+------------------------------
+Total number of events: 2220</pre>
+</blockquote>
+
+
+
+
+
+<p>As promised, here's some sample code that relies on a
+<tt class="command">last</tt>-like program to dump the contents of the
+event log. It uses a program called <tt class="command">ElDump</tt> by
+<em class="emphasis">Jesper Lauritsen,</em> downloaded from <a href="http://www.ibt.ku.dk/jesper/JespersNTtools.htm">http://www.ibt.ku.dk/jesper/JespersNTtools.htm</a>. <tt class="command">ElDump</tt> is
+similar to <tt class="command">DumpEl</tt> found in the NT Resource
+Kit:<a name="INDEX-943"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$eldump = 'c:\bin\eldump';      # path to ElDump
+# output data field separated by ~ and without full message
+# text (faster)
+$dumpflags = '-l system -c ~ -M'; 
+      
+open(ELDUMP,"$eldump $dumpflags|") or die "Unable to run $eldump:$!\n";
+
+print STDERR "Reading system log.";
+
+while(&lt;ELDUMP&gt;){    
+    ($date,$time,$source,$type,$category,$event,$user,$computer) = 
+    split('~');
+    $$type{$source}++;
+    print STDERR ".";
+}
+print STDERR "done.\n";
+
+close(ELDUMP);
+
+# for each type of event, print out the sources and number of 
+# events per source
+foreach $type (qw(Error Warning Information 
+                  AuditSuccess AuditFailure)){
+    print "-" x 65,"\n";
+    print uc($type)."s by source:\n";
+    for (sort keys %$type){
+        print "$_ ($$type{$_})\n";
+    }
+}
+print "-" x 65,"\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's a snippet from the output:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">ERRORs by source:
+BROWSER (8)
+Cdrom (2)
+DCOM (15)
+Dhcp (2524)
+Disk (1)
+EventLog (5)
+RemoteAccess (30)
+Serial (24)
+Service Control Manager (100)
+Sparrow (2)
+atapi (2)
+i8042prt (4)
+-----------------------------------------------------------------
+WARNINGs by source:
+BROWSER (80)
+Cdrom (22)
+Dhcp (76)
+Print (8)
+Srv (82)</pre>
+</blockquote>
+
+
+
+
+
+<a name="ch09-8-fm2xml"></a>
+<h3 class="sect3">9.5.1.1. A simple stream read-count variation</h3>
+
+
+
+
+
+<p>A simple variation of the stream read-count approach involves taking
+multiple passes through the data. This is sometimes necessary for
+large data sets and cases where it takes an initial scan through the
+data before you can determine the difference between interesting and
+non-interesting data. Programmatically, this means after the first
+pass through the input, either:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>Moving back to the beginning of the data stream (which could just be
+a file) using <tt class="literal">seek( )</tt> or an API-specific call,
+or</p>
+</li>
+<li>
+<p>Closing and re-opening the filehandle. This is often the only choice
+when you are reading the output of a program like
+<tt class="command">last</tt>.</p>
+</li>
+</ul>
+<p>Here's an example where a multiple-pass read-count approach
+might be useful. Imagine you have to deal with a security breach
+where an account on your system has been compromised. One of the
+first questions you might want to ask is "Has any other account
+been compromised from the same source machine?" Finding a
+comprehensive answer to this seemingly simple question turns out to
+be trickier than you might expect. Let's take a first shot at
+the problem. This SunOS-specific code (see the initial template)
+takes the name of a user as its first argument and an optional
+regular expression as a second argument for filtering out hosts we
+wish to ignore:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$template       = "A8 A8 A16 l"; # for SunOS 4.1.x
+$recordsize     = length(pack($template,(  )));
+($user,$ignore) = @ARGV;
+
+print "-- scanning for first host contacts from $user --\n";
+open(WTMP,"/var/adm/wtmp") or die "Unable to open wtmp:$!\n";
+while (read(WTMP,$record,$recordsize)) {
+    ($tty,$name,$host,$time)=unpack($template,$record);
+    
+    if ($user eq $name){
+       next if (defined $ignore and $host =~ /$ignore/o);
+	    if (length($host) &gt; 2 and !exists $contacts{$host}){
+	        $connect = localtime($time);
+	        $contacts{$host}=$time;
+	        write;
+	    }
+    }
+}
+
+print "-- scanning for other contacts from those hosts --\n";
+die "Unable to seek to beginning of wtmp:$!\n"
+  unless (seek(WTMP,0,0));
+
+while (read(WTMP,$record,$recordsize)) {
+    ($tty,$name,$host,$time)=unpack($template,$record);
+    
+    # if it is not a logout, and we're looking for this host,
+    # and this is a connection from a user *other* than the 
+    # compromised account, then record
+    if (substr($name,1,1) ne "\0" and	
+	     exists $contacts{$host} and 
+	     $name ne $user){
+	         $connect = localtime($time);
+	         write;
+    }
+}
+close(WTMP);
+
+# here's the output format, may need to be adjusted based on template
+format STDOUT = 
+@&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;    @&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;  @&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;
+$name,$host,$connect
+.</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<a name="INDEX-944"></a>First the
+program scans through a <em class="filename">wtmp</em> file looking for
+all logins from the compromised user. As it finds them, it compiles a
+hash of all of the hosts from which these logins took place. It then
+rolls back to the beginning of the file and scans for connections
+from that host list, printing matches as it finds them. It would be
+easy to modify this program to scan all of the files in a directory
+of rotated <em class="filename">wtmp</em> log files.</p>
+
+
+
+
+
+<p>One problem with this program is that it is too specific. It will
+only match exact hostnames. If an intruder is coming in from a dialup
+modem bank of an ISP (which they often are), chances are the
+hostnames will change with each dial-up connection. Still, partial
+solutions like this often help a great deal.</p>
+
+
+
+
+
+<p>Besides its simplicity, the stream read-count approach we've
+been discussing has the advantage of being faster and less
+memory-intensive than other method. It works best with the stateless
+type of log files we discussed early on in the chapter. But
+sometimes, especially when dealing with stateful data, we need to use
+a different plan of attack.<a name="INDEX-945"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch09-9-fm2xml"></a>
+<h3 class="sect2">9.5.2. Read-Remember-Process</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-946"></a>The
+opposite extreme of our previous approach, where we passed by the
+data as fast as possible, is to read it into memory and deal with it
+after reading. Let's look at a few versions of this strategy.</p>
+
+
+
+
+
+<p>First, an easy example: let's say you have an FTP transfer log
+and you want to know which files have been transferred the most
+often. Here are some sample lines from a <tt class="command">wu-ftpd</tt>
+FTP server transfer log:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Sun Dec 27 05:18:57 1998 1 nic.funet.fi 11868
+/net/ftp.funet.fi/CPAN/MIRRORING.
+FROM a _ o a cpan@perl.org ftp 0 *
+Sun Dec 27 05:52:28 1998 25 kju.hc.congress.ccc.de 269273
+/CPAN/doc/FAQs/FAQ/
+PerlFAQ.html a _ o a mozilla@ ftp 0 *
+Sun Dec 27 06:15:04 1998 1 rising-sun.media.mit.edu 11868
+/CPAN/MIRRORING.FROM b _ 
+o a root@rising-sun.media.mit.edu ftp 0 *
+Sun Dec 27 06:15:05 1998 1 rising-sun.media.mit.edu 35993 /CPAN/RECENT.html b _ o a 
+root@rising-sun.media.mit.edu ftp 0 *</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's the list of fields for each line of the previous output
+(please see the <tt class="command">wu-ftpd</tt> server manpage
+<em class="citetitle">xferlog(5)</em> for details on each field).</p>
+
+
+
+
+
+<a name="ch09-10-fm2xml"></a>
+<table border="1">
+
+
+
+<tr>
+<th>
+<p>Field #</p>
+</th>
+<th>
+<p>Field Name</p>
+</th>
+</tr>
+
+
+
+
+
+
+
+
+
+
+<tr>
+<td>
+<p>0</p>
+</td>
+<td>
+<p>
+<tt class="literal">current-time</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>1</p>
+</td>
+<td>
+<p>
+<tt class="literal">transfer-time</tt> (in seconds)</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>2</p>
+</td>
+<td>
+<p>
+<tt class="literal">remote-host</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>3</p>
+</td>
+<td>
+<p>
+<tt class="literal">filesize</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>4</p>
+</td>
+<td>
+<p>
+<tt class="literal">filename</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>5</p>
+</td>
+<td>
+<p>
+<tt class="literal">transfer-type</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>6</p>
+</td>
+<td>
+<p>
+<tt class="literal">special-action-flag</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>7</p>
+</td>
+<td>
+<p>
+<tt class="literal">direction</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>8</p>
+</td>
+<td>
+<p>
+<tt class="literal">access-mode</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>9</p>
+</td>
+<td>
+<p>
+<tt class="literal">username</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>10</p>
+</td>
+<td>
+<p>
+<tt class="literal">service-name</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>11</p>
+</td>
+<td>
+<p>
+<tt class="literal">authentication-method</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>12</p>
+</td>
+<td>
+<p>
+<tt class="literal">authenticated-user-id</tt>
+</p>
+</td>
+</tr>
+
+
+
+
+
+</table>
+
+<p>Here's some code to show which files have been transferred most
+often:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$xferlog = "/var/adm/log/xferlog";
+
+open(XFERLOG,$xferlog) or die "Unable to open $xferlog:$!\n";
+
+while (&lt;XFERLOG&gt;){
+    $files{(split)[8]}++;
+}
+
+close(XFERLOG);
+
+for (sort {$files{$b} &lt;=&gt; $files{$a}||$a cmp $b} keys %files){
+    print "$_:$files{$_}\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>We read each line of the file, using the name of the file as a hash
+key and incrementing the value for that key. The name of the file is
+extracted from each log line using an array index that references a
+specific element of the list returned by the <tt class="literal">split(
+)</tt> function:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$files{(split)[8]}++;</pre>
+</blockquote>
+
+
+
+
+
+<p>You may notice that the specific element we reference (8) is
+different from the 8<sup class="superscript">th</sup> field in the
+<em class="filename">xferlog</em> field listing above. This is an
+unfortunate result of the lack of field delimiters in the original
+file. We are splitting on whitespace (the default for
+<tt class="literal">split( )</tt>), so the date field becomes five
+separate list items.</p>
+
+
+
+
+
+<p>One subtle trick in this code sample is in the anonymous
+<tt class="literal">sort</tt> function we use to sort the values:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">for (sort {$files{$b} &lt;=&gt; $files{$a}||$a cmp $b} keys %files){</pre>
+</blockquote>
+
+
+
+
+
+<p>Note that the places of <tt class="literal">$a</tt> and
+<tt class="literal">$b</tt> have been switched from their alphabetical
+order in the first portion. This causes <tt class="literal">sort</tt> to
+return the items in descending order, thus showing us the more
+frequently transferred files first. The second portion of the
+anonymous <tt class="literal">sort</tt> function (<tt class="literal">||$a cmp
+$b</tt>) assures that we list files with the same number of
+transfers in a sorted order.</p>
+
+
+
+
+
+<p>If we want to limit this script to counting only certain files or
+directories, we could let the user specify a regular expression as
+the first argument to this script. For example, adding:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">next unless /$ARGV[0]/o;</pre>
+</blockquote>
+
+
+
+
+
+<p>to the <tt class="literal">while( )</tt> loop allows you to specify a
+regular expression to limit which files will be counted.</p>
+
+
+
+
+
+<a name="ch09-11-fm2xml"></a>
+<div class="sidebar">
+<h4 class="objtitle">Regular Expressions</h4>
+
+
+
+
+<p>
+<a name="INDEX-947"></a>Regular expression crafting is often
+one of the most important parts of log parsing. Regexps are used like
+programmatic sieves to extract the interesting data from the
+non-interesting data in your logs. The regular expressions used in
+this chapter are very basic, but you'll probably be creating
+more sophisticated regexps for your own use. You may wish to use the
+subroutine or compiled regular expression techniques introduced in
+the previous chapter to use them even more efficiently.</p>
+
+
+
+
+<p>Any time you spend learning how to wield regexp power will
+benefit you in many ways. One of the best for learning about regular
+expressions is Jeffrey Friedl's book, <em class="citetitle">Mastering
+Regular Expressions</em> (O'Reilly).</p>
+
+
+
+
+
+</div>
+
+<p>Let's take a look at another example of the
+read-remember-process approach using our "breach-finder"
+program from the previous section. Our earlier code only showed us
+<em class="emphasis">successful</em> logins from the intruder sites. We
+have no way of knowing about unsuccessful attempts. For that
+information, we're going to have to bring in another log file.</p>
+
+
+
+
+
+<a name="ch09-12-fm2xml"></a>
+<blockquote class="note">
+<h4 class="objtitle">WARNING</h4>
+<p>This problem exposes one of Unix's flaws: Unix systems tend to
+store log information in a number of different places and formats.
+Few tools are provided for dealing with these disparities (luckily we
+have Perl). It is not uncommon to need more than one data source to
+solve problems like these.</p>
+
+
+
+
+</blockquote>
+
+<p>
+<a name="INDEX-948"></a>The log
+file that will be the most help to us in this endeavor is the one
+generated through <tt class="command">syslog</tt> by Wietse Venema's
+Unix security tool <tt class="command">tcpwrappers</tt>.
+<tt class="command">tcpwrappers</tt> provides gatekeeper programs and
+libraries that can be used to control access to network services. An
+individual network service like <tt class="command">telnet</tt> can be
+configured so that a <em class="emphasis">tcpwrappers</em> program first
+handles all network connections to this service. After a connection
+is made, the <tt class="command">tcpwrappers</tt> program will
+<tt class="command">syslog</tt> the connection attempt and then either pass
+the connection off to the real service or take some action (like
+dropping the connection). The choice of whether to let the connection
+through is based on some simple user-provided rules (e.g., allow only
+certain originating hosts). <tt class="command">tcpwrappers</tt> can also
+take preliminary precautions to make sure the connection is coming
+from the place it purports to come from using a DNS reverse-lookup.
+It can also be configured to log the name of the user who made the
+connection (via the RFC931 ident protocol) if possible. For a more
+detailed description of <tt class="command">tcpwrappers</tt>, see Simson
+Garfinkel and Gene Spafford's book <em class="citetitle">Practical Unix
+&amp; Internet Security </em>(O'Reilly).</p>
+
+
+
+
+
+<p>For our purposes, we can just add some code to our previous
+breach-finder program that scans the <tt class="command">tcpwrappers</tt>
+log (<em class="filename">tcpdlog</em> in this case) for connections from
+the suspect hosts we found in our scan of <em class="filename">wtmp</em>.
+If we add the following code to the end of our previous code sample:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># tcpd log file location
+$tcpdlog        = "/var/log/tcpd/tcpdlog"; 
+$hostlen        = 16;  # max length of hostname in wtmp file
+
+print "-- scanning tcpdlog --\n";
+open(TCPDLOG,$tcpdlog) or die "Unable to read $tcpdlog:$!\n";
+while(&lt;TCPDLOG&gt;){
+    next if !/connect from /; # we only care about connections
+    ($connecto,$connectfrom) = /(.+):\s+connect from\s+(.+)/;
+    $connectfrom =~ s/^.+@//;
+
+    # tcpwrappers can log the entire hostname, not just the first N 
+    # characters like some wtmp logs. As a result, we need to truncate 
+    # the hostname at the same place as the wtmp file if we want to 
+    # perform a hash lookup below
+    $connectfrom = substr($connectfrom,0,$hostlen);
+    print if (exists $contacts{$connectfrom} and 
+              $connectfrom !~ /$ignore/o);
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>we get output that looks like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">-- scanning for first host contacts from user --
+user       host.ccs.neu  Fri Apr  3 13:41:47
+-- scanning for other contacts from those hosts --
+user2      host.ccs.neu  Thu Oct  9 17:06:49
+user2      host.ccs.neu  Thu Oct  9 17:44:31
+user2      host.ccs.neu  Fri Oct 10 22:00:41
+user2      host.ccs.neu  Wed Oct 15 07:32:50
+user2      host.ccs.neu  Wed Oct 22 16:24:12
+-- scanning tcpdlog --
+Jan 12 13:16:29 host2 in.rshd[866]: connect from user4@host.ccs.neu.edu
+Jan 13 14:38:54 host3 in.rlogind[4761]: connect from user5@host.ccs.neu.edu
+Jan 15 14:30:17 host4 in.ftpd[18799]: connect from user6@host.ccs.neu.edu
+Jan 16 19:48:19 host5 in.ftpd[5131]: connect from user7@host.ccs.neu.edu</pre>
+</blockquote>
+
+
+
+
+
+<p>You may have noticed that the output above found connections from two
+different time ranges. We found connections in
+<em class="filename">wtmp</em> from April 3 to October 22, while the
+<tt class="command">tcpwrappers</tt> data appeared to show only January
+connections. The difference in dates is an indication that our
+<em class="filename">wtmp</em> files and our
+<tt class="command">tcpwrappers</tt> files are rotated at different speeds.
+You need to be aware of these details when writing code that tacitly
+assumes the two log files being correlated refer to the same time
+period.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-949"></a><a name="INDEX-950"></a>For a final
+and more sophisticated example of the read-remember-process approach,
+let's look at a task that requires combining stateful and
+stateless data. If you wanted a more comprehensive picture of the
+activity on a <tt class="command">wu-ftpd</tt> server, you might want to
+use code to correlate the login and logout activity logged in a
+machine's <em class="filename">wtmp</em> file with the file transfer
+information recorded by <tt class="command">wu-ftpd</tt> in its
+<em class="filename">xferlog</em> file. It might be nice if you could see
+output that showed when an FTP session started and finished, and what
+transfers took place during that session.</p>
+
+
+
+
+
+<p>Here's a snippet of sample output from the code we're
+about to assemble. It shows four FTP sessions in March. The first
+session shows one file being transferred to the machine. The next two
+show files being transferred from that machine, and the last shows a
+connection without any transfers:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Thu Mar 12 18:14:30 1998-Thu Mar 12 18:14:38 1998 pitpc.ccs.neu.ed
+        -&gt; /home/dnb/makemod
+
+Sat Mar 14 23:28:08 1998-Sat Mar 14 23:28:56 1998 traal-22.ccs.neu
+        &lt;- /home/dnb/.emacs19
+
+Sat Mar 14 23:14:05 1998-Sat Mar 14 23:34:28 1998 traal-22.ccs.neu
+        &lt;- /home/dnb/lib/emacs19/cperl-mode.el
+        &lt;- /home/dnb/lib/emacs19/filladapt.el
+
+Wed Mar 25 21:21:15 1998-Wed Mar 25 21:36:15 1998 traal-22.ccs.neu
+        (no transfers in xferlog)</pre>
+</blockquote>
+
+
+
+
+
+<p>Producing this output turns out to be non-trivial, since we need to
+pigeonhole stateless data into a stateful log. The
+<em class="filename">xferlog</em> transfer log shows only the time and the
+host that initiated the transfer. The <em class="filename">wtmp</em> log
+shows the connection and disconnections from other hosts to the
+server. Let's walk through how to combine the two types of data
+using a read-remember-process approach. We'll define some
+variables for the program, and then call the subroutines to perform
+each task:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># for date-&gt;Unix time (secs from Epoch) conversion
+use Time::Local; <a name="INDEX-951"></a>
+
+$xferlog = "/var/log/xferlog"; # location of transfer log
+$wtmp = "/var/adm/wtmp";       # location of wtmp
+$template = "A8 A8 A16 l";     # SunOS 4.1.4 template for wtmp 
+$recordsize = length(pack($template,(  ))); # size of each wtmp entry
+$hostlen = 16;   # max length of the hostname in wtmp
+# month name to number mapping
+%month = qw{Jan 0 Feb 1 Mar 2 Apr 3 May 4 Jun 5 Jul 6 
+            Aug 7 Sep 8 Oct 9 Nov 10 Dec 11};  
+
+&amp;ScanXferlog;    # scan the transfer log
+&amp;ScanWtmp;       # scan the wtmp log
+&amp;ShowTransfers;  # correlate and print transfers</pre>
+</blockquote>
+
+
+
+
+
+<p>Now let's look at the procedure that reads the
+<tt class="command">wu-ftpd</tt><em class="filename">xferlog</em> logfile:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># scans a wu-ftpd transfer log and populates the %transfers 
+# data structure
+sub ScanXferlog {
+    local($sec,$min,$hours,$mday,$mon,$year);
+    my($time,$rhost,$fname,$direction);
+
+    print STDERR "Scanning $xferlog...";
+    open(XFERLOG,$xferlog) or 
+       die "Unable to open $xferlog:$!\n";
+    
+    while (&lt;XFERLOG&gt;){
+       # use an array slice to select the fields we want
+	   ($mon,$mday,$time,$year,$rhost,$fname,$direction) = 
+          (split)[1,2,3,4,6,8,11];
+
+       # add the direction of transfer to the filename, 
+       # i is "transferred in"
+	   $fname = ($direction eq 'i' ? "-&gt; " : "&lt;- ") . $fname;
+
+       # convert the transfer time to Unix epoch format
+	   ($hours,$min,$sec) = split(':',$time);
+	   $unixdate =  
+         timelocal($sec,$min,$hours,$mday,$month{$mon},$year);
+
+	   # put the data into a hash of lists of lists:
+       push(@{$transfers{substr($rhost,0,$hostlen)}},
+            [$unixdate,$fname]);
+    }
+    close(XFERLOG);
+    print STDERR "done.\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>The <tt class="literal">push( )</tt> line of Perl in the previous code
+probably deserves a little explanation. This line creates a hash of
+lists of lists that looks something like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$transfers{hostname} = 
+  ([time1, filename1], [time2, filename2],[time3, filename3]...)</pre>
+</blockquote>
+
+
+
+
+
+<p>The <tt class="literal">%transfers</tt> hash is keyed on the name of the
+host that initiated the transfer. We truncate that name to the
+largest string size our <em class="filename">wtmp</em> can hold as we
+create each hash entry.</p>
+
+
+
+
+
+<p>For each host, we store a list of transfer pairs, each pair recording
+when a file was transferred and the name of that file. We're
+choosing to store the time in "seconds since the epoch"
+for ease of comparison later.<a href="#FOOTNOTE-6">[6]</a> The
+subroutine <tt class="literal">timelocal( )</tt> from the module
+<tt class="literal">Time::Local</tt> helps us convert to that standard.
+Because we're scanning a file transfer log written in
+chronological order, these lists of pairs are built in chronological
+order as well, a property that will come in handy later.</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-6"></a>
+<p>[6]This is seconds since
+some arbitrary starting point. For example, the epoch on most Unix
+machines is 00:00:00 GMT on January 1, 1970.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<p>Let's move on to scanning <em class="filename">wtmp</em> :</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># scans the wtmp file and populates the @sessions structure 
+# with ftp sessions
+sub ScanWtmp {
+    my($record,$tty,$name,$host,$time,%connections);
+
+    print STDERR "Scanning $wtmp...\n";
+    open(WTMP,$wtmp) or die "Unable to open $wtmp:$!\n";
+
+    while (read(WTMP,$record,$recordsize)) {
+
+        # don't even bother to unpack if record does not begin
+        # with ftp. NOTE: this creates a wtmp format dependency 
+        # as a trade-off for speed
+	    next if (substr($record,0,3) ne "ftp");
+
+	    ($tty,$name,$host,$time)=unpack($template,$record);
+
+        # if we find an open connection record, then 
+        # create a hash of list of lists. The LoL will be used
+        # as a stack below.
+	    if ($name and substr($name,0,1) ne "\0"){
+	        push(@{$connections{$tty}},[$host,$time]);
+	    }
+       # if we find a close connection record, we try to pair
+       # it with a previous open connection record we recorded 
+       # before
+	    else {
+               unless (exists $connections{$tty}){
+               warn "found lone logout on $tty:" . 
+                     scalar localtime($time)."\n";
+               next;
+	        }
+           # we'll use the previous open connect and this
+           # close connect to record this as a single session. 
+           # To do that we create a list of lists where each 
+           # list is (hostname, login, logout) 
+           push(@sessions,
+                [@{shift @{$connections{$tty}}},$time]);
+
+	        # if no more connections on the stack for that
+            # tty, remove from hash
+	        delete $connections{$tty} 
+              unless (@{$connections{$tty}});
+	    }	
+    }
+    close(WTMP);
+    print STDERR "done.\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Let's look at what's going in this code. We read through
+<em class="filename">wtmp</em> one record at a time. If that record begins
+with <tt class="literal">ftp</tt>, we know that this is an FTP session. As
+the comment says, the line of code that makes that decision has an
+implicit assumption about the format of a <em class="filename">wtmp</em>
+record. If <tt class="literal">tty</tt> was not the first field in the
+record, this test would not work. However, being able to test whether
+a line is of interest without having to <tt class="literal">unpack(
+)</tt> is worth it.</p>
+
+
+
+
+
+<p>Once we've found a line that begins with
+<tt class="literal">ftp</tt>, we take it apart to determine if it describes
+opening or closing of an FTP session. If it is an opening of a
+connection, we record that in <tt class="literal">%connections</tt>, a data
+structure that keeps tabs on all the open sessions. Like
+<tt class="literal">%transfers</tt> in our previous subroutine, it is a
+hash of list of lists, this time keyed on the tty (i.e., terminal) of
+each connection. Each of the values in this hash is a set of pairs
+detailing the connection hostname and time.</p>
+
+
+
+
+
+<p>Why use such a complicated data structure to keep track of the open
+connections? Unfortunately, there isn't a simple
+"open-close open-close open-close" pairing of lines in
+<em class="filename">wtmp</em>. For instance, take a look at these lines
+from <em class="filename">wtmp</em> (as printed by our first
+<em class="filename">wtmp</em> program earlier in this chapter):</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">ftpd1833:dnb:ganges.ccs.neu.e:Fri Mar 27 14:04:47 1998
+ttyp7:(logout):(logout):Fri Mar 27 14:05:11 1998
+ftpd1833:dnb:hotdiggitydog-he:Fri Mar 27 14:05:20 1998
+ftpd1833:(logout):(logout):Fri Mar 27 14:06:20 1998
+ftpd1833:(logout):(logout):Fri Mar 27 14:06:43 1998</pre>
+</blockquote>
+
+
+
+
+
+<p>Notice the two open FTP connection records on the same tty (lines 1
+and 3). If we just stored a single connection per tty in a plain
+hash, we'd lose the first connection record when we found the
+second one.</p>
+
+
+
+
+
+<p>Instead, we use the list of lists keyed off every tty in
+<tt class="literal">%connections</tt> as a stack. When we see a connection
+opening, we add a <em class="replaceable">(host, login-time) </em>pair
+for the connection to the stack kept for that tty. Each time we see a
+close connection line for this tty, we "pop" one of the
+open connection records off the stack and store our complete
+information about the session as a whole in another data structure.
+That's the purpose of this line of code:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">push(@sessions,[@{shift @{$connections{$tty}}},$time]);</pre>
+</blockquote>
+
+
+
+
+
+<p>Let's untangle this line from the inside out to make sure
+everything is clear. The part in bold type returns a reference to the
+stack/list of open connection pairs for a specific tty:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">push(@sessions,[@{shift @{<tt class="userinput"><b>$connections{$tty}</b></tt>}},$time]);</pre>
+</blockquote>
+
+
+
+
+
+<p>This pops the reference to the first connection pair off that stack:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">push(@sessions,[@{<tt class="userinput"><b>shift @{$connections{$tty}}</b></tt>},$time]);</pre>
+</blockquote>
+
+
+
+
+
+<p>We dereference it to get at the actual
+<tt class="literal">(</tt><em class="replaceable">host, login-time)</em>
+connection pair list. If we place this pair at the beginning of
+another list that ends with the connection time, Perl will
+interpolate the connection pair and we'll have a single,
+three-element list. This gives us a triad of <em class="replaceable">(host,
+login-time, logout-time)</em>:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">push(@sessions,[<tt class="userinput"><b>@{shift @{$connections{$tty}}},$time</b></tt>]);</pre>
+</blockquote>
+
+
+
+
+
+<p>Now that we have all of the parts (initiating host, connection start,
+and end) of an FTP session in a single list, we can push a reference
+to that list on to the <tt class="literal">@sessions</tt> lists of lists
+for future use:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">push(@sessions,[@{shift @{$connections{$tty}}},$time]);</pre>
+</blockquote>
+
+
+
+
+
+<p>We have a list of sessions thanks to this one, very busy line of code.</p>
+
+
+
+
+
+<p>To finish the job in our <tt class="literal">&amp;ScanWtmp</tt>
+subroutine we check if the stack is empty for a tty, i.e., there are
+no more open connection requests pending. If this is the case we can
+delete that tty's entry from the hash; we know the connection
+has ended:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">delete $connections{$tty} unless (@{$connections{$tty}});</pre>
+</blockquote>
+
+
+
+
+
+<p>Time to do the actual correlation between our two different data
+sets. This task falls to our <tt class="literal">&amp;ShowTransfers</tt>
+subroutine. For each session, it prints out the connection triad, and
+then the files transferred during this session.</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># iterate over the session log, pairing sessions
+# with transfers
+sub ShowTransfers {
+    local($session);
+
+    foreach $session (@sessions){
+
+	    # print session times
+	    print scalar localtime($$session[1]) . "-" .
+	          scalar localtime($$session[2]) . 
+              " $$session[0]\n";
+
+       # find all files transferred in this connection triad 
+       # and print them
+	    print &amp;FindFiles(@{$session}),"\n";
+    }
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's the hard part, deciding whether a particular login
+session had any transfers:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># returns all of the files transferred for a given connect 
+# session triad
+sub FindFiles{
+    my($rhost,$login,$logout) = @_;
+    my($transfer,@found);
+
+    # easy case, no transfers in this login
+    unless (exists $transfers{$rhost}){
+	    return "\t(no transfers in xferlog)\n";
+    }
+
+    # easy case, first transfer we have on record is 
+    # after this login
+    if ($transfers{$rhost}-&gt;[0]-&gt;[0] &gt; $logout){
+	    return "\t(no transfers in xferlog)\n";
+    }
+
+    # find any files transferred in this session
+    foreach $transfer (@{$transfers{$rhost}}){
+
+        # if transfer happened before login 
+ 	    next if ($$transfer[0] &lt; $login);  
+
+        # if transfer happened after logout
+	    last if ($$transfer[0] &gt; $logout); 
+
+        # if we've already used this entry
+	    next unless (defined $$transfer[1]);  
+
+	    push(@found,"\t".$$transfer[1]."\n");
+	    undef $$transfer[1];
+    }
+    ($#found &gt; -1 ? @found : "\t(no transfers in xferlog)\n")
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>We can eliminate the easy cases first. If we've never seen
+transfers initiated by this host, or the first transfer associated
+with this host occurs after the session triad we are checking has
+ended, we know no files have been transferred during that session.</p>
+
+
+
+
+
+<p>If we can't eliminate the easy cases, we need to look through
+our lists of transfers. We check if each transfer made from the host
+in question occurred after the session started, but before the
+session ended. We skip to the next transfer if either of these
+conditions isn't true. We also avoid testing the other
+transfers for the host as soon as we've found a transfer that
+takes place after the session has ended. Remember we mentioned that
+all of the transfers are added to the data structure in chronological
+order? Here's where it pays off.</p>
+
+
+
+
+
+<p>The last test we make before considering a transfer entry to be valid
+may look a little peculiar:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># if we've already used this entry
+next unless (defined $$transfer[1]);</pre>
+</blockquote>
+
+
+
+
+
+<p>If two anonymous FTP sessions from the same host overlap in time, we
+have no way of knowing which session is responsible for initiating a
+transfer of that file. There is simply no information from either of
+our logs that can help us make that determination. The best we can do
+in this case is make up a standard and keep to it. The standard here
+is "attribute the transfer to the first session
+possible." This test line above, and the subsequent
+<tt class="literal">undef</tt>ing of the filename value as a flag,
+enforces that standard.</p>
+
+
+
+
+
+<p>If this final test passes, we declare victory and add the filename to
+the list of files transferred in that session. The session and its
+accompanying file transfers are printed.</p>
+
+
+
+
+
+<p>Read-remember-process programs that have to do this sort of
+correlation can get fairly sophisticated, especially when they are
+bringing together data sources where the correlation is a bit fuzzy.
+So in good Perl spirit, let's see if we can take an easier
+approach. <a name="INDEX-952"></a><a name="INDEX-953"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch09-13-fm2xml"></a>
+<h3 class="sect2">9.5.3. Black Boxes</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-954"></a><a name="INDEX-955"></a><a name="INDEX-956"></a><a name="INDEX-957"></a>In the Perl world, if you are
+trying to write something generally useful, another person may have
+beat you to it and published their code for the task. This gives you
+an opportunity to simply feed your data into their module in a
+prescribed way and receive results without having to know how the
+task was performed. This is often known as a "black box
+approach."</p>
+
+
+
+
+
+<p>One example is the <tt class="literal">SyslogScan</tt> package by Rolf
+Harold Nelson. Earlier in this chapter we noted that parsing a mail
+log file from <em class="emphasis">sendmail</em> can be tricky because the
+lines are stateful. Each line often has one or more sibling lines
+interspersed with other lines later in the log. The
+<tt class="literal">SyslogScan</tt> package offers an easy way to refer to
+each mail delivery without having to manually scan the file and pair
+up all of the relevant lines. It can filter for certain addresses and
+keep track of some rudimentary statistics for the messages it has
+seen.<a name="INDEX-958"></a><a name="INDEX-959"></a>
+</p>
+
+
+
+
+
+<p>
+<tt class="literal">SyslogScan</tt> is object-oriented, so the first step
+is to load the module and create a new object instance:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use SyslogScan::DeliveryIterator;
+
+# a list of mail syslog files
+$maillogs = ["/var/log/mail/maillog"]; 
+
+$iterator = new SyslogScan::DeliveryIterator(syslogList =&gt; $maillogs);</pre>
+</blockquote>
+
+
+
+
+
+<p>The <tt class="literal">new </tt>method of
+<tt class="literal">SyslogScan::DeliveryIterator</tt> returns an
+<em class="emphasis">iterator</em>, essentially a pointer into the file
+that shuttles forward message delivery by message delivery. By using
+an iterator, we are spared from the actual work of scanning ahead in
+the file looking for all of the lines related to a particular
+message. If we call the <tt class="literal">next( )</tt> method of that
+iterator, it will hand us back a delivery object. This object
+encapsulates the information about that delivery previously spread
+over several lines in the log. For example, this code:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">while ($delivery = $iterator -&gt; next(  )){
+    print $delivery-&gt;{Sender}." -&gt; ".
+           join(",",@{$delivery-&gt;{ReceiverList}}),"\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>prints out information like:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">root@host.ccs.neu.edu -&gt; user1@cse.scu.edu
+owner-freebsd-java-digest@freebsd.org -&gt; user2@ccs.neu.edu
+root@host.ccs.neu.edu -&gt; user3@ccs.neu.edu</pre>
+</blockquote>
+
+
+
+
+
+<p>It gets even snazzier. If we feed a <tt class="literal">SyslogScan</tt>
+iterator object to the <tt class="literal">new</tt> method of the
+<tt class="literal">SyslogScan::Summary</tt> module,
+<tt class="literal">new</tt> will take all of the output from that
+iterator's <tt class="literal">next</tt> method and return a
+summary object. This summary object contains usage summaries for all
+of the delivery objects that iterator could possible return.</p>
+
+
+
+
+
+<p>But the <tt class="literal">SyslogScan</tt> package takes this
+functionality to still another level. If we now feed a summary object
+to the <tt class="literal">new</tt> method of
+<tt class="literal">SyslogScan::ByGroup</tt>, we get a bygroup object that
+has grouped all of the summaries into domains and compiled stats for
+those groups. Here's the magic we just described in action:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use SyslogScan::DeliveryIterator;
+use SyslogScan::Summary;
+use SyslogScan::ByGroup;
+use SyslogScan::Usage;
+
+# the location of our maillog
+$maillogs = ["/var/log/mail/maillog"]; 
+
+# get an iterator for this file
+$iterator = new SyslogScan::DeliveryIterator(syslogList =&gt; $maillogs);
+
+# feed this iterator to ::Summary, receive a summary object
+$summary = new SyslogScan::Summary($iterator);
+
+# feed this summary object to ::ByGroup and receive a 
+# stats-by-group object
+$bygroup = new SyslogScan::ByGroup($summary);
+
+# print the contents of this object
+foreach $group (sort keys %$bygroup){
+    ($bmesg,$bbytes)=@{$bygroup-&gt;{$group}-&gt;
+                      {groupUsage}-&gt;getBroadcastVolume(  )};
+    ($smesg,$sbytes)=@{$bygroup-&gt;{$group}-&gt;
+                      {groupUsage}-&gt;getSendVolume(  )};
+    ($rmesg,$rbytes)=@{$bygroup-&gt;{$group}-&gt;
+                      {groupUsage}-&gt;getReceiveVolume(  )};
+    ($rmesg,$rbytes)=@{$bygroup-&gt;{$group}-&gt;
+                      {groupUsage}-&gt;getReceiveVolume(  )};
+    write;
+}
+
+format STDOUT_TOP =
+Name                         Bmesg  BByytes  Smesg  SBytes   Rmesg  Rbytes
+---------------------------  -----  -------- ------ -------- ------ -------
+.
+format STDOUT =
+@&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;  @&gt;&gt;&gt;&gt;&gt; @&gt;&gt;&gt;&gt;&gt;&gt;&gt; @&gt;&gt;&gt;&gt;&gt; @&gt;&gt;&gt;&gt;&gt;&gt;&gt; @&gt;&gt;&gt;&gt;&gt; @&gt;&gt;&gt;&gt;&gt;&gt;&gt;
+$group,$bmesg,$bbytes,$smesg,$sbytes,$rmesg,$rbytes
+.</pre>
+</blockquote>
+
+
+
+
+
+<p>The result is a report detailing the number and bytes of broadcast,
+sent, and received messages. Here's an excerpt from some sample
+output:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Name                 Bmesg  BByytes  Smesg  SBytes   Rmesg  Rbytes
+-------------------  -----  -------- ------ -------- ------ -------
+getreminded.com          1     3420      1     3420      0        0
+gillette.com             1      984      1      984      4     7812
+gis.net                  3    10830      3    10830      1      787
+globalserve.net          1     1245      1     1245      0        0
+globe.com                0        0      0        0      1     2040</pre>
+</blockquote>
+
+
+
+
+
+<p>The plus side of the black box approach is that you can often get a
+great deal done, thanks to the hard work of the module or script
+author, with very little code of your own. The minus side to using
+the black box approach is the trust you have to place in another
+author's code. It may have subtle bugs or use an approach that
+does not scale for your needs. It is best to look over the code
+before you drop it into production in your site.<a name="INDEX-960"></a><a name="INDEX-961"></a><a name="INDEX-962"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch09-14-fm2xml"></a>
+<h3 class="sect2">9.5.4. Using Databases</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-963"></a><a name="INDEX-964"></a>The last approach we'll
+discuss requires the most knowledge outside of the Perl domain to
+implement. As a result, we'll only take a very simple look at a
+technique that over time will probably become more prevalent.</p>
+
+
+
+
+
+<p>The previous examples we've seen work fine on reasonably-sized
+data sets when run on machines with a reasonable amount of memory,
+but they don't scale. For situations where you have lots of
+data, especially if the data comes from different sources, databases
+are the natural tool.</p>
+
+
+
+
+
+<p>There are at least two ways to make use of databases from Perl. The
+first is one I'll call a "Perl-only" method. With
+this method, all of the database activity takes place in Perl, or
+libraries tightly coupled to Perl. The second way uses Perl modules
+like the DBI family to make Perl a client of another database like
+MySQL, Oracle, or MS-SQL. Let's use both of these approaches
+for log processing and analysis.</p>
+
+
+
+
+
+<a name="ch09-15-fm2xml"></a>
+<h3 class="sect3">9.5.4.1. Using Perl-only databases</h3>
+
+
+
+
+
+<p>As long as the data set is not too large, we can probably stick to a
+Perl-only solution. We'll extend our ubiquitous breach-finder
+for an example. So far our code just dealt with connections on a
+single machine. If we wanted to find out about logins from intruders
+on any of our machines, how would we do it?</p>
+
+
+
+
+
+<p>Our first step is to drop all of the <em class="filename">wtmp</em> data
+for our machines into a database of some sort. For the purpose of
+this example, assume that all of the machines in question have direct
+access to some shared directory via some network file system like
+NFS. Before we proceed, we need to choose a database format.</p>
+
+
+
+
+
+<p>My "Perl database format" of choice is the Berkeley DB
+format. I use quotes around "Perl database format"
+because, while the support for DB is shipped with the Perl sources,
+the actually DB libraries must be procured from another source
+(<a href="http://www.sleepycat.com">http://www.sleepycat.com</a>) and
+installed before the Perl support can be built. <a href="ch09_05.htm#ch09-47520">Table 9-4</a> provides a comparison between the different
+supported database formats.</p>
+
+
+
+
+
+<a name="ch09-47520"></a>
+<h4 class="objtitle">Table 9.4. Comparison of the Supported Perl Database Formats</h4>
+<table border="1">
+
+
+
+
+
+
+
+<tr>
+<th>
+<p>Name</p>
+</th>
+<th>
+<p>Unix Support</p>
+</th>
+<th>
+<p>NT/2000 Support</p>
+</th>
+<th>
+<p>Mac Support</p>
+</th>
+<th>
+<p>Key or Value Size Limits</p>
+</th>
+<th>
+<p>Byte-Order Independent</p>
+</th>
+</tr>
+
+
+
+
+
+
+
+
+
+
+<tr>
+<td>
+<p>"old" dbm</p>
+</td>
+<td>
+<p>Yes</p>
+</td>
+<td>
+<p>No</p>
+</td>
+<td>
+<p>No</p>
+</td>
+<td>
+<p>1K</p>
+</td>
+<td>
+<p>No</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>"new" dbm</p>
+</td>
+<td>
+<p>Yes</p>
+</td>
+<td>
+<p>No</p>
+</td>
+<td>
+<p>Yes</p>
+</td>
+<td>
+<p>4K</p>
+</td>
+<td>
+<p>No</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>Sdbm</p>
+</td>
+<td>
+<p>Yes</p>
+</td>
+<td>
+<p>Yes</p>
+</td>
+<td>
+<p>No</p>
+</td>
+<td>
+<p>1K (default)</p>
+</td>
+<td>
+<p>No</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>Gdbm</p>
+</td>
+<td>
+<p>Yes <a href="#FOOTNOTE-7">[7]</a>
+</p>
+</td>
+<td>
+<p>Yes <a href="#FOOTNOTE-8">[8]</a>
+</p>
+</td>
+<td>
+<p>No</p>
+</td>
+<td>
+<p>None</p>
+</td>
+<td>
+<p>No</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>DB</p>
+</td>
+<td>
+<p>Yes <sup class="superscript">a</sup>
+</p>
+</td>
+<td>
+<p>Yes <sup class="superscript">a</sup>
+</p>
+</td>
+<td>
+<p>Yes</p>
+</td>
+<td>
+<p>None</p>
+</td>
+<td>
+<p>Yes</p>
+</td>
+</tr>
+
+
+
+
+
+</table>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-7"></a>
+<p>[7]Actual database libraries may have to be
+downloaded separately.</p>
+
+
+
+
+</blockquote>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-8"></a>
+<p>[8]Database library and Perl module must be
+downloaded from the net (<a href="http://www.roth.net">http://www.roth.net</a>).</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<p>
+<a name="INDEX-965"></a>I like the
+Berkeley-DB format because it can handle larger data sets and is
+byte-order independent. The byte-order independence is particularly
+important for the Perl code we're about to see, since
+we'll want to read and write to the same file from different
+machines which may have different architectures.</p>
+
+
+
+
+
+<p>We'll start off by populating the database. For the sake of
+simplicity and portability, we're calling the
+<tt class="command">last</tt> program to avoid having to <tt class="literal">unpack(
+)</tt> several different <em class="filename">wtmp</em> files
+ourselves. Here's the code, with an explanation to
+follow:<a name="INDEX-966"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use DB_File;
+use FreezeThaw qw(freeze thaw);
+use Sys::Hostname; # to get the current hostname<a name="INDEX-967"></a>
+<a name="INDEX-968"></a>
+use Fcntl;         # for the definition of O_CREAT and O_RDWR
+
+# find the executable for the last program
+(-x "/bin/last" and $lastex = "/bin/last") or 
+  (-x "/usr/ucb/last" and $lastex = "/usr/ucb/last");
+
+$userdb    = "userdata";     # user database file
+$connectdb = "connectdata";  # connection database file
+$thishost  = &amp;hostname;
+
+open(LAST,"$lastex|") or
+    die "Can't run the program $lastex:$!\n";
+
+# read each line of the output from "last"
+while (&lt;LAST&gt;){
+    next if /^reboot\s/ or /^shutdown\s/ or 
+           /^ftp\s/     or /^wtmp\s/; 
+    ($user,$tty,$host,$day,$mon,$date,$time) = split;  
+    next if $tty =~ /^:0/ or $tty =~ /^console$/;
+    next if (length($host) &lt; 4);
+    $when = $mon." ".$date." ".$time;
+    
+	# save each record in a hash of list of lists
+    push(@{$users{$user}},[$thishost,$host,$when]);
+    push(@{$connects{$host}},[$thishost,$user,$when]);
+}
+
+close(LAST);
+
+# tie to a database file, creating it (for Read &amp; Write); if 
+# it does not exist see the footnote in the text re: $DB_BTREE
+tie %userdb, "DB_File",$userdb,O_CREAT|O_RDWR, 0600, $DB_BTREE
+  or die "Unable to open $userdb database for r/w:$!\n";
+
+# iterate through the users and store the info in our 
+# database using freeze
+foreach $user (keys %users){
+    if (exists $userdb{$user}){
+   	    ($userinfo) = thaw($userdb{$user});
+	    push(@{$userinfo},@{$users{$user}});
+	    $userdb{$user}=freeze $userinfo;
+    }
+    else {
+	    $userdb{$user}=freeze $users{$user};
+    }
+}
+untie %userdb;
+
+# do the same for the connections
+tie %connectdb, "DB_File",$connectdb,O_CREAT|O_RDWR, 
+                0600, $DB_BTREE
+  or die "Unable to open $connectdb database for r/w:$!\n";
+foreach $connect (keys %connects){
+    if (exists $connectdb{$connect}){
+	    ($connectinfo) = thaw($connectdb{$connect});
+	    push(@{$connectinfo},@{$connects{$connect}});
+	    $connectdb{$connect}=freeze($connectinfo);
+    }
+    else {
+	    $connectdb{$connect}=freeze($connects{$connect});
+    }
+}
+untie %connectdb;</pre>
+</blockquote>
+
+
+
+
+
+<p>Our code takes the output from the <em class="emphasis">last</em> program
+and does the following:</p>
+
+
+
+
+
+<ol>
+<li>
+<p>Filters out the lines that are not useful.</p>
+</li>
+<li>
+<p>Squirrels away the output in two hash of list of lists data
+structures that look like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$users{username} = 
+    [[current host, connecting host, connect time],
+     [current host, connecting host, connect time]
+     ...
+    ];
+$connects{host} = 
+    [[current host, username1, connect time],
+     [current host, username2, connect time],
+     ...
+    ];</pre>
+</blockquote>
+</li>
+<li>
+<p>Takes this data structure in memory and attempts to merge it into a
+database.</p>
+</li>
+</ol>
+<p>This last step is the most interesting, so let's explore it
+more carefully. We tie the hashes <tt class="literal">%userdb</tt> and
+<tt class="literal">%connectdb</tt> to database files.<a href="#FOOTNOTE-9">[9]</a> This magic allows us to access those
+hashes transparently, while Perl handles storing and retrieving data
+to the database files behind the scenes. But hashes only store simple
+strings. How do we get our "hashes of list of lists" into
+a single hash value for storage?</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-9"></a>
+<p>[9]You
+don't usually have to use the BTREE form of storage when using
+<tt class="literal">DB_File</tt>, but this program can store some very long
+values. Those values caused the Version 1.85
+<tt class="literal">DB_HASH</tt> storage method to croak in testing
+(causing corrupted data), while the BTREE storage method seemed to
+handle the pounding. Later versions of the DB libraries may not have
+this bug.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<p>
+<a name="INDEX-969"></a><a name="INDEX-970"></a>Ilya Zakharevich's
+<tt class="literal">FreezeThaw</tt> module is used to store our complex
+data structure in a single scalar that can be used as a hash value.
+<tt class="literal">FreezeThaw</tt> can take an arbitrary Perl data
+structure and encode it as a string. There are other modules like
+this, <tt class="literal">Data::Dumper</tt> by Gurusamy Sarathy (shipped
+with Perl) and <tt class="literal">Storable</tt> by Raphael Manfredi being
+the most prevalent. <tt class="literal">FreezeThaw</tt> offers the most
+compact representation of a complex data structure, hence its use
+here. Each of these modules has its strong points, so be sure to
+investigate all three if you have a task like ours.</p>
+
+
+
+
+
+<p>In our program we check if an entry for this user or host exists. If
+it doesn't, we simply "freeze" the data structure
+into a string and store that string in the database using our tied
+hash. If it does exist, we "thaw" the existing data
+structure found in the database back into memory, add our data, then
+re-freeze and re-store it.</p>
+
+
+
+
+
+<p>If we run this code on several machines, we'll have a database
+with some potentially useful information to feed to the next version
+of our breach-finder program.</p>
+
+
+
+
+
+<a name="ch09-16-fm2xml"></a>
+<blockquote class="note">
+<h4 class="objtitle">TIP</h4>
+<p>An excellent time to populate a database like this is just after a
+log rotation of a <em class="filename">wtmp</em> file has taken place.</p>
+
+
+
+
+
+<p>The database population code presented here is too bare-bones for
+production use. One glaring deficiency is the lack of a mechanism to
+prevent multiple instances of the program from updating the database
+at the same time. Given that file locking over NFS is known to be
+dicey at best, it might be easier to call code like this from a
+larger program that serializes the process of collecting information
+from each machine in turn.</p>
+
+
+
+
+</blockquote>
+
+<p>Now that we have a database full of data, let's walk through
+our new improved breach-finder program that uses this
+information:<a name="INDEX-971"></a><a name="INDEX-972"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use DB_File;
+use FreezeThaw qw(freeze thaw);
+use Fcntl;
+
+# accept the username and hosts to ignore as command-line arguments
+($user,$ignore) = @ARGV;
+
+# database files we'll be using
+$userdb    ="userdata";
+$connectdb ="connectdata";
+
+tie %userdb, "DB_File",$userdb,O_RDONLY,666,$DB_BTREE
+  or die "Unable to open $userdb database for reading:$!\n";
+tie %connectdb, "DB_File",$connectdb,O_RDONLY,666,$DB_BTREE
+  or die "Unable to open $connectdb database 
+          for reading:$!\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>We've loaded the modules we need, taken our input, set a few
+variables, and tied them to our database files. Now it's time
+to do some work:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># we can exit if we've never seen a connect from this user
+unless (exists $userdb{$user}){
+    print "No logins from that user.\n";
+    untie %userdb;
+    untie %connectdb;
+    exit;
+}
+
+($userinfo) = thaw($userdb{$user});
+
+print "-- first host contacts from $user --\n";
+foreach $contact (@{$userinfo}){
+    next if (defined $ignore and $contact-&gt;[1] =~ /$ignore/o);
+    print $contact-&gt;[1] . " -&gt; " . $contact-&gt;[0] . 
+          " on ".$contact-&gt;[2]."\n";
+    $otherhosts{$contact-&gt;[1]}='';
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>This code says: if we've seen this user at all, we reconstitute
+that user's contact records in memory using <tt class="literal">thaw(
+)</tt>. For each contact, we test to see if we've been
+asked to ignore the host it came from. If not, we print a line for
+that contact and record the originating host in the
+<tt class="literal">%otherhosts</tt> hash.</p>
+
+
+
+
+
+<p>We use a hash here as a simple way of collecting the unique list of
+hosts from all of the contact records. Now that we have the list of
+hosts the intruder may have connected from, we need to find out all
+of the other users who have connected from these potentially
+compromising hosts.</p>
+
+
+
+
+
+<p>Finding this information will be easy because when we recorded which
+users logged in to which machines, we also recorded the inverse
+(i.e., which machines were logged into by which users) in another
+database file. We now look at all of the records from the hosts we
+identified in the previous step. If we are not told to ignore a host,
+and we have connection records for it, we capture a unique list of
+users who have logged into that host using the
+<tt class="literal">%userseen</tt> hash:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">print "-- other connects from source machines  --\n";
+foreach $host (keys %otherhosts){
+    next if (defined $ignore and $host =~ /$ignore/o);
+    next unless (exists $connectdb{$host});
+	
+	($connectinfo) = thaw($connectdb{$host});
+    
+	foreach $connect (@{$connectinfo}){
+	    next if (defined $ignore and $connect-&gt;[0] =~ /$ignore/o);
+	    $userseen{$connect-&gt;[1]}='';
+	}
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>The final act of this three-step drama has a nice circular flair. We
+return to our original user database to find all of the connections
+made by suspect users from suspect machines:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">foreach $user (sort keys %userseen){
+    next unless (exists $userdb{$user});
+
+    ($userinfo) = thaw($userdb{$user});
+
+    foreach $contact (@{$userinfo}){
+        next if (defined $ignore and $contact-&gt;[1] =~ /$ignore/o);
+        write if (exists $otherhosts{$contact-&gt;[1]});
+    }
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>All that's left is to sweep up the theater and go home:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">untie %userdb;
+untie %connectdb;
+
+format STDOUT =
+@&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt; @&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt; -&gt; @&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt; on @&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;
+$user.":",$contact-&gt;[1],$contact-&gt;[0],$contact-&gt;[2]
+.</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's some example output from the program (again, with the
+user and hostnames changed to protect the innocent):</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">-- first host contacts from baduser --
+badhost1.exampl -&gt; machine1.ccs.neu.edu on Jan 18 09:55
+badhost2.exampl -&gt; machine2.ccs.neu.edu on Jan 19 11:53
+-- other connects from source machines  --
+baduser2:  badhost1.exampl -&gt; machine2.ccs.neu.e on Dec 15 13:26
+baduser2:  badhost2.exampl -&gt; machine2.ccs.neu.e on Dec 11 12:45
+baduser3:  badhost1.exampl -&gt; machine1.ccs.neu.ed on Jul 13 16:20
+baduser4:  badhost1.exampl -&gt; machine1.ccs.neu.ed on Jun 9 11:53
+baduser:   badhost1.exampl -&gt; machine1.ccs.neu.ed on Jan 18 09:55
+baduser:   badhost2.exampl -&gt; machine2.ccs.neu.e on Jan 19 11:53</pre>
+</blockquote>
+
+
+
+
+
+<p>This is a lovely example program, but it doesn't really scale
+past a small cluster of machines. For every subsequent run of the
+program, it may have to read a record from the database,
+<tt class="literal">thaw( )</tt> it back into memory, add some new data
+to the record, <tt class="literal">freeze( )</tt> it again, and store it
+back in the database. This can be CPU-time-and memory-intensive. The
+whole process potentially happens once per user and machine
+connection, so things slow down very quickly.</p>
+
+
+
+
+
+
+
+
+
+
+<a name="ch09-17-fm2xml"></a>
+<h3 class="sect3">9.5.4.2. Using Perl-cliented SQL databases</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-973"></a><a name="INDEX-974"></a>Let's
+look at one way you might deal with very large datasets. You may need
+to load your data into a more sophisticated SQL database (commercial
+or otherwise) and query the information you need from it using SQL.
+If you're not familiar with SQL, I recommend you take a quick
+peek at <a href="appd_01.htm">Appendix D, "The Fifteen-Minute SQL Tutorial"</a>, before looking at this section.
+<a name="INDEX-975"></a>
+</p>
+
+
+
+
+
+<p>Populating the database could look like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use DBI;
+use Sys::Hostname;
+
+$db = "dnb"; # the name of the database we're using
+
+# locate the last executable
+(-x "/bin/last" and $lastex = "/bin/last") or 
+  (-x "/usr/ucb/last" and $lastex = "/usr/ucb/last");
+
+# connect to a Sybase database using user "dnb" and a password 
+# provided on the command line
+$dbh = DBI-&gt;connect('dbi:Sybase:','dnb',$ARGV[0]);
+die "Unable to connect: $DBI::errstr\n" 
+  unless (defined $dbh);
+
+# change to the database we'll be using
+$dbh-&gt;do("use $db") or
+  die "Unable to change to $db: ".$dbh-&gt;errstr."\n";
+
+# create the lastinfo table if it doesn't exist
+unless ($dbh-&gt;selectrow_array(
+          q{SELECT name from sysobjects WHERE name="lastinfo"})){
+          $dbh-&gt;do(q{create table lastinfo (username char(8),
+                                            localhost char(40),
+                                            otherhost varchar(75),
+                                            when char(18))}) or
+      die "Unable to create lastinfo: ".$dbh-&gt;errstr."\n";
+}
+
+$thishost  = &amp;hostname;
+
+$sth = $dbh-&gt;prepare(
+  qq{INSERT INTO lastinfo(username,localhost,otherhost,when) 
+   VALUES (?,'$thishost', ?, ?)}) or
+  die "Unable to prepare insert: ".$dbh-&gt;errstr."\n";
+
+open(LAST,"$lastex|") or die "Can't run the program $lastex:$!\n";
+
+while (&lt;LAST&gt;){
+    next if /^reboot\s/ or /^shutdown\s/ or 
+            /^ftp\s/    or /^wtmp\s/; 
+    ($user,$tty,$host,$day,$mon,$date,$time) = split;  
+    next if $tty =~ /^:0/ or $tty =~ /^console$/;
+    next if (length($host) &lt; 4);
+    $when = $mon." ".$date." ".$time;
+    
+    $sth-&gt;execute($user,$host,$when);
+}
+
+close(LAST);
+$dbh-&gt;disconnect;</pre>
+</blockquote>
+
+
+
+
+
+<p>This creates a table called <em class="filename">lastinfo</em> with
+<em class="replaceable">username</em>,
+<em class="replaceable">localhost</em>,
+<em class="replaceable">otherhost</em>, and
+<em class="replaceable">when</em> columns. We iterate over the output
+of <tt class="command">last</tt>, inserting non-bogus entries into this
+table.</p>
+
+
+
+
+
+<p>Now we can use databases to do what they do so well. Here is a set of
+sample SQL queries that could easily be wrapped in Perl using the DBI
+or ODBC interfaces we explored in <a href="ch07_01.htm">Chapter 7, "SQL Database Administration"</a>:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">-- how many entries in the database?
+select count (*) from lastinfo;
+            
+ -----------
+       10068
+-- how many users have logged in?
+select count (distinct username) from lastinfo;
+            
+ -----------
+         237
+
+-- how many separate hosts have connected to our machines?
+select count (distinct otherhost) from lastinfo;
+            
+ -----------
+        1000
+
+-- which local hosts has the user "dnb" logged into?
+select distinct localhost from lastinfo where username = "dnb";
+ localhost                               
+ ----------------------------------------
+ host1
+ host2</pre>
+</blockquote>
+
+
+
+
+
+<p>These examples should give you a taste of the sort of "data
+mining" you can do once all of the data is in a real database.
+Each of those queries took only a second or so to run. Databases can
+be fast, powerful tools for system administration.</p>
+
+
+
+
+
+<p>The subject of log analysis is a vast one. Hopefully this chapter has
+given you a few tools and a little inspiration.<a name="INDEX-976"></a><a name="INDEX-977"></a><a name="INDEX-978"></a><a name="INDEX-979"></a><a name="INDEX-980"></a><a name="INDEX-981"></a><a name="INDEX-982"></a><a name="INDEX-983"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch09_04.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch09_06.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">9.4. Disk Space Problems</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">9.6. Module Information for This Chapter</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

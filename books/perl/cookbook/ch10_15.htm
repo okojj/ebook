@@ -1,0 +1,150 @@
+<html><head>
+<title>Recipe 10.14. Redefining a Function</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:40:05Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch10_01.htm" title="10. Subroutines"><link rel="prev" href="ch10_14.htm" title="10.13. Saving Global Values"><link rel="next" href="ch10_16.htm" title="10.15. Trapping Undefined Function Calls with AUTOLOAD"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch10_14.htm" title="10.13. Saving Global Values"><img src="../gifs/txtpreva.gif" alt="Previous: 10.13. Saving Global Values" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch10_01.htm" title="10. Subroutines">Chapter 10<br>Subroutines</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch10_16.htm" title="10.15. Trapping Undefined Function Calls with AUTOLOAD"><img src="../gifs/txtnexta.gif" alt="Next: 10.15. Trapping Undefined Function Calls with AUTOLOAD" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch10-24176">10.14. Redefining a Function</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch10-pgfId-1000005610">Problem</A
+></H3
+><p class="para"><a class="indexterm" name="ch10-idx-1000004739-0"></A
+><a class="indexterm" name="ch10-idx-1000004739-1"></A
+><a class="indexterm" name="ch10-idx-1000004739-2"></A
+>You want to temporarily or permanently redefine a function, but functions can't be assigned to.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch10-pgfId-1062">Solution</A
+></H3
+><p class="para">To redefine a function, assign a new code reference to the typeglob of the name of the function. Use a <code class="literal">local</CODE
+> if you want it to be temporary.</P
+><pre class="programlisting">undef &amp;grow;                # silence -w complaints of redefinition
+*grow = \&amp;expand;           
+grow();                     # calls expand()
+
+{
+    local *grow = \&amp;shrink;         # only until this block exists
+        grow();                 # calls shrink()
+}</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch10-pgfId-1084">Discussion</A
+></H3
+><p class="para">Unlike a variable but like a handle, a function cannot be directly assigned to. It's just a name. You can manipulate it almost as though it were a variable, because you can directly manipulate the run-time symbol table using typeglobs like <code class="literal">*foo</CODE
+> to produce interesting <a class="indexterm" name="ch10-idx-1000006373-0"></A
+>aliasing effects.</P
+><p class="para">Assigning a reference to a typeglob changes what is accessed the next time a symbol of that type is needed. This is what the Exporter does when you <a class="indexterm" name="ch10-idx-1000006380-0"></A
+>import a function or variable from one package into another. Since this is direct manipulation of the package symbol table, it only works on package variables (globals), not lexicals.</P
+><pre class="programlisting">*one::var = \%two::Table;   # make %one::var alias for %two::Table
+*one::big = \&amp;two::small;   # make &amp;one::big alias for &amp;two::small</PRE
+><p class="para">A typeglob is something you can use <code class="literal">local</CODE
+> on, but not <code class="literal">my</CODE
+>. Because of the <code class="literal">local</CODE
+>, this aliasing effect is then limited to the duration of the current block.</P
+><pre class="programlisting">local *fred = \&amp;barney;     # temporarily alias &amp;fred to &amp;barney</PRE
+><p class="para">If the value assigned to a typeglob is not a reference but itself another typeglob, then <em class="emphasis">all</EM
+> types by that name are aliased. The types aliased in a full typeglob assignment are scalar, array, hash, function, filehandle, directory handle, and format. That means that assigning <code class="literal">*Top</CODE
+> <code class="literal">=</CODE
+> <code class="literal">*Bottom</CODE
+> would make the current package variable <code class="literal">$Top</CODE
+> an alias for <code class="literal">$Bottom</CODE
+>, <code class="literal">@Top</CODE
+> for <code class="literal">@Bottom</CODE
+>, <code class="literal">%Top</CODE
+> for <code class="literal">%Bottom</CODE
+>, and <code class="literal">&amp;Top</CODE
+> for <code class="literal">&amp;Bottom</CODE
+>. It would even alias the corresponding file and directory handles and formats! You probably don't want to do this.</P
+><p class="para">Use assignments to typeglobs together with closures to clone a bunch of similar functions cheaply and easily. Imagine you wanted a function for HTML generation to help with colors. For example:</P
+><pre class="programlisting">$string =  red(&quot;careful here&quot;);
+print $string;
+<code class="userinput"><b><code class="replaceable"><i>&lt;FONT COLOR='red'&gt;careful here&lt;/FONT&gt;</I
+></CODE
+></B
+></CODE
+></PRE
+><p class="para">You could write the <code class="literal">red </CODE
+> function this way:</P
+><pre class="programlisting">sub red { &quot;&lt;FONT COLOR='red'&gt;@_&lt;/FONT&gt;&quot; }</PRE
+><p class="para">If you need more colors, you could do something like this:</P
+><pre class="programlisting">sub color_font {
+    my $color = shift;
+    return &quot;&lt;FONT COLOR='$color'&gt;@_&lt;/FONT&gt;&quot;;
+}
+sub red    { color_font(&quot;red&quot;, @_)     }
+sub green  { color_font(&quot;green&quot;, @_)   }
+sub blue   { color_font(&quot;blue&quot;, @_)    }
+sub purple { color_font(&quot;purple&quot;, @_)  }
+# etc</PRE
+><p class="para">The similar nature of these functions suggests that there may be a way to factor out the common bit. To do this, use an assignment to an indirect typeglob. If you're running with the highly recommended <code class="literal">use</CODE
+> <code class="literal">strict</CODE
+> pragma, you must first disable <code class="literal">strict 'refs'</CODE
+> for that block.</P
+><pre class="programlisting">@colors = qw(red blue green yellow orange purple violet);
+for my $name (@colors) {
+    no strict 'refs';
+    *$name = sub { &quot;&lt;FONT COLOR='$name'&gt;@_&lt;/FONT&gt;&quot; };
+} </PRE
+><p class="para">These functions all seem independent, but the real code was in fact only compiled once. This technique saves on both compile time and memory use. To create a proper closure, any variables in the anonymous subroutine <em class="emphasis">must</EM
+> be lexicals. That's the reason for the <code class="literal">my</CODE
+> on the loop iteration variable.</P
+><p class="para">This is one of the few places where giving a prototype to a closure is sensible. If you wanted to impose scalar context on the arguments of these functions (probably not a wise idea), you could have written it this way instead:</P
+><pre class="programlisting">*$name = sub ($) { &quot;&lt;FONT COLOR='$name'&gt;$_[0]&lt;/FONT&gt;&quot; };</PRE
+><p class="para">However, since prototype checking happens at compile time, the preceding assignment happens too late to be useful. So, put the whole loop of assignments within a BEGIN block, forcing it to occur during compilation.<a class="indexterm" name="ch10-idx-1000004741-0"></A
+><a class="indexterm" name="ch10-idx-1000004741-1"></A
+><a class="indexterm" name="ch10-idx-1000004741-2"></A
+>  <a class="indexterm" name="ch10-idx-1000006406-0"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch10-pgfId-1000005636">See Also</A
+></H3
+><p class="para">The sections on <a class="olink" href="../prog/ch05_01.htm#PERL2-CH-5-SECT-1.1">"Symbol Tables"</A
+> in <a class="olink" href="../prog/ch05_01.htm">Chapter 5</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlmod </I
+>(1); the section on <a class="olink" href="../prog/ch04_03.htm#PERL2-CH-4-SECT-3.6">"Closures"</A
+> in <a class="olink" href="../prog/ch04_01.htm">Chapter 4</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and the discussion of closures in <i class="filename">perlref  </I
+>(1); <a class="xref" href="ch10_12.htm" title="Prototyping Functions">Recipe 10.11</A
+>; <a class="xref" href="ch11_05.htm" title="Taking References to Functions">Recipe 11.4</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch10_14.htm" title="10.13. Saving Global Values"><img src="../gifs/txtpreva.gif" alt="Previous: 10.13. Saving Global Values" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch10_16.htm" title="10.15. Trapping Undefined Function Calls with AUTOLOAD"><img src="../gifs/txtnexta.gif" alt="Next: 10.15. Trapping Undefined Function Calls with AUTOLOAD" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">10.13. Saving Global Values</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">10.15. Trapping Undefined Function Calls with AUTOLOAD</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

@@ -1,0 +1,104 @@
+<html><head>
+<title>Recipe 13.2. Destroying an Object</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:42:16Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch13_01.htm" title="13. Classes, Objects, and Ties"><link rel="prev" href="ch13_02.htm" title="13.1. Constructing an Object"><link rel="next" href="ch13_04.htm" title="13.3. Managing Instance Data"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_02.htm" title="13.1. Constructing an Object"><img src="../gifs/txtpreva.gif" alt="Previous: 13.1. Constructing an Object" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch13_01.htm" title="13. Classes, Objects, and Ties">Chapter 13<br>Classes, Objects, and Ties</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_04.htm" title="13.3. Managing Instance Data"><img src="../gifs/txtnexta.gif" alt="Next: 13.3. Managing Instance Data" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch13-39047">13.2. Destroying an Object</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-413">Problem<a class="indexterm" name="ch13-idx-1000004484-0"></A
+><a class="indexterm" name="ch13-idx-1000004484-1"></A
+></A
+></H3
+><p class="para">You want to run special code whenever an object is no longer used. This is sometimes needed when the object is an interface to the outside world  &nbsp;-   or contains circular data structures  &nbsp;-   and must clean up after itself. You might remove temporary files, break circular links, gracefully disconnect from a socket, or kill a spawned subprocess.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-419">Solution</A
+></H3
+><p class="para">Create a method named <code class="literal">DESTROY</CODE
+>. This will be called when there are no more references to the object, or else when the program shuts down, whichever comes first. You don't need to do any memory deallocation here, just any finalization code if it makes sense for the class.</P
+><pre class="programlisting">sub DESTROY {
+    my $self = shift;
+    printf(&quot;$self dying at %s\n&quot;, scalar localtime);
+} </PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-433">Discussion</A
+></H3
+><p class="para">Every story has a beginning and an end. The beginning of the object's story is its constructor, explicitly called when the object comes into existence. The end of its story is the <em class="emphasis">destructor</EM
+>, a method implicitly called when an object leaves this life. Any per-object clean-up code is placed in the destructor, which must be named <code class="literal">DESTROY</CODE
+>.</P
+><p class="para">Why can't destructors have arbitrary names? Because, although a constructor is explicitly called by name, a destructor is not. Destruction happens automatically via Perl's <a class="indexterm" name="ch13-idx-1000004494-0"></A
+><a class="indexterm" name="ch13-idx-1000004494-1"></A
+>garbage collection (GC) system, which is currently implemented as a quick but lazy reference-based GC system. To know what to call, Perl insists that the destructor be named <code class="literal">DESTROY</CODE
+>. If more than one object goes out of scope at once, Perl doesn't promise to call the destructors in a particular order.</P
+><p class="para">Why is <code class="literal">DESTROY</CODE
+> in all caps? Perl on occasion uses purely uppercase function names as a convention to indicate that the function will be automatically called by Perl. Others that are called implicitly include <code class="literal">BEGIN</CODE
+>, <code class="literal">END</CODE
+>, <code class="literal">AUTOLOAD</CODE
+>, plus all methods used by tied objects (see <a class="xref" href="ch13_16.htm" title="Creating Magic Variables with tie">Recipe 13.15</A
+>), like <code class="literal">STORE</CODE
+> and <code class="literal">FETCH</CODE
+>.</P
+><p class="para">The user doesn't care when the destructor is called. It just happens when it's supposed to. In languages without any form of GC, this is undependable, so the programmer must explicitly call the destructor to clean up memory and state, crossing their fingers that it's the right time to do so. This is a terrible state of affairs.</P
+><p class="para">Because of Perl's automatic memory management, an object destructor is rarely needed in Perl. Even when it is, explicit invocation is not only uncalled for, it's downright dangerous. The destructor will be called by the run-time system when the object is no longer in use. Most classes don't need a destructor because Perl takes care of simple matters like memory deallocation.</P
+><p class="para">The only situation where Perl's reference-based garbage collection system won't work for you is when there's a circularity in your data structure, such as:</P
+><pre class="programlisting">$self-&gt;{WHATEVER} = $self;</PRE
+><p class="para">In that case, you must delete the self-reference manually if you expect your program not to leak memory. While admittedly error-prone, this is the best we can do right now. <a class="xref" href="ch13_14.htm" title="Coping with Circular Data Structures">Recipe 13.13</A
+> provides an elegant solution to this problem, however. Nonetheless, rest assured that when your program is finished, its objects' destructors are all duly called. At interpreter shutdown time, a second, more sweeping form of garbage collection is performed. Not even unreachable or circular objects can escape this final destruction. So you are guaranteed that an object <em class="emphasis">eventually</EM
+> gets properly destroyed, unless a program never exits. If you're running Perl embedded in another application, the second GC pass happens more frequently  &nbsp;-   whenever an interpreter shuts down.</P
+><p class="para"><code class="literal">DESTROY</CODE
+> does <em class="emphasis">not</EM
+> get called when a program exits via an <code class="literal">exec</CODE
+> call.<a class="indexterm" name="ch13-idx-1000004486-0"></A
+><a class="indexterm" name="ch13-idx-1000004486-1"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-455">See Also</A
+></H3
+><p class="para"><i class="filename">perltoot </I
+>(1) and <i class="filename">perlobj </I
+>(1); the section  <a class="olink" href="../prog/ch05_03.htm#PERL2-CH-5-SECT-3.9">"A Note on Garbage Collection"</A
+> in <a class="olink" href="../prog/ch05_01.htm">Chapter 5</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; <a class="xref" href="ch13_11.htm" title="Accessing Overridden Methods">Recipe 13.10</A
+>; <a class="xref" href="ch13_14.htm" title="Coping with Circular Data Structures">Recipe 13.13</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_02.htm" title="13.1. Constructing an Object"><img src="../gifs/txtpreva.gif" alt="Previous: 13.1. Constructing an Object" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_04.htm" title="13.3. Managing Instance Data"><img src="../gifs/txtnexta.gif" alt="Next: 13.3. Managing Instance Data" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">13.1. Constructing an Object</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">13.3. Managing Instance Data</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

@@ -1,0 +1,370 @@
+<html>
+<head>
+<title>Message Processing (Java Distributed Computing)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jim Farley">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-206-9E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Message Processing">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm" alt="Java Distributed Computing"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch06_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_01.htm">Chapter 6: Message-Passing Systems</a></td><td align="right" valign="top" width="172"><a href="ch06_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_04.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">6.3. Message Processing</h2>
+
+<p>
+<a name="INDEX-838"></a><a name="INDEX-839"></a>When
+you're developing an agent that will be exchanging messages,
+it's important to think about how message processing will
+integrate with the rest of the objects making up the agent. Ideally,
+you'd like to:
+</p>
+
+<dl>
+<dt>
+<b><em class="emphasis">Isolate communications details from application details</em></b>
+</dt>
+<dd>
+<p>This leaves you free to design the bulk of the classes making up the
+application around application issues, not issues related to the
+communication scheme you happen to be using. Likewise, the
+communications subsystem can be designed and updated independently,
+based on the communication needs of the overall system.
+</p>
+</dd>
+
+<dt>
+<b><em class="emphasis">Provide a structured way to link messages to method calls on application objects</em></b>
+</dt>
+<dd>
+<p>You need a well-defined way for incoming messages to trigger method
+calls on application objects, and for object methods to generate
+messages to remote agents to service requests.
+</p>
+</dd>
+
+</dl>
+
+<p>These may seem like conflicting requirements, but we'll see
+that they can both be satisfied to one degree or another by a single
+message-processing method.
+</p>
+
+<a name="JDP-CH-6-SECT-3.1"></a>
+<h3 class="sect2">6.3.1. Asychronous vs. Synchronous Message Handling</h3>
+
+<p>
+<a name="INDEX-840"></a><a name="INDEX-841"></a><a name="INDEX-842"></a>A crucial question in designing a
+message-processing system is whether it needs to be asynchronous or
+not. <a name="INDEX-843"></a>In our chess example, the player
+agents can process messages synchronously, since they'll be
+handshaking throughout the entire game. That is, one player sends a
+move (in a message) to the other player; the second player applies
+the move to its copy of the "playing board," weighs its
+options, and sends its countermove to the first player. In this
+simple example, there isn't anything else a player needs to do
+while choosing its move or waiting for the other player to send its
+move, so there's no need for the ability to receive and process
+messages asynchronously.
+</p>
+
+<p>This isn't usually the case, though. Messages usually trigger
+some significant processing by an agent, which can be carried on
+while waiting for any further messages. Agents in an application will
+usually be better off if they can send and receive messages
+asynchronously from any other work they may need to do. This
+"other work" may be in response to these messages, or may
+be independent of the message passing that's going on. If we
+were implementing a more sophisticated network game than our simple
+chess system, each player agent might have plenty of work to do in
+addition to sending and receiving messages. There may be user input
+to deal with, multiple remote players to synchronize with, graphical
+displays to update, and complicated internal models to keep straight.
+To keep everything in the agent running smoothly, asynchronous
+message I/O will probably be necessary, so your message-passing
+scheme should support it.
+</p>
+
+
+<a name="JDP-CH-6-SECT-3.2"></a>
+<h3 class="sect2">6.3.2. A Basic Message Processor</h3>
+
+<p>Based on our earlier definition of a message, the
+<tt class="literal">BasicMessage</tt><a name="INDEX-844"></a><a name="INDEX-845"></a> class shown in <a href="#JDP-CH-6-EX-2">Example 6-1</a> is an implementation of a generic message
+object. It has a message identifier and a list of arguments, all
+represented as strings. The <tt class="literal">BasicMessage</tt> has
+public methods for querying its identifier
+(<tt class="literal">messageId()</tt>) and its arguments
+(<tt class="literal">argList()</tt>). It also has an abstract
+<tt class="literal">Do()</tt> method, which will be implemented in
+subclasses of <tt class="literal">BasicMessage</tt> to perform whatever
+is required by the given message. It's in the
+<tt class="literal">Do()</tt> method implementations that we'll both
+define our message protocol, and link our message-passing scheme to
+the application objects in the system. For each type of message in
+our protocol, a subclass of <tt class="literal">BasicMessage</tt> can be
+defined to interpret the message arguments and do whatever is
+required for that type of message.
+</p>
+
+<a name="JDP-CH-6-EX-2"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-1. A Basic Message Class</h4>
+<blockquote>
+<pre class="programlisting">package dcj.examples.messageV1;
+
+import java.util.Vector;
+
+public abstract class BasicMessage
+{
+  protected String id;
+  protected Vector argList;
+
+  public BasicMessage() {
+    argList = new Vector();
+  }
+
+  public BasicMessage(String mid) {
+    id = mid;
+    argList = new Vector();
+  }
+
+  protected void setId(String mid) {
+    id = mid;
+  }
+
+  public void addArg(String arg) {
+    argList.addElement(arg);
+  }
+
+  public String messageID() {
+    return id;
+  }
+
+  public Vector argList() {
+    Vector listCopy = (Vector)argList.clone();
+    return listCopy;
+  }
+
+  public abstract boolean Do();
+}</pre>
+</blockquote>
+</div>
+
+<a name="INDEX-846"></a>
+
+<p>To send and receive messages over a connection to a remote agent, we
+have the <tt class="literal">BasicMsgHandler</tt><a name="INDEX-847"></a>, shown in <a href="#JDP-CH-6-EX-3">Example 6-2</a>. This class handles messages in terms of
+string
+<em class="emphasis">tokens</em><a name="INDEX-848"></a>
+--a message is simply a series of tokens followed by an
+"end-of-message" indicator. The first token is the
+message identifier, and the rest are arguments to the message. The
+<tt class="literal">readMsg()</tt><a name="INDEX-849"></a>
+method on <tt class="literal">BasicMsgHandler</tt> reads the message
+identifier of the incoming message first, then calls
+<tt class="literal">buildMessage()</tt><a name="INDEX-850"></a>
+to construct the message object corresponding to the message type.
+The <tt class="literal">buildMessage()</tt> method is abstract in
+<tt class="literal">BasicMsgHandler</tt>, and is implemented by
+subclasses to match the message protocol being used.
+</p>
+
+<p>To support asynchronous message processing, the
+<tt class="literal">BasicMsgHandler</tt> also implements the
+<tt class="literal">Runnable</tt><a name="INDEX-851"></a><a name="INDEX-852"></a> interface. The
+<tt class="literal">run()</tt> method is a loop that reads a message,
+calls the message's <tt class="literal">Do()</tt> method, then
+reads the next message. The
+<tt class="literal">BasicMsgHandler</tt>'s
+<tt class="literal">run()</tt> method does not send messages directly. If
+a message needs to be sent to the remote agent, it will have to be
+done inside the <tt class="literal">Do()</tt> method of one of the
+incoming messages, or outside of the
+<tt class="literal">BasicMsg-Handler</tt>'s thread altogether. A
+static message handler object is associated with the
+<tt class="literal">BasicMsgHandler</tt> class for this purpose.
+It's initialized by the <tt class="literal">BasicMsg-Handler</tt>
+constructors--when a <tt class="literal">BasicMsgHandler</tt> is
+created, it sets the static handler object to point to itself. In
+many message-passing applications there is one central message
+handler for each agent, and it's sometimes convenient to have
+this message handler globally accessible. For example, the
+<tt class="literal">Do()</tt> method on a
+<tt class="literal">BasicMessage</tt> subclass may need to send a message
+to the remote agent in response to the message it has just processed.
+Note that the static message handler object is declared
+<tt class="literal">public</tt>, so an application can change the global
+handler when <tt class="literal"></tt><a name="INDEX-853"></a><a name="INDEX-854"></a> necessary.
+</p>
+
+<a name="JDP-CH-6-EX-3"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-2. A Basic Message Handler</h4>
+<blockquote>
+<pre class="programlisting">package dcj.examples.messageV1;
+
+import java.util.Vector;
+import java.lang.*;
+import java.io.*;
+
+public abstract class BasicMsgHandler implements Runnable
+{
+  // Static message handler for applications where only one message 
+  // handler is used and needs to be globally accessible.
+  public static BasicMsgHandler current = null;
+
+  InputStream msgIn;
+  OutputStream msgOut;
+  StreamTokenizer tokenizer;
+  String msgEndToken = "END";
+
+  public BasicMsgHandler(InputStream in, OutputStream out) {
+    setStreams(in, out);
+    current = this;
+  }
+
+  public BasicMsgHandler(InputStream in, OutputStream out,
+                         String endToken) {
+    msgEndToken = endToken;
+    setStreams(in, out);
+    current = this;
+  }
+
+  protected void setStreams(InputStream in, OutputStream out) {
+    msgIn = in;
+    msgOut = out;
+  }
+
+  public BasicMessage readMsg() throws IOException {
+    BasicMessage msg;
+    String token;
+    DataInputStream din = new DataInputStream(msgIn);
+
+    token = din.readUTF();
+    msg = buildMessage(token);
+
+    if (msg != null) {
+      boolean msgEnd = false;
+      while (!msgEnd) {
+        token = din.readUTF();
+        if (token.compareTo(msgEndToken) == 0)
+          msgEnd = true;
+        else {
+          msg.addArg(token);
+        }
+      }
+    }
+    return msg;
+  }
+
+  public void sendMsg(BasicMessage msg) throws IOException {
+    boolean success = true;
+    DataOutputStream dout = new DataOutputStream(msgOut);
+
+    dout.writeUTF(msg.messageID());
+
+    Vector args = msg.argList();
+    int acnt = args.size();
+    for (int i = 0; i &lt; acnt; i++) {
+      dout.writeUTF((String)args.elementAt(i));
+    }
+    
+    dout.writeUTF(msgEndToken);
+  }
+
+  public void run() {
+    try {
+      while (true) {
+        BasicMessage msg = readMsg();
+        if (msg != null)
+          msg.Do();
+      }
+    }
+    // Treat an IOException as a termination of the message
+    // exchange, and let this message-processing thread die.
+    catch (IOException e) {}
+  }
+
+  protected abstract BasicMessage buildMessage(String msgId);
+}</pre>
+</blockquote>
+</div>
+
+<p>These two classes define a framework for simple message-passing
+protocols. In the next section, we'll see how to use these
+classes in practice, and how this structure needs to be expanded to
+support more complex message-passing <tt class="literal"></tt><a name="INDEX-855"></a><a name="INDEX-856"></a>
+situations.<a name="INDEX-857"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch06_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_04.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">6.2. Why Do We Need Messages?</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">6.4. Fixed Protocols</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

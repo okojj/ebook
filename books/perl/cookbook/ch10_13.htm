@@ -1,0 +1,132 @@
+<html><head>
+<title>Recipe 10.12. Handling Exceptions</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:40:00Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch10_01.htm" title="10. Subroutines"><link rel="prev" href="ch10_12.htm" title="10.11. Prototyping Functions"><link rel="next" href="ch10_14.htm" title="10.13. Saving Global Values"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch10_12.htm" title="10.11. Prototyping Functions"><img src="../gifs/txtpreva.gif" alt="Previous: 10.11. Prototyping Functions" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch10_01.htm" title="10. Subroutines">Chapter 10<br>Subroutines</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch10_14.htm" title="10.13. Saving Global Values"><img src="../gifs/txtnexta.gif" alt="Next: 10.13. Saving Global Values" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch10-34783">10.12. Handling Exceptions</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch10-pgfId-944">Problem</A
+></H3
+><p class="para"><a class="indexterm" name="ch10-idx-1000004720-0"></A
+><a class="indexterm" name="ch10-idx-1000004720-1"></A
+><a class="indexterm" name="ch10-idx-1000004720-2"></A
+>How do you safely call a function that might raise an exception? How do you create a function that raises an exception?</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch10-pgfId-950">Solution</A
+></H3
+><p class="para">Sometimes you encounter a problem so exceptional that merely returning an error isn't strong enough, because the caller could ignore the error. Use <code class="literal">die</CODE
+><a class="indexterm" name="ch10-idx-1000004721-0"></A
+> <code class="literal">STRING</CODE
+> from your function to trigger an exception:</P
+><pre class="programlisting">die &quot;some message&quot;;         # raise exception</PRE
+><p class="para">The caller can wrap the function call in an <code class="literal">eval</CODE
+> to intercept that exception, and then consult the special variable <code class="literal">$@</CODE
+> to see what happened:</P
+><pre class="programlisting">eval { func() };
+if ($@) {
+    warn &quot;func raised an exception: $@&quot;;
+} </PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch10-pgfId-968">Discussion</A
+></H3
+><p class="para">Raising exceptions is not a facility to be used lightly. Most functions should return an error using a bare <code class="literal">return</CODE
+> statement. Wrapping every call in a trap is tedious and unsightly, removing the appeal of using exceptions in the first place.</P
+><p class="para">But on rare occasion, failure in a function should cause the entire program to abort. Rather than calling the irrecoverable <code class="literal">exit</CODE
+> function, you should call <code class="literal">die</CODE
+> instead, which at least gives the programmer the chance to cope. If no exception handler has been installed via <code class="literal">eval</CODE
+>, then the program aborts at that point.</P
+><p class="para">To detect such a failure program, wrap the call to the function with a block <code class="literal">eval</CODE
+>. The <code class="literal">$@</CODE
+> variable will be set to the offending exception if one occurred; otherwise, it will be false.</P
+><pre class="programlisting">eval { $val = func() };
+warn &quot;func blew up: $@&quot; if $@;</PRE
+><p class="para">Any <code class="literal">eval</CODE
+> catches all exceptions, not just specific ones. Usually you should propagate unexpected exceptions to an enclosing hander. For example, suppose your function raised an exception containing the string <code class="literal">&quot;Full</CODE
+> <code class="literal">moon!&quot;</CODE
+>. You could safely trap that exception while letting the others through by inspecting the <code class="literal">$@</CODE
+> variable. Calling <code class="literal">die</CODE
+> without an argument uses the contents of <code class="literal">$@</CODE
+> and the current context to construct a new exception string.</P
+><pre class="programlisting">eval { $val = func() };
+if ($@ &amp;&amp; $@ !~ /Full moon!/) {
+    die;    # re-raise unknown errors
+}</PRE
+><p class="para">If the function is part of a module, consider using the Carp module and call <code class="literal">croak</CODE
+> or <code class="literal">confess</CODE
+> instead of <code class="literal">die</CODE
+>. The only difference between <code class="literal">die</CODE
+> and <code class="literal">croak</CODE
+> is that with <code class="literal">croak</CODE
+>, the error appears to be from the caller's perspective, not the module's. The <code class="literal">confess</CODE
+> function, on the other hand, creates a full stack backtrace of who called whom and with what arguments.</P
+><p class="para">Another intriguing possibility is for the function to detect that its return value is being completely ignored; that is, it is being called in a void context. In that case, returning an error indication would be useless, so raise an exception instead.</P
+><p class="para">Of course, just because it's not voided doesn't mean the return value is being dealt with appropriately. But if it is voided, it's certainly not being checked.</P
+><pre class="programlisting">if (defined wantarray()) {
+        return;
+} else {
+    die &quot;pay attention to my error!&quot;;
+}<a class="indexterm" name="ch10-idx-1000004723-0"></A
+><a class="indexterm" name="ch10-idx-1000004723-1"></A
+><a class="indexterm" name="ch10-idx-1000004723-2"></A
+></PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch10-pgfId-1008">See Also</A
+></H3
+><p class="para">The <a class="olink" href="../prog/ch02_09.htm#PERL2-CH-2-SECT-9.3"><code class="literal">$@</CODE
+></A
+> variable in <a class="olink" href="../prog/ch02_01.htm">Chapter 2</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and <i class="filename">perlvar </I
+>(1); the <a class="olink" href="../prog/ch03_027.htm"><code class="literal">die</CODE
+></A
+> and  <a class="olink" href="../prog/ch03_032.htm"><code class="literal">eval</CODE
+></A
+> functions in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and <i class="filename">perlfunc </I
+>(1); <a class="xref" href="ch10_16.htm" title="Trapping Undefined Function Calls with AUTOLOAD">Recipe 10.15</A
+>; <a class="xref" href="ch12_03.htm" title="Trapping Errors in require or use">Recipe 12.2</A
+>; <a class="xref" href="ch16_22.htm" title="Timing Out an Operation">Recipe 16.21</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch10_12.htm" title="10.11. Prototyping Functions"><img src="../gifs/txtpreva.gif" alt="Previous: 10.11. Prototyping Functions" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch10_14.htm" title="10.13. Saving Global Values"><img src="../gifs/txtnexta.gif" alt="Next: 10.13. Saving Global Values" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">10.11. Prototyping Functions</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">10.13. Saving Global Values</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

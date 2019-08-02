@@ -1,0 +1,138 @@
+<html><head>
+<title>Recipe 13.1. Constructing an Object</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:42:15Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch13_01.htm" title="13. Classes, Objects, and Ties"><link rel="prev" href="ch13_01.htm" title="13.0. Introduction"><link rel="next" href="ch13_03.htm" title="13.2. Destroying an Object"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_01.htm" title="13.0. Introduction"><img src="../gifs/txtpreva.gif" alt="Previous: 13.0. Introduction" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch13_01.htm" title="13. Classes, Objects, and Ties">Chapter 13<br>Classes, Objects, and Ties</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_03.htm" title="13.2. Destroying an Object"><img src="../gifs/txtnexta.gif" alt="Next: 13.2. Destroying an Object" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch13-25741">13.1. Constructing an Object</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-281">Problem<a class="indexterm" name="ch13-idx-1000004463-0"></A
+><a class="indexterm" name="ch13-idx-1000004463-1"></A
+></A
+></H3
+><p class="para">You want to create a way for your users to generate new objects.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-287">Solution</A
+></H3
+><p class="para">Make a constructor. In Perl, the constructor method must not only initialize its object, but must also first allocate memory for it, typically using an anonymous hash. C++ constructors, on the other hand, are called with memory already allocated. The rest of the object-oriented world would call C++'s constructors <em class="emphasis">initializers</EM
+><a class="indexterm" name="ch13-idx-1000004483-0"></A
+><a class="indexterm" name="ch13-idx-1000004483-1"></A
+>.</P
+><p class="para">Here's the canonical object constructor in Perl:</P
+><pre class="programlisting">sub new {
+    my $class = shift;
+    my $self  = { };
+    bless($self, $class);
+    return $self;
+} </PRE
+><p class="para">This is the equivalent one-liner:</P
+><pre class="programlisting">sub new { bless( { }, shift ) }</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-311">Discussion</A
+></H3
+><p class="para">Any method that allocates and initializes a new object acts as a constructor. The most important thing to remember is that a reference isn't an object until <code class="literal">bless</CODE
+> has been called on it. The simplest possible constructor, although not particularly useful, is the following:</P
+><pre class="programlisting">sub new { bless({}) }</PRE
+><p class="para">Let's add some initialization:</P
+><pre class="programlisting">sub new {
+    my $self = { };  # allocate anonymous hash
+    bless($self);
+    # init two sample attributes/data members/fields
+    $self-&gt;{START} = time();  
+    $self-&gt;{AGE}   = 0;
+    return $self;
+} </PRE
+><p class="para">This constructor isn't very useful because it uses the single-argument form of <code class="literal">bless</CODE
+>, which always blesses the object into <em class="emphasis">the current package</EM
+>. This means it can't be usefully inherited from; objects it constructs will always be blessed into the class that the <code class="literal">new</CODE
+> function was compiled into. In the case of inheritance, this is not necessarily the class on whose behalf the method was invoked.</P
+><p class="para">To solve this, have the constructor heed its first argument. For a class method, this is the package name. Pass this class name as the second argument to <code class="literal">bless</CODE
+>:</P
+><pre class="programlisting">sub new {
+    my $classname  = shift;         # What class are we constructing?
+    my $self      = {};             # Allocate new memory
+    bless($self, $classname);       # Mark it of the right type
+    $self-&gt;{START}  = <code class="literal">time();</CODE
+>       # init data fields
+    $self-&gt;{AGE}    = <code class="literal">0;</CODE
+>
+    return $self;                   # And give it back
+} </PRE
+><p class="para">Now the constructor can be correctly inherited by a derived class.</P
+><p class="para">You might also want to separate the memory allocation and blessing step from the instance data initialization step. Simple classes won't need this, but it makes inheritance easier; see <a class="xref" href="ch13_11.htm" title="Accessing Overridden Methods">Recipe 13.10</A
+>.</P
+><pre class="programlisting">sub new {
+    my $classname  = shift;         # What class are we constructing?
+    my $self      = {};             # Allocate new memory
+    bless($self, $classname);       # Mark it of the right type
+    $self-&gt;_init(@_);               # Call _init with remaining args
+    return $self;
+} 
+
+# &quot;private&quot; method to initialize fields.  It always sets START to
+# the current time, and AGE to 0.  If called with arguments, _init
+# interprets them as key+value pairs to initialize the object with.
+sub _init {
+    my $self = shift;
+    $self-&gt;{START} = <code class="literal">time();</CODE
+>
+    $self-&gt;{AGE}   = 0;
+    if (@_) {
+        my %extra = @_;
+        @$self{keys %extra} = values %extra;
+    } 
+} <a class="indexterm" name="ch13-idx-1000004479-0"></A
+><a class="indexterm" name="ch13-idx-1000004479-1"></A
+><a class="indexterm" name="ch13-idx-1000004479-2"></A
+></PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-1000004330">See Also</A
+></H3
+><p class="para"><i class="filename">perltoot </I
+>(1) and <i class="filename">perlobj </I
+>(1); <a class="olink" href="../prog/ch05_01.htm">Chapter 5</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; <a class="xref" href="ch13_07.htm" title="Cloning Objects">Recipe 13.6</A
+>; <a class="xref" href="ch13_10.htm" title="Writing an Inheritable Class">Recipe 13.9</A
+>; <a class="xref" href="ch13_11.htm" title="Accessing Overridden Methods">Recipe 13.10</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_01.htm" title="13.0. Introduction"><img src="../gifs/txtpreva.gif" alt="Previous: 13.0. Introduction" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_03.htm" title="13.2. Destroying an Object"><img src="../gifs/txtnexta.gif" alt="Next: 13.2. Destroying an Object" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">13.0. Introduction</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">13.2. Destroying an Object</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

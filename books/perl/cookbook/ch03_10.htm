@@ -1,0 +1,187 @@
+<html><head>
+<title>Recipe 3.9. High-Resolution Timers</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:30:44Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch03_01.htm" title="3. Dates and Times"><link rel="prev" href="ch03_09.htm" title="3.8. Printing a Date"><link rel="next" href="ch03_11.htm" title="3.10. Short Sleeps"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch03_09.htm" title="3.8. Printing a Date"><img src="../gifs/txtpreva.gif" alt="Previous: 3.8. Printing a Date" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch03_01.htm" title="3. Dates and Times">Chapter 3<br>Dates and Times</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch03_11.htm" title="3.10. Short Sleeps"><img src="../gifs/txtnexta.gif" alt="Next: 3.10. Short Sleeps" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch03-89828">3.9. High-Resolution Timers</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch03-pgfId-734">Problem <a class="indexterm" name="ch03-idx-1000006355-0"></A
+><a class="indexterm" name="ch03-idx-1000006355-1"></A
+><a class="indexterm" name="ch03-idx-1000006355-2"></A
+><a class="indexterm" name="ch03-idx-1000006355-3"></A
+></A
+></H3
+><p class="para">You need to measure time with a finer granularity than the full seconds that <code class="literal">time</CODE
+> returns.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch03-pgfId-740">Solution</A
+></H3
+><p class="para">This might not be possible. If your system supports both the <code class="literal">syscall</CODE
+> function in Perl as well as a system call like <i class="filename">gettimeofday </I
+>(2), then you could possibly use them to measure the time. The procedure for using <code class="literal">syscall</CODE
+> varies from system to system. The Discussion has sample code using it, but this is not necessarily portable.</P
+><p class="para">The <a class="indexterm" name="ch03-idx-1000006356-0"></A
+><a class="indexterm" name="ch03-idx-1000006356-1"></A
+>Time::HiRes module (available from CPAN) encapsulates this functionality for some systems:</P
+><pre class="programlisting">use Time::HiRes qw(gettimeofday);
+$t0 = gettimeofday;
+## do your operation here
+$t1 = gettimeofday;
+$elapsed = $t1-$t0;
+# $elapsed is a floating point value, representing number
+# of seconds between $t0 and $t1</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch03-pgfId-762">Discussion</A
+></H3
+><p class="para">Here's some code that uses Time::HiRes to time how long the user takes to press RETURN:</P
+><pre class="programlisting">use Time::HiRes qw(gettimeofday);
+print &quot;Press return when ready: &quot;;
+$before = gettimeofday;
+$line = &lt;&gt;;
+$elapsed = gettimeofday-$before;
+print &quot;You took $elapsed seconds.\n&quot;;
+<code class="userinput"><b><code class="replaceable"><i>Press return when ready: </I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>You took 0.228149 seconds.</I
+></CODE
+></B
+></CODE
+></PRE
+><p class="para">Compare this to the equivalent <code class="literal">syscall</CODE
+> code:</P
+><pre class="programlisting">require 'sys/syscall.ph';
+
+# initialize the structures returned by gettimeofday
+$TIMEVAL_T = &quot;LL&quot;;
+$done = $start = pack($TIMEVAL_T, ());
+
+# prompt
+print &quot;Press return when ready: &quot;;
+
+# read the time into $start
+syscall(&amp;SYS_gettimeofday, $start, 0) != -1
+           || die &quot;gettimeofday: $!&quot;;
+
+# read a line
+$line = &lt;&gt;;
+
+# read the time into $done
+syscall(&amp;SYS_gettimeofday, $done, 0) != -1
+       || die &quot;gettimeofday: $!&quot;;
+
+# expand the structure
+@start = unpack($TIMEVAL_T, $start);
+@done  = unpack($TIMEVAL_T, $done);
+
+# fix microseconds
+for ($done[1], $start[1]) { $_ /= 1_000_000 }
+    
+# calculate time difference
+$delta_time = sprintf &quot;%.4f&quot;, ($done[0]  + $done[1]  )
+                                         -
+                              ($start[0] + $start[1] );
+
+print &quot;That took $delta_time seconds\n&quot;;
+<code class="userinput"><b><code class="replaceable"><i>Press return when ready: </I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>That took 0.3037 seconds</I
+></CODE
+></B
+></CODE
+></PRE
+><p class="para">It's longer because it's doing system calls in Perl, while Time::HiRes does them in C providing a single function. It's complex because directly accessing system calls peculiar to your operating system requires you to know details about the underlying C structures that the system call takes and returns. Some programs that come with the Perl distribution try to automatically calculate the formats to <code class="literal">pack</CODE
+> and <code class="literal">unpack</CODE
+> for you, if fed the appropriate C header file. In the example, <em class="emphasis">sys/syscall.ph</EM
+> is a Perl library file generated with <em class="emphasis">h2ph</EM
+>, which converts the <em class="emphasis">sys/syscall.h</EM
+> header file into <em class="emphasis">sys/syscall.ph</EM
+> that defines (among other things) <code class="literal">&amp;SYS_gettimeofday</CODE
+> as a subroutine that returns the system call number of <code class="literal">gettimeofday</CODE
+>.</P
+><p class="para">Here's another example of Time::HiRes, showing how you could use it to benchmark a sort:</P
+><pre class="programlisting">use Time::HiRes qw(gettimeofday);
+# take mean sorting time
+$size = 500;
+$number_of_times = 100;
+$total_time = 0;
+
+for ($i = 0; $i &lt; $number_of_times; $i++) {
+    my (@array, $j, $begin, $time);
+    # populate array
+    @array = ();
+    for ($j=0; $j&lt;$size; $j++) { push(@array, rand) }
+
+    # sort it
+    $begin = gettimeofday;
+    @array = sort { $a &lt;=&gt; $b } @array;
+    $time = gettimeofday-$begin;
+    $total_time += $time;
+}
+
+printf &quot;On average, sorting %d random numbers takes %.5f seconds\n&quot;,
+    $size, ($total_time/$number_of_times);
+<code class="userinput"><b><code class="replaceable"><i>On average, sorting 500 random numbers takes 0.02821 seconds</I
+></CODE
+></B
+></CODE
+></PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch03-pgfId-904">See Also</A
+></H3
+><p class="para">The documentation for the CPAN modules Time::HiRes and Benchmark; the <code class="literal">syscall</CODE
+> function in <em class="emphasis">perlfunc </EM
+>(1) and <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; your system's <em class="emphasis">syscall</EM
+> (2) manpage<a class="indexterm" name="ch03-idx-1000006358-0"></A
+><a class="indexterm" name="ch03-idx-1000006358-1"></A
+><a class="indexterm" name="ch03-idx-1000006358-2"></A
+><a class="indexterm" name="ch03-idx-1000006358-3"></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch03_09.htm" title="3.8. Printing a Date"><img src="../gifs/txtpreva.gif" alt="Previous: 3.8. Printing a Date" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch03_11.htm" title="3.10. Short Sleeps"><img src="../gifs/txtnexta.gif" alt="Next: 3.10. Short Sleeps" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">3.8. Printing a Date</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">3.10. Short Sleeps</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

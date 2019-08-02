@@ -1,0 +1,265 @@
+<html><head>
+<title>[Chapter 11] 11.2 Design Notes</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:36:09Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch11_01.htm" title="11. Implementing Object Persistence"><link rel="prev" href="ch11_01.htm" title="11.1 Adaptor: An Introduction"><link rel="next" href="ch11_03.htm" title="11.3 Implementation"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch11_01.htm" title="11.1 Adaptor: An Introduction"><img src="../gifs/txtpreva.gif" alt="Previous: 11.1 Adaptor: An Introduction" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch11_01.htm" title="11. Implementing Object Persistence">Chapter 11<br>Implementing Object Persistence</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch11_03.htm" title="11.3 Implementation"><img src="../gifs/txtnexta.gif" alt="Next: 11.3 Implementation" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch11-13378">11.2 Design Notes</A
+></H2
+><p class="para"><a class="indexterm" name="ch11-idx-989206-0"></A
+>The adaptor interface is undoubtedly simple; in this section, we will ask ourselves whether it is too simplistic. The Adaptor implementation is still at the level of a prototype but, as we shall see in the next few pages, is significant enough to challenge us on all the issues that the people working with object persistence are trying to grapple with. </P
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-984240">11.2.1 Design Goals</A
+></H3
+><p class="para">I wanted the Adaptor API to be <em class="emphasis">transparent</EM
+><a class="indexterm" name="ch11-idx-989216-0"></A
+><a class="indexterm" name="ch11-idx-989216-1"></A
+><a class="indexterm" name="ch11-idx-989216-2"></A
+> ; that is, to be able to change the type of persistent store at will. The idea was to write small prototypes without messing around with databases and then migrate to a database for the real thing by simply changing the adaptor. Further, I wanted to retain the flexibility of an object living in multiple persistent stores concurrently, because that is the only way to copy objects from one store to another.</P
+><p class="para">I wanted to retain the best features of memory-based data structures (navigability, speed, ease of use) and those of databases (transactions, concurrency, queries), where available. Finally, I did not want the adaptor to break object encapsulation, which means that the implementation could not assume anything about how a module stores instance-specific information and, more subtly, how it constructs its objects. </P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-984299">11.2.2 Object Encapsulation</A
+></H3
+><p class="para"><a class="indexterm" name="ch11-idx-989217-0"></A
+><a class="indexterm" name="ch11-idx-989217-1"></A
+>One important stricture that we easily forget is that an object is not just data. The three serialization modules we saw in the last chapter&nbsp;- FreezeThaw, Data::Dumper, and Storable&nbsp;- all make this assumption. They look past an object reference at the underlying structure and serialize whatever is reachable from there. This assumes that all instance-specific data is reachable from the reference: a false assumption. For example, an object reference of type ObjectTemplate is merely a reference to a scalar. By studying that reference, you have no idea of the object's attributes. </P
+><p class="para">There is a worse problem with the above modules: when restoring objects from a byte stream, they simply recreate the original data structure in memory and bless it under the target module, without the module's involvement. This has the possibility of missing a few key initializations.</P
+><p class="para">To avoid these problems, Adaptor requires each class that wants persistence to support three methods: a constructor, <kbd class="command">new()</KBD
+><a class="indexterm" name="ch11-idx-989311-0"></A
+><a class="indexterm" name="ch11-idx-989311-1"></A
+>, and two attribute accessor methods, <kbd class="command">get_attributes()</KBD
+> and <kbd class="command">set_attributes()</KBD
+>, as follows:</P
+><ol class="orderedlist"><li class="listitem"><p class="para"><a class="listitem" name="ch11-pgfId-983280"></A
+><code class="literal">new()</CODE
+>: The module must provide this constructor (a "default constructor," in C++ parlance), capable of creating an object without any input parameters. The simplest default constructor for creating hash-table-based objects looks like this:</P
+><pre class="programlisting">    sub new {
+       bless {}; # bless a hash-table reference and return it.
+    }</PRE
+><p class="para">Of course, an even simpler alternative is to use ObjectTemplate, which provides an inheritable default constructor. As it happens, it also provides the other two methods listed next. </P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch11-pgfId-983285"></A
+><code class="literal">get_attributes(</CODE
+><a class="indexterm" name="ch11-idx-989219-0"></A
+><code class="replaceable"><i>LIST</I
+></CODE
+><code class="literal">)</CODE
+>: Given a list of attribute names, this method should return a list of corresponding values. For now, the restriction is that these values must be scalars (a big limitation; we will have more to say about this shortly). Because this method can be coded efficiently, it is preferable to Adaptor calling individual accessor functions. For example, if you use a hash table for your objects, you can implement this method as a hash slice:</P
+><pre class="programlisting">    sub get_attributes {
+       my $obj = shift; # @_ now contains names of attributes
+       @{$obj}{@_};     # hash slice returns corresponding values
+    }</PRE
+><p class="para">Adaptor uses the configuration file to specify the list of persistent attributes. </P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch11-pgfId-983316"></A
+><code class="literal">set_attributes(</CODE
+><a class="indexterm" name="ch11-idx-989220-0"></A
+><code class="replaceable"><i>LIST</I
+></CODE
+><code class="literal">)</CODE
+>: Given a list of attribute name and value pairs, this method updates the appropriate attributes. Both this function and <kbd class="command">get_attributes</KBD
+> above must allow an attribute called <kbd class="command">_id </KBD
+>, for reasons to be outlined shortly. </P
+></LI
+></OL
+><p class="para">These methods are perfectly general functions; they are not tied to persistence in any way. In contrast, some libraries, especially in the C++ world (Microsoft Foundation Classes and the NIH library), require the object to support a streaming interface. Since a streamed object is of no use to a database, I chose to keep the attributes distinct. Besides, if we wanted to send these attributes to a file, we know we can always rely on other modules to stream them, without having to ask the object to do it for us.<a class="indexterm" name="ch11-idx-989221-0"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-984365">11.2.3 Object-Adaptor Protocol</A
+></H3
+><p class="para">When storing the object, the adaptor consults the configuration information for the list of persistent attributes for that class. It gives this list to <kbd class="command">get_attributes</KBD
+> to retrieve the corresponding values and, depending on the type of the adaptor, either serializes it to a file or updates the database with an SQL query.</P
+><p class="para">When retrieving an object from the database, the adaptor calls <kbd class="command">new()</KBD
+> on the appropriate class and calls <kbd class="command">set_attributes</KBD
+> to prime the newly constructed object with data from the persistent store. </P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-984492">11.2.4 Multivalued Attributes and Database Mapping</A
+></H3
+><p class="para"><a class="indexterm" name="ch11-idx-989228-0"></A
+>Adaptor::DBI simply translates an object to a single row in an RDBMS table. For this reason, it requires each value returned by <kbd class="command">get_attributes</KBD
+> to be a simple scalar (number or string, not a reference). My hope is to eventually ease this restriction with the help of <i class="filename">typemaps</I
+>&nbsp;- pieces of code that can perform customized translations of data types.[<a class="footnote" href="#ch11-pgfId-984539">7</A
+>]</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch11-pgfId-984539">[7]</A
+> In <a class="xref" href="ch18_01.htm#ch18-19903" title="Writing an Extension: Overview">Section 18.1, "Writing an Extension: Overview"</A
+>, we will see how the concept of typemaps is used in creating extensions. </P
+></DIV
+></BLOCKQUOTE
+><p class="para">Here are the currently available choices for how to handle an object with one or more non-simple-scalar attributes:</P
+><ol class="orderedlist"><li class="listitem"><p class="para"><a class="listitem" name="ch11-pgfId-986368"></A
+><em class="emphasis">Customized</EM
+> <kbd class="command">{get,set}_attributes</KBD
+><a class="indexterm" name="ch11-idx-989223-0"></A
+><a class="indexterm" name="ch11-idx-989223-1"></A
+>: <a class="indexterm" name="ch11-idx-989222-0"></A
+><a class="indexterm" name="ch11-idx-989222-1"></A
+>Adaptor::DBI allows multivalued attributes in memory. All it requires is that <kbd class="command">get_attributes</KBD
+> translate such attributes to a simple scalar in a way that <kbd class="command">set_attributes</KBD
+> will be able to convert back to the original structure, when the data is read back from disk. It can do this translation using FreezeThaw, Data::Dumper, <kbd class="command">sprintf</KBD
+>, or <kbd class="command">pack</KBD
+>; the last two are probably the best, because you can control the length of the resulting scalar (it matters because database columns have predeclared maximum sizes). The scalar can then be mapped to a database column capable of accommodating a variable number of characters (such as <cite class="citetitle">VARCHAR</CITE
+>) or a binary string (such as Oracle's <em class="emphasis">RAW</EM
+> or <em class="emphasis">LONG RAW</EM
+>). Incidentally, there are still a lot of problems associated with BLOB (Binary Large OBjects) columns: some databases only allow one BLOB column, and others sport an API that is completely different from that of the conventional data types.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch11-pgfId-984599"></A
+><em class="emphasis">Use file storage </EM
+>: <a class="indexterm" name="ch11-idx-989224-0"></A
+><a class="indexterm" name="ch11-idx-989224-1"></A
+>Adaptor::File doesn't care whether the attributes are references or ordinary scalars, because it simply hands over the attributes to Storable. In other words, <kbd class="command">get/set_attributes</KBD
+> doesn't have to worry about multivalued attributes if you use Adaptor::File. Of course, the solution won't work if you decide to use a database adaptor tomorrow. There is also the danger that you might inadvertently store unrelated objects this way, just because they happen to be reachable from some attribute.<a class="indexterm" name="ch11-idx-989226-0"></A
+><a class="indexterm" name="ch11-idx-989226-1"></A
+></P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch11-pgfId-983657"></A
+><em class="emphasis">Separate object class</EM
+>: If an attribute is a reference to a sequence of homogenous records (an employee has multiple records of educational qualifications, for example), that attribute can be modeled as a separate class that gets its own table. More on this when we study object associations later in this section.</P
+></LI
+></OL
+><p class="para">Since <kbd class="command">{get,set}_attributes</KBD
+> are general methods, how do they know whether or not to serialize complex attributes? Well, they don't. If you want to make this distinction, you could have a different set of attribute <em class="emphasis">names</EM
+> for persistence purposes (<kbd class="command">db_address</KBD
+>, for example) and have these methods recognize these special cases. This strategy conflicts with our original intention of not embedding db-specific code within an object. Oh, well. As Jiri Soukup notes in his book <em class="emphasis">Taming C++: Pattern Classes and Persistence for Large Projects</EM
+> [<a class="xref" href="ch11_04.htm#ch11-pgfId-985539" title="">11</A
+>], "It is popular to show elegant C++ programs, and elegance is not a feature of programs providing persistent data."<kbd class="command"></KBD
+><a class="indexterm" name="ch11-idx-989233-0"></A
+><a class="indexterm" name="ch11-idx-989233-1"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-984530">11.2.5 Inheritance and Database Mapping</A
+></H3
+><p class="para"><a class="indexterm" name="ch11-idx-989235-0"></A
+>The common strategy for mapping an inheritance relationship to a database is to have the superclass and derived class each map to its own table. The table representing the derived class contains all the attributes of all its superclasses; in other words, the inheritance hierarchy is flattened. Another strategy&nbsp;- less commonly used&nbsp;- is to create one table with the <em class="emphasis">union</EM
+> of all attributes of an inheritance hierarchy and have all objects of all classes in that hierarchy use that one table. You can have an extra column identify the specific class of object. Adaptor does not have a problem with either strategy, because it puts the burden of interpreting the attribute names and values on the <kbd class="command">get/set</KBD
+> methods.<kbd class="command"></KBD
+><a class="indexterm" name="ch11-idx-989230-0"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-983417">11.2.6 Object Identity</A
+></H3
+><p class="para"><a class="indexterm" name="ch11-idx-989236-0"></A
+><a class="indexterm" name="ch11-idx-989236-1"></A
+>One key notion in OO circles is that an object has properties separate from its identity. Two objects may have identical properties but still occupy different address spaces; they will be considered <i class="filename">equivalent</I
+>, not <i class="filename">identical</I
+>. </P
+><p class="para">In memory, an object's address provides its identity, and in a database, the primary key does the same. Adaptor requires each object to support an attribute called <kbd class="command">_id</KBD
+>, so a future implementation can automatically convert relationship attributes (those that point to other objects) to the <kbd class="command">_id</KBD
+>s of the objects on the other end. For example, if you ask an Employee object for its <kbd class="command">dept</KBD
+> attribute, it will ask the department object it is pointing to for its <kbd class="command">_id</KBD
+> and return that. Note that the object doesn't necessarily have to allocate memory for its <kbd class="command">_id</KBD
+>; the <kbd class="command">get/set_attributes</KBD
+> methods can compute it on the fly based on some other attribute. For example, an employee object can return the Social Security number or employee number when asked for its <kbd class="command">_id.</KBD
+></P
+><p class="para">When <kbd class="command">store()</KBD
+><a class="indexterm" name="ch11-idx-989241-0"></A
+> is called, Adaptor supplies the object with a unique identity, if it doesn't already have one. The identity cannot be a simple global counter, because when the program restarts, it will get reset to 0, and the adaptor will start handing out numbers that might have been given to persistent objects in an earlier incarnation. Storing the counter's last value in a file is slow because you have to make sure you flush this value to the file every single time you store an object. (You never know when the program might crash.) The current implementation experiments with an alternate approach. When the program starts, it notes down the time (using <kbd class="command">time</KBD
+>, which returns the seconds elapsed since January 1, 1970), and appends to it a five-digit counter; the combined number can be used as an object identifier. When the counter overflows, the time is again noted. If the program crashes and comes back again, the identifier is unique, unless it crashes and comes back up within one second. The trouble with this scheme is that it generates long identifiers (eight bytes, using <kbd class="command">pack()</KBD
+>). It also does not work in a distributed setup, because there is the real possibility that two programs call <kbd class="command">time()</KBD
+> within the same second, thus generating the same identifier. To avoid this, you have to create an even bigger identifier that incorporates the IP address of the machine.<a class="indexterm" name="ch11-idx-989238-0"></A
+><a class="indexterm" name="ch11-idx-989238-1"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-983742">11.2.7 Object Associations</A
+></H3
+><p class="para"><a class="indexterm" name="ch11-idx-989244-0"></A
+><a class="indexterm" name="ch11-idx-989244-1"></A
+>An attribute that is a reference to some other object can be translated to the other object's <kbd class="command">_id</KBD
+> value (a <i class="firstterm">foreign key</I
+><a class="indexterm" name="ch11-idx-989240-0"></A
+>, in database-speak) when storing it in a database or file. As currently implemented, Adaptor does not automatically do this translation, because I don't have a good solution to handle the following problem.</P
+><p class="para">Assume that an employee object's <kbd class="command">dept</KBD
+> attribute points to a department object. When storing <kbd class="command">dept</KBD
+>, we can simply store the department object's <kbd class="command">_id</KBD
+>. No problems so far. Now, when we retrieve the employee record back from disk, what do we do with the encoded <kbd class="command">dept</KBD
+> attribute? Do we immediately create a department object so that the in-memory <kbd class="command">dept</KBD
+> attribute can refer to it? If so, what data should it contain? Should we read the database to correctly populate the department object? That has the problem that an innocuous query on an employee ends up loading all kinds of objects from the database. Alternatively, should we keep the department in an uninitialized state, and only populate it the first time it is used? Further, we must ensure that when the department data is read from disk, it doesn't create a fresh new object, because one with the same identity already exists in memory. We will have more to say on this subject in the following section. For now, it eases my life a little to leave it to the objects to implement foreign key attributes. </P
+><p class="para">Now let us look at how associations of varying cardinalities can be implemented in a database regardless of how they appear in memory.</P
+><p class="para"><a class="indexterm" name="ch11-idx-989242-0"></A
+>One-to-many associations such as a department containing a list of employees can be implemented as a foreign-key attribute on the <em class="emphasis">many</EM
+> side. That is, in the database, the employee object points <em class="emphasis">back</EM
+> to its containing department object, instead of the department maintaining a multivalued attribute. </P
+><p class="para"><a class="indexterm" name="ch11-idx-989243-0"></A
+>Many-to-many associations can be modeled as a separate class; this way, each association becomes a single record in the database. For example, an employee can work on many projects; a project has many employees working on it; we can model this relationship in a separate class called <kbd class="command">ProjectEmployee</KBD
+>. This scheme has the additional advantage that the relationships can be queried and updated, independent of the objects they are supposed to connect. Associations with cardinalities higher than two (ternary associations, for example) map to distinct tables. Rumbaugh et al. [<a class="xref" href="ch11_04.htm#ch11-pgfId-985453" title="">6</A
+>] give an excellent treatment of database-mapping approaches.</P
+><p class="para">All these strategies (or limitations) will change dramatically once object-relational extensions become widely available.<a class="indexterm" name="ch11-idx-989246-0"></A
+><a class="indexterm" name="ch11-idx-989246-1"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-36078">11.2.8 Uniqueness of Objects in Memory</A
+></H3
+><p class="para"><a class="indexterm" name="ch11-idx-989248-0"></A
+><a class="indexterm" name="ch11-idx-989248-1"></A
+>Close on the heels of object identity issues comes a very thorny problem. Consider the following query:</P
+><pre class="programlisting">@emps = $db-&gt;retrieve_where ('Employee', 'age &lt; 40');</PRE
+><p class="para">This returns a list of object references that match the query criteria. Now if you re-issue this query, it is not too much to expect it to return an identical list of objects (the same object references, that is). This means that Adaptor has to keep an in-memory cache of objects that have been retrieved from disk in previous queries, so that if a database row is reread, the corresponding object is reused. The problem with this scheme is that if this cache is in script space, it increments the reference count of all its constituent objects, which means that once an object is in this cache, it will never be freed, even if no one else is interested in it. In other words, the cache can never shrink, and in the worst case, it has a copy of all the objects present in the database. </P
+><p class="para">One solution to this problem is to implement the cache in C and not update the reference count at all.[<a class="footnote" href="#ch11-pgfId-986469">8</A
+>] If all persistent objects were to inherit from a module called Persistent, say, then this module's <code class="literal">DESTROY</CODE
+> method can be used to remove unwanted entries from this cache. </P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch11-pgfId-986469">[8]</A
+> You will know how to do this once you have read <a class="xref" href="ch20_01.htm" title="Perl Internals">Chapter 20, <cite class="chapter">Perl Internals</CITE
+></A
+>.</P
+></DIV
+></BLOCKQUOTE
+><p class="para">The <a class="indexterm" name="ch11-idx-989255-0"></A
+><a class="indexterm" name="ch11-idx-989255-1"></A
+>Adaptor::DBI module, as currently implemented, takes the easy way out and creates a fresh set of objects for each query, leaving it to Perl to automatically deallocate them when no other object refers to them. This means that the applications developer has to be careful when modifying an object returned from a query. This is a clumsy solution, I know. In addition, there is currently no provision for <i class="firstterm">cache inconsistency</I
+>&nbsp;- where the cache is out-of-date if someone else modifies the database. </P
+><p class="para">The <a class="indexterm" name="ch11-idx-989263-0"></A
+><a class="indexterm" name="ch11-idx-989263-1"></A
+>Adaptor::File module does not have this problem because it maintains a list of <em class="emphasis">all</EM
+> objects given to its <kbd class="command">store()</KBD
+> method (for reasons to be explained in the next section); hence successive identical queries return identical lists. <a class="indexterm" name="ch11-idx-989261-0"></A
+><a class="indexterm" name="ch11-idx-989261-1"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-984963">11.2.9 Queries</A
+></H3
+><p class="para"><a class="indexterm" name="ch11-idx-989265-0"></A
+>One big reason why object-oriented databases haven't caught on is the lack of a query language (or at least a standard query language). When you have a million objects in the database, it would be a terrible thing to load every single object in memory to see whether it matches your criteria; this is a job best left to the database. Adaptor::DBI simply translates queries to equivalent SQL queries, while Adaptor::File implements a simple-minded scheme for file based objects: it converts the query expression to an <code class="literal">eval</CODE
+>able Perl expression and cycles through all objects, matching them against the query specification.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-986726">11.2.10 Schema Evolution</A
+></H3
+><p class="para"><a class="indexterm" name="ch11-idx-989266-0"></A
+>Let us say you have sent your objects' data to a file, and tomorrow, some more attributes are added to the object implementation. The schema is said to have evolved. The framework has to be able to reconcile old data with newer object implementations.<a class="indexterm" name="ch11-idx-989199-0"></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch11_01.htm" title="11.1 Adaptor: An Introduction"><img src="../gifs/txtpreva.gif" alt="Previous: 11.1 Adaptor: An Introduction" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch11_03.htm" title="11.3 Implementation"><img src="../gifs/txtnexta.gif" alt="Next: 11.3 Implementation" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">11.1 Adaptor: An Introduction</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">11.3 Implementation</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

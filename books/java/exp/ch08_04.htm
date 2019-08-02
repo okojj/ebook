@@ -1,0 +1,346 @@
+<!doctype html public "-//ORA//DTD CD HTML 3.2//EN">
+<html>
+<head>
+<title>[Chapter 8] 8.4 Data compression</TITLE>
+<meta name="author" content="Pat Niemeyer and Josh Peck">
+<meta name="date" content="Tue Jul 22 18:57:21 1997">
+<meta name="form" content="html">
+<meta name="metadata" content="dublincore.0.1">
+<meta name="objecttype" content="book part">
+<meta name="otheragent" content="gmat dbtohtml">
+<meta name="publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="source" content="SGML">
+<meta name="subject" content="Java">
+<meta name="title" content="Exploring Java">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+</HEAD>
+<body bgcolor="#FFFFFF">
+
+<div class=htmlnav>
+<h1><a href='index.htm'><img src="gifs/smbanner.gif" alt="Exploring Java" border=0></a></H1>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch08_03.htm"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 8<br>Input/Output Facilities</FONT></B></TD>
+<td width=172 align=right valign=top><a href="ch09_01.htm"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+</table>
+
+&nbsp;
+<hr align=left width=515>
+</DIV>
+<div class=sect1>
+<h2 class=sect1><a class="TITLE" name="EXJ-CH-8-SECT-4">8.4 Data compression</A></h2>
+
+<p class=para>
+Java 1.1 includes a new package, <tt class=literal>java.util.zip</tt>, 
+that contains classes you can use for data compression.  In this section
+we'll talk about how to use the classes.  We'll also present two useful
+example programs that build on what you have just learned about streams
+and files.
+
+<p class=para>
+The
+classes in the <tt class=literal>java.util.zip</tt>
+package support two widespread compression formats: GZIP and
+ZIP.  Both of these are based on the ZLIB compression algorithm, which is
+discussed in RFC 1950, RFC 1951, and RFC 1952.  These documents are available
+at <tt class=literal>ftp://ds.internic.net/rfc/</tt>.  I don't recommend
+reading these documents unless you want to implement your own compression algorithm or
+otherwise extend the functionality of the <tt class=literal>java.util.zip</tt>
+package.
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="EXJ-CH-8-SECT-4.1">Compressing data</A></h3>
+
+<p class=para>
+The <tt class=literal>java.util.zip</tt> class provides two
+<tt class=literal>FilterOutputStream</tt> subclasses to write compressed
+data to a stream.  To write compressed data in the GZIP format, simply wrap
+a <tt class=literal>GZIPOutputStream</tt>
+around an underlying stream and write to it.  The following
+is a complete example that shows how to compress a file using the GZIP format.
+
+<div class=programlisting>
+<p>
+<pre>
+import java.io.*;
+import java.util.zip.*;
+public class GZip {
+  public static int sChunk = 8192;
+  public static void main(String[] args) {
+    if (args.length != 1) {
+      System.out.println("Usage: GZip source");
+      return;
+    }
+    // Create output stream.
+    String zipname = args[0] + ".gz";
+    GZIPOutputStream zipout;
+    try {
+      FileOutputStream out = new FileOutputStream(zipname);
+      zipout = new GZIPOutputStream(out);
+    }
+    catch (IOException e) {
+      System.out.println("Couldn't create " + zipname + ".");
+      return;
+    }
+    byte[] buffer = new byte[sChunk];
+    // Compress the file.
+    try {
+      FileInputStream in = new FileInputStream(args[0]);
+      int length;
+      while ((length = in.read(buffer, 0, sChunk)) != -1)
+        zipout.write(buffer, 0, length);
+      in.close();
+    }
+    catch (IOException e) {
+      System.out.println("Couldn't compress " + args[0] + ".");
+    }
+    try { zipout.close(); }
+    catch (IOException e) {}
+  }
+}
+</PRE>
+</DIV>
+
+<p class=para>
+First we check to make sure we have a command-line argument representing a file name.  Then
+we construct a <tt class=literal>GZIPOutputStream</tt> wrapped around
+a <tt class=literal>FileOutputStream</tt> representing the given file name with the
+<tt class=literal>.gz</tt> suffix appended.  With this in place, we open the
+source file.  We read chunks of data from it and write them into the
+<tt class=literal>GZIPOutputStream</tt>.  Finally, we clean up by closing our
+open streams.
+
+<p class=para>
+Writing data to a ZIP file is a little more involved, but still quite manageable.  While
+a GZIP file contains only one compressed file, a ZIP file is actually an archive of files,
+some (or all) of which may be compressed.  Each item in the ZIP file is represented
+by a <tt class=literal>ZipEntry</tt> object.  When writing to a
+<tt class=literal>ZipOutputStream</tt>, you'll need to call
+<tt class=literal>putNextEntry()</tt> before writing the data for each item.
+The following example shows how to create a <tt class=literal>ZipOutputStream</tt>.
+You'll notice it's just like creating a <tt class=literal>GZIPOutputStream</tt>.
+
+<div class=programlisting>
+<p>
+<pre>
+ZipOutputStream zipout;
+try {
+  FileOutputStream out = new FileOutputStream("archive.zip");
+  zipout = new ZipOutputStream(out);
+}
+catch (IOException e) {}
+</PRE>
+</DIV>
+
+<p class=para>
+Let's say we have two files we want to write into this archive.  Before
+we begin writing we need to call <tt class=literal>putNextEntry()</tt>.
+We'll create a simple entry with just a name.  There are other
+fields in <tt class=literal>ZipEntry</tt> that
+you can set, but most of the time you won't need to bother with
+them.
+
+<div class=programlisting>
+<p>
+<pre>
+try {
+  ZipEntry entry = new ZipEntry("First");
+  zipout.putNextEntry(entry);
+}
+catch (IOException e) {}
+</PRE>
+</DIV>
+
+<p class=para>
+At this point you can write the contents of the first file into the
+archive.  When you're ready to write the second file into the archive,
+you simply call <tt class=literal>putNextEntry()</tt> again:
+
+<div class=programlisting>
+<p>
+<pre>
+try {
+  ZipEntry entry = new ZipEntry("Second");
+  zipout.putNextEntry(entry);
+}
+catch (IOException e) {}
+</PRE>
+</DIV>
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="EXJ-CH-8-SECT-4.2">Decompressing data</A></h3>
+
+<p class=para>
+To decompress data, you can use one of the two
+<tt class=literal>FilterInputStream</tt> subclasses provided in
+<tt class=literal>java.util.zip</tt>.
+To decompress data in the GZIP format, simply wrap
+a <tt class=literal>GZIPInputStream</tt>
+around an underlying stream and read from it.  The following
+is a complete example that shows how to decompress a GZIP file.
+
+<div class=programlisting>
+<p>
+<pre>
+import java.io.*;
+import java.util.zip.*;
+public class GUnzip {
+  public static int sChunk = 8192;
+  public static void main(String[] args) {
+    if (args.length != 1) {
+      System.out.println("Usage: GUnzip source");
+      return;
+    }
+    // Create input stream.
+    String zipname, source;
+    if (args[0].endsWith(".gz")) {
+      zipname = args[0];
+      source = args[0].substring(0, args[0].length() - 3);
+    }
+    else {
+      zipname = args[0] + ".gz";
+      source = args[0];
+    }
+    GZIPInputStream zipin;
+    try {
+      FileInputStream in = new FileInputStream(zipname);
+      zipin = new GZIPInputStream(in);
+    }
+    catch (IOException e) {
+      System.out.println("Couldn't open " + zipname + ".");
+      return;
+    }
+    byte[] buffer = new byte[sChunk];
+    // Decompress the file.
+    try {
+      FileOutputStream out = new FileOutputStream(source);
+      int length;
+      while ((length = zipin.read(buffer, 0, sChunk)) != -1)
+        out.write(buffer, 0, length);
+      out.close();
+    }
+    catch (IOException e) {
+      System.out.println("Couldn't decompress " + args[0] + ".");
+    }
+    try { zipin.close(); }
+    catch (IOException e) {}
+  }
+}
+</PRE>
+</DIV>
+
+<p class=para>
+First we check to make sure we have a command-line argument representing a file name.  If
+the argument ends with <tt class=literal>.gz</tt>, we figure out what the file name for the
+uncompressed file should be.  Otherwise we just use the given argument and assume the
+compressed file has the <tt class=literal>.gz</tt> suffix.
+Then
+we construct a <tt class=literal>GZIPInputStream</tt> wrapped around
+a <tt class=literal>FileInputStream</tt> representing the compressed file.
+With this in place, we open the
+target file.  We read chunks of data from the 
+<tt class=literal>GZIPInputStream</tt>
+and write them into the
+target file.  Finally, we clean up by closing our
+open streams.
+
+<p class=para>
+Again, the ZIP archive presents a little more complexity than the
+GZIP file.  When reading
+from a <tt class=literal>ZipInputStream</tt>, you should call
+<tt class=literal>getNextEntry()</tt> before reading each item.  When
+<tt class=literal>getNextEntry()</tt> returns <tt class=literal>null</tt>,
+there are no more items to read.
+The following example shows how to create a <tt class=literal>ZipInputStream</tt>.
+You'll notice it's just like creating a <tt class=literal>GZIPInputStream</tt>.
+
+<div class=programlisting>
+<p>
+<pre>
+ZipInputStream zipin;
+try {
+  FileInputStream in = new FileInputStream("archive.zip");
+  zipin = new ZipInputStream(in);
+}
+catch (IOException e) {}
+</PRE>
+</DIV>
+
+<p class=para>
+Suppose we want to read two files from this archive.  Before
+we begin reading we need to call <tt class=literal>getNextEntry()</tt>.
+At the least, the entry will give us a name of the item we
+are reading from the archive.
+
+<div class=programlisting>
+<p>
+<pre>
+try {
+  ZipEntry first = zipin.getNextEntry();
+}
+catch (IOException e) {}
+</PRE>
+</DIV>
+
+<p class=para>
+At this point you can read the contents of the first item in the
+archive.  When you come to the end of the item, the
+<tt class=literal>read()</tt> method will
+return -1.  Now you can call
+<tt class=literal>getNextEntry()</tt> again to read
+the second item from the archive.
+
+<div class=programlisting>
+<p>
+<pre>
+try {
+  ZipEntry second = zipin.getNextEntry();
+}
+catch (IOException e) {}
+</PRE>
+</DIV>
+
+<p class=para>
+If you call <tt class=literal>getNextEntry()</tt> and
+it returns <tt class=literal>null</tt>, then there
+are no more items and you have reached the end of the archive.
+
+</DIV>
+
+</DIV>
+
+
+<div class=htmlnav>
+
+<p>
+<hr align=left width=515>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch08_03.htm"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><a href="index.htm"><img src='gifs/txthome.gif' border=0 alt='Home'></a></td>
+<td width=172 align=right valign=top><a href="ch09_01.htm"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+<tr>
+<td width=172 align=left valign=top>Serialization</td>
+<td width=171 align=center valign=top><a href="index/idx_0.htm"><img src='gifs/index.gif' alt='Book Index' border=0></a></td>
+<td width=172 align=right valign=top>Network Programming</td>
+</tr>
+</table>
+<hr align=left width=515>
+
+<img src="gifs/smnavbar.gif" usemap="#map" border=0> 
+<map name="map"> 
+<area shape=RECT coords="0,0,108,15" href="../javanut/index.htm" alt="Java in a Nutshell"> 
+<area shape=RECT coords="109,0,200,15" href="../langref/index.htm" alt="Java Language Reference"> 
+<area shape=RECT coords="203,0,290,15" href="../awt/index.htm" alt="Java AWT"> 
+<area shape=RECT coords="291,0,419,15" href="../fclass/index.htm" alt="Java Fundamental Classes"> 
+<area shape=RECT coords="421,0,514,15" href="index.htm" alt="Exploring Java"> 
+</MAP>
+</DIV>
+
+</BODY>
+</HTML>

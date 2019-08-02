@@ -1,0 +1,713 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 20] 20.2 INSTEAD OF Triggers</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein &amp; Bill Pribyl"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T19:09:34Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates CD-ROM-1-56592-335-9E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-335-9E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle PL/SQL"><META
+NAME="DC.Title"
+CONTENT="Oracle PL/SQL Programming, 2nd Edition"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch20_01.htm"
+TITLE="20. Object Views"><LINK
+REL="prev"
+HREF="ch20_01.htm"
+TITLE="20.1 Example: Using Object Views"><LINK
+REL="next"
+HREF="ch20_03.htm"
+TITLE="20.3 Syntax for Object Views"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd Edition"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch20_01.htm"
+TITLE="20.1 Example: Using Object Views"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 20.1 Example: Using Object Views"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch20_01.htm"
+TITLE="20. Object Views"
+>Chapter 20<BR>Object Views</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch20_03.htm"
+TITLE="20.3 Syntax for Object Views"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 20.3 Syntax for Object Views"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="SQL2-CH-20-SECT-2"
+>20.2 INSTEAD OF Triggers</A
+></H2
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch20-idx-6242-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch20-idx-6242-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch20-idx-6242-3"
+></A
+>Some conventional views are "inherently modifiable." For example, even Oracle Version 6 allowed updates through a view of a single table which uses no aggregation clauses such as GROUP BY. While Oracle7 added to the family of modifiable views, even in Oracle8 there is still a class of views which are "inherently unmodifiable" if you limit yourself to standard SQL. </P
+><P
+CLASS="para"
+>However, in Oracle8, if you can come up with the logic of how you want Oracle to interpret a particular operation on a view&nbsp;-- however wacky that view might be&nbsp;-- you can implement the behavior with INSTEAD OF triggers. Happily, this new type of trigger is available to all Oracle8 users; it is not a part of the Oracle objects option. </P
+><P
+CLASS="para"
+>Conceptually, INSTEAD OF triggers are very simple. You write code that the Oracle server will execute when a program performs a DML operation on the view. Unlike a conventional BEFORE or AFTER trigger, an INSTEAD OF trigger <EM
+CLASS="emphasis"
+>takes the place of</EM
+>, rather than supplements, Oracle's usual DML behavior. (And in case you're wondering, you cannot use BEFORE/AFTER triggers on any type of view, even if you have defined an INSTEAD OF trigger on the view.) </P
+><P
+CLASS="para"
+>For example, to allow applications to INSERT into our images_v view, we could write the following trigger: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE TRIGGER images_v_insert
+<B
+CLASS="emphasis.bold"
+>INSTEAD OF INSERT ON images_v</B
+>
+FOR EACH ROW
+BEGIN
+   /* This will fail with DUP_VAL_ON_INDEX if the images table
+   || already contains a record with the new image_id.
+   */
+   INSERT INTO images
+      VALUES (:NEW.image_id, :NEW.file_name, :NEW.file_type,
+              :NEW.bytes);
+
+   IF :NEW.keywords IS NOT NULL THEN
+      DECLARE
+         /* Note: apparent bug prevents use of :NEW.keywords.LAST.
+         || The workaround is to store :NEW.keywords as a local
+         || variable (in this case keywords_holder.)
+         */
+         keywords_holder Keyword_tab_t := :NEW.keywords;
+      BEGIN
+         FOR the_keyword IN 1..keywords_holder.LAST
+         LOOP
+            INSERT INTO keywords
+            VALUES (:NEW.image_id, keywords_holder(the_keyword));
+         END LOOP;
+       END;
+   END IF;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Once we've created this INSTEAD OF trigger, we can insert a record into this object view (and hence into <EM
+CLASS="emphasis"
+>both</EM
+> underlying tables) quite easily using: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>INSERT INTO images_v
+VALUES (Image_t(41265, 'pigpic.jpg', 'JPG', 824,
+        Keyword_tab_t('PIG', 'BOVINE', 'FARM ANIMAL')));</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This statement causes the INSTEAD OF trigger to fire, and as long as the primary key value (image_id = 41265) does not already exist, the trigger will insert the data into the appropriate tables. </P
+><P
+CLASS="para"
+>Similarly, we can write additional triggers that handle updates and deletes. These triggers use the predictable clauses INSTEAD OF UPDATE and INSTEAD OF DELETE. </P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-20-SECT-2.1"
+>20.2.1 INSTEAD OF Triggers: To Use or Not to Use?</A
+></H3
+><P
+CLASS="para"
+>Before launching headlong into the business of updating complex views with triggers, let's step back and look at the bigger picture. Do we really <EM
+CLASS="emphasis"
+>want</EM
+> to use INSTEAD OF triggers in an Oracle environment? Particularly if we are migrating toward an object approach, isn't this new feature just a relational "throwback" which facilitates a free-for-all in which any application can perform DML? </P
+><P
+CLASS="para"
+>Yes and no.</P
+><P
+CLASS="para"
+>Let's consider arguments on both sides, and come up with some considerations so you can decide what's best for your application. </P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="SQL2-CH-20-SECT-2.1.1"
+>20.2.1.1 The "don't use" argument</A
+></H4
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch20-idx-6250-1"
+></A
+>On the one hand, you <EM
+CLASS="emphasis"
+>could </EM
+>use tools such as packages and methods to provide a more comprehensive technique than triggers for encapsulating DML. It is nearly trivial to take the logic from our INSTEAD OF trigger and put it into an alternate PL/SQL construct which has more universal application. In other words, if you standardize on some combination of packages and object methods as the means of performing DML, you could keep your environment consistent without using view triggers. You might conclude that view triggers are just another variable in an increasingly complex standards equation. </P
+><P
+CLASS="para"
+>Moreover, even Oracle cautions against the "excessive use" of triggers, because they can cause "complex interdependencies." Imagine if your INSTEAD OF triggers performed DML on tables which had other triggers, which performed DML on still other tables...it's easy to see how this could get confusing. </P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="SQL2-CH-20-SECT-2.1.2"
+>20.2.1.2 The "use" argument</A
+></H4
+><P
+CLASS="para"
+>On the other hand, you can put much of the necessary logic into an INSTEAD OF trigger that you would normally put into a package or method body. Doing so in combination with a proper set of privilege restrictions could protect your data just as well as, or even better than, methods or packages. </P
+><P
+CLASS="para"
+>What's more, if you use a client tool such as Oracle Forms, INSTEAD OF triggers allow you to use much more of the product's default functionality when you create a Forms "block" against a view rather than a table. This fact alone could make object views wildly popular. </P
+><P
+CLASS="para"
+>Finally, if you use OCI, a more significant factor is that INSTEAD OF triggers are <EM
+CLASS="emphasis"
+>required</EM
+> if the object view is not inherently modifiable and you want to be able to easily "flush" cached object view data back to the server. </P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="SQL2-CH-20-SECT-2.1.3"
+>20.2.1.3 What to do?</A
+></H4
+><P
+CLASS="para"
+>One of the most important architectural decisions you will make for your object views is where to put SQL statements that insert, update, and delete data. Going on the assumption that you want to localize these operations on the server side, you have at least three choices: PL/SQL packages, object methods, and INSTEAD OF triggers. </P
+><P
+CLASS="para"
+><A
+CLASS="xref"
+HREF="ch20_02.htm#SQL2-CH-20-TABLE-2"
+>Table 20.1</A
+> summarizes some of the major considerations of the three techniques. This table is not meant to compare these approaches "in general" but only as they apply to localizing DML on object views. </P
+><BR><TABLE
+CLASS="table"
+BORDER="1"
+CELLPADDING="3"
+><CAPTION
+CLASS="table"
+><A
+CLASS="title"
+NAME="SQL2-CH-20-TABLE-2"
+>Table 20.1: Assessment of Techniques for Encapsulating DML on Object Views</A
+></CAPTION
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>DML Consideration</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>PL/SQL Package</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Object Method</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>INSTEAD OF Trigger</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Ability to adapt to schema changes</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Excellent; can be easily altered and recompiled independently</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Poor, especially if object types are responsible for their own persistence </P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Good, but still some areas where Oracle does not automatically recompile dependent structures </P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Risk of unexpected interactions</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Low</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Low</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>High; triggers may have unpredictable interactions with each other</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Ease of use with client tool default functionality (specifically, Developer/2000) </P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Acceptable; programmer must add code for all client-side transactional triggers </P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Acceptable; programmer must add code for all client-side transactional triggers </P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Excellent (however, there is no INSTEAD OF LOCK server-side trigger)</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Ability to use technique on transient objects</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Very good, but not a "natural" use of packages</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Excellent</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Theoretically possible, but why bother?</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Can be turned on and off at will</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>No</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>No</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Yes (by disabling and enabling the trigger)</P
+> </TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+><A
+CLASS="xref"
+HREF="ch18_01.htm"
+>Chapter 18</A
+> discussed at some length architectural considerations of packages versus methods. While those considerations also apply to object views, we now need to compare packages and methods with INSTEAD OF triggers. </P
+><P
+CLASS="para"
+>As you can see, there is no clear "winner." Each technique has benefits that may be of more or less importance to your own particular application. </P
+><P
+CLASS="para"
+>And of course, you may decide that INSTEAD OF triggers make sense <EM
+CLASS="emphasis"
+>in combination with</EM
+> PL/SQL packages and/or object methods to provide layers of encapsulation. For example: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE TRIGGER images_v_insert
+INSTEAD OF INSERT ON images_v
+FOR EACH ROW
+BEGIN
+   /* Call a packaged procedure to perform the insertion.
+   || (The called procedure is not presented in the text.)
+   */
+   manage_image.create_one(:NEW.image_id, :NEW.file_type,
+      :NEW.file_name, :NEW.bytes, :NEW.keywords);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In an ideal world, you will select an architecture and design approach before hurling every Oracle feature at your application. Use a feature if it make sense for your architectural approach. I tend to agree with Oracle's advice that if you do use triggers, you should use them in<A
+CLASS="indexterm"
+NAME="AUTOID-18959"
+></A
+> moderation.<A
+CLASS="indexterm"
+NAME="AUTOID-18960"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-18961"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-18962"
+></A
+> </P
+></DIV
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch20_01.htm"
+TITLE="20.1 Example: Using Object Views"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 20.1 Example: Using Object Views"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming, 2nd Edition"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch20_03.htm"
+TITLE="20.3 Syntax for Object Views"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 20.3 Syntax for Object Views"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>20.1 Example: Using Object Views</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>20.3 Syntax for Object Views</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

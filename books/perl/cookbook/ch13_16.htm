@@ -1,0 +1,500 @@
+<html><head>
+<title>Recipe 13.15. Creating Magic Variables with tie</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:42:35Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch13_01.htm" title="13. Classes, Objects, and Ties"><link rel="prev" href="ch13_15.htm" title="13.14. Overloading Operators"><link rel="next" href="ch14_01.htm" title="14. Database Access"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_15.htm" title="13.14. Overloading Operators"><img src="../gifs/txtpreva.gif" alt="Previous: 13.14. Overloading Operators" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch13_01.htm" title="13. Classes, Objects, and Ties">Chapter 13<br>Classes, Objects, and Ties</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="chapter" href="ch14_01.htm" title="14. Database Access"><img src="../gifs/txtnexta.gif" alt="Next: 14. Database Access" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch13-24376">13.15. Creating Magic Variables with tie</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-2257">Problem<a class="indexterm" name="ch13-idx-1000004677-0"></A
+><a class="indexterm" name="ch13-idx-1000004677-1"></A
+><a class="indexterm" name="ch13-idx-1000004677-2"></A
+><a class="indexterm" name="ch13-idx-1000004677-3"></A
+><a class="indexterm" name="ch13-idx-1000004677-4"></A
+><a class="indexterm" name="ch13-idx-1000004677-5"></A
+></A
+></H3
+><p class="para">You want to add special processing to a variable or handle.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-2263">Solution</A
+></H3
+><p class="para">Use the <code class="literal">tie</CODE
+> function to give your ordinary variables object hooks.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-2269">Discussion</A
+></H3
+><p class="para">Anyone who's ever used a DBM file under Perl has already used tied objects. Perhaps the most excellent way of using objects is such that the user never notices them. With <code class="literal">tie</CODE
+>, you can bind a variable or handle to a class, after which all access to the tied variable or handle is transparently intercepted by specially named object methods.</P
+><p class="para">The most important <code class="literal">tie</CODE
+> methods are <a class="indexterm" name="ch13-idx-1000004678-0"></A
+>FETCH to intercept read access, <a class="indexterm" name="ch13-idx-1000004679-0"></A
+>STORE to intercept write access, and the constructor, which is one of <a class="indexterm" name="ch13-idx-1000004680-0"></A
+>TIESCALAR, TIEARRAY, TIEHASH, or TIEHANDLE.</P
+><table class="informaltable" border="1" cellpadding="3"><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">User Code</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Executed Code</P
+></TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1">&#13;<pre class="programlisting">tie $s, &quot;SomeClass&quot;</PRE
+>
+</TD
+><td class="entry" rowspan="1" colspan="1">&#13;<pre class="programlisting">SomeClass-&gt;<code class="literal">TIESCALAR()</CODE
+></PRE
+>
+</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1">&#13;<pre class="programlisting">$p = $s</PRE
+>
+</TD
+><td class="entry" rowspan="1" colspan="1">&#13;<pre class="programlisting">$p = $obj-&gt;<code class="literal">FETCH()</CODE
+></PRE
+>
+</TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1">&#13;<pre class="programlisting">$s = 10</PRE
+>
+</TD
+><td class="entry" rowspan="1" colspan="1">&#13;<pre class="programlisting">$obj-&gt;STORE(10)</PRE
+>
+</TD
+></TR
+></TBODY
+></TABLE
+><p class="para">Where did that <code class="literal">$obj</CODE
+> come from? The <code class="literal">tie</CODE
+> triggers a call to the class's TIESCALAR constructor method. Perl squirrels away the object returned and surreptitiously uses it for later access.</P
+><p class="para">Here's a simple example of a <code class="literal">tie</CODE
+> class that implements a value ring. Every time the variable is read from, the next value on the ring is displayed. When it's written to, a new value is pushed on the ring. Here's an example:</P
+><pre class="programlisting">#!/usr/bin/perl
+# demo_valuering - show tie class
+use ValueRing;
+tie $color, 'ValueRing', qw(red blue);
+print &quot;$color $color $color $color $color $color\n&quot;;
+<b class="emphasis.bold">red blue red blue red blue</B
+>
+
+$color = 'green';
+print &quot;$color $color $color $color $color $color\n&quot;;
+<b class="emphasis.bold">green red blue green red blue</B
+></PRE
+><p class="para">The simple implementation is shown in <a class="xref" href="#ch13-35467" title="ValueRing">Example 13.3</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch13-35467">Example 13.3: ValueRing</A
+></H4
+><pre class="programlisting">package ValueRing;
+
+# this is the constructor for scalar ties
+sub TIESCALAR {
+    my ($class, @values) = @_;
+    bless  \@values, $class;
+    return \@values;
+} 
+
+# this intercepts read accesses
+sub FETCH {
+    my $self = shift;
+    push(@$self, shift(@$self));
+    return $self-&gt;[-1];
+} 
+
+# this intercepts write accesses
+sub STORE {
+    my ($self, $value) = @_;
+    unshift @$self, $value;
+    return $value;
+} 
+
+1;</PRE
+></DIV
+><p class="para">This example might not be compelling, but it illustrates how easy it is to write ties of arbitrary complexity. To the user, <code class="literal">$color</CODE
+> is just a plain old variable, not an object. All the magic is hidden beneath the tie. You don't have to use a scalar reference just because you're tying a scalar. Here we've used an array reference, but you can use anything you'd like. Usually a hash reference will be used irrespective of what's being tied to because it's the most flexible object representation.</P
+><p class="para">For arrays and hashes, more elaborate operations are possible. Tied handles didn't appear until the 5.004 release, and prior to 5.005 use of tied arrays was somewhat limited, but tied hashes have always been richly supported. Because so many object methods are needed to fully support tied hashes, most users choose to inherit from the standard Tie::Hash module, which provides default methods for these. <a class="indexterm" name="ch13-idx-1000004707-0"></A
+></P
+><p class="para">Following are numerous examples of interesting uses of ties.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-chap13_tie_0">Tie Example: Outlaw $_</A
+></H3
+><p class="para"><a class="indexterm" name="ch13-idx-1000004686-0"></A
+><a class="indexterm" name="ch13-idx-1000004686-1"></A
+>This curious tie class is used to outlaw unlocalized uses of the implicit variable, <code class="literal">$_</CODE
+>. Instead of pulling it in with <code class="literal">use</CODE
+>, which implicitly invokes the class's <code class="literal">import ( )</CODE
+> method, this one should be loaded with <code class="literal">no</CODE
+> to call the seldom-used <code class="literal">unimport ( )</CODE
+> method. The user says:</P
+><pre class="programlisting">no UnderScore;</PRE
+><p class="para">Then, all uses of the unlocalized global <code class="literal">$_</CODE
+> will raise an exception.</P
+><p class="para">Here's a little test suite for the module.</P
+><pre class="programlisting">#!/usr/bin/perl
+# <a class="indexterm" name="ch13-idx-1000006758-0"></A
+>nounder_demo - show how to ban $_ from your program
+no UnderScore;
+@tests = (
+    &quot;Assignment&quot;  =&gt; sub { $_ = &quot;Bad&quot; },
+    &quot;Reading&quot;     =&gt; sub { print }, 
+    &quot;Matching&quot;    =&gt; sub { $x = /badness/ },
+    &quot;Chop&quot;        =&gt; sub { chop },
+    &quot;Filetest&quot;    =&gt; sub { -x }, 
+    &quot;Nesting&quot;     =&gt; sub { for (1..3) { print } },
+);
+
+while ( ($name, $code) = splice(@tests, 0, 2) ) {
+    print &quot;Testing $name: &quot;;
+    eval { &amp;$code };
+    print $@ ? &quot;detected&quot; : &quot;missed!&quot;;
+    print &quot;\n&quot;;
+} </PRE
+><p class="para">The result is the following:</P
+><pre class="programlisting"><code class="userinput"><b><code class="replaceable"><i>Testing Assignment: detected</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Testing Reading: detected</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Testing Matching: detected</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Testing Chop: detected</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Testing Filetest: detected</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Testing Nesting: 123missed!</I
+></CODE
+></B
+></CODE
+></PRE
+><p class="para">The reason the last one was missed is that it was properly localized by the <code class="literal">for</CODE
+> loop, so it was considered safe.</P
+><p class="para">The UnderScore module itself is shown in <a class="xref" href="#ch13-32163" title="UnderScore (continued)">Example 13.4</A
+>. Notice how small it is. The module itself does the <code class="literal">tie</CODE
+> in its initialization code.</P
+><div class="example"><h4 class="example"><a class="title" name="ch13-32163">Example 13.4: UnderScore (continued)</A
+></H4
+><pre class="programlisting">package UnderScore;
+use Carp;
+sub TIESCALAR {
+    my $class = shift;
+    my $dummy;
+    return bless \$dummy =&gt; $class;
+} 
+sub FETCH { croak &quot;Read access to \$_ forbidden&quot;  } 
+sub STORE { croak &quot;Write access to \$_ forbidden&quot; } 
+sub unimport { tie($_, __PACKAGE__) }
+sub import { untie $_ } 
+tie($_, __PACKAGE__) unless tied $_;
+1;</PRE
+></DIV
+><p class="para">You can't usefully mix calls to <code class="literal">use</CODE
+> and <code class="literal">no</CODE
+> for this class in your program, because they all happen at compile time, not run time. To renege and let yourself use <code class="literal">$_</CODE
+> again, <code class="literal">local</CODE
+>ize it.<a class="indexterm" name="ch13-idx-1000004688-0"></A
+><a class="indexterm" name="ch13-idx-1000004688-1"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-chap13_tie_1">Tie Example: Make a Hash That Always Appends</A
+></H3
+><p class="para"><a class="indexterm" name="ch13-idx-1000004692-0"></A
+>The class shown below produces a hash whose keys accumulate in an array.</P
+><pre class="programlisting">#!/usr/bin/perl 
+# <a class="indexterm" name="ch13-idx-1000004713-0"></A
+>appendhash_demo - show magic hash that autoappends
+use Tie::AppendHash;
+tie %tab, 'Tie::AppendHash';
+
+$tab{beer} = &quot;guinness&quot;;
+$tab{food} = &quot;potatoes&quot;;
+$tab{food} = &quot;peas&quot;;
+
+while (my($k, $v) = each %tab) {
+    print &quot;$k =&gt; [@$v]\n&quot;;
+}</PRE
+><p class="para">Here is the result:</P
+><pre class="programlisting"><b class="emphasis.bold">food =&gt; [potatoes peas]</B
+>
+<b class="emphasis.bold">beer =&gt; [guinness]</B
+></PRE
+><p class="para">To make this class easy, we will use the boilerplate hash tying module from the standard distribution, shown in <a class="xref" href="#ch13-15202" title="Tie::AppendHash">Example 13.5</A
+>. To do this, we load the Tie::Hash module and then inherit from the Tie::StdHash class. (Yes, those are different names. The file <em class="emphasis">Tie/Hash.pm</EM
+> provides both the Tie::Hash and Tie::StdHash classes, which are slightly different.)</P
+><div class="example"><h4 class="example"><a class="title" name="ch13-15202">Example 13.5: Tie::AppendHash</A
+></H4
+><pre class="programlisting">package Tie::AppendHash;
+use strict;
+use Tie::Hash;
+use Carp;
+use vars qw(@ISA);
+@ISA = qw(Tie::StdHash);
+sub STORE {
+    my ($self, $key, $value) = @_;
+    push @{$self-&gt;{$key}}, $value;
+} 
+1;</PRE
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-chap13_tie_2">Tie Example: Case-Insensitive Hash</A
+></H3
+><p class="para"><a class="indexterm" name="ch13-idx-1000006808-0"></A
+>Here's a fancier hash tie called Tie::Folded. It provides a hash with case-insensitive keys.</P
+><pre class="programlisting">#!/usr/bin/perl 
+# <a class="indexterm" name="ch13-idx-1000004715-0"></A
+>folded_demo - demo hash that magically folds case
+use Tie::Folded;
+tie %tab, 'Tie::Folded';
+
+$tab{VILLAIN}  = &quot;big &quot;; 
+$tab{herOine}  = &quot;red riding hood&quot;;
+$tab{villain} .= &quot;bad wolf&quot;;   
+
+while ( my($k, $v) = each %tab ) {
+    print &quot;$k is $v\n&quot;;
+}</PRE
+><p class="para">The following is the output of this demo program:</P
+><pre class="programlisting"><b class="emphasis.bold">heroine is red riding hood</B
+>
+<b class="emphasis.bold">villain is big bad wolf</B
+></PRE
+><p class="para">Because we have to trap more accesses, the class in <a class="xref" href="#ch13-20857" title="Tie::Folded">Example 13.6</A
+> is slightly more complicated than the one in <a class="xref" href="#ch13-15202" title="Tie::AppendHash">Example 13.5</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch13-20857">Example 13.6: Tie::Folded</A
+></H4
+><pre class="programlisting">package Tie::Folded;
+use strict;
+use Tie::Hash;
+use vars qw(@ISA);
+@ISA = qw(Tie::StdHash);
+sub STORE {
+    my ($self, $key, $value) = @_;
+    return $self-&gt;{lc $key} = $value;
+    } 
+sub FETCH {
+    my ($self, $key) = @_;
+    return $self-&gt;{lc $key};
+} 
+sub EXISTS {
+    my ($self, $key) = @_;
+    return exists $self-&gt;{lc $key};
+} 
+sub DEFINED {
+    my ($self, $key) = @_;
+    return defined $self-&gt;{lc $key};
+} 
+1;<a class="indexterm" name="ch13-idx-1000006068-0"></A
+></PRE
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-chap13_tie_3">Tie Example: Hash That Allows Look-Ups by Key or Value</A
+></H3
+><p class="para">Here is a hash that lets you look up members by key or by value. It does this by having a store method that not only uses the key to store the value, it also uses the value to store the key.</P
+><p class="para">Normally there could be a problem if the value being stored were a reference, since you can't normally use a <a class="indexterm" name="ch13-idx-1000006817-0"></A
+>reference as a key. The standard distribution comes with the Tie::RefHash class that avoids this problem. We'll inherit from it so that we can also avoid this difficulty.</P
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch13-idx-1000004717-0"></A
+>revhash_demo - show hash that permits key *or* value lookups
+use strict;
+use Tie::RevHash;
+my %tab;
+tie %tab, 'Tie::RevHash';
+%tab = qw{
+    Red         Rojo
+    Blue        Azul
+    Green       Verde
+};
+$tab{EVIL} = [ &quot;No way!&quot;, &quot;Way!!&quot; ];
+
+while ( my($k, $v) = each %tab ) {
+    print ref($k) ? &quot;[@$k]&quot; : $k, &quot; =&gt; &quot;,
+        ref($v) ? &quot;[@$v]&quot; : $v, &quot;\n&quot;;
+} </PRE
+><p class="para">When run, <i class="filename">revhash_demo</I
+> produces this:</P
+><pre class="programlisting"><b class="emphasis.bold">[No way! Way!!] =&gt; EVIL</B
+>
+<b class="emphasis.bold">EVIL =&gt; [No way! Way!!]</B
+>
+<b class="emphasis.bold">Blue =&gt; Azul</B
+>
+<b class="emphasis.bold">Green =&gt; Verde</B
+>
+<b class="emphasis.bold">Rojo =&gt; Red</B
+>
+<b class="emphasis.bold">Red =&gt; Rojo</B
+>
+<b class="emphasis.bold">Azul =&gt; Blue</B
+>
+<b class="emphasis.bold">Verde =&gt; Green</B
+></PRE
+><p class="para">The module is shown in <a class="xref" href="#ch13-33223" title="Tie::RevHash">Example 13.7</A
+>. Notice how small it is!</P
+><div class="example"><h4 class="example"><a class="title" name="ch13-33223">Example 13.7: Tie::RevHash</A
+></H4
+><pre class="programlisting">package Tie::RevHash;
+use Tie::RefHash;
+use vars qw(@ISA);
+@ISA = qw(Tie::RefHash);
+sub STORE {
+    my ($self, $key, $value) = @_;
+    $self-&gt;SUPER::STORE($key, $value);
+    $self-&gt;SUPER::STORE($value, $key);
+}
+
+sub DELETE {
+    my ($self, $key) = @_;
+    my $value = $self-&gt;SUPER::FETCH($key);
+    $self-&gt;SUPER::DELETE($key);
+    $self-&gt;SUPER::DELETE($value);
+}
+
+1;<a class="indexterm" name="ch13-idx-1000006111-0"></A
+></PRE
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-chap13_tie_4">Tie Example: Handle That Counts Access</A
+></H3
+><p class="para"><a class="indexterm" name="ch13-idx-1000004700-0"></A
+>Here's an example of tying a filehandle:</P
+><pre class="programlisting">use Counter;
+tie *CH, 'Counter';
+while (&lt;CH&gt;) {
+    print &quot;Got $_\n&quot;;
+} </PRE
+><p class="para">When run, that program keeps printing <code class="literal">Got</CODE
+> <code class="literal">1</CODE
+>, <code class="literal">Got</CODE
+> <code class="literal">2</CODE
+>, and so on until the universe collapses, you hit an interrupt, or your computer reboots, whichever comes first. Its simple implementation is shown in <a class="xref" href="#ch13-36823" title="Counter">Example 13.8</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch13-36823">Example 13.8: Counter</A
+></H4
+><pre class="programlisting">package Counter;
+sub TIEHANDLE {
+    my $class = shift;
+    my $start = shift;
+    return bless \$start =&gt; $class;
+} 
+sub READLINE {
+    my $self = shift;
+    return ++$$self;
+} 
+1;</PRE
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-chap13_tie_5">Tie Example: Multiple Sink Filehandles</A
+></H3
+><p class="para">Finally, here's an example of a tied handle that implements a <em class="emphasis">tee</EM
+>-like functionality by twinning standard out and standard error:</P
+><pre class="programlisting">use Tie::Tee;
+tie *TEE, 'Tie::Tee', *STDOUT, *STDERR;
+print TEE &quot;This line goes both places.\n&quot;;</PRE
+><p class="para">Or, more elaborately:</P
+><pre class="programlisting">#!/usr/bin/perl
+# demo_tietee
+use Tie::Tee;
+use Symbol;
+
+@handles = (*STDOUT);
+for $i ( 1 .. 10 ) {
+    push(@handles, $handle = gensym());
+    open($handle, &quot;&gt;/tmp/teetest.$i&quot;);
+} 
+
+tie *TEE, 'Tie::Tee', @handles;
+print TEE &quot;This lines goes many places.\n&quot;;</PRE
+><p class="para">The <em class="emphasis">Tie/Tee.pm</EM
+> file is shown in <a class="xref" href="#ch13-36731" title="Tie::Tee">Example 13.9</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch13-36731">Example 13.9: Tie::Tee</A
+></H4
+><pre class="programlisting">package Tie::Tee;
+
+sub TIEHANDLE {
+    my $class   = shift;
+    my $handles = [@_];
+
+    bless $handles, $class;
+    return $handles;
+}
+
+sub PRINT {
+    my $href = shift;
+    my $handle;
+    my $success = 0;
+
+    foreach $handle (@$href) {
+        $success += print $handle @_;
+    }
+
+    return $success == @$href;
+}                                     
+
+1;<a class="indexterm" name="ch13-idx-1000006714-0"></A
+><a class="indexterm" name="ch13-idx-1000006714-1"></A
+><a class="indexterm" name="ch13-idx-1000006714-2"></A
+><a class="indexterm" name="ch13-idx-1000006714-3"></A
+><a class="indexterm" name="ch13-idx-1000006714-4"></A
+></PRE
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-1000000533">See Also</A
+></H3
+><p class="para">The <code class="literal">tie</CODE
+> function in <i class="filename">perlfunc </I
+>(1); <i class="filename">perltie </I
+>(1); the section on "Using Tied Variables" in <a class="olink" href="../prog/ch05_01.htm">Chapter 5</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_15.htm" title="13.14. Overloading Operators"><img src="../gifs/txtpreva.gif" alt="Previous: 13.14. Overloading Operators" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="chapter" href="ch14_01.htm" title="14. Database Access"><img src="../gifs/txtnexta.gif" alt="Next: 14. Database Access" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">13.14. Overloading Operators</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">14. Database Access</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

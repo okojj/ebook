@@ -1,0 +1,791 @@
+<html>
+<head>
+<title>Managing Instance Data (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Managing Instance Data">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch12_06.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch12_01.htm">Chapter 12: Objects</a></td><td align="right" valign="top" width="172"><a href="ch12_08.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">12.7. Managing Instance Data</h2>
+
+<p>
+<a name="INDEX-2518"></a><a name="INDEX-2519"></a>
+Most classes create objects that are essentially just data structures
+with several internal data fields (instance variables) plus methods
+to manipulate them.</p>
+
+<p>
+<a name="INDEX-2520"></a><a name="INDEX-2521"></a>
+Perl classes inherit methods, not data, but as long as all access
+to the object is through method calls anyway, this works out fine.
+If you want data inheritance, you have to effect it through method
+inheritance.  By and large, this is not a necessity in Perl, because
+most classes store the attributes of their object in an anonymous
+hash.  The object's instance data is contained within this hash,
+which serves as its own little namespace to be carved up by whatever
+classes do something with the object.  For example, if you want an
+object called <tt class="literal">$city</tt> to have a data field named <tt class="literal">elevation</tt>, you
+can simply access <tt class="literal">$city-&gt;{elevation}</tt>.  No declarations are
+necessary.  But method wrappers have their uses.</p>
+
+<p>Suppose you want to implement a <tt class="literal">Person</tt> object.  You decide to have a
+data field called "name", which by a strange coincidence you'll store
+under the key <tt class="literal">name</tt> in the anonymous hash that will serve as the
+object.  But you don't want users touching the data directly.  To reap
+the rewards of encapsulation, users need methods to access that
+instance variable without lifting the veil of abstraction.</p>
+
+<p>
+<a name="INDEX-2522"></a>
+For example, you might make a pair of accessor methods:
+<blockquote>
+<pre class="programlisting">sub get_name {
+    my $self = shift;
+    return $self-&gt;{name};
+}
+
+sub set_name {
+    my $self      = shift;
+    $self-&gt;{name} = shift;
+}</pre>
+</blockquote>
+
+which leads to code like this:
+<blockquote>
+<pre class="programlisting">$him = Person-&gt;new();
+$him-&gt;set_name("Frodo");
+$him-&gt;set_name( ucfirst($him-&gt;get_name) );</pre>
+</blockquote>
+
+You could even combine both methods into one:
+<blockquote>
+<pre class="programlisting">sub name {
+    my $self = shift;
+    if (@_) { $self-&gt;{name} = shift }
+    return $self-&gt;{name};
+}</pre>
+</blockquote>
+
+This would then lead to code like this:
+<blockquote>
+<pre class="programlisting">$him = Person-&gt;new();
+$him-&gt;name("Frodo");
+$him-&gt;name( ucfirst($him-&gt;name) );</pre>
+</blockquote>
+<a name="INDEX-2523"></a>
+The advantage of writing a separate function for each instance
+variable (which for our <tt class="literal">Person</tt> class might be name, age, height,
+and so on) is that it is direct, obvious, and flexible.  The drawback
+is that every time you want a new class, you end up defining one or
+two nearly identical methods per instance variable.  This isn't too
+bad for the first few, and you're certainly welcome to do it that way
+if you'd like.  But when convenience is preferred over flexibility,
+you might prefer one of the techniques described in the following sections.</p>
+
+<p>Note that we will be varying the implementation, not the interface.  If
+users of your class respect the encapsulation, you'll be able to
+transparently swap one implementation for another without the users
+noticing.  (Family members in your inheritance tree using your class
+for a subclass or superclass might not be so forgiving, since they know
+you far better than strangers do.)  If your users have been peeking and
+poking into the private affairs of your class, the inevitable disaster
+is their own fault and none of your concern.  All you can do is live up
+to your end of the contract by maintaining the interface.  Trying to
+stop everyone else in the world from ever doing something slightly
+wicked will take up all your time and energy--and in the end, fail
+anyway.</p>
+
+<p>
+<a name="INDEX-2524"></a><a name="INDEX-2525"></a><a name="INDEX-2526"></a>
+Dealing with family members is more challenging.  If a subclass
+overrides a superclass's attribute accessor, should it access the same
+field in the hash, or not?  An argument can be made either way,
+depending on the nature of the attribute.  For the sake of safety in
+the general case, each accessor can prefix the name of the hash field
+with its own classname, so that subclass and superclass can both have
+their own version.  Several of the examples below, including the
+standard <tt class="literal">Struct::Class</tt> module, use this subclass-safe strategy.
+You'll see accessors resembling this:
+<blockquote>
+<pre class="programlisting">sub name {
+    my $self = shift;
+    my $field = __PACKAGE__ . "::name";
+    if (@_) { $self-&gt;{$field} = shift }
+    return $self-&gt;{$field};
+}</pre>
+</blockquote>
+
+In each of the following examples, we create a simple
+<tt class="literal">Person</tt> class with fields <tt class="literal">name</tt>,
+<tt class="literal">race</tt>, and <tt class="literal">aliases</tt>, each with an
+identical interface but a completely different implementation.  We're
+not going to tell you which one we like the best, because we like them
+all the best, depending on the occasion.  And tastes differ.  Some
+folks prefer stewed conies; others prefer fissssh.</p>
+
+
+<h3 class="sect2">12.7.1. Field Declarations with use fields</h3>
+
+<a name="INDEX-2527"></a><a name="INDEX-2528"></a><a name="INDEX-2529"></a><a name="INDEX-2530"></a><a name="INDEX-2531"></a>
+<p>Objects don't have to be implemented as anonymous hashes.  Any
+reference will do.  For example, if you used an anonymous array,
+you could set up a constructor like this:
+<blockquote>
+<pre class="programlisting">sub new {
+    my $invocant = shift;
+    my $class = ref($invocant) || $invocant;
+    return bless [], $class;
+}</pre>
+</blockquote>
+
+and have accessors like these:
+<blockquote>
+<pre class="programlisting">sub name {
+    my $self = shift;
+    if (@_) { $self-&gt;[0] = shift }
+    return $self-&gt;[0];
+}
+
+sub race {
+    my $self = shift;
+    if (@_) { $self-&gt;[1] = shift }
+    return $self-&gt;[1];
+}
+
+sub aliases {
+    my $self = shift;
+    if (@_) { $self-&gt;[2] = shift }
+    return $self-&gt;[2];
+}</pre>
+</blockquote>
+<a name="INDEX-2532"></a>
+Arrays are somewhat faster to access than hashes and don't take
+up quite as much memory, but they're not at all convenient to
+use.  You have to keep track of the index numbers (not just in
+your class, but in your superclass, too), which must somehow indicate
+which pieces of the array your class is using.  Otherwise, you might reuse
+a slot.</p>
+
+<p>The <tt class="literal">use fields</tt> pragma addresses all of these points:
+<blockquote>
+<pre class="programlisting">package Person;
+use fields qw(name race aliases);</pre>
+</blockquote>
+<a name="INDEX-2533"></a><a name="INDEX-2534"></a><a name="INDEX-2535"></a><a name="INDEX-2536"></a>
+This pragma does not create accessor methods for you, but it does rely
+on some built-in magic (called <em class="emphasis">pseudohashes</em>) to
+do something similar.  (You may wish to wrap accessors around the
+fields anyway, as we do in the following example.) Pseudohashes are
+array references that you can use like hashes because they have an
+associated key map table.  The <tt class="literal">use fields</tt> pragma
+sets this key map up for you, effectively declaring which fields are
+valid for the <tt class="literal">Person</tt> object; this makes the Perl
+compiler aware of them.  If you declare the type of your object
+variable (as in <tt class="literal">my Person $self</tt>, in the next
+example), the compiler is smart enough to optimize access to the
+fields into straight array accesses.  Perhaps more importantly, it
+validates field names for type safety (well, typo safety, really) at
+compile time.  (See the section <a href="ch08_03.htm#ch08-sect-pseudo">Section 12.3.5, "Pseudohashes"</a> in <a href="ch08_01.htm">Chapter 8, "References"</a>.)</p>
+
+<p>A constructor and sample accessors would look like this:
+<blockquote>
+<pre class="programlisting">package Person;
+use fields qw(name race aliases);
+sub new {
+    my $type = shift;
+    my Person $self = fields::new(ref $type || $type);
+    $self-&gt;{name} = "unnamed";
+    $self-&gt;{race}  = "unknown";
+    $self-&gt;{aliases} = [];
+    return $self;
+}
+sub name {
+    my Person $self = shift;
+    $self-&gt;{name} = shift if @_;
+    return $self-&gt;{name};
+}
+sub race {
+    my Person $self = shift;
+    $self-&gt;{race} = shift if @_;
+    return $self-&gt;{race};
+}
+sub aliases {
+    my Person $self = shift;
+    $self-&gt;{aliases} = shift if @_;
+    return $self-&gt;{aliases};
+}
+1;</pre>
+</blockquote>
+
+If you misspell one of the literal keys used to access the pseudohash,
+you won't have to wait until run time to learn about this.  The
+compiler knows what type of object <tt class="literal">$self</tt> is
+supposed to refer to (because you told it), so it can check that the
+code accesses only those fields that <tt class="literal">Person</tt> objects
+actually have.  If you have horses on the brain and try to access a
+nonexistent field (such as <tt class="literal">$self-&gt;{mane}</tt>), the
+compiler can flag this error right away and will never turn the
+erroneous program over to the interpreter to run.</p>
+
+<p>There's still a bit of repetition in declaring methods to get at
+instance variables, so you still might like to automate the creation
+of simple accessor methods using one of the techniques below.
+However, because all these techniques use some sort of indirection, if
+you use them, you will lose the compile-time benefits of typo-checking
+lexically typed hash accesses.  You'll still keep the (small) time and
+space advantages, though.</p>
+
+<p>
+<a name="INDEX-2537"></a><a name="INDEX-2538"></a><a name="INDEX-2539"></a>
+If you do elect to use a pseudohash to implement your class, any class
+that inherits from this one must be aware of that underlying
+pseudohash implementation.  If an object is implemented as a
+pseudohash, all participants in the inheritance hierarchy should
+employ the <tt class="literal">use base</tt> and <tt class="literal">use
+fields</tt> declarations.  For example,
+<blockquote>
+<pre class="programlisting">package Wizard;
+use base "Person";
+use fields qw(staff color sphere);</pre>
+</blockquote>
+
+This makes the <tt class="literal">Wizard</tt> module a subclass of class
+<tt class="literal">Person</tt>, and loads the
+<em class="emphasis">Person.pm</em> file.  It also registers three new
+fields in this class to go along with those from
+<tt class="literal">Person</tt>.
+
+That way when you write:
+<blockquote>
+<pre class="programlisting">my Wizard $mage = fields::new("Wizard");</pre>
+</blockquote>
+
+you'll get a pseudohash object with access to both classes' fields:
+<blockquote>
+<pre class="programlisting">$mage-&gt;name("Gandalf");
+$mage-&gt;color("Grey");</pre>
+</blockquote>
+</p>
+
+<p>Since all subclasses must know that they are using a pseudohash
+implementation, they should use the direct pseudohash notation for both 
+efficiency and type safety:
+<blockquote>
+<pre class="programlisting">$mage-&gt;{name} = "Gandalf";
+$mage-&gt;{color} = "Grey";</pre>
+</blockquote>
+
+If you want to keep your implementations interchangeable, however,
+outside users of your class must use the accessor methods.</p>
+
+<p>Although <tt class="literal">use base</tt> supports only single inheritance,
+this is seldom a severe restriction.  See the descriptions of
+<tt class="literal">use base</tt> and <tt class="literal">use fields</tt> in <a href="ch31_01.htm">Chapter 31, "Pragmatic Modules"</a>.</p>
+
+<a name="INDEX-2540"></a><a name="INDEX-2541"></a><a name="INDEX-2542"></a>
+
+
+
+
+
+
+<h3 class="sect2">12.7.2. Generating Classes with Class::Struct</h3>
+
+<a name="INDEX-2543"></a><a name="INDEX-2544"></a><a name="INDEX-2545"></a><a name="INDEX-2546"></a><a name="INDEX-2547"></a>
+<p>The standard <tt class="literal">Class::Struct</tt> module exports a function named
+<tt class="literal">struct</tt>.  This creates all the trapping you'll need to get started
+on an entire class.  It generates a constructor named <tt class="literal">new</tt>, plus
+accessor methods for each of the data fields (instance variables)
+named in that structure.</p>
+
+<p>For example, if you put the class in a <em class="emphasis">Person.pm</em> file:
+<blockquote>
+<pre class="programlisting">package Person;
+use Class::Struct;
+struct Person =&gt; {    # create a definition for a "Person"
+    name    =&gt; '$',   #    name field is a scalar
+    race    =&gt; '$',   #    race field is also a scalar
+    aliases =&gt; '@',   #    but aliases field is an array ref
+};
+1;</pre>
+</blockquote>
+
+Then you could use that module this way:
+<blockquote>
+<pre class="programlisting">use Person;
+my $mage = Person-&gt;new();
+$mage-&gt;name("Gandalf");
+$mage-&gt;race("Istar");
+$mage-&gt;aliases( ["Mithrandir", "Olorin", "Incanus"] );</pre>
+</blockquote>
+
+The <tt class="literal">Class::Struct</tt> module created all four of those
+methods.  Because it follows the subclass-safe policy of always
+prefixing the field name with the class name, it also permits an
+inherited class to have its own separate field of the same name as a
+base class field without conflict.  That means in this case that
+"<tt class="literal">Person::name</tt>" rather than just
+"<tt class="literal">name</tt>" is used for the hash key for that particular
+instance variable.</p>
+
+<p>Fields in a <tt class="literal">struct</tt> declaration don't have to be basic Perl types.
+They can also specify other classes, but classes created with
+<tt class="literal">struct</tt> work best because the function makes assumptions about how
+the classes behave that aren't generally true of all classes.  For
+example, the <tt class="literal">new</tt> method for the appropriate class is invoked to
+initialize the field, but many classes have constructors with
+other names.</p>
+
+<p>See the description of <tt class="literal">Class::Struct</tt> in <a href="ch32_01.htm">Chapter 32, "Standard Modules"</a>, and its online documentation
+for more information.  Many standard modules use
+<tt class="literal">Class::Struct</tt> to implement their classes, including
+<tt class="literal">User::pwent</tt> and <tt class="literal">Net::hostent</tt>.
+Reading their code can prove instructive.</p>
+
+
+
+
+
+
+<h3 class="sect2">12.7.3. Generating Accessors with Autoloading</h3>
+
+<p>
+<a name="INDEX-2548"></a><a name="INDEX-2549"></a><a name="INDEX-2550"></a><a name="INDEX-2551"></a>
+As we mentioned earlier, when you invoke a nonexistent method, Perl
+has two different ways to look for an <tt class="literal">AUTOLOAD</tt>
+method, depending on whether you declared a stub method.  You can use
+this property to provide access to the object's instance data without
+writing a separate function for each instance.  Inside the
+<tt class="literal">AUTOLOAD</tt> routine, the name of the method actually
+invoked can be retrieved from the <tt class="literal">$AUTOLOAD</tt>
+variable.  Consider the following code:
+<blockquote>
+<pre class="programlisting">use Person;
+$him = Person-&gt;new;
+$him-&gt;name("Aragorn");
+$him-&gt;race("Man");
+$him-&gt;aliases( ["Strider", "Estel", "Elessar"] );
+printf "%s is of the race of %s.\n", $him-&gt;name, $him-&gt;race;
+print "His aliases are: ", join(", ", @{$him-&gt;aliases}), ".\n";</pre>
+</blockquote>
+
+As before, this version of the <tt class="literal">Person</tt> class
+implements a data structure with three fields:
+<tt class="literal">name</tt>, <tt class="literal">race</tt>, and
+<tt class="literal">aliases</tt>:
+<blockquote>
+<pre class="programlisting">package Person;
+use Carp;
+
+my %Fields = (
+    "Person::name"  =&gt; "unnamed",
+    "Person::race"   =&gt; "unknown",
+    "Person::aliases"  =&gt; [],
+);
+
+# The next declaration guarantees we get our own autoloader.
+use subs qw(name race aliases);
+
+sub new {
+    my $invocant = shift;
+    my $class = ref($invocant) || $invocant;
+    my $self  = { %Fields, @_ };    # clone like Class::Struct
+    bless $self, $class;
+    return $self;
+}
+
+sub AUTOLOAD {
+    my $self = shift;
+    # only handle instance methods, not class methods
+    croak "$self not an object" unless ref($invocant);
+    my $name = our $AUTOLOAD;
+    return if $name =~ /::DESTROY$/;
+    unless (exists $self-&gt;{$name}) {
+        croak "Can't access `$name' field in $self";
+    }
+    if (@_) { return $self-&gt;{$name} = shift }
+    else    { return $self-&gt;{$name} }
+}</pre>
+</blockquote>
+
+As you see, there are no methods named <tt class="literal">name</tt>,
+<tt class="literal">race</tt>, or <tt class="literal">aliases</tt> anywhere to be
+found.  The <tt class="literal">AUTOLOAD</tt> routine takes care of all
+that.  When someone uses
+<tt class="literal">$him-&gt;name("Aragorn")</tt>, the
+<tt class="literal">AUTOLOAD</tt> subroutine is called with
+<tt class="literal">$AUTOLOAD</tt> set to "<tt class="literal">Person::name</tt>".
+Conveniently, by leaving it fully qualified, it's in exactly the right
+form for accessing fields of the object hash.  That way if you use
+this class as part of a larger class hierarchy, you don't conflict
+with uses of the same name in other classes.</p>
+
+
+
+
+
+
+<h3 class="sect2">12.7.4. Generating Accessors with Closures</h3>
+
+<p>
+<a name="INDEX-2552"></a><a name="INDEX-2553"></a><a name="INDEX-2554"></a><a name="INDEX-2555"></a>
+Most accessor methods do essentially the same thing: they simply fetch
+or store a value from that instance variable.  In Perl, the most natural way to
+create a family of near-duplicate functions is looping around
+a closure.  But closures are anonymous functions lacking names, and
+methods need to be named subroutines in the class's package symbol
+table so that they can be called by name.  This is no problem--just
+assign the closure reference to a typeglob of the appropriate name.
+<blockquote>
+<pre class="programlisting">package Person;
+
+sub new {
+    my $invocant = shift;
+    my $self = bless({}, ref $invocant || $invocant);
+    $self-&gt;init();
+    return $self;
+}
+
+sub init {
+    my $self = shift;
+    $self-&gt;name("unnamed");
+    $self-&gt;race("unknown");
+    $self-&gt;aliases([]);
+}
+
+for my $field (qw(name race aliases)) {
+    my $slot = __PACKAGE__ . "::$field";
+    no strict "refs";          # So symbolic ref to typeglob works.
+
+    *$field = sub {
+        my $self = shift;
+        $self-&gt;{$slot} = shift if @_;
+        return $self-&gt;{$slot};
+    };
+}</pre>
+</blockquote>
+
+Closures are the cleanest hand-rolled way to create a multitude of
+accessor methods for your instance data.  It's efficient for both the
+computer and you.  Not only do all the accessors share the same bit of
+code (they only need their own lexical pads), but later if you decide
+to add another attribute, the changes required are minimal:  just add
+one more word to the <tt class="literal">for</tt> loop's list, and perhaps something to the
+<tt class="literal">init</tt> method.</p>
+
+
+
+
+
+<a name="ch12-sect-po"></a>
+<h3 class="sect2">12.7.5. Using Closures for Private Objects</h3>
+
+<p>
+<a name="INDEX-2556"></a><a name="INDEX-2557"></a><a name="INDEX-2558"></a><a name="INDEX-2559"></a>
+So far, these techniques for managing instance data have offered no
+mechanism for "protection" from external access.  Anyone outside the
+class can open up the object's black box and poke about inside--if they
+don't mind voiding the warranty.  Enforced privacy tends to get in the
+way of people trying to get their jobs done.  Perl's philosophy is that
+it's better to encapsulate one's data with a sign that says:
+<blockquote>
+<pre class="programlisting">IN CASE OF FIRE
+  BREAK GLASS</pre>
+</blockquote>
+
+You should respect such encapsulation when possible, but still have
+easy access to the contents in an emergency situation, like for
+debugging.</p>
+
+<p>But if you do want to enforce privacy, Perl isn't about to get in your
+way.  Perl offers low-level building blocks that you can use to surround
+your class and its objects with an impenetrable privacy shield--one
+stronger, in fact, than that found in many popular object-oriented
+languages.  Lexical scopes and the lexical variables inside them are
+the key components here, and closures play a pivotal role.</p>
+
+<p>
+<a name="INDEX-2560"></a>
+In the section <a href="ch12_05.htm#ch12-sect-pm">Section 12.5.5, "Private Methods"</a> we saw how a class can use
+closures to implement methods that are invisible outside the module
+file.  Later we'll look at accessor methods that regulate class
+data so private that not even the rest of the class has unrestricted
+access.  Those are still fairly traditional uses of closures.  The
+truly interesting approach is to use a closure as the very object
+itself.  The object's instance variables are locked up inside a
+scope to which the object alone--that is, the closure--has free
+access.  This is a very strong form of encapsulation; not only is
+it proof against external tampering, even other methods in the same
+class must use the proper access methods to get at the object's
+instance data.</p>
+
+<p>Here's an example of how this might work.  We'll use closures
+both for the objects themselves and for the generated accessors:
+<blockquote>
+<pre class="programlisting">package Person;
+sub new {
+    my $invocant  = shift;
+    my $class = ref($invocant) || $invocant;
+    my $data = {
+       NAME     =&gt; "unnamed",
+       RACE     =&gt; "unknown",
+       ALIASES  =&gt; [],
+    };
+    my $self = sub {
+       my $field = shift;
+       #############################
+       ### ACCESS CHECKS GO HERE ###
+       #############################
+       if (@_) { $data-&gt;{$field} = shift }
+       return    $data-&gt;{$field};
+    };
+    bless($self, $class);
+    return $self;
+}
+# generate method names
+for my $field (qw(name race aliases)) {
+    no strict "refs";  # for access to the symbol table
+    *$field = sub {
+        my $self = shift;
+        return $self-&gt;(uc $field, @_);
+    };
+}</pre>
+</blockquote>
+
+The object created and returned by the <tt class="literal">new</tt> method
+is no longer a hash, as it was in other constructors we've looked at.
+It's a closure with unique access to the attribute data stored in the
+hash referred to by <tt class="literal">$data</tt>.  Once the constructor
+call is finished, the only access to <tt class="literal">$data</tt> (and
+hence to the attributes) is via the closure.</p>
+
+<p>In a call like <tt class="literal">$him-&gt;name("Bombadil")</tt>,
+the invoking object stored in <tt class="literal">$self</tt> is the closure
+that was blessed and returned by the constructor.  There's not a lot
+one can do with a closure beyond calling it, so we do just that with
+<tt class="literal">$self-&gt;(uc $field, @_)</tt>.  Don't be fooled by the
+arrow; this is just a regular indirect function call, not a method
+invocation.  The initial argument is the string
+"<tt class="literal">name</tt>", and any remaining arguments are whatever
+else was passed in.<a href="#FOOTNOTE-7">[7]</a> Once we're executing inside the
+closure, the hash reference inside <tt class="literal">$data</tt> is again
+accessible.  The closure is then free to permit or deny access to
+whatever it pleases.</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-7"></a>
+<p>[7] Sure, the double-function call is
+slow, but if you wanted fast, would you really be using objects in the
+first place?</p>
+
+</blockquote>
+
+<p>
+<a name="INDEX-2561"></a><a name="INDEX-2562"></a>
+No one outside the closure object has unmediated access to this very
+private instance data, not even other methods in the class.  They could
+try to call the closure the way the methods generated by the <tt class="literal">for</tt>
+loop do, perhaps setting an instance variable the class never heard
+of.  But this approach is easily blocked by inserting various bits of code in 
+the constructor where you see the comment about access checks.  First, we
+need a common preamble:
+<blockquote>
+<pre class="programlisting">use Carp;
+local $Carp::CarpLevel = 1;  # Keeps croak messages short
+my ($cpack, $cfile) = caller();</pre>
+</blockquote>
+
+Now for each of the checks.  The first one makes sure the specified
+attribute name exists:
+<blockquote>
+<pre class="programlisting">croak "No valid field '$field' in object"
+    unless exists $data-&gt;{$field};</pre>
+</blockquote>
+
+This one allows access only by callers from the same file:
+<blockquote>
+<pre class="programlisting">carp "Unmediated access denied to foreign file"
+    unless $cfile eq __FILE__;</pre>
+</blockquote>
+
+This one allows access only by callers from the same package:
+<blockquote>
+<pre class="programlisting">carp "Unmediated access denied to foreign package ${cpack}::"
+    unless $cpack eq __PACKAGE__;</pre>
+</blockquote>
+
+And this one allows access only by callers whose classes inherit ours:
+<blockquote>
+<pre class="programlisting">carp "Unmediated access denied to unfriendly class ${cpack}::"
+    unless $cpack-&gt;isa(__PACKAGE__);</pre>
+</blockquote>
+
+All these checks block unmediated access only.  Users of the class who
+politely use the class's designated methods are under no such
+restriction.  Perl gives you the tools to be just as persnickety as you
+want to be.  Fortunately, not many people want to be.</p>
+
+<p>
+<a name="INDEX-2563"></a><a name="INDEX-2564"></a><a name="INDEX-2565"></a><a name="INDEX-2566"></a>
+But some people ought to be.  Persnickety is good when you're writing
+flight control software.  If you either want or ought to be one of
+those people, and you prefer using working code over reinventing
+everything on your own, check out Damian Conway's
+<tt class="literal">Tie::SecureHash</tt> module on CPAN.  It implements
+restricted hashes with support for public, protected, and private
+persnicketations.  It also copes with the inheritance issues that
+we've ignored in the previous example.  Damian has also written an
+even more ambitious module, <tt class="literal">Class::Contract</tt>, that
+imposes a formal software engineering regimen over Perl's flexible
+object system.  This module's feature list reads like a checklist from
+a computer science 
+
+professor's software engineering
+
+textbook,<a href="#FOOTNOTE-8">[8]</a>including enforced encapsulation, static
+inheritance, and
+design-by-contract condition checking for object-oriented Perl, along
+with a declarative syntax for attribute, method, constructor, and
+destructor definitions at both the object and class level, and
+preconditions, postconditions, and class invariants.  Whew!</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-8"></a>
+<p>[8] Can you guess what Damian's job is?  By the
+way, we highly recommend his book, <em class="emphasis">Object Oriented
+Perl</em> (Manning Publications,
+1999).</p>
+
+</blockquote>
+
+<a name="INDEX-2567"></a><a name="INDEX-2568"></a><a name="INDEX-2569"></a><a name="INDEX-2570"></a>
+
+
+
+
+
+
+<h3 class="sect2">12.7.6. New Tricks</h3>
+
+<p>
+<a name="INDEX-2571"></a><a name="INDEX-2572"></a><a name="INDEX-2573"></a><a name="INDEX-2574"></a><a name="INDEX-2575"></a><a name="INDEX-2576"></a><a name="INDEX-2577"></a>
+As of release 5.6 of Perl, you can also declare a method to indicate
+that it returns an lvalue.  This is done with the 
+lvalue subroutine attribute (not to be confused with object attributes).
+This experimental feature allows you to treat the method as something
+that would appear on the lefthand side of an equal sign:
+<blockquote>
+<pre class="programlisting">package Critter;
+
+sub new {
+    my $class = shift;
+    my $self = { pups =&gt; 0, @_ };    # Override default.
+    bless $self, $class;
+}
+
+sub pups : lvalue {                  # We'll assign to pups() later.
+    my $self = shift;
+    $self-&gt;{pups};
+}
+
+package main;
+$varmint = Critter-&gt;new(pups =&gt; 4);
+$varmint-&gt;pups *= 2;                 # Assign to $varmint-&gt;pups!
+$varmint-&gt;pups =~ s/(.)/$1$1/;       # Modify $varmint-&gt;pups in place!
+print $varmint-&gt;pups;                # Now we have 88 pups.</pre>
+</blockquote>
+
+This lets you pretend <tt class="literal">$varmint-&gt;pups</tt> is a variable while
+still obeying encapsulation.  See the section <a href="ch06_05.htm#ch06-sect-lvalue">Section 12.5.2, "The lvalue Attribute"</a> in
+<a href="ch06_01.htm">Chapter 6, "Subroutines"</a>.</p>
+
+<p>
+<a name="INDEX-2578"></a><a name="INDEX-2579"></a><a name="INDEX-2580"></a><a name="INDEX-2581"></a>
+If you're running a threaded version of Perl and want to ensure that only one
+thread can call a particular method on an object, you can use the
+<tt class="literal">locked</tt> and <tt class="literal">method</tt> attributes to do that:
+<blockquote>
+<pre class="programlisting">sub pups : locked method {
+    ...
+}</pre>
+</blockquote>
+
+When any thread invokes the <tt class="literal">pups</tt> method on an
+object, Perl locks the object before execution, preventing other
+threads from doing the same.  See the section <a href="ch06_05.htm#ch06-sect-locked">Section 12.5.1, "The locked and method Attributes"</a> in <a href="ch06_01.htm">Chapter 6, "Subroutines"</a>.</p>
+
+<a name="INDEX-2582"></a><a name="INDEX-2583"></a>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch12_06.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch12_08.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">12.6. Instance Destructors</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">12.8. Managing Class Data</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

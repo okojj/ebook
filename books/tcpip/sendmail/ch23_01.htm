@@ -1,0 +1,211 @@
+<html><head>
+<title>[Chapter 23] The Queue</TITLE>
+<meta name="DC.title" content="sendmail"><meta name="DC.creator" content="Bryan Costales &amp; Eric Allman"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-01-06T19:31:13Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-222-0" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="part03.htm" title="III. Administration"><link rel="prev" href="ch22_09.htm" title="22.9 Pitfalls"><link rel="next" href="ch23_02.htm" title="23.2 Parts of a Queued Message"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="sendmail" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="sendmail"><area shape="RECT" coords="467,0,514,18" href="../search/ssrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch22_09.htm" title="22.9 Pitfalls"><img src="../gifs/txtpreva.gif" alt="Previous: 22.9 Pitfalls" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 23</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch23_02.htm" title="23.2 Parts of a Queued Message"><img src="../gifs/txtnexta.gif" alt="Next: 23.2 Parts of a Queued Message" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="CHAPTER"><h1 class="chapter"><a class="title" name="SML2-CH-23">23. The Queue</A
+></H1
+><div class="htmltoc"><p><b>Contents:</B
+><br><a class="sect1" href="#SML2-CH-23-SECT-1" title="23.1 Overview of the Queue">Overview of the Queue</A
+><br><a class="sect1" href="ch23_02.htm" title="23.2 Parts of a Queued Message">Parts of a Queued Message</A
+><br><a class="sect1" href="ch23_03.htm" title="23.3 A Bogus qf File (V8 only): Qf">A Bogus qf File (V8 only): Qf</A
+><br><a class="sect1" href="ch23_04.htm" title="23.4 Printing the Queue">Printing the Queue</A
+><br><a class="sect1" href="ch23_05.htm" title="23.5 How the Queue Is Processed">How the Queue Is Processed</A
+><br><a class="sect1" href="ch23_06.htm" title="23.6 Cause the Queue to Be Processed">Cause the Queue to Be Processed</A
+><br><a class="sect1" href="ch23_07.htm" title="23.7 Process Alternate Queues">Process Alternate Queues</A
+><br><a class="sect1" href="ch23_08.htm" title="23.8 Pitfalls">Pitfalls</A
+><br><a class="sect1" href="ch23_09.htm" title="23.9 The qf File Internals">The qf File Internals</A
+></P
+><p></P
+></DIV
+><p class="para"></P
+><p class="para">Mail messages may either be delivered immediately or be held
+for later delivery.<a class="indexterm" name="SML2-CH-23-IX-QUEUE"></A
+><a class="indexterm" name="AUTOID-19858"></A
+>
+Held messages are referred to as &quot;queued.&quot;
+They are placed into a holding directory, usually called <em class="emphasis">mqueue</EM
+>,
+from which they are delivered at a later time.
+There are many reasons a mail message may be queued:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para">If a mail message is temporarily undeliverable, it is queued
+and delivery is attempted later. If the message is addressed
+to multiple recipients, it is queued only for those recipients
+to whom delivery is not immediately possible.</P
+></LI
+><li class="listitem"><p class="para">If the <code class="literal">s</CODE
+> configuration option is set to true, all mail
+messages are queued for safety while delivery is attempted.
+The message is removed from the queue only if delivery
+succeeds. If delivery fails, the message
+is left in the queue, and another attempt is made to deliver it
+later. This causes the mail to be saved in the unhappy event
+of a system crash during processing.</P
+></LI
+><li class="listitem"><p class="para">If <em class="emphasis">sendmail</EM
+> is run with the <code class="literal">DeliveryMode</CODE
+> (<code class="literal">d</CODE
+>) option
+(see <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-16" title="">Section 34.8.16, DeliveryMode (d)</A
+>) set to <code class="literal">queue-only</CODE
+> or
+<code class="literal">defer</CODE
+>, all mail is queued, and no immediate
+delivery attempt is made. A separate queue run is required
+to attempt delivery.</P
+></LI
+><li class="listitem"><p class="para">If the load (average number of blocked processes) becomes higher than
+the value given to the <code class="literal">QueueLA</CODE
+> (<code class="literal">x</CODE
+>) option (see <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-50" title="">Section 34.8.50, QueueLA (x)</A
+>),
+<em class="emphasis">sendmail</EM
+> queues messages rather than attempting to deliver
+them. A separate queue run is required later to process the queue.</P
+></LI
+></UL
+><p class="para"></P
+><div class="sect1"><h2 class="sect1"><a class="title" name="SML2-CH-23-SECT-1">23.1 Overview of the Queue</A
+></H2
+><p class="para"><a class="indexterm" name="AUTOID-19886"></A
+><a class="indexterm" name="AUTOID-19889"></A
+>The <em class="emphasis">sendmail</EM
+> queue is implemented by placing held messages
+into a directory.<a class="indexterm" name="AUTOID-19894"></A
+>
+That directory and its name (usually <em class="emphasis">mqueue</EM
+>)
+are specified in the configuration file by the <code class="literal">QueueDirectory</CODE
+> (<code class="literal">Q</CODE
+>)
+option (see <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-48" title="">Section 34.8.48, QueueDirectory (Q)</A
+>):</P
+><p class="para"><blockquote class="screen"><pre class="screen">OQ/var/spool/mqueue                         <i class="lineannotation"><img src="../chars/larr.gif" alt="&lt;-"> pre-V8.7 form</I
+>
+O QueueDirectory=/var/spool/mqueue          <i class="lineannotation"><img src="../chars/larr.gif" alt="&lt;-"> beginning with V8.7</I
+></PRE
+></BLOCKQUOTE
+></P
+><p class="para">If the <code class="literal">QueueDirectory</CODE
+> (<code class="literal">Q</CODE
+>) option is missing, the name defaults to <code class="literal">mqueue</CODE
+>.
+When the location is relative (as <code class="literal">mqueue</CODE
+>),
+it is relative to the location where
+<em class="emphasis">sendmail</EM
+> is run. Since the <em class="emphasis">sendmail</EM
+> daemon is typically started
+from an <em class="emphasis">rc</EM
+> file at boot time, such relative locations are usually relative
+to the <em class="emphasis">root</EM
+> (<code class="literal">/</CODE
+>) directory.
+[1]</P
+><blockquote class="footnote"><p class="para">[1] Of course, if <em class="emphasis">sendmail</EM
+> is started somewhere else or by someone else, the queue directory
+will be a subdirectory under that other starting directory.</P
+></BLOCKQUOTE
+><p class="para">After <em class="emphasis">sendmail</EM
+> has processed its configuration file, it
+does a <em class="emphasis">chdir</EM
+>(2) into its queue directory and does all the
+rest of its work from there. This change into the queue directory
+has two side effects:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para">Should the <em class="emphasis">sendmail</EM
+> program fault and produce a core dump, the core
+image is left in the queue directory.</P
+></LI
+><li class="listitem"><p class="para">Any relative pathnames that are given to options in the configuration file 
+are interpreted as relative to the queue directory. (This is not
+true for the <code class="literal">F</CODE
+> configuration command; see <a class="xref" href="ch32_01.htm#SML2-CH-32-SECT-1-2" title="The F Class Command">Section 32.1.2, "The F Class Command"</A
+>.
+Those files are processed at the same
+time as the configuration file, before the <em class="emphasis">chdir</EM
+>.)</P
+></LI
+></UL
+><p class="para"><a class="indexterm" name="AUTOID-19930"></A
+><a class="indexterm" name="AUTOID-19933"></A
+>The queue directory should be set to have very narrow permissions.
+It must be owned by <em class="emphasis">root</EM
+>.
+We (and CERT) recommend a mode of 0700.
+Prior to V8 <em class="emphasis">sendmail</EM
+>, such narrow permissions would cause
+C-shell scripts run from a <em class="emphasis">~/.forward</EM
+> files to fail.
+V8 <em class="emphasis">sendmail</EM
+> lets you specify alternative directories in which
+to run programs (see the <code class="literal">D=</CODE
+> delivery agent equate, <a class="xref" href="ch30_04.htm#SML2-CH-30-SECT-4-3" title="">Section 30.4.3, D=</A
+>).
+This allows you to use mode 0700 queue directories
+without the associated problems.</P
+><p class="para">As a further precaution, all the components of the path leading to
+the queue directory should be owned by <em class="emphasis">root</EM
+> and be writable only by <em class="emphasis">root</EM
+>.
+In the case of our example of <em class="emphasis">/var/spool/mqueue</EM
+>, permissions should
+look like this:</P
+><p class="para"><blockquote class="screen"><pre class="screen">drwxr-xr-x  root    /
+drwxr-xr-x  root    /var/
+drwxr-xr-x  root    /var/spool/
+drwx---  root    /var/spool/mqueue/</PRE
+></BLOCKQUOTE
+></P
+><p class="para">For additional security, see the <code class="literal">restrictmailq</CODE
+> keyword for the
+<code class="literal">PrivacyOptions</CODE
+> (<code class="literal">p</CODE
+>) option (see <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-47" title="">Section 34.8.47, PrivacyOptions (p)</A
+>).
+It allows only users in the same group as the group ownership
+of 
+
+the queue directory to be able
+to print its contents with <em class="emphasis">mailq</EM
+> or <code class="literal">-bp</CODE
+> (see <a class="xref" href="ch23_04.htm" title="Printing the Queue">Section 23.4, "Printing the Queue"</A
+>).&#13;</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch22_09.htm" title="22.9 Pitfalls"><img src="../gifs/txtpreva.gif" alt="Previous: 22.9 Pitfalls" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="sendmail"><img src="../gifs/txthome.gif" alt="sendmail" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch23_02.htm" title="23.2 Parts of a Queued Message"><img src="../gifs/txtnexta.gif" alt="Next: 23.2 Parts of a Queued Message" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">22.9 Pitfalls</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">23.2 Parts of a Queued Message</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.htm" title="The Networking CD Bookshelf">Library Home</A
+> | <a href="../dnsbind/index.htm" title="DNS &amp; BIND">DNS &amp; BIND</A
+> | <a href="../tcpip/index.htm" title="TCP/IP Network Administration">TCP/IP</A
+> | <a href="index.htm" title="sendmail">sendmail</A
+> | <a href="../smdref/index.htm" title="sendmail Desktop Reference">sendmail Reference</A
+> | <a href="../firewall/index.htm" title="Building Internet Firewalls">Firewalls</A
+> | <a href="../puis/index.htm" title="Practical UNIX &amp; Internet Security">Practical Security</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

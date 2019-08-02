@@ -1,0 +1,175 @@
+<html><head><title>[Chapter 24] 24.16 Trimming a Huge Directory </TITLE
+><meta name="DC.title" content="UNIX Power Tools"><meta name="DC.creator" content="Jerry Peek, Tim O'Reilly &amp; Mike Loukides"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1998-08-04T21:41:45Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-260-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch24_01.htm" webstripperlinkwas="ch24_01.htm" title="24. Other Ways to Get Disk Space"><link rel="prev" href="ch24_15.htm" webstripperlinkwas="ch24_15.htm" title="24.15 Trimming a Directory "><link rel="next" href="ch24_17.htm" webstripperlinkwas="ch24_17.htm" title="24.17 Disk Quotas "></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" alt="UNIX Power Tools" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,58" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/upt/index.htm" alt="UNIX Power Tools"><area shape="RECT" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="jobjects/fsearch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch24_15.htm" webstripperlinkwas="ch24_15.htm" title="24.15 Trimming a Directory "><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous: 24.15 Trimming a Directory " border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 24<br>Other Ways to Get Disk Space</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch24_17.htm" webstripperlinkwas="ch24_17.htm" title="24.17 Disk Quotas "><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next: 24.17 Disk Quotas " border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="UPT-ART-6020">24.16 Trimming a Huge Directory </A
+></H2
+><p class="para">Some implementations of the BSD fast filesystem never truncate
+directories. That is, when you delete a file, the filesystem marks its
+directory entry as &quot;invalid,&quot; but doesn't actually delete the entry.
+The old entry can be re-used when someone creates a new file, 
+but will never go away. Therefore, 
+the directories themselves can only get larger with time. Directories
+usually don't occupy a huge amount of space, but searching through a
+large directory is noticeably slow. So you should avoid letting
+directories get too large.</P
+><p class="para">On many UNIX systems, the only way to &quot;shrink a directory&quot;
+is to move all of its files somewhere else and then remove it;
+for example:</P
+><p class="para"><table class="screen.co" border="1"><tr><th valign="TOP"><pre class="calloutlist">
+&#13;
+<a class="co" href="ch15_05.htm" webstripperlinkwas="ch15_05.htm" title='15.5 Matching All "Dot Files&quot; with Wildcards'>.[^A--/-^?]</A
+> 
+&#13;</PRE
+></TH
+><td valign="TOP"><pre class="screen">
+ls -lgd old   <em class="emphasis">Get old owner, group, and mode</EM
+>
+mkdir new; chown <code class="replaceable"><i>user</I
+></CODE
+> new; chgrp <code class="replaceable"><i>group</I
+></CODE
+> new; chmod <code class="replaceable"><i>mode</I
+></CODE
+> new
+mv old/.??* old/.[^A--/-^?] old/* new   ^A <em class="emphasis">and</EM
+> <code class="literal">^?</CODE
+> <em class="emphasis">are CTRL-a and DEL</EM
+>
+rmdir old
+mv new old</PRE
+></TD
+></TR
+></TABLE
+></P
+><p class="para">This method also works on V7-ish filesystems.
+It cannot be applied
+to the root of a filesystem.</P
+><p class="para">Other implementations of the BSD fast filesystem do truncate
+directories. They do this after a complete scan of the
+directory has shown that some number of trailing fragments are
+empty. Complete scans are forced for any operation that places
+a new name into the directory&nbsp;- such as <em class="emphasis">creat</EM
+>(2) or <em class="emphasis">link</EM
+>(2).
+In addition, new names are always placed in the earliest possible
+free slot. Hence, on these systems there is another way to
+shrink a directory.
+[How do you know if your BSD filesystem truncates directories?
+Try the pseudo-code below (but use actual commands), and see if it has an 
+effect. -<em class="emphasis">ML</EM
+>&nbsp;]</P
+><p class="para"><blockquote class="screen"><pre class="screen">while (the directory can be shrunk) {
+    mv (file in last slot) (some short name)
+    mv (the short name) (original name)
+}</PRE
+></BLOCKQUOTE
+></P
+><p class="para">This works on the root of a filesystem as well as subdirectories.</P
+><p class="para">Neither method should be used if some external agent (for example, a
+daemon) is busy looking
+at the directory. The first method will also fail if the
+external agent is quiet but will resume <em class="emphasis">and</EM
+> hold the existing
+directory open (for example, a daemon program, like <em class="emphasis">sendmail</EM
+>, that
+rescans the directory,
+but which is currently stopped or idle).
+The second method requires knowing a &quot;safe&quot; short name&nbsp;- i.e., a name
+that doesn't duplicate any other name in the directory.</P
+><p class="para">I have found the second method useful enough to write a shell script
+to do the job. I call the script <em class="emphasis">squoze</EM
+>:</P
+><p class="para"><table class="screen.co" border="1"><tr><th valign="TOP"><pre class="calloutlist">
+&#13;
+
+
+
+
+<a class="co" href="ch35_21.htm" webstripperlinkwas="ch35_21.htm" title="35.21 Using IFS to Split Strings ">IFS</A
+> 
+
+<a class="co" href="ch45_09.htm" webstripperlinkwas="ch45_09.htm" title='45.9 The Unappreciated Bourne Shell  ":&quot; Operator'>:</A
+> 
+
+<a class="co" href="ch25_15.htm" webstripperlinkwas="ch25_15.htm" title="25.15 Finer Control on tail ">-r</A
+> 
+
+
+
+<a class="co" href="ch21_11.htm" webstripperlinkwas="ch21_11.htm" title="21.11 Safer Removing, Moving, and Copying ">-i</A
+> <a class="co" href="ch44_09.htm" webstripperlinkwas="ch44_09.htm" title="44.9 Testing Your Success ">&amp;&amp;</A
+> 
+
+
+&#13;</PRE
+></TH
+><td valign="TOP"><pre class="screen">
+&#13;#! /bin/sh
+#
+# squoze
+last=
+ls -ldg
+IFS='
+'
+while :
+do
+   set `ls -f | tail -10r`
+   for i do
+      case &quot;$i&quot; in &quot;$last&quot;|.|..) break 2;; esac
+      # _ (underscore) is the &quot;safe, short&quot; filename
+      /bin/mv -i &quot;$i&quot; _ &amp;&amp; /bin/mv _ &quot;$i&quot;
+   done
+   last=&quot;$i&quot;
+done
+ls -ldg</PRE
+></TD
+></TR
+></TABLE
+></P
+><p class="para">[The <em class="emphasis">ls -f</EM
+> option lists entries in the order they appear in the
+directory; it doesn't sort. <em class="emphasis">-JP</EM
+>&nbsp;]
+This script does not handle filenames with embedded newlines. It is,
+however, safe to apply to a <em class="emphasis">sendmail</EM
+> queue while <em class="emphasis">sendmail</EM
+> is stopped.<a class="indexterm" name="AUTOID-27031"></A
+><a class="indexterm" name="AUTOID-27032"></A
+><a class="indexterm" name="AUTOID-27033"></A
+></P
+><div class="sect1info"><p class="SECT1INFO">- <span class="authorinitials">CT</SPAN
+> <span class="bibliomisc">in <a class="systemitem.newsgroup" href="../WebStripper/protected.html#link======news:comp.unix.admin" webstripperlinkwas="../WebStripper/protected.html#link======news:comp.unix.admin">comp.unix.admin</A
+> on Usenet, 22 August 1991</SPAN
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch24_15.htm" webstripperlinkwas="ch24_15.htm" title="24.15 Trimming a Directory "><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous: 24.15 Trimming a Directory " border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/upt/index.htm" title="UNIX Power Tools"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="UNIX Power Tools" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch24_17.htm" webstripperlinkwas="ch24_17.htm" title="24.17 Disk Quotas "><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next: 24.17 Disk Quotas " border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">24.15 Trimming a Directory </TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" webstripperlinkwas="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">24.17 Disk Quotas </TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#map" border="0" alt="The UNIX CD Bookshelf Navigation"><map name="map"><area shape="RECT" coords="0,0,73,21" href="../index.html" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/index.html" alt="The UNIX CD Bookshelf"><area shape="RECT" coords="74,0,163,21" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/upt/index.htm" alt="UNIX Power Tools"><area shape="RECT" coords="164,0,257,21" href="../unixnut/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/unixnut/index.htm" alt="UNIX in a Nutshell"><area shape="RECT" coords="258,0,321,21" href="../vi/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/vi/index.htm" alt="Learning the vi Editor"><area shape="RECT" coords="322,0,378,21" href="../sedawk/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/sedawk/index.htm" alt="sed &amp; awk"><area shape="RECT" coords="379,0,438,21" href="../ksh/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/ksh/index.htm" alt="Learning the Korn Shell"><area shape="RECT" coords="439,0,514,21" href="../lrnunix/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/lrnunix/index.htm" alt="Learning the UNIX Operating System"></MAP
+></DIV
+></BODY
+></HTML
+>

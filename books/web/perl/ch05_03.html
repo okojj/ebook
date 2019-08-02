@@ -1,0 +1,1007 @@
+<!doctype html public "-//ORA//DTD CD HTML 3.2//EN">
+<html>
+<head>
+<title>[Chapter 5] 5.3 Objects</TITLE>
+<meta name="author" content="Larry Wall, Tom Christiansen, and Randal Schwartz">
+<meta name="date" content="Fri Aug 29 18:38:02 1997">
+<meta name="form" content="html">
+<meta name="metadata" content="dublincore.0.1">
+<meta name="objecttype" content="book part">
+<meta name="otheragent" content="gmat dbtohtml">
+<meta name="publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="source" content="SGML">
+<meta name="subject" content="Perl">
+<meta name="title" content="Programming Perl, Second Edition">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+</HEAD>
+<body bgcolor="#FFFFFF">
+
+<div class=htmlnav>
+<h1><a href='index.html'><img src="gifs/smbanner.gif" alt="Programming Perl, Second Edition" border=0></a></H1>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch05_02.html"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 5<br>Packages, Modules, and Object Classes</FONT></B></TD>
+<td width=172 align=right valign=top><a href="ch05_04.html"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+</table>
+
+&nbsp;
+<hr align=left width=515>
+</DIV>
+<div class=sect1>
+<h2 class=sect1><a class="TITLE" name="PERL2-CH-5-SECT-3">5.3 Objects</A></h2>
+
+<p class=para>
+<a name="CH05.OBJ"></A>First of all, you need to understand packages and modules as previously
+described in this chapter.  You also need to know what references and
+referenced thingies are in Perl; see <a href="ch04_01.html">Chapter 4, <i>References and Nested Data Structures</i></A>, for that.
+
+<p class=para>
+It's also helpful to understand a little about object-oriented
+programming (OOP), so in the next section we'll give you a little course
+on OOL (object-oriented lingo).
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-3.1">Brief Refresher on Object-Oriented Programming</A></h3>
+
+<p class=para>
+
+An <i class=emphasis>object</I> is a data structure with a collection of behaviors that
+the data structure is capable of.  We generally speak of behaviors as
+being performed by the object directly, sometimes to the point of
+anthropomorphizing the object.  For example, we might say that a
+rectangle "knows"
+how to display itself on the screen, or "knows" how to compute its own
+area.
+
+<p class=para>
+An object gets its behaviors by being an <i class=emphasis>instance</I> of a <i class=emphasis>class</I>.
+The class defines <i class=emphasis>methods</I> that apply to all objects belonging to
+that class, called <i class=emphasis>instance methods</I>.
+
+<p class=para>
+The class will also likely include instance-independent methods,
+called <i class=emphasis>class methods</I>.[9]
+Some class methods create
+new objects of the classes, and are called <i class=emphasis>constructor methods</I>
+(such as "create a new rectangle with width 10 and height 5").  Other
+class methods might perform operations on many objects collectively
+("display all rectangles"), or provide other necessary operations
+("read a rectangle from this file").
+
+<blockquote class=footnote>
+<p class=para>[9] 
+Or sometimes <i class=emphasis>static methods</I>.
+</blockquote>
+<p class=para>
+A class may be defined so as to <i class=emphasis>inherit</I> both class and instance methods
+from <i class=emphasis>parent classes</I>, also known as <i class=emphasis>base classes</I>.  This allows a new
+class to be created
+that is similar to an existing class, but with added behaviors. Any
+method invocation that is not found in a particular class will be
+searched for in the parent classes automatically.  For example, a
+rectangle class might inherit some common behaviors from a generic
+polygon class.
+
+<p class=para>
+While you might know the particular implementation of an object,
+generally you should treat the object as a black box.  All access to the
+object should be obtained through the published interface via the
+provided methods.  This allows the implementation to be revised, as long
+as the interface remains frozen (or at least, upward compatible).  By
+published interface, we mean the written documentation describing how
+to use a particular class.  (Perl does not have an explicit interface
+facility apart from this.  You are expected to exercise common sense and
+common decency.)
+
+<p class=para>
+Objects of different classes may be held in the same variable at different
+times. When a method is invoked on the contents of the variable, the
+proper method for the object's class gets selected automatically.  If, for
+example, the <tt class=literal>draw( )</tt> method is invoked on a variable that holds
+either a rectangle or a circle, the method actually used depends on the
+current nature of the object to which the variable refers.  For this to
+work, however, the methods for drawing circles and rectangles must both be
+called <tt class=literal>draw( )</tt>.
+
+<p class=para>
+Admittedly, there's a lot more to objects than this, and a lot of ways
+to find out more.  But that's not our purpose here.  So, on we go.
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-3.2">Perl's Objects</A></h3>
+
+<p class=para>
+Here are three simple definitions that you may find reassuring:
+
+<p>
+<ul class=itemizedlist>
+<li class=listitem>An <i class=emphasis>object</I> is simply a referenced thingy that happens to know which class it
+belongs to.
+
+<p>
+<li class=listitem>A <i class=emphasis>class</I> is simply a package that happens to provide methods to deal
+with objects.
+
+<p>
+<li class=listitem>A <i class=emphasis>method</I> is simply a subroutine that expects an object reference (or
+a package name, for class methods) as its first argument.
+
+<p>
+</UL>
+<p class=para>
+We'll cover these points in more depth now.
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-3.3">An Object Is Simply a Referenced Thingy</A></h3>
+
+<p class=para>
+<a name="CH05.CONST1"></A><a name="CH05.CONST2"></A><a name="CH05.CONST3"></A>Perl doesn't provide any special syntax for constructors.  A constructor
+is merely a subroutine that returns a reference to a thingy that it has
+blessed into a class, generally the class in which the subroutine is
+defined.  The constructor does this using the built-in <a href="ch03_02.html#PERL2-CMD-BLESS">bless</A> function,
+which marks a thingy as belonging to a particular class.  It takes
+either one or two arguments: the first argument is a regular hard reference
+to any kind of thingy, and the second argument (if present) is the
+package that will own the thingy.  If no second argument is supplied,
+the current package is assumed.  Here is a typical constructor:
+
+<div class=programlisting>
+<p>
+<pre>
+package Critter;
+sub new { return bless {}; }
+</PRE>
+</DIV>
+
+<p class=para>
+The <tt class=literal>{}</tt> composes a reference to an empty anonymous hash.
+The <a href="ch03_02.html#PERL2-CMD-BLESS">bless</A> function takes that hash reference and tells the thingy
+it references that it's now a member of the class Critter, and returns the
+reference.
+The same thing can be accomplished more explicitly this way:
+
+<div class=programlisting>
+<p>
+<pre>
+sub new {
+    my     $obref = {};         # ref to empty hash
+    bless  $obref;              # make it an object in this class
+    return $obref;              # return it
+}
+</PRE>
+</DIV>
+
+<p class=para>
+Once a reference has been blessed into a class, you can invoke the class's
+instance methods upon it.  For example:
+
+<div class=programlisting>
+<p>
+<pre>
+$circle-&gt;draw();
+</PRE>
+</DIV>
+
+<p class=para>
+We'll discuss method invocation in more detail below.
+
+<p class=para>
+Sometimes constructors call other methods in the class as part of the
+construction.  Here we'll call an <tt class=literal>_initialize()</tt> method, which
+may be in the current package or in one of the classes (packages) that
+this class inherits from.  The leading underscore is an oft-used convention
+indicating that the function is private, that is, to be used
+only by the class itself.  This result can also be achieved by omitting
+the function from the published documentation for that class.
+
+<div class=programlisting>
+<p>
+<pre>
+sub new {
+    my $self = {}
+    bless $self;
+    $self-&gt;_initialize();
+    return $self;
+}
+</PRE>
+</DIV>
+
+<p class=para>
+If you want your constructor method to be (usefully) inheritable, then
+you must use the two-argument form of <a href="ch03_02.html#PERL2-CMD-BLESS">bless</A>.  That's because, in
+Perl, methods execute in the context of the original base class rather
+than in the context of the derived class.  For example, suppose you have
+a Polygon class that had a <tt class=literal>new()</tt> method as a constructor.  This
+would work fine when called as <tt class=literal>Polygon-&gt;new()</tt>.  But then you
+decide to also have a Square class, which inherits methods from the
+Polygon class.  The only way for that constructor to build an object of
+the proper class when it is called as <tt class=literal>Square-&gt;new()</tt> is by using
+the two-argument form of <a href="ch03_02.html#PERL2-CMD-BLESS">bless</A>, as in the following example:
+
+<div class=programlisting>
+<p>
+<pre>
+sub new {
+    my $class = shift;
+    my $self = {};
+    bless $self, $class;        # bless $self into the designated class
+    $self-&gt;_initialize();       # in case there's more work to do
+    return $self;
+}
+</PRE>
+</DIV>
+
+<p class=para>
+Within the class package, methods will typically deal with the reference
+as an ordinary (unblessed) reference to a thingy.  Outside the class
+package, the reference should generally treated as an opaque value that
+may only be accessed through the class's methods.  (Mutually consenting
+classes may of course do whatever they like with each other, but even
+that doesn't necessarily make it right.)
+
+<p class=para>
+A constructor may re-bless a referenced object currently belonging to
+another class, but then the new class is responsible for all cleanup
+later.  The previous blessing is forgotten, as an object may only
+belong to one class at a time.  (Although of course it's free to
+inherit methods from many classes.)
+
+<p class=para>
+A clarification:  Perl objects are blessed.  References are not.
+Thingies know which package they belong to.  References do not.  The
+<a href="ch03_02.html#PERL2-CMD-BLESS">bless</A> operator simply uses the reference in order to find the
+thingy.  Consider the following example:
+
+<div class=programlisting>
+<p>
+<pre>
+$a = {};            # generate reference to hash
+$b = $a;            # reference assignment (shallow)
+bless $b, Mountain;
+bless $a, Fourteener;
+print "\$b is a ", ref($b), "\n";
+</PRE>
+</DIV>
+
+<p class=para>
+This reports <tt class=literal>$b</tt> as being a member of class <tt class=literal>Fourteener</tt>, not a
+member of class <tt class=literal>Mountain</tt>, because the second blessing operates on the
+underlying thingy that <tt class=literal>$a</tt> refers to, not on the reference itself.
+Thus is the first blessing forgotten.
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-3.4">A Class Is Simply a Package</A></h3>
+
+<p class=para>
+Perl doesn't provide any special syntax for class definitions.  You
+just use a package as a class by putting method definitions into the
+class.
+
+<p class=para>
+Within each package a special array called <tt class=literal>@ISA</tt>
+tells Perl where else to look for a method if it can't find the method in
+that package.  This is how Perl implements inheritance.  Each
+element of the <tt class=literal>@ISA</tt> array is just the name of another package
+that happens to be used as a class.  The packages are recursively
+searched (depth first) for missing methods, in the order that packages
+are mentioned in <tt class=literal>@ISA</tt>.  This means that if you have two
+different packages (say, <tt class=literal>Mom</tt> and <tt class=literal>Dad</tt>) in a class's
+<tt class=literal>@ISA</tt>, Perl would first look for missing methods in
+<tt class=literal>Mom</tt> and all of her ancestor classes before going on to search through
+<tt class=literal>Dad</tt> and his ancestors.  Classes accessible through <tt class=literal>@ISA</tt>
+are known as <i class=emphasis>base classes</I> of the current class, which is itself called
+the <i class=emphasis>derived class</I>.[10]
+
+<blockquote class=footnote>
+<p class=para>[10] 
+Instead of "base class" and "derived class",
+some OOP literature uses <i class=emphasis>superclass</I> for the
+more generic classes and <i class=emphasis>subclass</I> for the more specific ones.
+Confusing the issue further, some literature uses "base class" to
+mean a "most super" superclass.  That's not what we mean by it.
+</blockquote>
+<p class=para>
+If a missing method is found in one of the base classes, Perl internally
+caches that location in the current class for efficiency, so the next time
+it has to find the method, it doesn't have to look so far.  Changing
+<tt class=literal>@ISA</tt> or defining new subroutines invalidates this cache and causes
+Perl to do the lookup again.
+
+<p class=para>
+If a method isn't found but an <tt class=literal>AUTOLOAD</tt> routine is found, then
+that routine is called on behalf of the missing method, with
+that package's <tt class=literal>$AUTOLOAD</tt> variable set to the
+fully qualified method name.
+
+<p class=para>
+If neither a method nor an <tt class=literal>AUTOLOAD</tt> routine is found in
+<tt class=literal>@ISA</tt>, then one last, desperate try is made for the method (or an
+<tt class=literal>AUTOLOAD</tt> routine) in the special pre-defined class called
+<tt class=literal>UNIVERSAL</tt>.
+This package does not initially contain any definitions (although see CPAN for
+some), but you may place your "last-ditch" methods there.  Think of it as a global base
+class from which all other classes implicitly derive.
+
+<p class=para>
+If that method still doesn't work, Perl finally gives up and
+complains by raising an exception.
+
+<p class=para>
+Perl classes do only method inheritance.  Data inheritance is left
+up to the class itself.  By and large, this is not a problem in Perl,
+because most classes model the attributes of their object using
+an anonymous hash.  All the object's data fields (termed "instance
+variables" in some languages) are contained within this anonymous hash instead of
+being part of the language itself.  This hash serves as its own little
+namespace to be carved up by the various classes that might want to do
+something with the object.  For example, if you want an object called
+<tt class=literal>$user_info</tt> to have a data field named <tt class=literal>age</tt>, you can simply
+access <tt class=literal>$user_info-&gt;{age}</tt>.  No declarations are necessary. See the
+section on "Instance Variables" under "Some Hints About Object Design"
+later in this chapter.
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-3.5">A Method Is Simply a Subroutine</A></h3>
+
+<p class=para>
+Perl doesn't provide any special syntax for method definition.  (It
+does provide a little syntax for method invocation, though.  More on
+that later.)  A method expects its first argument to indicate the object or
+package it is being invoked on.
+
+<div class=sect3>
+<h4 class=sect3><a class="TITLE" name="PERL2-CH-5-SECT-3.5.1">Class methods</A></h4>
+
+<p class=para>
+A <i class=emphasis>class method</I> expects a class (package) name as its first argument.
+(The class name isn't blessed; it's just a string.)  These methods
+provide functionality for the class as a whole, not for any individual
+object instance belonging to the class.  Constructors are typically
+written as class methods.  Many class methods simply ignore their first
+argument, since they already know what package they're in, and don't
+care what package they were invoked via.  (These aren't necessarily the
+same, since class methods follow the inheritance tree just like ordinary
+instance methods.)
+
+<p class=para>
+Another typical use for class methods might be to look up an object by
+some nickname in a global registry:
+
+<div class=programlisting>
+<p>
+<pre>
+sub find {
+    my ($class, $nickname) = @_;
+    return $objtable{$nickname};
+}
+</PRE>
+</DIV>
+
+</DIV>
+
+<div class=sect3>
+<h4 class=sect3><a class="TITLE" name="PERL2-CH-5-SECT-3.5.2">Instance methods</A></h4>
+
+<p class=para>
+An <i class=emphasis>instance method</I> expects an object reference[11]
+as its first argument.
+Typically it shifts the first argument into a private variable (often
+called <tt class=literal>$self</tt> or <tt class=literal>$this</tt> depending on the cultural biases of the
+programmer), and then it uses the variable as an ordinary reference:
+
+<blockquote class=footnote>
+<p class=para>[11] 
+By which we mean simply an ordinary hard reference that happens to
+point to an object thingy. Remember that the reference itself doesn't
+know or care whether its thingy is blessed.
+</blockquote>
+<div class=programlisting>
+<p>
+<pre>
+sub display {
+    my $self = shift;
+    my @keys;
+    if (@_ == 0) {                  # no further arguments
+        @keys = sort keys(%$self);
+    }  else {
+        @keys = @_;                 # use the ones given
+    }
+    foreach $key (@keys) {
+        print "\t$key =&gt; $self-&gt;{$key}\n";
+    }
+}
+</PRE>
+</DIV>
+
+<p class=para>
+Despite being counterintuitive to object-oriented novices, it's a good idea <i class=emphasis>not</I> to
+check the type of object that caused the instance method to be
+invoked.  If you do, it can get in the way of inheritance.
+
+</DIV>
+
+<div class=sect3>
+<h4 class=sect3><a class="TITLE" name="PERL2-CH-5-SECT-3.5.3">Dual-nature methods</A></h4>
+
+<p class=para>
+Because there is no language-defined distinction between definitions of
+class methods and instance methods (nor arbitrary functions, for that
+matter), you could actually have the same method work for both
+purposes.  It just has to check whether it was passed a reference or
+not.  Suppose you want a constructor that can figure out its class
+from either a classname or an existing object.  Here's an example of the
+two uses of such a method:
+
+<div class=programlisting>
+<p>
+<pre>
+$ob1  = StarKnight-&gt;new();
+$luke = $ob1-&gt;new();
+</PRE>
+</DIV>
+
+<p class=para>
+Here's how such a method might be defined.  We use the <a href="ch03_02.html#PERL2-CMD-REF">ref</A> function
+to find out the type of the object the method was called on so our new
+object can be blessed into that class.  If <a href="ch03_02.html#PERL2-CMD-REF">ref</A> returns false, then
+our <tt class=literal>$self</tt> argument isn't an object, so it must be a class name.
+
+<div class=programlisting>
+<p>
+<pre>
+package StarKnight;
+sub new {
+    my $self  = shift;
+    my $type  = ref($self) || $self;
+    return bless {}, $type;
+}
+</PRE>
+</DIV>
+
+</DIV>
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-3.6">Method Invocation</A></h3>
+
+<p class=para>
+<a name="CH05.METH1"></A><a name="CH05.METH2"></A>Perl supports two different syntactic forms for explicitly invoking class or
+instance methods.[12]
+Unlike normal function calls, method
+calls always receive, as their first parameter, the appropriate class name
+or object reference upon which they were invoked.
+
+<blockquote class=footnote>
+<p class=para>[12] 
+Methods may also be called implicitly due to object destructors,
+tied variables, or operator overloading.
+Properly speaking, none of these is a function
+invocation.  Rather, Perl uses the information presented via the syntax
+to determine which function to call.
+Operator overloading is implemented by the standard overload
+module as described separately in <a href="ch07_01.html">Chapter 7, <i>The Standard Perl Library</i></A>.
+</blockquote>
+<p class=para>
+The first syntax form looks like this:
+
+<div class=programlisting>
+<p>
+<pre>
+<tt class=replaceable><i>METHOD</i></tt> <tt class=replaceable><i>CLASS_OR_INSTANCE</i></tt> <tt class=replaceable><i>LIST</i></tt>
+</PRE>
+</DIV>
+
+<p class=para>
+Since this is similar to using the filehandle specification with
+<a href="ch03_02.html#PERL2-CMD-PRINT">print</A> or <a href="ch03_02.html#PERL2-CMD-PRINTF">printf</A>, 
+and also similar to English sentences like "Give
+the dog the bone," we'll call it the <i class=emphasis>indirect object</I> form.  To look
+up an object with the class method <tt class=literal>find</tt>, and to print out
+some of its attributes with the instance method <tt class=literal>display</tt>, you could
+say this:
+
+<div class=programlisting>
+<p>
+<pre>
+$fred = find Critter "Fred";
+display $fred 'Height', 'Weight';
+</PRE>
+</DIV>
+
+<p class=para>
+The indirect object form allows a <tt class=replaceable><i>BLOCK</i></tt> returning an object (or class)
+in the indirect object slot, so you can combine these into one
+statement:
+
+<div class=programlisting>
+<p>
+<pre>
+display { find Critter "Fred" } 'Height', 'Weight';
+</PRE>
+</DIV>
+
+<p class=para>
+The second syntax form looks like this:
+
+<div class=programlisting>
+<p>
+<pre>
+<tt class=replaceable><i>CLASS_OR_INSTANCE</i></tt> -&gt;<tt class=replaceable><i>METHOD</i></tt>(<tt class=replaceable><i>LIST</i></tt>)
+</PRE>
+</DIV>
+
+<p class=para>
+This second syntax employs the <tt class=literal>-&gt;</tt> notation. It is sometimes called the <i class=emphasis>object-oriented</I> syntax.
+The parentheses are required if there are any arguments, because this form can't
+be used as a list operator, although the first form can.
+
+<div class=programlisting>
+<p>
+<pre>
+$fred = Critter-&gt;find("Fred");
+$fred-&gt;display('Height', 'Weight');
+</PRE>
+</DIV>
+
+<p class=para>
+Or, you can put the above in only one statement, like this:
+
+<div class=programlisting>
+<p>
+<pre>
+Critter-&gt;find("Fred")-&gt;display('Height', 'Weight');
+</PRE>
+</DIV>
+
+<p class=para>
+There are times when one syntax is more readable, and times when the
+other syntax is more readable.  The indirect object syntax is less
+cluttered, but it has the same ambiguity as ordinary list operators.
+If there is an open parenthesis following the class or
+object, then the matching close parenthesis terminates the list of
+arguments.  Thus, the parentheses of
+
+<div class=programlisting>
+<p>
+<pre>
+new Critter ('Barney', 1.5, 70);
+</PRE>
+</DIV>
+
+<p class=para>
+are assumed to surround all the arguments of the method call, regardless
+of what comes afterward. Therefore, saying
+
+<div class=programlisting>
+<p>
+<pre>
+new Critter ('Bam' x 2), 1.4, 45;
+</PRE>
+</DIV>
+
+<p class=para>
+would be equivalent to
+
+<div class=programlisting>
+<p>
+<pre>
+Critter-&gt;new('Bam' x 2), 1.4, 45;
+</PRE>
+</DIV>
+
+<p class=para>
+which is unlikely to do what you want since the <tt class=literal>1.4</tt> and <tt class=literal>45</tt>
+are not being passed to the <tt class=literal>new( )</tt> routine.
+
+<p class=para>
+There may be occasions when you need to specify which class's method to use.
+In that case, you <i class=emphasis>could</I> call your method as an ordinary subroutine
+call, being sure to pass the requisite first argument explicitly:
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+$fred = MyCritter::find("Critter", "Fred");
+MyCritter::display($fred, 'Height', 'Weight');
+</PRE>
+</DIV>
+
+<p class=para>
+However, this does not do any inheritance.  If you merely
+want to specify that Perl should start looking for a method in a
+particular package, use an ordinary method call, but qualify the method
+name with the package like this:
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+$fred = Critter-&gt;MyCritter::find("Fred");
+$fred-&gt;MyCritter::display('Height', 'Weight');
+</PRE>
+</DIV>
+
+<p class=para>
+If you're trying to control where the method search begins and you're
+executing in the class package itself, then you may use the <tt class=literal>SUPER</tt>
+pseudoclass, which says to start looking in your base class's
+<tt class=literal>@ISA</tt> list without having to explicitly name it:
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+$self-&gt;SUPER::display('Height', 'Weight');
+</PRE>
+</DIV>
+
+<p class=para>
+The <tt class=literal>SUPER</tt> construct is meaningful only when used <i class=emphasis>inside</I> the class methods; while
+writers of class modules can employ <tt class=literal>SUPER</tt> in their own code,
+people who merely use class objects cannot.
+
+<p class=para>
+Sometimes you want to call a method when you don't know the method name
+ahead of time.  You can use the arrow form, replacing the method name
+with a simple scalar variable (not an expression or indexed aggregate) containing the method name:
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+$method = $fast ? "findfirst" : "findbest";
+$fred-&gt;$method(@args);
+</PRE>
+</DIV>
+
+<p class=para>
+We mentioned that the object-oriented notation is less syntactically
+ambiguous than the indirect object notation, even though the latter
+is less cluttered.  Here's why:
+An indirect object is limited to a name, a scalar variable, or a
+<tt class=replaceable><i>BLOCK</i></tt>.[13]
+(If you try to put anything more complicated in that slot, it will not
+be parsed as you expect.)  The left side of <tt class=literal>-&gt;</tt> is not so limited.
+This means that A and B below are equivalent to each other, and C and D
+are also equivalent, but A and B differ from C and D:
+<blockquote class=footnote>
+<p class=para>[13] 
+Attentive readers will recall that this is precisely the same list of
+syntactic items that are allowed after a funny character to indicate a
+variable dereference--for example, <tt class=literal>@ary</tt>, <tt class=literal>@$aryref</tt>, or
+<tt class=literal>@{$aryref}</tt>.
+</blockquote>
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+A: method $obref-&gt;{fieldname}
+B: (method $obref)-&gt;{fieldname}
+C: $obref-&gt;{fieldname}-&gt;method()
+D: method {$obref-&gt;{fieldname}}
+</PRE>
+</DIV>
+
+<p class=para>
+In A and B, the method applies to <tt class=literal>$obref</tt>, which must yield a hash
+reference with <tt class=literal>"fieldname"</tt> as a key.  In C and D the method
+applies to <tt class=literal>$obref-&gt;{fieldname}</tt>, which must evaluate to an object
+appropriate for the method.
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-3.7">Destructors</A></h3>
+
+<p class=para>
+When the last reference to an object goes away, the object is
+automatically destroyed.  (This may even be after you exit, if you've
+stored references in global variables.)  If you want to capture control
+just before the object is freed, you may define a <tt class=literal>DESTROY</tt> method in
+your class.  It will automatically be called at the appropriate moment,
+and you can do any extra cleanup you desire.  (Perl does the memory
+management cleanup for you automatically.)
+
+<p class=para>
+Perl does not do nested destruction for you.  If your constructor
+re-blessed a reference from one of your base classes, your <tt class=literal>DESTROY</tt>
+method may need to call <tt class=literal>DESTROY</tt> for any base classes that need it.
+But this only applies to re-blessed objects; an object reference that is
+merely <i class=emphasis>contained</I> within the current object--as, for example, one
+value in a larger hash--will be freed and
+destroyed automatically.  This is one of the reasons why containership
+via mere aggregation (sometimes called a "has-a" relationship) is often
+cleaner and clearer than inheritance (an "is-a" relationship).  In other
+words, often you really only need to store one object inside another
+directly instead of employing inheritance, which can add unnecessary
+complexity.
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-3.8">Method Autoloading</A></h3>
+
+<p class=para>
+<a name="CH05.METH3"></A><a name="CH05.METH4"></A>After Perl has vainly looked through an object's class package and the packages of
+its base classes to find a method, it also checks for an <tt class=literal>AUTOLOAD</tt>
+routine in each package before concluding that the method can't be found.
+One could use this property to provide an interface to the object's
+data fields (instance variables) without writing a separate function
+for each.  Consider the following code:
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+use Person;
+$him = new Person;
+$him-&gt;name("Jason");
+$him-&gt;age(23);
+$him-&gt;peers( ["Norbert", "Rhys", "Phineas"] );
+printf "%s is %d years old.\n", $him-&gt;name, $him-&gt;age;
+print "His peers are: ", join(", ", @{$him-&gt;peers}), ".\n";
+</PRE>
+</DIV>
+
+<p class=para>
+The Person class implements a data structure containing three fields:
+<tt class=literal>name</tt>, <tt class=literal>age</tt>, and <tt class=literal>peers</tt>.  Instead of accessing the objects' data fields directly, you use
+supplied methods to do so.  To set one of these fields, call a method of
+that name with an argument of the value the field should be set to.  To
+retrieve one of the fields without setting it, call the method without an
+argument.  Here's the code that does that:
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+package Person;
+use Carp;       # see Carp.pm in <a href="ch07_01.html">Chapter 7, <i>The Standard Perl Library</i></A>
+my %fields = (
+    name        =&gt; undef,
+    age         =&gt; undef,
+    peers       =&gt; undef,
+);
+sub new {
+    my $that  = shift;
+    my $class = ref($that) || $that;
+    my $self  = {
+        %fields,
+    };
+    bless $self, $class;
+    return $self;
+} 
+sub AUTOLOAD {
+    my $self = shift;
+    my $type = ref($self) || croak "$self is not an object";
+    my $name = $AUTOLOAD;
+    $name =~ s/.*://;   # strip fully-qualified portion
+    unless (exists $self-&gt;{$name} ) {
+        croak "Can't access `$name' field in object of class $type";
+    } 
+    if (@_) {
+        return $self-&gt;{$name} = shift;
+    } else {
+        return $self-&gt;{$name};
+    } 
+}
+</PRE>
+</DIV>
+
+<p class=para>
+As you see, there isn't really a method named <tt class=literal>name()</tt>,
+<tt class=literal>age()</tt>, or <tt class=literal>peers()</tt> to be found anywhere.  The
+<tt class=literal>AUTOLOAD</tt> routine takes care of all of these.  This class is a
+fairly generic implementation of something analogous to a C structure.
+A more complete implementation of this notion can be found in the
+Class::Template module contained on CPAN.  The Alias
+module found there may also prove useful for simplifying member access.[14]
+
+<blockquote class=footnote>
+<p class=para>[14] 
+CPAN is the Comprehensive Perl Archive Network, as described in the
+Preface.
+</blockquote>
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-3.9">A Note on Garbage Collection</A></h3>
+
+<p class=para>
+<a name="CH05.MEM1"></A><a name="CH05.MEM2"></A><a name="CH05.MEM3"></A>High-level languages typically allow the programmers to dispense with
+worrying about deallocating memory when they're done using it.  This
+automatic reclamation process is known as <i class=emphasis>garbage collection</I>.
+For most purposes, Perl uses a fast and simple, reference-based garbage
+collection system.  One serious concern is that unreachable memory
+with a non-zero reference count will normally not get freed.
+Therefore, saying this is a bad idea:
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+{               # make $a and $b point to each other
+    my($a, $b);
+    $a = \$b;
+    $b = \$a;
+}
+</PRE>
+</DIV>
+
+<p class=para>
+or more simply:
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+{               # make $a point to itself
+    my $a;
+    $a = \$a;
+}
+</PRE>
+</DIV>
+
+<p class=para>
+When the block is exited, its <a href="ch03_02.html#PERL2-CMD-MY">my</A> variables are normally
+freed up.  But their internal reference counts can never go to zero,
+because the variables point at each other or themselves.  This is circular
+reference.
+No one outside the block can reach them, which makes them useless.  But
+even though they <i class=emphasis>should</I> go away, they can't.  When building recursive
+data structures, you'll have to break the self-reference yourself
+explicitly if you don't care to cause a memory leak.
+
+<p class=para>
+For example, here's a self-referential node such as one might use in a
+sophisticated tree structure:
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+sub new_node {
+    my $self = shift;
+    my $class = ref($self) || $self;
+    my $node = {};
+    $node-&gt;{LEFT} = $node-&gt;{RIGHT} = $node;
+    $node-&gt;{DATA} = [ @_ ];
+    return bless $node, $class;
+}
+</PRE>
+</DIV>
+
+<p class=para>
+If you create nodes like this, they (currently)[15]
+won't ever go away unless you break the circular references yourself.
+
+<blockquote class=footnote>
+<p class=para>[15] 
+In other words, this behavior is not to be construed as a feature, and
+you shouldn't depend on it.  Someday, Perl may have a full
+mark-and-sweep style garbage collection as in Lisp or Scheme.  If that
+happens, it will properly clean up memory lost to unreachable circular
+data.
+</blockquote>
+<p class=para>
+Well, almost never.
+
+<p class=para>
+When an interpreter thread finally shuts down (usually when your program
+exits), then a complete pass of garbage
+collection is performed, and everything allocated by that thread gets
+destroyed.  This is essential to support Perl as an embedded or a
+multithreadable language.  When a thread shuts down, all its objects
+must be properly destructed, and all its memory has to be reclaimed.
+The following program demonstrates Perl's multi-phased garbage collection:
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+#!/usr/bin/perl
+package Subtle;
+sub new {
+    my $test;
+    $test = \$test;   # Create a self-reference.
+    warn "CREATING " . \$test;
+    return bless \$test;
+}
+sub DESTROY {
+    my $self = shift;
+    warn "DESTROYING $self";
+}
+package main;
+warn "starting program";
+{
+    my $a = Subtle-&gt;new;
+    my $b = Subtle-&gt;new;
+    $$a = 0;           # Break this self-reference, but not the other.
+    warn "leaving block";
+}
+warn "just exited block";
+warn "time to die...";
+exit;
+</PRE>
+</DIV>
+
+<p class=para>
+When run as <i class=emphasis>/tmp/try</I>, the following output is produced:
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+starting program at /tmp/try line 18.
+CREATING SCALAR(0x8e5b8) at /tmp/try line 7.
+CREATING SCALAR(0x8e57c) at /tmp/try line 7.
+leaving block at /tmp/try line 23.
+DESTROYING Subtle=SCALAR(0x8e5b8) at /tmp/try line 13.
+just exited block at /tmp/try line 26.
+time to die... at /tmp/try line 27.
+DESTROYING Subtle=SCALAR(0x8e57c) during global destruction.
+</PRE>
+</DIV>
+
+<p class=para>
+Notice that "global destruction" in the last line?  That's the thread
+garbage collector reaching the unreachable.
+
+<p class=para>
+Objects are always destructed even when regular references aren't, and in fact
+are destructed in a separate pass before ordinary references.  This is an
+attempt to prevent object destructors from using references that have
+themselves been destructed.  Plain references are (currently) only garbage
+collected if the "destruct level" is greater than 0, which is usually only
+true when Perl is invoked as an embedded interpreter.  You can test the
+higher levels of global destruction in the regular Perl executable by
+setting the <tt class=literal>PERL_DESTRUCT_LEVEL</tt> environment variable (presuming the
+<tt class=literal>-DDEBUGGING</tt> option was enabled at Perl build time).
+
+</DIV>
+
+</DIV>
+
+
+<div class=htmlnav>
+
+<p>
+<hr align=left width=515>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch05_02.html"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><a href="index.html"><img src='gifs/txthome.gif' border=0 alt='Home'></a></td>
+<td width=172 align=right valign=top><a href="ch05_04.html"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+<tr>
+<td width=172 align=left valign=top>Modules</td>
+<td width=171 align=center valign=top><a href="index/idx_0.html"><img src='gifs/index.gif' alt='Book Index' border=0></a></td>
+<td width=172 align=right valign=top>Using Tied Variables</td>
+</tr>
+</table>
+<hr align=left width=515>
+
+<img src="gifs/smnavbar.gif" usemap="#map" border=0> 
+<map name="map"> 
+<area shape="Rect" coords="0,0,45,20" href="../html/index.html" alt="HTML: The Definitive Guide">
+<area shape="Rect" coords="46,0,164,37" href="../cgi/index.html" alt="CGI Programming">
+<area shape="Rect" coords="163,0,248,32" href="../jscript/index.html" alt="JavaScript: The Definitive Guide">
+<area shape="Rect" coords="247,0,371,44" href="index.html" alt="Programming Perl">
+<area shape="Rect" coords="371,0,524,46" href="../webnut/index.html" alt="WebMaster in a Nutshell">
+</MAP>
+</DIV>
+
+</BODY>
+</HTML>

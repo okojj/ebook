@@ -1,0 +1,121 @@
+<html><head>
+<title>[Chapter 5] 5.6 Using Eval for Time-Outs</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:32:47Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch05_01.htm" title="5. Eval"><link rel="prev" href="ch05_05.htm" title="5.5 Using Eval for Efficiency"><link rel="next" href="ch05_07.htm" title="5.7 Eval in Other Languages"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch05_05.htm" title="5.5 Using Eval for Efficiency"><img src="../gifs/txtpreva.gif" alt="Previous: 5.5 Using Eval for Efficiency" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch05_01.htm" title="5. Eval">Chapter 5<br>Eval</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch05_07.htm" title="5.7 Eval in Other Languages"><img src="../gifs/txtnexta.gif" alt="Next: 5.7 Eval in Other Languages" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch05-27968">5.6 Using Eval for Time-Outs</A
+></H2
+><p class="para"><a class="indexterm" name="ch05-idx-951200-0"></A
+><a class="indexterm" name="ch05-idx-951200-1"></A
+>When you call <kbd class="command">eval</KBD
+>, Perl makes a note of the next statement to start executing just in case a <kbd class="command">die</KBD
+> is invoked somewhere within. Internally, <kbd class="command">die</KBD
+> happens to invoke a <kbd class="command">longjmp</KBD
+><a class="indexterm" name="ch05-idx-951266-0"></A
+><a class="indexterm" name="ch05-idx-951266-1"></A
+>, so Perl wastes no time at all transferring control back up to the statement following <kbd class="command">eval</KBD
+>, regardless of how deep the stack is. (All temporary and local variables created in the <code class="literal">eval</CODE
+>'ed code are automatically garbage collected.)</P
+><p class="para">The use of <kbd class="command">setjmp</KBD
+> and <kbd class="command">longjmp</KBD
+> internally gives us one new technique: aborting blocked system calls and infinite loops. Let's say you want to wait at most 10 seconds for the user to type something.[<a class="footnote" href="#ch05-pgfId-945972">4</A
+>] If you say <kbd class="command">$buf</KBD
+> <kbd class="command">=</KBD
+> <kbd class="command">&lt;&gt;</KBD
+>, the program is blocked until the user deigns to hit a carriage return, but we would like Perl to abort it after waiting 10 seconds. Generating a time-out is not really a problem; the built-in function <kbd class="command">alarm()</KBD
+><a class="indexterm" name="ch05-idx-951267-0"></A
+><a class="indexterm" name="ch05-idx-951267-1"></A
+> can be used to generate an <kbd class="command">ALRM</KBD
+> signal after a given number of seconds, like this:<pre class="programlisting">$SIG{ALRM} = \&amp;timed_out;
+alarm(10);      # Tells the OS to issue an ALRM signal after 10 seconds
+$buf = &lt;&gt;;      # Go into a blocking read</PRE
+></P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch05-pgfId-945972">[4]</A
+> Thanks to Tom Christiansen for this example.</P
+></DIV
+></BLOCKQUOTE
+><p class="para">The procedure <kbd class="command">timed_out</KBD
+> is called (after 10 seconds) regardless of what Perl happens to be executing at that time, be it a blocked <kbd class="command">read</KBD
+> or an infinite loop. The problem is, how does <kbd class="command">timed_out</KBD
+> force Perl to abandon what Perl happened to be doing at the time it was called? That's where <kbd class="command">eval</KBD
+>/<kbd class="command">die</KBD
+><a class="indexterm" name="ch05-idx-951269-0"></A
+> come in. Put an <kbd class="command">eval</KBD
+> around <kbd class="command">$buf = &lt;&gt;</KBD
+> and a <kbd class="command">die</KBD
+> inside <kbd class="command">timed_out()</KBD
+>, and control will be restored to the statement following <kbd class="command">eval</KBD
+> (the <kbd class="command">if</KBD
+> statement), as shown here:</P
+><pre class="programlisting">$SIG{ALRM} = \&amp;timed_out;
+eval {
+    alarm (10);
+    $buf = &lt;&gt;;
+    alarm(0);           # Cancel the pending alarm if user responds.
+};
+if ($@ =~ /GOT TIRED OF WAITING/) {
+    print &quot;Timed out. Proceeding with default\n&quot;;
+    ....
+}
+
+sub timed_out {
+    die &quot;GOT TIRED OF WAITING&quot;;
+}</PRE
+><p class="para">If the user doesn't hit a return within 10 seconds, <kbd class="command">timed_out</KBD
+> is called from the signal handler, which calls <kbd class="command">die</KBD
+>, which internally <kbd class="command">longjmps</KBD
+><a class="indexterm" name="ch05-idx-951270-0"></A
+> over to the statement following the innermost <kbd class="command">eval</KBD
+>. If the user does hit a return within the allotted time, <kbd class="command">alarm(0)</KBD
+> is called to reset the alarm. </P
+><p class="para">Note that if the alarm goes off, <kbd class="command">$@</KBD
+> contains something like "GOT TIRED OF WAITING at foo.pl line 100," so you cannot use <kbd class="command">eq</KBD
+>; you must use a regular expression match (or the <kbd class="command">index</KBD
+> operator).</P
+><p class="para">Tom <a class="indexterm" name="ch05-idx-951268-0"></A
+>Christiansen pointed out a subtle and interesting point. It is essential that you set <kbd class="command">alarm</KBD
+> inside the <kbd class="command">eval</KBD
+> block, because on a heavily loaded machine (and for small time-out periods), it is possible to lose the time-slice after the call to <kbd class="command">alarm</KBD
+> and before it has a chance to enter the protected section (the <kbd class="command">eval</KBD
+> block). Later on, when the program regains the time-slice, it is possible that the time-out interval has expired, and the program will abort.<a class="indexterm" name="ch05-idx-951204-0"></A
+><a class="indexterm" name="ch05-idx-951204-1"></A
+></P
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch05_05.htm" title="5.5 Using Eval for Efficiency"><img src="../gifs/txtpreva.gif" alt="Previous: 5.5 Using Eval for Efficiency" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch05_07.htm" title="5.7 Eval in Other Languages"><img src="../gifs/txtnexta.gif" alt="Next: 5.7 Eval in Other Languages" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">5.5 Using Eval for Efficiency</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">5.7 Eval in Other Languages</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

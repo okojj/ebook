@@ -1,0 +1,336 @@
+<html><head>
+<title>Recipe 7.7. Writing a Filter</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:36:12Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch07_01.htm" title="7. File Access"><link rel="prev" href="ch07_07.htm" title="7.6. Storing Files Inside Your Program Text"><link rel="next" href="ch07_09.htm" title="7.8. Modifying a File in Place with Temporary File"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_07.htm" title="7.6. Storing Files Inside Your Program Text"><img src="../gifs/txtpreva.gif" alt="Previous: 7.6. Storing Files Inside Your Program Text" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch07_01.htm" title="7. File Access">Chapter 7<br>File Access</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch07_09.htm" title="7.8. Modifying a File in Place with Temporary File"><img src="../gifs/txtnexta.gif" alt="Next: 7.8. Modifying a File in Place with Temporary File" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch07-39704">7.7. Writing a Filter</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-726">Problem</A
+></H3
+><p class="para"><a class="indexterm" name="ch07-idx-1000009627-0"></A
+><a class="indexterm" name="ch07-idx-1000009627-1"></A
+><a class="indexterm" name="ch07-idx-1000009627-2"></A
+>You want to write a program that takes a list of filenames on the command line and reads from STDIN if no filenames were given. You'd like the user to be able to give the file <code class="literal">&quot;-&quot;</CODE
+> to indicate STDIN or <code class="literal">&quot;someprogram</CODE
+> <code class="literal">|&quot;</CODE
+> to indicate the output of another program. You might want your program to modify the files in place or to produce output based on its input.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-732">Solution</A
+></H3
+><p class="para">Read lines with &lt;&gt;: <a class="indexterm" name="ch07-idx-1000009648-0"></A
+><a class="indexterm" name="ch07-idx-1000009648-1"></A
+></P
+><pre class="programlisting">while (&lt;&gt;) {
+    # do something with the line
+}</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-744"><code class="literal"></CODE
+><a class="indexterm" name="ch07-idx-1000012042-0"></A
+>iscussion</A
+></H3
+><p class="para">When you say:</P
+><pre class="programlisting">while (&lt;&gt;) {
+    # ...
+ }</PRE
+><p class="para">Perl translates this into:[<a class="footnote" href="#ch07-pgfId-1000001149">4</A
+>]</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch07-pgfId-1000001149">[4]</A
+> Except that the code written here won't work because ARGV has internal magic.</P
+></DIV
+></BLOCKQUOTE
+><pre class="programlisting">unshift(@ARGV, '-') unless @ARGV;
+while ($ARGV = shift @ARGV) {
+    unless (open(ARGV, $ARGV)) {
+        warn &quot;Can't open $ARGV: $!\n&quot;;
+        next;
+    }
+    while (defined($_ = &lt;ARGV&gt;)) {
+        # ...
+    }
+}</PRE
+><p class="para">You can access <code class="literal">ARGV</CODE
+> and <code class="literal">$ARGV</CODE
+> inside the loop to read more from the filehandle or to find the filename currently being processed. Let's look at how this works.</P
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch07-pgfId-1000007512">Behavior</A
+></H4
+><p class="para">If the user supplies no arguments, Perl sets <code class="literal">@ARGV</CODE
+> to a single string, <code class="literal">&quot;-&quot;</CODE
+>. This is shorthand for STDIN when opened for reading and STDOUT when opened for writing. It's also what lets the user of your program specify <code class="literal">&quot;-&quot;</CODE
+> as a filename on the command line to read from STDIN.</P
+><p class="para">Next, the file processing loop removes one argument at a time from <code class="literal">@ARGV</CODE
+> and copies the filename into the global variable <code class="literal">$ARGV</CODE
+>. If the file cannot be opened, Perl goes on to the next one. Otherwise, it processes a line at a time. When the file runs out, the loop goes back and opens the next one, repeating the process until <code class="literal">@ARGV</CODE
+> is exhausted.</P
+><p class="para">The <code class="literal">open</CODE
+> statement didn't say <code class="literal">open(ARGV,</CODE
+> <code class="literal">&quot;&lt;</CODE
+> <code class="literal">$ARGV&quot;)</CODE
+>. There's no extra greater- than symbol supplied. This allows for interesting effects, like passing the string <code class="literal">&quot;gzip</CODE
+> <code class="literal">-dc</CODE
+> <code class="literal">file.gz</CODE
+> <code class="literal">|&quot;</CODE
+> as an argument, to make your program read the output of the command <code class="literal">&quot;gzip</CODE
+> <code class="literal">-dc</CODE
+> <code class="literal">file.gz&quot;</CODE
+>. See Recipe 16.6 for more about this use of magic open.</P
+><p class="para">You can change <code class="literal">@ARGV</CODE
+> before or inside the loop. Let's say you don't want the default behavior of reading from STDIN if there aren't any arguments &nbsp;-  you want it to default to all the C or C++ source and header files. Insert this line before you start processing <code class="literal">&lt;ARGV&gt;</CODE
+>:</P
+><pre class="programlisting">@ARGV = glob(&quot;*.[Cch]&quot;) unless @ARGV;</PRE
+><p class="para">Process options before the loop, either with one of the Getopt libraries described in <a class="xref" href="ch15_01.htm" title="User Interfaces">Chapter 15, <cite class="chapter">User Interfaces</CITE
+></A
+>, or manually:</P
+><pre class="programlisting"># arg demo 1: Process optional -c flag 
+if (@ARGV &amp;&amp; $ARGV[0] eq '-c') { 
+    $chop_first++;
+    shift;
+}
+
+# arg demo 2: Process optional -NUMBER flag    
+if (@ARGV &amp;&amp; $ARGV[0] =~ /^-(\d+)$/) { 
+    $columns = $1; 
+    shift;
+}
+
+# arg demo 3: Process clustering -a, -i, -n, or -u flags     
+while (@ARGV &amp;&amp; $ARGV[0] =~ /^-(.+)/ &amp;&amp; (shift, ($_ = $1), 1)) { 
+    next if /^$/; 
+    s/a// &amp;&amp; (++$append,      redo);
+    s/i// &amp;&amp; (++$ignore_ints, redo); 
+    s/n// &amp;&amp; (++$nostdout,    redo); 
+    s/u// &amp;&amp; (++$unbuffer,    redo); 
+    die &quot;usage: $0 [-ainu] [filenames] ...\n&quot;;    
+}</PRE
+><p class="para">Other than its implicit looping over command-line arguments, <code class="literal">&lt;&gt;</CODE
+> is not special. The special variables controlling I/O still apply; see <a class="xref" href="ch08_01.htm" title="File Contents">Chapter 8</A
+> for more on them. You can set <code class="literal">$/</CODE
+> to set the line terminator, and <code class="literal">$.</CODE
+> contains the current line (record) number. If you undefine <code class="literal">$/</CODE
+>, you don't get the concatenated contents of all files at once; you get one complete file each time:</P
+><pre class="programlisting">undef $/;		     
+while (&lt;&gt;) { 	
+    # $_ now has the complete contents of 	
+    # the file whose name is in $ARGV     
+}</PRE
+><p class="para">If you localize <code class="literal">$/</CODE
+>, the old value is automatically restored when the enclosing block exits:</P
+><pre class="programlisting">{     # create block for local 	
+    local $/;         # record separator now undef 	
+    while (&lt;&gt;) { 	    
+        # do something; called functions still have 	    
+        # undeffed version of $/ 	
+    }     
+}                     # $/ restored here</PRE
+><p class="para">Because processing <code class="literal">&lt;ARGV&gt;</CODE
+> never explicitly closes filehandles, the record number in <code class="literal">$.</CODE
+> is not reset. If you don't like that, you can explicitly close the file yourself to reset <code class="literal">$.</CODE
+>:</P
+><pre class="programlisting">while (&lt;&gt;) { 	
+    print &quot;$ARGV:$.:$_&quot;; 	
+    close ARGV if eof;     
+}</PRE
+><p class="para"><code class="literal">The</CODE
+> <code class="literal">eof</CODE
+> <code class="literal">function</CODE
+> defaults to checking the end of file status of the last file read. Since the last handle read was ARGV, <code class="literal">eof</CODE
+> reports whether we're at the end of the current file. If so, we close it and reset the <code class="literal">$.</CODE
+> variable. On the other hand, the special notation <code class="literal">eof()</CODE
+> with parentheses but no argument checks if we've reached the end of all files in the <code class="literal">&lt;ARGV&gt;</CODE
+> processing.</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="ch07-pgfId-1000008252">Command-line options</A
+></H4
+><p class="para"><a class="indexterm" name="ch07-idx-1000009633-0"></A
+><a class="indexterm" name="ch07-idx-1000009633-1"></A
+><a class="indexterm" name="ch07-idx-1000009633-2"></A
+>Perl has command-line options, <b class="emphasis.bold">-n</B
+>,<b class="emphasis.bold"> -p</B
+>,<b class="emphasis.bold"> </B
+>and <b class="emphasis.bold">-i</B
+>, to make writing filters and one-liners easier.</P
+><p class="para">The <b class="emphasis.bold">-n</B
+> option adds the <code class="literal">while</CODE
+> <code class="literal">(&lt;&gt;)</CODE
+> loop around your program text. It's normally used for filters like <em class="emphasis">grep</EM
+> or programs that summarize the data they read. The program is shown in <a class="xref" href="#ch07-34632" title="findlogin1">Example 7.1</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch07-34632">Example 7.1: findlogin1</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl   
+# <a class="indexterm" name="ch07-idx-1000009827-0"></A
+>findlogin1 - print all lines containing the string &quot;login&quot;   
+while (&lt;&gt;) {# loop over files on command line 	
+    print if /login/;     
+}</PRE
+></DIV
+><p class="para">The program in <a class="xref" href="#ch07-34632" title="findlogin1">Example 7.1</A
+> could be written as shown in <a class="xref" href="#ch07-36310" title="findlogin2">Example 7.2</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch07-36310">Example 7.2: findlogin2</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -n     
+# findlogin2 - print all lines containing the string &quot;login&quot;     
+print if /login/;</PRE
+></DIV
+><p class="para">You can combine the <b class="emphasis.bold">-n</B
+> and <b class="emphasis.bold">-e</B
+> options to run Perl code from the command line:</P
+><pre class="programlisting">% perl -ne 'print if /login/'</PRE
+><p class="para">The <b class="emphasis.bold">-p</B
+> option is like <b class="emphasis.bold">-n</B
+> but it adds a <code class="literal">print</CODE
+> at the end of the loop. It's normally used for programs that translate their input. This program is shown in <a class="xref" href="#ch07-34498" title="lowercase1">Example 7.3</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch07-34498">Example 7.3: lowercase1</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl    
+# <a class="indexterm" name="ch07-idx-1000009830-0"></A
+>lowercase - turn all lines into lowercase
+
+use locale;
+while (&lt;&gt;) {                 # loop over lines on command line
+    s/([^\W0-9_])/\l$1/g;    # change all letters to lowercase
+print;
+}</PRE
+></DIV
+><p class="para">The program in <a class="xref" href="#ch07-34498" title="lowercase1">Example 7.3</A
+> could be written as shown in <a class="xref" href="#ch07-32154" title="lowercase2">Example 7.4</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch07-32154">Example 7.4: lowercase2</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -p     
+# lowercase - turn all lines into lowercase     
+use locale;     
+s/([^\W0-9_])/\l$1/g;# change all letters to lowercase</PRE
+></DIV
+><p class="para">Or written from the command line as:</P
+><pre class="programlisting">% perl -Mlocale -pe 's/([^\W0-9_])/\l$1/g'</PRE
+><p class="para">While using<b class="emphasis.bold"> -n</B
+> or <b class="emphasis.bold">-p</B
+> for implicit input looping, the special label <a class="indexterm" name="ch07-idx-1000012067-0"></A
+><code class="literal">LINE:</CODE
+> is silently created for the whole input loop. That means that from an inner loop, you can go on the following input record by using <code class="literal">next</CODE
+> <code class="literal">LINE</CODE
+> (this is like <em class="emphasis">awk  </EM
+>'s <code class="literal">next</CODE
+>). Go on to the file by closing ARGV (this is like <em class="emphasis">awk</EM
+>  's <code class="literal">nextfile</CODE
+>). This is shown in <a class="xref" href="#ch07-34027" title="countchunks">Example 7.5</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch07-34027">Example 7.5: countchunks</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -n    
+# <a class="indexterm" name="ch07-idx-1000009833-0"></A
+>countchunks - count how many words are used.    
+# skip comments, and bail on file if __END__   
+# or __DATA__ seen.    
+for (split /\W+/) { 
+    next LINE if /^#/; 
+    close ARGV if /__(DATA|END)__/; 
+    $chunks++;     
+}     
+END { print &quot;Found $chunks chunks\n&quot; }</PRE
+></DIV
+><p class="para">The <em class="emphasis">tcsh</EM
+> keeps a <em class="emphasis">.history</EM
+> file in a format such that every other line contains a commented out timestamp in Epoch seconds:</P
+><pre class="programlisting">#+0894382237     
+less /etc/motd     
+#+0894382239     
+vi ~/.exrc     
+#+0894382242     
+date     
+#+0894382242     
+who     
+#+0894382288     
+telnet home</PRE
+><p class="para">A simple one-liner can render that legible:</P
+><pre class="programlisting">% perl -pe 's/^#\+(\d+)\n/localtime($1) . &quot; &quot;/e' 
+<code class="userinput"><b><code class="replaceable"><i>Tue May  5 09:30:37 1998     less /etc/motd </I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Tue May  5 09:30:39 1998     vi ~/.exrc </I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Tue May  5 09:30:42 1998     date</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Tue May  5 09:30:42 1998     who </I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Tue May  5 09:31:28 1998     telnet home</I
+></CODE
+></B
+></CODE
+></PRE
+><p class="para">The <b class="emphasis.bold">-i</B
+> option changes each file on the command line. It is described in <a class="xref" href="ch07_10.htm" title="Modifying a File in Place with -i Switch">Recipe 7.9</A
+>, and is normally used in conjunction with <b class="emphasis.bold">-p</B
+>.</P
+><p class="para">You have to say <code class="literal">use</CODE
+> <code class="literal">locale</CODE
+> to handle current character <a class="indexterm" name="ch07-idx-1000009653-0"></A
+><a class="indexterm" name="ch07-idx-1000009653-1"></A
+>set.<a class="indexterm" name="ch07-idx-1000009629-0"></A
+><a class="indexterm" name="ch07-idx-1000009629-1"></A
+><a class="indexterm" name="ch07-idx-1000009629-2"></A
+></P
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-1000008971">See Also</A
+></H3
+><p class="para"><i class="filename">perlrun </I
+>(1), and the <a class="olink" href="../prog/ch06_01.htm#PERL2-CH-6-SECT-1.2">"Switches"</A
+> section of <a class="olink" href="../prog/ch06_01.htm">Chapter 6</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; <a class="xref" href="ch07_10.htm" title="Modifying a File in Place with -i Switch">Recipe 7.9</A
+>; Recipe 16.6</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_07.htm" title="7.6. Storing Files Inside Your Program Text"><img src="../gifs/txtpreva.gif" alt="Previous: 7.6. Storing Files Inside Your Program Text" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch07_09.htm" title="7.8. Modifying a File in Place with Temporary File"><img src="../gifs/txtnexta.gif" alt="Next: 7.8. Modifying a File in Place with Temporary File" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">7.6. Storing Files Inside Your Program Text</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">7.8. Modifying a File in Place with Temporary File</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

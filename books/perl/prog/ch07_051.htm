@@ -1,0 +1,400 @@
+<html><head>
+<title>[Chapter 7] 7.2.51 Safe&nbsp;- Create Safe Namespaces for Evaluating Perl Code</TITLE>
+<meta name="DC.title" content="Programming Perl"><meta name="DC.creator" content="Larry Wall, Tom Christiansen &amp; Randal L. Schwartz"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T02:03:28Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-149-6" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch07_02.htm" title="7.2 Library Modules"><link rel="prev" href="ch07_050.htm" title="7.2.50 Pod::Text&nbsp;- Convert POD Data to Formatted ASCII Text"><link rel="next" href="ch07_052.htm" title="7.2.52 SDBM_File&nbsp;- Tied Access to SDBM Files"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Programming Perl" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Programming Perl"><area shape="RECT" coords="467,0,514,18" href="../search/psrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT2" href="ch07_050.htm" title="7.2.50 Pod::Text&nbsp;- Convert POD Data to Formatted ASCII Text"><img src="../gifs/txtpreva.gif" alt="Previous: 7.2.50 Pod::Text&nbsp;- Convert POD Data to Formatted ASCII Text" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch07_01.htm" title="7. The Standard Perl Library">Chapter 7<br>The Standard Perl Library</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT2" href="ch07_052.htm" title="7.2.52 SDBM_File&nbsp;- Tied Access to SDBM Files"><img src="../gifs/txtnexta.gif" alt="Next: 7.2.52 SDBM_File&nbsp;- Tied Access to SDBM Files" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT2"><h3 class="sect2"><a class="title" name="AUTOID-26217">7.2.51 Safe&nbsp;- Create Safe Namespaces for Evaluating Perl Code</A
+></H3
+><pre class="programlisting">use Safe;
+$cpt = new Safe;  # create a new safe compartment</PRE
+><p class="para"><a class="indexterm" name="CH07.SAFE1"></A
+><a class="indexterm" name="CH07.SAFE2"></A
+><a class="indexterm" name="CH07.SAFE3"></A
+><a class="indexterm" name="CH07.SAFE4"></A
+><a class="indexterm" name="CH07.SAFE5"></A
+>The Safe extension module allows the creation of compartments in which
+untrusted Perl code can be evaluated.  Each compartment provides a new
+namespace and has an associated operator mask.</P
+><p class="para">The root of the namespace (that is, <code class="literal">main::</CODE
+>) is changed to a
+different package, and code evaluated in the compartment cannot
+refer to variables outside this namespace, even with run-time
+glob lookups and other tricks.  Code that is compiled outside
+the compartment can choose to place variables into (or share
+variables with) the compartment's namespace, and only that
+data will be visible to code evaluated in the compartment.</P
+><p class="para">By default, the only variables shared with compartments are the
+underscore variables <b class="emphasis.bold">$_</B
+> and <b class="emphasis.bold">@_</B
+> (and, technically, the much less
+frequently used <code class="literal">%_</CODE
+>, the <code class="literal">_</CODE
+> filehandle and so on).  This is because
+otherwise Perl operators that default to <code class="literal">$_</CODE
+> would not work and neither
+would the assignment of arguments to <code class="literal">@_</CODE
+> on subroutine entry.</P
+><p class="para"><a class="indexterm" name="CH07.SAFE6"></A
+>Each compartment has an associated operator mask with which you can exclude
+particular Perl operators from the compartment.  (The mask syntax is explained
+below.)  Recall that Perl code is compiled into an internal format before
+execution.  Evaluating Perl code (for example, via <code class="literal">eval</CODE
+>
+<code class="replaceable"><i>STRING</I
+></CODE
+> or <code class="literal">do</CODE
+>
+<code class="replaceable"><i>FILE</I
+></CODE
+>) causes the code to be compiled into an internal
+format and then, provided there was no error in the compilation, executed.  Code
+evaluated in a compartment is compiled subject to the compartment's operator
+mask.  Attempting to evaluate compartmentalized code that contains a masked
+operator will cause the compilation to fail with an error.  The code will not be
+executed.</P
+><p class="para">By default, the operator mask for a newly created compartment masks out all
+operations that give access to the system in some sense.  This includes masking
+off operators such as <a class="xref" href="ch03_167.htm" title="system"><b class="xref.cmd">system</B
+></A
+>, <a class="xref" href="ch03_102.htm" title="open"><b class="xref.cmd">open</B
+></A
+>, <a class="xref" href="ch03_015.htm" title="chown"><b class="xref.cmd">chown</B
+></A
+>, and <a class="xref" href="ch03_145.htm" title="shmget"><b class="xref.cmd">shmget</B
+></A
+>, but operators such as <a class="xref" href="ch03_110.htm" title="print"><b class="xref.cmd">print</B
+></A
+>, <a class="xref" href="ch03_166.htm" title="sysread"><b class="xref.cmd">sysread</B
+></A
+>, and
+<code class="literal">&lt;FILEHANDLE&gt;</CODE
+> are not masked off.  These file operators
+are allowed since, in order for the code in the compartment to have access to a
+filehandle, the code outside the compartment must have explicitly placed the
+filehandle variable inside the compartment.</P
+><p class="para">Since it is only at the compilation stage that the operator mask applies,
+controlled access to potentially unsafe operations can be achieved by having a
+handle to a wrapper subroutine (written outside the compartment) placed into the
+compartment. For example:</P
+><pre class="programlisting">$cpt = new Safe;
+sub wrapper {
+    ;# vet arguments and perform potentially unsafe operations
+}
+$cpt-&gt;share('&amp;wrapper');  # see share method below</PRE
+><p class="para">An operator mask exists at user-level as a string of bytes of length
+<code class="literal">MAXO</CODE
+>, each of which is either <code class="literal">0x00</CODE
+> or
+<code class="literal">0x01</CODE
+>.  Here, <code class="literal">MAXO</CODE
+> is the number of
+operators in the current version of Perl.  The subroutine
+<code class="literal">MAXO</CODE
+> (available for export by package Safe) returns the
+number of operators in the currently running Perl executable.  The presence of a
+<code class="literal">0x01</CODE
+> byte at offset <code class="replaceable"><i>n</I
+></CODE
+> of the
+string indicates that operator number <code class="replaceable"><i>n</I
+></CODE
+> should be
+masked (that is, disallowed).  The Safe extension makes available routines for
+converting from operator names to operator numbers (and vice versa) and for
+converting from a list of operator names to the corresponding mask (and vice
+versa).</P
+><div class="sect3"><h4 class="sect3"><a class="title" name="PERL2-CH-7-SECT-1.86">7.2.51.1 Methods in class Safe</A
+></H4
+><p class="para">To create a new compartment, use:</P
+><pre class="programlisting">$cpt = new Safe <code class="replaceable"><i>NAMESPACE</I
+></CODE
+>, <code class="replaceable"><i>MASK</I
+></CODE
+>;</PRE
+><p class="para">where <code class="replaceable"><i>NAMESPACE</I
+></CODE
+> is the root namespace to use for the
+compartment (defaults to <code class="literal">Safe::Root000000000</CODE
+>, auto-incremented
+for each new compartment).  <code class="replaceable"><i>MASK</I
+></CODE
+> is the operator mask to use.
+Both arguments are optional.</P
+><p class="para">The following methods can then be used on the compartment
+object returned by the above constructor.  The object argument
+is implicit in each case.</P
+><dl class="variablelist"><dt class="term"><code class="literal">root</CODE
+>(<code class="replaceable"><i>NAMESPACE</I
+></CODE
+><code class="literal">)</CODE
+></DT
+><dd class="listitem"><p class="para">A get-or-set method for the compartment's namespace.  With the
+<code class="replaceable"><i>NAMESPACE</I
+></CODE
+> argument present, it sets the root namespace for the
+compartment.  With no <code class="replaceable"><i>NAMESPACE</I
+></CODE
+> argument present, it returns the
+current root namespace of the compartment.</P
+></DD
+><dt class="term"><code class="literal">mask</CODE
+>(<code class="replaceable"><i>MASK</I
+></CODE
+><code class="literal">)</CODE
+></DT
+><dd class="listitem"><p class="para">A get-or-set method for the compartment's operator mask.
+With the <code class="replaceable"><i>MASK</I
+></CODE
+> argument present, it sets the operator mask for the
+compartment.  With no <code class="replaceable"><i>MASK</I
+></CODE
+> argument present, it returns the
+current operator mask of the compartment.</P
+></DD
+><dt class="term"><code class="literal">trap</CODE
+>(<code class="replaceable"><i>OP</I
+></CODE
+><code class="literal">, ...)</CODE
+></DT
+><dd class="listitem"><p class="para">Sets bits in the compartment's operator mask corresponding
+to each operator named in the list of arguments.  Each <code class="replaceable"><i>OP</I
+></CODE
+> can be
+either the name of an operation or its number.  See <em class="emphasis">opcode.h</EM
+> or
+<em class="emphasis">opcode.pl</EM
+> in the main Perl distribution for a canonical list of
+operator names.</P
+></DD
+><dt class="term"><code class="literal">untrap(</CODE
+><code class="replaceable"><i>OP</I
+></CODE
+><code class="literal">, ...)</CODE
+></DT
+><dd class="listitem"><p class="para">Resets bits in the compartment's operator mask corresponding
+to each operator named in the list of arguments.  Each <code class="replaceable"><i>OP</I
+></CODE
+> can be
+either the name of an operation or its number.  See <em class="emphasis">opcode.h</EM
+> or
+<em class="emphasis">opcode.pl</EM
+> in the main Perl distribution for a canonical list of
+operator names.</P
+></DD
+><dt class="term"><code class="literal">share(</CODE
+><code class="replaceable"><i>VARNAME</I
+></CODE
+><code class="literal">, ...)</CODE
+></DT
+><dd class="listitem"><p class="para">Shares the variables in the argument list with the compartment.  Each
+<code class="replaceable"><i>VARNAME</I
+></CODE
+> must be a string containing the name of a variable with
+a leading type identifier included.  Examples of legal variable names
+are <code class="literal">$foo</CODE
+> for a scalar, <code class="literal">@foo</CODE
+> for an array, <code class="literal">%foo</CODE
+>
+for a hash, <code class="literal">&amp;foo</CODE
+> for a subroutine and <code class="literal">*foo</CODE
+> for a
+typeglob.  (A typeglob results in the sharing of all symbol table
+entries associated with <code class="literal">foo</CODE
+>, including scalar, array, hash,
+subroutine, and filehandle.)</P
+></DD
+><dt class="term"><code class="literal">varglob(</CODE
+><code class="replaceable"><i>VARNAME</I
+></CODE
+><code class="literal">)</CODE
+></DT
+><dd class="listitem"><p class="para">Returns a typeglob for the symbol table entry of <code class="replaceable"><i>VARNAME</I
+></CODE
+> in the package
+of the compartment. <code class="replaceable"><i>VARNAME</I
+></CODE
+> must be the name of a variable without
+any leading type marker. For example:</P
+><pre class="programlisting">$cpt = new Safe 'Root';
+$Root::foo = &quot;Hello world&quot;;
+# Equivalent version which doesn't need to know $cpt's package name:
+${$cpt-&gt;varglob('foo')} = &quot;Hello world&quot;;</PRE
+></DD
+><dt class="term"><code class="literal">reval(</CODE
+><code class="replaceable"><i>STRING</I
+></CODE
+><code class="literal">)</CODE
+></DT
+><dd class="listitem"><p class="para">Evaluates <code class="replaceable"><i>STRING</I
+></CODE
+> as Perl code inside the compartment.
+The code can only see the compartment's namespace (as returned by the
+<code class="literal">root()</CODE
+> method).  Any attempt by code in
+<code class="replaceable"><i>STRING</I
+></CODE
+> to use an operator which is in the
+compartment's mask will cause an error (at run-time of the main program, but at
+compile-time for the code in <code class="replaceable"><i>STRING</I
+></CODE
+>).  If the code in
+<code class="replaceable"><i>STRING</I
+></CODE
+> includes an <a class="xref" href="ch03_032.htm" title="eval"><b class="xref.cmd">eval</B
+></A
+> (and the <a class="xref" href="ch03_032.htm" title="eval"><b class="xref.cmd">eval</B
+></A
+> operator is permitted) then the
+error can occur at run-time for <code class="replaceable"><i>STRING</I
+></CODE
+> (although it
+is at compile-time for the <a class="xref" href="ch03_032.htm" title="eval"><b class="xref.cmd">eval</B
+></A
+> within
+<code class="replaceable"><i>STRING</I
+></CODE
+>).  The error is of the form &quot;<code class="literal">%s
+trapped by operation mask operation....</CODE
+>&quot;  If an operation
+is trapped in this way, then the code in <code class="replaceable"><i>STRING</I
+></CODE
+> will
+not be executed.  If such a trapped operation occurs, or if any other
+compile-time or return error occurs, then <b class="emphasis.bold">$@</B
+> is
+set to the error message, just as with an <a class="xref" href="ch03_032.htm" title="eval"><b class="xref.cmd">eval</B
+></A
+>.  If there is no error, then the
+method returns the value of the last expression evaluated, or a return statement
+may be used, just as with subroutines and <a class="xref" href="ch03_032.htm" title="eval"><b class="xref.cmd">eval</B
+></A
+>.</P
+></DD
+><dt class="term"><code class="literal">rdo(</CODE
+><code class="replaceable"><i>FILENAME</I
+></CODE
+><code class="literal">)</CODE
+></DT
+><dd class="listitem"><p class="para">Evaluates the contents of file <code class="replaceable"><i>FILENAME</I
+></CODE
+> inside the compartment.
+See the <code class="literal">reval()</CODE
+> method earlier for further details.</P
+></DD
+></DL
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="PERL2-CH-7-SECT-1.87">7.2.51.2 Subroutines in package Safe</A
+></H4
+><p class="para">The Safe package contains subroutines for manipulating operator
+names and operator masks.  All are available for export by the package.
+The canonical list of operator names is contained in the array
+<code class="literal">op_name</CODE
+> defined and initialized in file <em class="emphasis">opcode.h</EM
+> of the Perl
+source distribution.</P
+><dl class="variablelist"><dt class="term"><code class="literal">ops_to_mask(</CODE
+><code class="replaceable"><i>OP</I
+></CODE
+><code class="literal">, ...)</CODE
+></DT
+><dd class="listitem"><p class="para">Takes a list of operator names and returns an operator mask
+with precisely those operators masked.</P
+></DD
+><dt class="term"><code class="literal">mask_to_ops(</CODE
+><code class="replaceable"><i>MASK</I
+></CODE
+><code class="literal">)</CODE
+></DT
+><dd class="listitem"><p class="para">Takes an operator mask and returns a list of operator names
+corresponding to those operators which are masked in <code class="replaceable"><i>MASK</I
+></CODE
+>.</P
+></DD
+><dt class="term"><code class="literal">opcode(</CODE
+><code class="replaceable"><i>OP</I
+></CODE
+><code class="literal">, ...)</CODE
+></DT
+><dd class="listitem"><p class="para">Takes a list of operator names and returns the corresponding
+list of opcodes (which can then be used as byte offsets into a mask).</P
+></DD
+><dt class="term"><code class="literal">opname(</CODE
+><code class="replaceable"><i>OP</I
+></CODE
+><code class="literal">, ...)</CODE
+></DT
+><dd class="listitem"><p class="para">Takes a list of opcodes and returns the corresponding list of
+operator names.</P
+></DD
+><dt class="term"><code class="literal">fullmask</CODE
+></DT
+><dd class="listitem"><p class="para">Returns a mask with all operators masked.
+It returns the string <code class="literal">&quot;\001&quot; x MAXO()</CODE
+>.</P
+></DD
+><dt class="term"><code class="literal">emptymask</CODE
+></DT
+><dd class="listitem"><p class="para">Returns a mask with all operators unmasked.
+It returns the string <code class="literal">&quot;\0&quot; x MAXO()</CODE
+>.  This is useful if you
+want a compartment to make use of the name-space protection
+features but do not want the default restrictive mask.</P
+></DD
+><dt class="term"><code class="literal">MAXO</CODE
+></DT
+><dd class="listitem"><p class="para">This returns the number of operators (hence the length of an
+operator mask).</P
+></DD
+><dt class="term"><code class="literal">op_mask</CODE
+></DT
+><dd class="listitem"><p class="para">This returns the operator mask that is actually in effect at the
+time the invocation to the subroutine is compiled.
+This is probably not terribly useful.</P
+></DD
+></DL
+><a class="indexterm" name="AUTOID-26431"></A
+><a class="indexterm" name="AUTOID-26432"></A
+><a class="indexterm" name="AUTOID-26433"></A
+><a class="indexterm" name="AUTOID-26434"></A
+><a class="indexterm" name="AUTOID-26435"></A
+><a class="indexterm" name="AUTOID-26436"></A
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT2" href="ch07_050.htm" title="7.2.50 Pod::Text&nbsp;- Convert POD Data to Formatted ASCII Text"><img src="../gifs/txtpreva.gif" alt="Previous: 7.2.50 Pod::Text&nbsp;- Convert POD Data to Formatted ASCII Text" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Programming Perl"><img src="../gifs/txthome.gif" alt="Programming Perl" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT2" href="ch07_052.htm" title="7.2.52 SDBM_File&nbsp;- Tied Access to SDBM Files"><img src="../gifs/txtnexta.gif" alt="Next: 7.2.52 SDBM_File&nbsp;- Tied Access to SDBM Files" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">7.2.50 Pod::Text&nbsp;- Convert POD Data to Formatted ASCII Text</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">7.2.52 SDBM_File&nbsp;- Tied Access to SDBM Files</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

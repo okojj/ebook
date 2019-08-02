@@ -1,0 +1,405 @@
+<html>
+<head>
+<title>Transaction Management (Java Enterprise in a Nutshell)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David Flanagan, Jim Farley, William Crawford and Kristopher Magnusson">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-483-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Transaction Management">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm" alt="Java Enterprise in a Nutshell"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch07_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch07_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch07_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch07_01.htm">Chapter 7: Enterprise JavaBeans</a></td><td align="right" valign="top" width="172"><a href="ch07_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch07_04.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY --><h2 class="sect1">7.3. Transaction Management</h2>
+<p>
+<a name="INDEX-1766"></a><a name="INDEX-1767"></a>
+
+One of the value-added features that Enterprise JavaBeans provides
+over regular remote objects is semiautomated transaction
+management. I'll periodically mention transaction-related issues
+when we look at creating, deploying, and using EJB objects, so this
+section introduces some basic transaction-management concepts. If
+you're not interested in using the transaction-management
+features of your EJB server, you can safely skip this section and jump
+to the material on implementing EJB object. If you plan to make JDBC
+calls from within your bean, however, you should note the information
+in the section on database transactions.</p>
+<p>Transactions break up a series of interactions into units of
+work that can be either committed if they are successfully executed or
+rolled back at any time before the transaction is committed. If a
+transaction is rolled back, all parties involved in the transaction
+are responsible for restoring their state to its pretransaction
+condition. Transaction support is especially important in a
+distributed environment, since agents may lose network contact with
+each other or one agent may die while engaged in a series of
+interactions with another agent. </p>
+<p>
+<a name="INDEX-1768"></a><a name="INDEX-1769"></a><a name="INDEX-1770"></a>
+The EJB container is the principal player in the area of transaction management, since it is responsible for either generating transactions around client interactions with the bean, or detecting client-requested transactions and then notifying the EJB objects about transaction boundaries (start and end). The Enterprise JavaBeans architecture relies on the Java Transaction API (JTA) for transaction support. The JTA represents a transaction with the <tt class="literal">javax.transaction.UserTransaction</tt> interface.<a href="#FOOTNOTE-3">[3]</a> Complete coverage of the JTA and the concepts of
+transaction-based processing are beyond the scope of this chapter, but
+a few words of overview here should be enough for you to get an
+understanding of how this can be a valuable feature of Enterprise
+JavaBeans. In addition, the JTA interfaces and classes are documented
+in <a href="part3.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/part3.htm">Part 3, "API Quick Reference"</a>.</p>
+<blockquote class="footnote">
+<a name="FOOTNOTE-3"></a>
+<p>[3]Note that shortly after the EJB 1.0 specification was released,
+  the name of the (then beta) JTA was changed, so that
+  <tt class="literal">javax.jts.UserTransaction</tt> became
+  <tt class="literal">javax.transaction.UserTransaction</tt>. I'm
+  using the new class name here, but keep in mind that you might see
+  the old package names in the EJB 1.0 documentation from Sun.</p>
+</blockquote>
+<p>
+<a name="INDEX-1771"></a><a name="INDEX-1772"></a><a name="INDEX-1773"></a><a name="INDEX-1774"></a><a name="INDEX-1775"></a>
+A client or an EJB object can declare a new transaction by creating a
+<tt class="literal">UserTransaction</tt> object. The transaction is started
+by calling the <tt class="literal">begin()</tt> method on the transaction
+object, and ended by calling either the <tt class="literal">commit()</tt>
+method (for a successful completion) or the
+<tt class="literal">rollback()</tt> method (to abort the transaction and
+revert to the state before the transaction began). The following code
+shows the (now clich&eacute;) example of a banking transaction in an EJB
+context:</p>
+<blockquote>
+<pre class="programlisting">
+// Get the JNDI context, and use it to get the Account home interface
+Context ctx = new InitialContext(props);
+AccountHome acctHome = (AccountHome)ctx.lookup("Accounts");
+
+
+// Get two accounts
+Account savings = acctHome.findByNameAndType("Jim Farley", "savings");
+Account checking = acctHome.findByNameAndType("Jim Farley", "checking");
+
+// Get a transaction object, using a JNDI lookup on the EJB context
+javax.transaction.UserTransaction xaction = 
+    (UserTransaction)ctx.lookup("javax.transaction.UserTransaction");
+
+// Perform a transaction
+xaction.begin();
+try {
+  savings.deposit(1500.0);
+  checking.transfer(savings, 750.0);
+  xaction.commit();
+}
+// If anything goes wrong, roll back the work we've done.
+catch (Exception e) {
+  xaction.rollback();
+}</pre>
+</blockquote>
+<p>This code might be seen in a client application using an EJB
+server for banking services. In this case, the client is using the
+transaction to ensure that both the deposit to savings and the
+transfer to checking are committed only if both operations are
+successful. If either one fails, the <tt class="literal">rollback()</tt>
+method is called on the transaction to ensure that any changes are
+undone. An EJB object might use similar procedures if it is managing
+its own transactions, the only difference being that the bean would be
+able to use its <tt class="literal">EJBContext</tt> to get a transaction
+from its container:</p>
+<blockquote>
+<pre class="programlisting">xaction = myContext.getUserTransaction();</pre>
+</blockquote>
+<p>The use of the <tt class="literal">EJBContext</tt> in enterprise beans
+is covered later in the chapter. 
+<a name="INDEX-1776"></a><a name="INDEX-1777"></a><a name="INDEX-1778"></a>
+</p>
+<p>
+<a name="INDEX-1779"></a><a name="INDEX-1780"></a><a name="INDEX-1781"></a><a name="INDEX-1782"></a>
+In the context of an Enterprise JavaBeans component, transaction
+boundaries can be defined by the client of the EJB object, the
+container, or the EJB object itself. In all cases, the EJB container
+decides how to handle the transaction context whenever a remote method
+is invoked on an EJB object. During a bean's lifetime, the
+container decides whether to execute the bean's business methods
+within the client's transaction or within a transaction that the
+container defines, or to allow the bean to manage its own transaction
+boundaries. When it is deployed, a bean can choose one of the
+following transaction-support attributes:
+<a name="INDEX-1783"></a>
+</p>
+<dl>
+<dt>
+<b><tt class="literal">TX_NOT_SUPPORTED</tt></b>
+</dt>
+<dd>
+<p>The bean cannot support transactions, so its methods must be called without a transaction context. If the client has initiated a transaction, it is suspended by the container before the bean's method is invoked. After the method completes, the container resumes the client's transaction.</p>
+</dd>
+<dt>
+<b><tt class="literal">TX_SUPPORTS</tt></b>
+</dt>
+<dd>
+<p>The bean supports transactions if requested. If the client calls a
+method on the bean, while within a transaction, the client's
+transaction context is passed to the bean as part of the bean's
+<tt class="literal">EJBContext</tt>.
+<a name="INDEX-1784"></a>
+</p>
+</dd>
+<dt>
+<b><tt class="literal">TX_REQUIRED</tt></b>
+</dt>
+<dd>
+<p>
+The bean requires that all method requests be executed within a
+  transaction context. If the client is already in a transaction of
+  its own, the transaction context is passed on to the bean in its
+  <tt class="literal">EJBContext</tt>. If not, the container creates a new
+  transaction before calling the bean's method and commits the
+  transaction when the bean's method finishes, but before the
+  method results are returned to the client.</p>
+</dd>
+<dt>
+<b><tt class="literal">TX_REQUIRES_NEW</tt></b>
+</dt>
+<dd>
+<p>The bean requires that all remote method
+requests be executed within a new transaction. The container
+automatically starts a new transaction before calling a remote method
+on the bean, and commits the transaction when the method finishes, but
+before the results are returned to the client. If the client calls a
+remote method while within a transaction, the client's
+transaction is suspended by the container before executing the
+bean's method within the new transaction and resumed after the
+new transaction is committed.</p>
+</dd>
+<dt>
+<b><tt class="literal">TX_MANDATORY</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1785"></a><a name="INDEX-1786"></a>
+The bean must be run within the context of a client-initiated
+transaction. If the client calls a remote method on the bean without
+starting a transaction first, the container throws a
+<tt class="literal">javax.jts.TransactionRequired Exception</tt>.</p>
+</dd>
+<dt>
+<b><tt class="literal">TX_BEAN_MANAGED</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1787"></a><a name="INDEX-1788"></a>
+The bean manages all its own transaction boundaries and does not
+  execute within the client's transactions. If the client calls
+  a remote method on the bean from within a client-generated
+  transaction, the client transaction is suspended for the duration
+  of the execution of the remote method. The bean's business
+  methods are run within a transaction only if the bean explicitly
+  creates one (the container does not automatically generate a
+  transaction for each method call). The bean's methods run
+  within the transaction until it is ended by the bean, and the
+  container ensures that the transaction context is provided in the
+  bean's <tt class="literal">EJBContext</tt> as long as the
+  transaction is open.</p>
+</dd>
+</dl>
+<a name="ch07-pgfid-985497"></a>
+<h3 class="sect2">7.3.1. Making the EJB Server Aware of Database Transactions</h3>
+<p>
+<a name="INDEX-1789"></a><a name="INDEX-1790"></a><a name="INDEX-1791"></a><a name="INDEX-1792"></a><a name="INDEX-1793"></a>
+In order for an EJB server to properly implement the various
+  transaction levels listed previously, it needs to be aware of JDBC
+  connections and database transactions that you make from within your
+  enterprise bean. This is key to the EJB server's ability to
+  provide your beans with semiautomatic transaction management. While
+  your bean methods are executing within a given transaction context,
+  the EJB server needs to ensure all database transactions that you
+  make are held pending the commit or rollback of the transaction. If
+  the transaction is committed, the pending database updates are
+  committed to their respective data sources. If the transaction is
+  rolled back, the pending database updates are rolled back as well.</p>
+<p>
+<a name="INDEX-1794"></a><a name="INDEX-1795"></a><a name="INDEX-1796"></a>
+To allow the EJB server to do this, your enterprise bean typically
+  needs to acquire JDBC connections in a manner specified by your EJB
+  server. Unfortunately, the EJB 1.0 specification does not provide a
+  standard method for acquiring database connections from an EJB
+  container. Until this oversight in the EJB specification is amended,
+  EJB server vendors have to provide their own methods for an EJB
+  object to get connections that are monitored by the EJB
+  container. Most EJB vendors provide a way to define a pool of JDBC
+  connections and a means for requesting connections from this pool at
+  runtime. BEA's WebLogic server, for example, allows you to
+  specify a connection pool in a server property file and then use a
+  JDBC URL to pull connections from this pool at runtime. An example
+  properties entry might look like this:</p>
+<blockquote>
+<pre class="programlisting">
+weblogic.jdbc.connectionPool.myPool=\
+  url=jdbc:weblogic:oracle,\
+  driver=weblogic.jdbc.oci.Driver,\
+  loginDelaySecs=1,\
+  initialCapacity=5,\
+  maxCapacity=10,\
+  capacityIncrement=1,\
+  props=user=jsmith;password=foobar;server=main</pre>
+</blockquote>
+<p>
+<a name="INDEX-1797"></a>
+This line of the properties file asks the server to create a
+  connection pool named <tt class="literal">myPool</tt> with the specified
+  JDBC driver and connection properties. The server reads this
+  information from the properties file on startup and creates the
+  pool, and then your EJB object can ask for connections from the pool
+  using a specific JDBC URL:</p>
+<blockquote>
+<pre class="programlisting">
+Connection conn = DriverManager.getConnection("jdbc:weblogic:jts:myPool");</pre>
+</blockquote>
+<p>
+<a name="INDEX-1798"></a><a name="INDEX-1799"></a><a name="INDEX-1800"></a><a name="INDEX-1801"></a>
+This allows the WebLogic server to issue your bean a JDBC connection that is controlled by the server. However, there is currently no consensus among EJB providers concerning support for this method of providing JDBC connections to EJB objects and clients. Before using JDBC code in your enterprise beans, make sure to consult your EJB server documentation to see specifically how it provides JDBC connection management.</p>
+<a name="ch07-pgfid-971715"></a>
+<h3 class="sect2">7.3.2. Transaction Isolation Levels</h3>
+<p>
+<a name="INDEX-1802"></a><a name="INDEX-1803"></a>
+Normally, you would expect multiple transactions originating from
+ multiple client requests on your bean to be effectively
+ serialized. In other words, if multiple client transactional requests
+ are made of your bean, the end effect of satisfying all these
+ requests by timesharing the bean between each client/transaction
+ should be the same as if each request were serialized at the
+ boundaries of each transaction. The ANSI SQL standard defines three
+ ways in which this transaction isolation rule can be violated:
+<a name="INDEX-1804"></a>
+</p>
+<dl>
+<dt>
+<b><em class="emphasis">Dirty reads</em></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1805"></a>
+If transaction A updates a record in the database, followed by
+transaction B reading the record, then transaction A performs a
+rollback on its update operation, the result is that transaction B has
+read an invalid state of the record.</p>
+</dd>
+<dt>
+<b><em class="emphasis">Nonrepeatable reads</em></b>
+</dt>
+<dd>
+<p>If transaction A reads a record, followed by transaction B updating
+the same record, then transaction A reads the same record a second
+time, transaction A has read two different values for the same record.
+<a name="INDEX-1806"></a>
+</p>
+</dd>
+<dt>
+<b><em class="emphasis">Phantom reads</em></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1807"></a>
+If transaction A performs a query on the database with a particular search criteria (<tt class="literal">WHERE</tt> clause),
+followed by transaction B creating new records that satisfy the search
+criteria, 
+
+
+followed by transaction A repeating its query, transaction A sees new, phantom records in the results of the second query.</p>
+</dd>
+</dl>
+<p>
+<a name="INDEX-1808"></a><a name="INDEX-1809"></a>
+When you deploy your enterprise bean within an EJB container, you can specify what level of transaction isolation you want it to enforce for you, using one of the following isolation levels:</p>
+<dl>
+<dt>
+<b><tt class="literal">TRANSACTION_READ_UNCOMMITTED</tt></b>
+</dt>
+<dd>
+<p>All the defined isolation violations are allowed.</p>
+</dd>
+<dt>
+<b><tt class="literal">TRANSACTION_READ_COMMITTED</tt></b>
+</dt>
+<dd>
+<p>Dirty reads are prevented, but nonrepeatable reads and phantom reads are allowed.</p>
+</dd>
+<dt>
+<b><tt class="literal">TRANSACTION_REPEATABLE_READ</tt></b>
+</dt>
+<dd>
+<p>Only phantom reads are allowed.</p>
+</dd>
+<dt>
+<b><tt class="literal">TRANSACTION_SERIALIZABLE</tt></b>
+</dt>
+<dd>
+<p>All the defined isolation violations are prevented, making concurrent transactions effectively serialized.</p>
+</dd>
+</dl>
+<p>
+<a name="INDEX-1810"></a><a name="INDEX-1811"></a>
+
+These levels can be applied to an entire bean or to individual methods on the bean. If you don't specify one of these isolation levels, the EJB server typically uses the default isolation level dictated by the database being used for persistent storage. For more information on these isolation levels and their meaning, consult the JDBC specification or the ODBC specification. <a href="ch02_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch02_01.htm">Chapter 2, "JDBC"</a>, also briefly discusses database isolation levels. I mention them here just so that you are aware that they exist and can seek out more information if the details of transaction isolation are important for your enterprise beans.</p>
+<a name="INDEX-1812"></a>
+<a name="INDEX-1813"></a>
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch07_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch07_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch07_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch07_04.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">7.2. EJB Roles</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">7.4. Implementing a Basic EJB Object</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

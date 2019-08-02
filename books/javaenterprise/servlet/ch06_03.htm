@@ -1,0 +1,277 @@
+<html>
+<head>
+<title>Server Push (Java Servlet Programming)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jason Hunter and William Crawford">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-391-XE" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Server Push">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm" alt="Java Servlet Programming"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch06_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch06_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch06_01.htm">Chapter 6: Sending Multimedia Content</a></td><td align="right" valign="top" width="172"><a href="ch07_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch07_01.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">6.3. Server Push</h2>
+
+<p>
+<a name="INDEX-1234"></a><a name="INDEX-1235"></a>Up
+until now, every page returned by a servlet has been just that: a
+page. Always one page with one content type. But why think in such
+limited terms? Why not have a servlet return several pages, each with
+a different content type, all in response to the same request? It may
+be hard to imagine--and sound even harder to implement--but
+it's actually quite easy using a technique known as
+<em class="emphasis">server push</em>.
+</p>
+
+<p>It's called server push because the server sends, or pushes, a
+sequence of response pages to the client. Compare this to the
+<a name="INDEX-1236"></a><a name="INDEX-1237"></a>client pull
+technique discussed in the last chapter, where it's left to the
+client to get, or pull, each page from the server. Although the
+results of each technique are similar to the end user--the
+appearance of a sequence of pages--the implementation details
+and the appropriate uses of the two techniques are quite different.
+</p>
+
+<p>With server push, the socket connection between the client and the
+server remains open until the last page has been sent. This gives the
+server the ability to send page updates quickly and to control
+exactly when those updates are sent. As such, server push is ideal
+for pages that need frequent updates (such as rudimentary animations)
+or pages that need server-controlled but somewhat infrequent updates
+(such as live status updates). Note, however, that server push is not
+yet supported by Microsoft Internet Explorer, and extended use should
+be avoided, as it has been found to be harmful to the
+<a name="INDEX-1238"></a><a name="INDEX-1239"></a>server's available socket count.
+</p>
+
+<p>With client pull, the socket connection is broken after every page,
+so responsibility for page updates falls to the client. The client
+uses the <tt class="literal">Refresh</tt><a name="INDEX-1240"></a><a name="INDEX-1241"></a>
+header value sent by the server to determine when to perform its
+update, so client pull is the best choice for pages that require
+infrequent updates or have updates at known intervals.
+</p>
+
+<p>Server push can come in handy for limited-length animations and for
+real-time status updates. For example, consider a servlet that could
+push the four latest satellite weather maps, creating a rudimentary
+animation. If you recall the <tt class="literal">PrimeSearcher</tt> servlet
+from <a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch03_01.htm">Chapter 3, "The Servlet Life Cycle"</a>, think about how we could use
+server push to notify a limited number of clients immediately as the
+servlet finds each new prime.
+</p>
+
+<p>
+<a href="#ch06-33864">Example 6-12</a> shows a servlet that uses server push to
+display a countdown to a rocket launch. It begins by sending a series
+of pages that count down from 10 to 1. Every page replaces the
+previous page. When the countdown reaches 0, the servlet sends a
+picture of a launch. It uses the
+<tt class="literal">com.oreilly.servlet.MultipartRe-sponse</tt><a name="INDEX-1242"></a><a name="INDEX-1243"></a><a name="INDEX-1244"></a>
+utility class (shown in <a href="#ch06-31400">Example 6-13</a>) to manage the
+server push details.
+</p>
+
+<a name="ch06-33864"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-12. Countdown to a rocket launch</h4>
+<blockquote>
+<pre class="programlisting">import java.awt.*;
+import java.io.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+import com.oreilly.servlet.MultipartResponse;
+import com.oreilly.servlet.ServletUtils;
+
+public class Countdown extends HttpServlet { 
+
+  static final String LAUNCH = "/images/launch.gif";
+
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+                               throws ServletException, IOException {
+    ServletOutputStream out = res.getOutputStream();  // some binary output
+
+    // Prepare a multipart response
+    MultipartResponse multi = new MultipartResponse(res);
+
+    // First send a countdown
+    for (int i = 10; i &gt; 0; i--) { 
+      multi.startResponse("text/plain");
+      out.println(i + "...");
+      multi.endResponse();
+      try { Thread.sleep(1000); } catch (InterruptedException e) { }
+    }
+
+    // Then send the launch image
+    multi.startResponse("image/gif");
+    try {
+      ServletUtils.returnFile(req.getRealPath(LAUNCH), out);
+    }
+    catch (FileNotFoundException e) {
+      throw new ServletException("Could not find file: " + e.getMessage());
+    }
+
+    // Don't forget to end the multipart response
+    multi.finish();
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>The <tt class="literal">MultipartResponse</tt> class hides most of the
+nasty, dirty details involved in using server push. Feel free to use
+it in your own servlets. It is easy to use, as you can see from the
+previous example.
+</p>
+
+<p>First, create a new <tt class="literal">MultipartResponse</tt> object,
+passing it the servlet's response object.
+<tt class="literal">MultipartResponse</tt> uses the response object to
+fetch the servlet's output stream and to set the
+response's content type. Then, for each page of content, begin
+by calling <tt class="literal">startResponse()</tt> and passing in the
+content type for that page. Send the content for the page by writing
+to the output stream as usual. A call to
+<tt class="literal">endResponse()</tt> ends the page and flushes the
+content, so the client can see it. At this point, you can add a call
+to <tt class="literal">sleep()</tt>, or some other kind of delay, until the
+next page is ready for sending. The call to
+<tt class="literal">endResponse()</tt> is optional, as the
+<tt class="literal">startResponse()</tt> method knows whether the previous
+response was ended and ends it if necessary. You should still call
+<tt class="literal">endResponse()</tt> if there's going to be a delay
+between the time one response ends and the next begins. This lets the
+client display the latest response while it is waiting for the next
+one. Finally, after all the response pages have been sent, a call to
+the <tt class="literal">finish()</tt> method finishes the multipart
+response and sends a code telling the client there will be no more
+responses.
+</p>
+
+<p>
+<a href="#ch06-31400">Example 6-13</a> contains the code for the
+<tt class="literal">MultipartResponse</tt> class.
+</p>
+
+<a name="ch06-31400"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-13. The MultipartResponse class </h4>
+<blockquote>
+<pre class="programlisting">public class MultipartResponse {
+
+  HttpServletResponse res;
+  ServletOutputStream out;
+  boolean endedLastResponse = true;
+
+  public MultipartResponse(HttpServletResponse response) throws IOException {
+    // Save the response object and output stream
+    res = response;
+    out = res.getOutputStream();
+
+    // Set things up
+    res.setContentType("multipart/x-mixed-replace;boundary=End");
+    out.println();
+    out.println("--End");
+  }
+
+  public void startResponse(String contentType) throws IOException {
+    // End the last response if necessary
+    if (!endedLastResponse) {
+      endResponse();
+    }
+    // Start the next one
+    out.println("Content-Type: " + contentType);
+    out.println();
+    endedLastResponse = false;
+  }
+
+  public void endResponse() throws IOException {
+    // End the last response, and flush so the client sees the content
+    out.println();
+    out.println("--End");
+    out.flush();
+    endedLastResponse = true;
+  }
+
+  public void finish() throws IOException {
+    out.println("--End--");
+    out.flush();
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="INDEX-1245"></a>
+<a name="INDEX-1246"></a>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch06_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch07_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch07_01.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">6.2. Compressed Content</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">7. Session Tracking</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

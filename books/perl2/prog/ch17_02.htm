@@ -1,0 +1,1177 @@
+<html>
+<head>
+<title>The Thread Model (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="The Thread Model">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch17_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch17_01.htm">Chapter 17: Threads</a></td><td align="right" valign="top" width="172"><a href="ch18_01.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">17.2. The Thread Model</h2>
+
+<p>
+<a name="INDEX-3129"></a><a name="INDEX-3130"></a>
+The thread model of multiprocessing was first introduced to Perl as an
+experimental feature in version 5.005.  (By "thread model", we mean
+threads that share data resources by default, not the new ithreads of
+version 5.6.)  In some senses, this thread model is still an
+experimental feature even in 5.6, because Perl is a rich language and
+multithreading can make a muddle of even the simplest language.  There
+are still various nooks and crannies of Perl semantics that don't
+interact very well with the notion of everything being shared.  The new
+ithreads model is an attempt to bypass these problems, and at some
+future point, the current thread model may be subsumed under the
+ithread model (when we get an interface to ithreads that says "share
+everything you can by default").  But despite its warts, the current
+"experimental" thread model continues to be useful in many real-world
+situations where the only alternative to being a guinea pig is even
+less desirable.  Reasonably robust applications can be written in
+threaded Perl, but you have to be very careful.  You should at least
+consider using <tt class="literal">fork</tt> instead, if you can think of a way to solve your problem with pipes instead of shared data structures.</p>
+
+<p>
+<a name="INDEX-3131"></a>
+But some algorithms are easier to express if multiple tasks have easy
+and efficient access to the same pool of data.<a href="#FOOTNOTE-2">[2]</a> This makes for code that
+can be smaller and simpler.  And because the kernel does not have to
+copy page tables for data (even if doing copy-on-write) at thread
+creation time, it should be faster to start a task this way.  Likewise,
+context switches can be faster if the kernel doesn't need to swap page
+tables.  (In fact, for user-level threads, the kernel doesn't get
+involved at all--though of course user-level threads have issues that
+kernel threads don't.)</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-2"></a>
+<p>[2] The System V
+shared memory model discussed in the last chapter does not exactly
+qualify as "easy and efficient".</p>
+
+</blockquote>
+
+<p>That's the good news.  Now for some more disclaimers.  We already
+mentioned that threading is somewhat experimental in Perl, but even if
+it weren't, programming with threads is treacherous.  The ability of one
+execution stream to poke holes willy-nilly into the data space of
+another exposes more opportunity for disaster than you can possibly
+imagine.  You might say to yourself, "That's easy to fix, I'll just put
+locks on any shared data."  Okay, locking of shared data is
+indispensable, but getting the locking protocols correct is notoriously
+difficult, with errors producing deadlock or nondeterministic results.
+If you have timing problems in your program, using threads will not
+only exacerbate them, but it will make them harder to locate.</p>
+
+<p>
+<a name="INDEX-3132"></a><a name="INDEX-3133"></a>
+Not only are you responsible for keeping your own shared data straight, but
+you are required to keep the data straight of all the Perl modules and
+C libraries you call into.  Your Perl code can be 100% threadsafe, and
+if you call into a nonthreadsafe module or C subroutine without
+providing your own semaphore protection, you're toast.  You should
+assume any module is not threadsafe until proven otherwise.  That
+even includes some of the standard modules.  Maybe even most of them.</p>
+
+<p>
+<a name="INDEX-3134"></a><a name="INDEX-3135"></a>
+Have we discouraged you yet?  No?  Then we'll point out that you're
+pretty much at the mercy of your operating system's threading library
+when it comes to scheduling and preemption policies.  Some thread
+libraries only do thread switching on blocking system calls.  Some libraries
+block the whole process if a single thread makes a blocking system
+call.  Some libraries only switch threads on quantum expiration (either
+thread or process).  Some libraries only switch threads explicitly.</p>
+
+<p>
+<a name="INDEX-3136"></a>
+Oh, and by the way, if your process receives a signal, which thread the
+signal is delivered to is completely system dependent.</p>
+
+<p>To do thread programming in Perl, you must build a special
+version of Perl following the directions given in the <em class="emphasis">README.threads</em>
+file in the Perl source directory.  This special Perl is pretty much
+guaranteed to run a bit slower than your standard Perl executable.</p>
+
+<p>
+<a name="INDEX-3137"></a><a name="INDEX-3138"></a>
+Do not assume that just because you know how threads are programmed in
+other models (POSIX, DEC, Microsoft, etc.) you know how threads work
+with Perl.  As with other things in Perl, Perl is Perl, not C++ or Java
+or whatnot.  For example, there are no real-time thread priorities
+(and no way to work around their absence).  There are also no mutexes.
+Just use regular locking or perhaps the <tt class="literal">Thread::Semaphore</tt> module or the <tt class="literal">cond_wait</tt> facilities.</p>
+
+<p>Still not discouraged?  Good, because threads are really cool.  You're
+scheduled to have some fun.</p>
+
+
+<h3 class="sect2">17.2.1. The Thread Module</h3>
+
+<p>
+<a name="INDEX-3139"></a>
+The current interface for Perl threads is defined by the <tt class="literal">Thread</tt>
+module.  Additionally, one new Perl keyword was added, the <tt class="literal">lock</tt>
+operator.  We'll talk about <tt class="literal">lock</tt> later in this chapter.  Other
+standard thread modules build on this basic interface.</p>
+
+<p>
+<a name="INDEX-3140"></a><a name="INDEX-3141"></a>
+The <tt class="literal">Thread</tt> module provides these class methods:</p>
+
+<a name="perl3-tab-thrclassmeth"></a>
+<table border="1">
+
+<tr>
+<th>Method</th>
+<th>Use</th>
+</tr>
+
+
+
+
+<tr>
+<td><tt class="literal">new</tt></td>
+<td>Construct a new <tt class="literal">Thread</tt>.</td>
+</tr>
+
+<tr>
+<td><tt class="literal">self</tt></td>
+<td>Return my current <tt class="literal">Thread</tt> object.</td>
+</tr>
+
+<tr>
+<td><tt class="literal">list</tt></td>
+<td>Return list of <tt class="literal">Thread</tt> objects.</td>
+</tr>
+
+
+</table>
+<a name="INDEX-3142"></a>
+<p>And, for <tt class="literal">Thread</tt> objects, it provides these object methods:</p>
+
+<a name="perl3-tab-throbjmeth"></a>
+<table border="1">
+
+<tr>
+<th>Method</th>
+<th>Use</th>
+</tr>
+
+
+
+
+<tr>
+<td><tt class="literal">join</tt></td>
+<td>Harvest a thread (propagate errors).</td>
+</tr>
+
+<tr>
+<td><tt class="literal">eval</tt></td>
+<td>Harvest a thread (trap errors).</td>
+</tr>
+
+<tr>
+<td><tt class="literal">equal</tt></td>
+<td>Compare two threads for identity.</td>
+</tr>
+
+<tr>
+<td><tt class="literal">tid</tt></td>
+<td>Return the internal thread ID.</td>
+</tr>
+
+
+</table>
+<p>
+<a name="INDEX-3143"></a>
+In addition, the <tt class="literal">Thread</tt> module provides these importable functions:</p>
+
+<a name="perl3-tab-thrimport"></a>
+<table border="1">
+
+<tr>
+<th>Function</th>
+<th>Use</th>
+</tr>
+
+
+
+
+<tr>
+<td><tt class="literal">yield</tt></td>
+<td>
+<p>Tell the scheduler to run a different thread.</p>
+</td>
+</tr>
+
+<tr>
+<td><tt class="literal">async</tt></td>
+<td>
+<p>Construct a <tt class="literal">Thread</tt> via closure.</p>
+</td>
+</tr>
+
+<tr>
+<td><tt class="literal">cond_signal</tt></td>
+<td>Wake up exactly one thread that is <tt class="literal">cond_wait()</tt>ing on a variable.</td>
+</tr>
+
+<tr>
+<td><tt class="literal">cond_broadcast</tt></td>
+<td>
+<p>Wake up all threads that may be <tt class="literal">cond_wait()</tt>ing on a variable.</p>
+</td>
+</tr>
+
+<tr>
+<td><tt class="literal">cond_wait</tt></td>
+<td>
+<p>Wait on a variable until awakened by a <tt class="literal">cond_signal()</tt> or <tt class="literal">cond_broadcast()</tt> on that variable.</p>
+</td>
+</tr>
+
+
+</table>
+<h3 class="sect3">17.2.1.1. Thread creation</h3>
+
+<p>
+<a name="INDEX-3144"></a><a name="INDEX-3145"></a><a name="INDEX-3146"></a><a name="INDEX-3147"></a>
+You can spawn a thread in one of two ways, either by using the
+<tt class="literal">Thread-&gt;new</tt> class method or by using the <tt class="literal">async</tt> function.  In
+either case, the returned value is a <tt class="literal">Thread</tt> object.  <tt class="literal">Thread-&gt;new</tt>
+takes a code reference indicating a function to run and arguments to
+pass to that function:
+<blockquote>
+<pre class="programlisting">use Thread;
+...
+$t = Thread-&gt;new( \&amp;func, $arg1, $arg2);</pre>
+</blockquote>
+<a name="INDEX-3148"></a>
+Often you'll find yourself wanting to pass a closure as the first
+argument without supplying any additional arguments:
+<blockquote>
+<pre class="programlisting">my $something;
+$t = Thread-&gt;new( sub { say($something) } );</pre>
+</blockquote>
+
+For this special case, the <tt class="literal">async</tt> function provides some notational
+relief (that is, syntactic sugar):
+<blockquote>
+<pre class="programlisting">use Thread qw(async);
+...
+my $something;
+$t = async {
+    say($something);
+};</pre>
+</blockquote>
+
+You'll note that we explicitly import the <tt class="literal">async</tt> function.  You
+may, of course, use the fully qualified name <tt class="literal">Thread::async</tt> instead,
+but then your syntactic sugar isn't so sweet.  Since <tt class="literal">async</tt> takes
+only a closure, anything you want to pass to it must be a lexical
+variable in scope at the time.</p>
+
+
+
+
+<h3 class="sect3">17.2.1.2. Thread destruction</h3>
+
+<p>
+<a name="INDEX-3149"></a><a name="INDEX-3150"></a><a name="INDEX-3151"></a>
+Once begun--and subject to the whims of your threading library--the
+thread will keep running on its own until its top-level function (the
+function you passed to the constructor) returns.  If you want to
+terminate a thread early, just <tt class="literal">return</tt> from within that top-level
+function.<a href="#FOOTNOTE-3">[3]</a>
+</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-3"></a>
+<p>[3] Don't call <tt class="literal">exit</tt>!  That would try to take down your
+entire process, and possibly succeed.  But the process won't actually
+exit until all threads exit, and some of them may refuse to exit on
+an <tt class="literal">exit</tt>.  More on that later.</p>
+
+</blockquote>
+
+<p>
+<a name="INDEX-3152"></a>
+Now it's all very well for your top-level subroutine to return, but who
+does it return <em class="emphasis">to</em>?  The thread that spawned this thread has presumably
+gone on to do other things and is no longer waiting at a method call
+for a response.  The answer is simple enough: the thread waits until
+someone issues a method call that <em class="emphasis">does</em> wait for a return value.
+That method call is called <tt class="literal">join</tt>, because it conceptually joins two
+threads back into one:
+<blockquote>
+<pre class="programlisting">$retval = $t-&gt;join();    # harvest thread $t</pre>
+</blockquote>
+
+The operation of <tt class="literal">join</tt> is reminiscent of <tt class="literal">waitpid</tt> on a child
+process.  If the thread has already shut down, the <tt class="literal">join</tt> method
+returns immediately with the return value of the thread's top-level
+subroutine.  If the thread is not done, <tt class="literal">join</tt> acts as a blocking call
+that suspends the calling thread indefinitely.  (There is no time-out
+facility.)  When the thread eventually completes, the <tt class="literal">join</tt> returns.</p>
+
+<p>Unlike <tt class="literal">waitpid</tt>, however, which can only harvest the process's own children,
+any thread can <tt class="literal">join</tt> any other thread within the process.  That is,
+it is not a necessity for the joining thread be the main thread or the
+parent thread.  The only restrictions are that a thread can't <tt class="literal">join</tt>
+itself (which would be like officiating at your own funeral), and a
+thread can't <tt class="literal">join</tt> a thread that has already been joined (which would
+be like two funeral directors fighting each other over the body).  If
+you try to do either of those things, an exception will be raised.</p>
+
+<p>The return value of <tt class="literal">join</tt> doesn't have to be a scalar value--it can
+also be a list:
+<blockquote>
+<pre class="programlisting">use Thread 'async';
+
+$t1 = async {
+    my @stuff = getpwuid($&gt;);
+    return @stuff;
+};
+
+$t2 = async {
+    my $motd = `cat /etc/motd`;
+    return $motd;
+};
+
+@retlist = $t1-&gt;join();
+$retval  = $t2-&gt;join();
+
+print "1st kid returned @retlist\n";
+print "2nd kid returned $retval\n";</pre>
+</blockquote>
+
+In fact, the return expression of a thread is always evaluated in list
+context, even if <tt class="literal">join</tt> is called in a scalar context, in which case the
+last value of the list is returned.</p>
+
+
+
+
+<h3 class="sect3">17.2.1.3. Catching exceptions from join</h3>
+
+<p>
+<a name="INDEX-3153"></a><a name="INDEX-3154"></a><a name="INDEX-3155"></a><a name="INDEX-3156"></a>
+If a thread terminates with an uncaught exception, this does not
+immediately kill the whole program.  That would be naughty.  Instead, when
+a <tt class="literal">join</tt> is run on that thread, the <tt class="literal">join</tt> itself raises the
+exception.  Using <tt class="literal">join</tt> on a thread indicates a willingness to
+propagate any exceptions raised by that thread.  If you'd rather trap
+the exception right then and there, use the <tt class="literal">eval</tt> method, which,
+like its built-in counterpart, causes the exception to be put into <tt class="literal">$@</tt>:
+<blockquote>
+<pre class="programlisting">$retval = $t-&gt;eval();   # catch join errors
+if ($@) {
+    warn "thread failed: $@";
+}
+else {
+    print "thread returned $retval\n";
+}</pre>
+</blockquote>
+
+Although there's no rule to this effect, you might want to adopt a
+practice of joining a thread only from within the thread that created
+the one you're joining.  That is, you harvest a child thread only from
+the parent thread that spawned it.  This makes it a little easier to
+keep track of which exceptions you might need to handle where.</p>
+
+
+
+
+<h3 class="sect3">17.2.1.4. The detach method</h3>
+
+<p>
+<a name="INDEX-3157"></a><a name="INDEX-3158"></a><a name="INDEX-3159"></a>
+As another alternative method of shutting down threads,
+if you don't plan to <tt class="literal">join</tt> a thread later to get its
+return value, you can call the <tt class="literal">detach</tt> method on it so that
+Perl will clean it up for you.  It can no longer be joined.
+It's a little bit like when a process is inherited by the <em class="emphasis">init</em>
+program under Unix, except that the only way to do that under Unix is
+for the parent process to die.</p>
+
+<p>The <tt class="literal">detach</tt> method does not "background" the thread; if you try to
+exit the main program and a detached thread is still running, the exit
+will hang until the thread exits on its own.  Rather, <tt class="literal">detach</tt> just
+spares you from clean up.  It merely tells Perl not to keep the return
+value and exit status of the thread after it finishes.  In a sense,
+<tt class="literal">detach</tt> tells Perl to do an implicit <tt class="literal">join</tt> when the thread
+finishes and then throw away the results.  That can be important: if
+you neither <tt class="literal">join</tt> nor <tt class="literal">detach</tt> a thread that returns some very large
+list, that storage will be lost until the end, because Perl would have
+to hang onto it on the off chance (very off, in this case) that someone
+would want to <tt class="literal">join</tt> that thread sometime in the future.</p>
+
+<p>
+<a name="INDEX-3160"></a>
+An exception raised in a detached child thread also no longer propagates up 
+through a <tt class="literal">join</tt>, since there will never be one.  Use <tt class="literal">eval {}</tt> wisely in
+the top-level function, and find some other way to report errors.</p>
+
+
+
+
+<h3 class="sect3">17.2.1.5. Identifying threads</h3>
+
+<p>
+<a name="INDEX-3161"></a><a name="INDEX-3162"></a><a name="INDEX-3163"></a>
+Every Perl thread has a distinguishing thread identification
+number, which the <tt class="literal">tid</tt> object method returns:
+<blockquote>
+<pre class="programlisting">$his_tidno = $t1-&gt;tid();</pre>
+</blockquote>
+<a name="INDEX-3164"></a>
+A thread can access its own thread object through the <tt class="literal">Thread-&gt;self</tt>
+call.  Don't confuse that with the thread ID: to figure out its own
+thread ID, a thread does this:
+<blockquote>
+<pre class="programlisting">$mytid = Thread-&gt;self-&gt;tid();   # $$ for threads, as it were.</pre>
+</blockquote>
+<a name="INDEX-3165"></a><a name="INDEX-3166"></a>
+To compare one thread object with another, do any of these:
+<blockquote>
+<pre class="programlisting">Thread::equal($t1, $t2)
+$t1-&gt;equal($t2)
+$t1-&gt;tid() == $td-&gt;tid()</pre>
+</blockquote>
+</p>
+
+
+
+
+<h3 class="sect3">17.2.1.6. Listing current threads</h3>
+
+<p>
+<a name="INDEX-3167"></a>
+You can get a list of current thread objects in the current process
+using the <tt class="literal">Thread-&gt;list</tt> class method call.  The list includes both
+running threads and threads that are done but haven't been joined yet. You can do this from any thread.
+<blockquote>
+<pre class="programlisting">for my $t (Thread-&gt;list()) {
+    printf "$t has tid = %d\n", $t-&gt;tid();
+}</pre>
+</blockquote>
+</p>
+
+
+
+
+<h3 class="sect3">17.2.1.7. Yielding the processor</h3>
+
+<p>
+<a name="INDEX-3168"></a><a name="INDEX-3169"></a><a name="INDEX-3170"></a><a name="INDEX-3171"></a>
+The <tt class="literal">Thread</tt> module supports an importable function named <tt class="literal">yield</tt>.
+Its job is to cause the calling thread to surrender the processor.
+Unfortunately, details of what this really does are completely dependent
+on which flavor of thread implementation you have.  Nevertheless, it's
+considered a nice gesture to relinquish control of the CPU occasionally:
+<blockquote>
+<pre class="programlisting">use Thread 'yield';
+yield();</pre>
+</blockquote>
+
+You don't have to use parentheses.  This is even safer, syntactically
+speaking, because it catches the seemingly inevitable "yeild" typo:
+<blockquote>
+<pre class="programlisting">use strict;
+use Thread 'yield';
+yeild;          # Compiler wails, then bails.
+yield;          # Ok.</pre>
+</blockquote>
+</p>
+
+<a name="INDEX-3172"></a>
+
+
+
+
+
+
+
+<h3 class="sect2">17.2.2. Data Access</h3>
+
+<p>
+<a name="INDEX-3173"></a><a name="INDEX-3174"></a>
+What we've gone over so far isn't really too hard, but we're
+about to fix that.  Nothing we've done has actually exercised
+the parallel nature of threads.  Accessing shared data changes all that.</p>
+
+<p>
+<a name="INDEX-3175"></a><a name="INDEX-3176"></a>
+Threaded code in Perl has the same constraints regarding data
+visibility as any other bit of Perl code.  Globals are still accessed
+via global symbol tables, and lexicals are still accessed via some
+containing lexical scope (scratchpad).</p>
+
+<p>However, the fact that multiple threads of control exist in the program
+throws a clinker into the works.  Two threads can't be allowed to
+access the same global variable simultaneously, or they may tromp on
+each other.  (The result of the tromping depends on the nature of the
+access.)  Similarly, two threads can't be allowed to access the same lexical variable simultaneously, because lexical 
+
+variables 
+
+also behave like globals if they
+are declared outside the scope of closures being used by threads.  Starting threads via subroutine references (using <tt class="literal">Thread-&gt;new</tt>)
+rather than via closures (using <tt class="literal">async</tt>) can help
+limit access to lexicals, if that's what you want.  (Sometimes it
+isn't, though.)</p>
+
+<p>
+<a name="INDEX-3177"></a>
+Perl solves the problem for certain built-in special variables, like
+<tt class="literal">$!</tt> and <tt class="literal">$_</tt> and <tt class="literal">@_</tt> and the like, by making them thread-specific
+data.  The bad news is that all your basic, everyday package variables
+are unprotected from tromping.</p>
+
+<p>The good news is that you don't generally have to worry about your lexical
+variables at all, presuming they were declared inside the current thread,
+since each thread will instantiate its own lexical scope upon entry, separate
+from any other thread.  You only have to worry about lexicals if they're
+shared between threads, by passing references around, for example, or by referring
+to lexicals from within closures running under multiple threads.</p>
+
+
+<h3 class="sect3">17.2.2.1. Synchronizing access with lock</h3>
+
+<p>
+<a name="INDEX-3178"></a><a name="INDEX-3179"></a>
+When more than one agent can access the same item at the same time,
+collisions happen, just like at an intersection.  Careful locking is
+your only defense.</p>
+
+<p>
+<a name="INDEX-3180"></a>
+The built-in <tt class="literal">lock</tt> function is Perl's red-light/green-light mechanism for
+access control.  Although <tt class="literal">lock</tt> is a keyword of sorts,
+it's a shy one, in that the built-in function is <em class="emphasis">not</em> used if the
+compiler has already seen a <tt class="literal">sub lock {}</tt> definition in user code.
+This is for backward compatibility.  <tt class="literal">CORE::lock</tt> is always the
+built-in, though.  (In a <em class="emphasis">perl</em> not built for threading, calling <tt class="literal">lock</tt>
+is not an error; it's a harmless no-op, at least in recent versions.)</p>
+
+<p>Just as the <tt class="literal">flock</tt> operator only blocks other instances of <tt class="literal">flock</tt>,
+not the actual I/O, so too the <tt class="literal">lock</tt> operator only blocks other
+instances of <tt class="literal">lock</tt>, not regular data access.  They are, in effect,
+<em class="emphasis">advisory</em> locks.  Just like traffic lights.<a href="#FOOTNOTE-4">[4]</a>
+</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-4"></a>
+<p>[4] Some railroad
+crossing signals are mandatory (the ones with gates), and some folks
+think locks should be mandatory too.  But just picture a world in which
+every intersection has arms that go up and down whenever the lights
+change.</p>
+
+</blockquote>
+
+<p>You can <tt class="literal">lock</tt> individual scalar variables and entire arrays and
+hashes as well.
+<blockquote>
+<pre class="programlisting">lock $var;
+lock @values;
+lock %table;</pre>
+</blockquote>
+
+However, using <tt class="literal">lock</tt> on an aggregate does not implicitly lock all that
+aggregate's scalar components:
+<blockquote>
+<pre class="programlisting">lock @values;       # in thread 1
+...
+lock $values[23];   # in thread 2 -- won't block!</pre>
+</blockquote>
+<a name="INDEX-3181"></a>
+If you lock a reference, this automatically locks access to the
+referent.  That is, you get one dereference for free.  This is handy because
+objects are always hidden behind a reference, and you often want to
+lock objects.  (And you almost never want to lock references.)</p>
+
+<p>
+<a name="INDEX-3182"></a>
+The problem with traffic lights, of course, is that they're red half
+the time, and then you have to wait.  Likewise, <tt class="literal">lock</tt> is a blocking
+call--your thread will hang there until the lock is granted.  There is
+no time-out facility.  There is no unlock facility, either, because
+locks are dynamically scoped.  They persist until their block, file, or
+<tt class="literal">eval</tt> has finished.  When they go out of scope, they are freed automatically.</p>
+
+<p>
+<a name="INDEX-3183"></a>
+Locks are also recursive.  That means that if you lock a variable in
+one function, and that function recurses while holding the lock,
+the same thread can successfully lock the same variable again.  The
+lock is finally dropped when all frames owning the locks have exited.</p>
+
+<p>Here's a simple demo of what can happen if you don't have locking.
+We'll force a context switch using <tt class="literal">yield</tt> to show
+the kind of problem that can also happen accidentally under preemptive
+scheduling:
+<blockquote>
+<pre class="programlisting">use Thread qw/async yield/;
+my $var = 0;
+sub abump {
+    if ($var == 0) {
+        yield;
+        $var++;
+    }
+}
+
+my $t1 = new Thread \&amp;abump;
+my $t2 = new Thread \&amp;abump;
+
+for my $t ($t1, $t2) { $t-&gt;join }
+print "var is $var\n";</pre>
+</blockquote>
+
+That code always prints <tt class="literal">2</tt> (for some definition of always) because
+we decided to do the bump after seeing its value was <tt class="literal">0</tt>, but before we
+could do so, another thread decided the same thing.</p>
+
+<p>We can fix that collision by the trivial addition of a lock 
+before we examine <tt class="literal">$var</tt>.  Now this code always prints <tt class="literal">1</tt>:
+<blockquote>
+<pre class="programlisting">sub abump {
+    lock $var;
+    if ($var == 0) {
+        yield;
+        $var++;
+    }
+}</pre>
+</blockquote>
+<a name="INDEX-3184"></a>
+Remember that there's no explicit <tt class="literal">unlock</tt> function.  To control unlocking, just
+add another, nested scoping level so the lock is released
+when that scope terminates:
+<blockquote>
+<pre class="programlisting">sub abump {
+    {
+        lock $var;
+        if ($var == 0) {
+            yield;
+            $var++;
+        }
+    }  # lock released here!
+    # other code with unlocked $var
+}</pre>
+</blockquote>
+</p>
+
+
+
+
+<h3 class="sect3">17.2.2.2. Deadlock</h3>
+
+<p>
+<a name="INDEX-3185"></a><a name="INDEX-3186"></a>
+Deadlock is the bane of thread programmers because it's easy to do by
+accident and hard to avoid even when you try to.  Here's a
+simple example of deadlock:
+<blockquote>
+<pre class="programlisting">my $t1 = async {
+    lock $a; yield; lock $b;
+    $a++; $b++
+};
+my $t2 = async {
+    lock $b; yield; lock $a;
+    $b++; $a++
+};</pre>
+</blockquote>
+
+The solution here is for all parties who need a particular
+set of locks to grab them in the same order.</p>
+
+<p>It's also good to minimize the duration of time you hold locks.
+(At least, it's good to do so for performance reasons.  But if you do it
+to reduce the risk of deadlock, all you're doing is making it harder
+to reproduce and diagnose the problem.)</p>
+
+
+
+
+<h3 class="sect3">17.2.2.3. Locking subroutines</h3>
+
+<a name="INDEX-3187"></a><a name="INDEX-3188"></a><a name="INDEX-3189"></a>
+<p>You can also put a lock on a subroutine:
+<blockquote>
+<pre class="programlisting">lock &amp;func;</pre>
+</blockquote>
+
+Unlike locks on data, which are advisory only, subroutine locks
+are <em class="emphasis">mandatory</em>.  No one else but the thread with the lock may enter
+the subroutine.</p>
+
+<p>Consider the following code, which contains race conditions involving the <tt class="literal">$done</tt> variable. (The <tt class="literal">yield</tt>s are for demonstration purposes only).
+<blockquote>
+<pre class="programlisting">use Thread qw/async yield/;
+my $done = 0;
+sub frob {
+    my $arg = shift;
+    my $tid = Thread-&gt;self-&gt;tid;
+    print "thread $tid: frob $arg\n";
+    yield;
+    unless ($done) {
+        yield;
+        $done++;
+        frob($arg + 10);
+    }
+}</pre>
+</blockquote>
+
+If you run it this way:
+<blockquote>
+<pre class="programlisting">my @t;
+for my $i (1..3) {
+    push @t, Thread-&gt;new(\&amp;frob, $i);
+}
+for (@t) { $_-&gt;join }
+print "done is $done\n";</pre>
+</blockquote>
+
+here's the output (well, sometimes--it's not deterministic):
+<blockquote>
+<pre class="programlisting">thread 1: frob 1
+thread 2: frob 2
+thread 3: frob 3
+thread 1: frob 11
+thread 2: frob 12
+thread 3: frob 13
+done is 3</pre>
+</blockquote>
+
+However, if you run it this way:
+<blockquote>
+<pre class="programlisting">for my $i (1..3) {
+    push @t, async {
+        lock &amp;frob;
+        frob($i);
+    };
+}
+for (@t) { $_-&gt;join }
+print "done is $done\n";</pre>
+</blockquote>
+
+here's the output:
+<blockquote>
+<pre class="programlisting">thread 1: frob 1
+thread 1: frob 11
+thread 2: frob 2
+thread 3: frob 3
+done is 1</pre>
+</blockquote>
+</p>
+
+
+
+
+<h3 class="sect3">17.2.2.4. The locked attribute</h3>
+
+<p>
+<a name="INDEX-3190"></a><a name="INDEX-3191"></a><a name="INDEX-3192"></a>
+Although obeying a subroutine lock is mandatory, nothing
+forces anyone to lock them in the first place.  You could say that
+the placement of the lock is advisory.  But some subroutines
+would really like to be able to require that they be locked before
+being called.</p>
+
+<p>The <tt class="literal">locked</tt> subroutine attribute addresses this.
+It's faster than calling <tt class="literal">lock &amp;sub</tt> because it's
+known at compile time, not just at run time.  But the behavior is the
+same as when we locked it explicitly earlier.  The syntax is as
+follows:
+<blockquote>
+<pre class="programlisting">sub frob : locked {
+    # as before
+}</pre>
+</blockquote>
+
+If you have a function prototype, it comes between the name and any
+attributes:
+<blockquote>
+<pre class="programlisting">sub frob ($) : locked {
+    # as before
+}</pre>
+</blockquote>
+</p>
+
+
+
+
+<h3 class="sect3">17.2.2.5. Locking methods</h3>
+
+<p>
+<a name="INDEX-3193"></a><a name="INDEX-3194"></a><a name="INDEX-3195"></a><a name="INDEX-3196"></a>
+Automatic locking on a subroutine is really cool, but sometimes it's
+overkill.  When you're invoking an object method, it doesn't generally
+matter if multiple methods are running simultaneously as long as they're
+all running on behalf of different objects.  So you'd really like to lock
+the object that the method is being called on instead.  Adding a
+<tt class="literal">method</tt> attribute to the subroutine definition does this:
+<blockquote>
+<pre class="programlisting">sub frob : locked method {
+    # as before
+}</pre>
+</blockquote>
+
+If called as a method, the invoking object is locked, providing serial
+access to that object, but allowing the method to be called on other
+objects.  If the method isn't called on an object, the attribute still
+tries to do the right thing: if you call a locked method as a class method
+(<tt class="literal">Package-&gt;new</tt> rather than <tt class="literal">$obj-&gt;new</tt>) the package's symbol
+table is locked. If you call a locked method as a normal subroutine, Perl will raise an exception.</p>
+
+
+
+
+<h3 class="sect3">17.2.2.6. Condition variables</h3>
+
+<p>
+<a name="INDEX-3197"></a><a name="INDEX-3198"></a><a name="INDEX-3199"></a><a name="INDEX-3200"></a>
+A condition variable allows a thread to give up the processor until
+some criterion is satisfied.  Condition variables are meant as points
+of coordination between threads when you need more control than a mere
+lock provides.  On the other hand, you don't really need more <em class="emphasis">overhead</em>
+than the lock provides, and condition variables are designed
+with this in mind.  You just use ordinary locks plus ordinary
+conditionals.  If the condition fails, then you'll have to take
+extraordinary measures via the <tt class="literal">cond_wait</tt> function; but we optimize
+for success, since in a well-designed application, we shouldn't be
+bottlenecking on the current condition anyway.</p>
+
+<p>
+<a name="INDEX-3201"></a>
+Besides locking and testing, the basic operations on condition
+variables consist of either sending or receiving a "signal" event (not
+a real signal in the <tt class="literal">%SIG</tt> sense).  Either you suspend your own
+execution to wait for an event to be received, or you send an event to
+wake up other threads waiting for the particular condition.  The <tt class="literal">Thread</tt>
+module provides three importable functions to do this:  <tt class="literal">cond_wait</tt>,
+<tt class="literal">cond_signal</tt>, and <tt class="literal">cond_broadcast</tt>.  These are the primitive
+mechanisms upon which more abstract modules like <tt class="literal">Thread::Queue</tt> and
+<tt class="literal">Thread::Semaphore</tt> are based.  It's often more convenient to use
+those abstractions, when possible.</p>
+
+<p>The <tt class="literal">cond_wait</tt> function takes a variable already locked by the
+current thread, unlocks that variable, and then blocks until another
+thread does a <tt class="literal">cond_signal</tt> or <tt class="literal">cond_broadcast</tt> for that same locked
+variable.</p>
+
+<p>The variable blocked by <tt class="literal">cond_wait</tt> is relocked after
+<tt class="literal">cond_wait</tt> returns.  If multiple threads are <tt class="literal">cond_wait</tt>ing the same
+variable, all but one reblock because they can't regain the lock on
+the variable.  Therefore, if you're only using <tt class="literal">cond_wait</tt> for
+synchronization, give up the lock as soon as possible.</p>
+
+<p>The <tt class="literal">cond_signal</tt> function takes a variable already locked by the
+current thread and unblocks one thread that's currently in a
+<tt class="literal">cond_wait</tt> on that variable.  If more than one thread is blocked in a
+<tt class="literal">cond_wait</tt> on that variable, only one is unblocked, and you can't
+predict which one.  If no threads are blocked in a <tt class="literal">cond_wait</tt> on that
+variable, the event is discarded.</p>
+
+<p>The <tt class="literal">cond_broadcast</tt> function works like <tt class="literal">cond_signal</tt>, but unblocks all
+threads blocked in a <tt class="literal">cond_wait</tt> on the locked variable, not just
+one.  (Of course, it's still the case that only one thread can have the
+variable locked at a time.)</p>
+
+<p>The <tt class="literal">cond_wait</tt> function is intended to be a last-resort kind of thing
+that a thread does only if the condition it wants isn't met.  The
+<tt class="literal">cond_signal</tt> and <tt class="literal">cond_broadcast</tt> indicate that the condition is
+changing.  The scheme is supposed to be this: lock, then check to see whether the
+condition you want is met; if it is, fine, and if it isn't,
+<tt class="literal">cond_wait</tt> until it <em class="emphasis">is</em> fine.  The emphasis should be on avoiding
+blocking if at all possible.  (Generally a good piece of advice when
+dealing with threads.)</p>
+
+<p>
+<a name="INDEX-3202"></a>
+Here's an example of passing control back and forth between two
+threads.  Don't be fooled by the fact that the actual conditions are
+over on the right in statement modifiers; <tt class="literal">cond_wait</tt>
+is never called unless the condition we're waiting for is false.
+<blockquote>
+<pre class="programlisting">use Thread qw(async cond_wait cond_signal);
+my $wait_var = 0;
+async {
+    lock $wait_var;
+    $wait_var = 1;
+    cond_wait $wait_var  until $wait_var == 2;
+    cond_signal($wait_var);
+    $wait_var = 1;
+    cond_wait $wait_var  until $wait_var == 2;
+    $wait_var = 1;
+    cond_signal($wait_var);
+};
+
+async {
+    lock $wait_var;
+    cond_wait $wait_var  until $wait_var == 1;
+    $wait_var = 2;
+    cond_signal($wait_var);
+    cond_wait $wait_var  until $wait_var == 1;
+    $wait_var = 2;
+    cond_signal($wait_var);
+    cond_wait $wait_var  until $wait_var == 1;
+};</pre>
+</blockquote>
+</p>
+
+
+
+
+
+
+
+<h3 class="sect2">17.2.3. Other Thread Modules</h3>
+
+<p>
+<a name="INDEX-3203"></a>
+Several modules are built on top of the <tt class="literal">cond_wait</tt> primitive.</p>
+
+
+<h3 class="sect3">17.2.3.1. Queues</h3>
+
+<p>
+<a name="INDEX-3204"></a><a name="INDEX-3205"></a>
+The standard <tt class="literal">Thread::Queue</tt> module provides a way to pass
+objects between threads without worrying about locks or
+synchronization.  This interface is much easier:</p>
+
+<a name="perl3-tab-thrqueue"></a>
+<table border="1">
+
+<tr>
+<th>Method</th>
+<th>Use</th>
+</tr>
+
+
+
+
+<tr>
+<td><tt class="literal">new</tt></td>
+<td>Construct a new <tt class="literal">Thread::Queue</tt>.</td>
+</tr>
+
+<tr>
+<td><tt class="literal">enqueue</tt><a name="INDEX-3206"></a></td>
+<td>Push one or more scalars on to the end of the queue.</td>
+</tr>
+
+<tr>
+<td><tt class="literal">dequeue</tt></td>
+<td>
+<p>Shift the first scalar off the front of the queue. The <tt class="literal">dequeue</tt> method blocks if there are no items present.</p>
+</td>
+</tr>
+
+
+</table>
+<p>Notice how similar a queue is to a regular pipe, except that 
+instead of sending bytes, you get to pass around full scalars, including
+references and blessed objects!</p>
+
+<p>Here's an example derived from the <em class="emphasis">perlthrtut</em> manpage:
+<blockquote>
+<pre class="programlisting">use Thread qw/async/;
+use Thread::Queue;
+
+my $Q = Thread::Queue-&gt;new();
+async {
+    while (defined($datum = $Q-&gt;dequeue)) {
+       print "Pulled $datum from queue\n";
+    }
+};
+
+$Q-&gt;enqueue(12);
+$Q-&gt;enqueue("A", "B", "C");
+$Q-&gt;enqueue($thr);
+sleep 3;
+$Q-&gt;enqueue(\%ENV);
+$Q-&gt;enqueue(undef);</pre>
+</blockquote>
+
+Here's what you get for output:
+<blockquote>
+<pre class="programlisting">Pulled 12 from queue
+Pulled A from queue
+Pulled B from queue
+Pulled C from queue
+Pulled Thread=SCALAR(0x8117200) from queue
+Pulled HASH(0x80dfd8c) from queue</pre>
+</blockquote>
+<a name="INDEX-3207"></a>
+Notice how <tt class="literal">$Q</tt> was in scope when the asynchronous thread was
+launched via an <tt class="literal">async</tt> closure.  Threads are under the same
+scoping rules as anything else in Perl.  The example above would
+not have worked had <tt class="literal">$Q</tt> been declared after the call to <tt class="literal">async</tt>.</p>
+
+
+
+
+<h3 class="sect3">17.2.3.2. Semaphores</h3>
+
+<p>
+<a name="INDEX-3208"></a><a name="INDEX-3209"></a><tt class="literal">Thread::Semaphore</tt> provides you with threadsafe,
+counting semaphore objects to implement your favorite
+<tt class="literal">p()</tt> and <tt class="literal">v()</tt> operations.  Because
+most of us don't associate these operations with the Dutch words
+<em class="emphasis">passeer</em> ("pass") and <em class="emphasis">verlaat</em>
+("leave"), the module calls these operations "down" and "up"
+respectively.  (In some of the literature, they're called "wait" and
+"signal".)  The following methods are supported:</p>
+
+<a name="perl3-tab-thrsema"></a>
+<table border="1">
+
+<tr>
+<th>Method</th>
+<th>Use</th>
+</tr>
+
+
+
+
+<tr>
+<td><tt class="literal">new</tt></td>
+<td>Construct a new <tt class="literal">Thread::Semaphore</tt>.</td>
+</tr>
+
+<tr>
+<td><tt class="literal">down</tt><a name="INDEX-3210"></a></td>
+<td>Allocate one or more items.</td>
+</tr>
+
+<tr>
+<td><tt class="literal">up</tt><a name="INDEX-3211"></a></td>
+<td>Deallocate one or more items.</td>
+</tr>
+
+
+</table>
+<p>The <tt class="literal">new</tt> method creates a new semaphore and initializes its count
+to the specified number.  If no number is specified, the semaphore's count is
+set to 1.  (The number represents some pool of items that can "run out"
+if they're all allocated.)
+<blockquote>
+<pre class="programlisting">use Thread::Semaphore;
+$mutex = Thread::Semaphore-&gt;new($MAX);</pre>
+</blockquote>
+
+The <tt class="literal">down</tt> method decreases the semaphore's count by the specified
+number, or by 1 if no number is given.  It can be interpreted as an attempt
+to allocate some or all of a resource.  If the semaphore's count drops below zero, this method blocks until the semaphore's count is equal
+to or larger than the amount you're requesting. Call it like this:
+<blockquote>
+<pre class="programlisting">$mutex-&gt;down();</pre>
+</blockquote>
+
+The <tt class="literal">up</tt> method increases the semaphore's count by the specified
+number, or 1 if no number is given.  It can be interpreted as freeing
+up some quantity of a previously allocated resource.  This unblocks at
+least one thread that was blocked trying to <tt class="literal">down</tt> the semaphore, provided that the
+<tt class="literal">up</tt> raises the semaphore count above what the <tt class="literal">down</tt> is trying to
+decrement it by. Call it like this:
+<blockquote>
+<pre class="programlisting">$mutex-&gt;up();</pre>
+</blockquote>
+</p>
+
+
+
+
+<h3 class="sect3">17.2.3.3. Other standard threading modules</h3>
+
+<p>
+<a name="INDEX-3212"></a><a name="INDEX-3213"></a><tt class="literal">Thread::Signal</tt> allows you to start up a thread that is designated to
+receive your process's <tt class="literal">%SIG</tt> signals.  This addresses the still-vexing
+problem that signals are unreliable as currently implemented in Perl and their imprudent use can cause occasional core dumps.
+<a name="INDEX-3214"></a>
+</p>
+
+<p>These modules are still in development and may not produce the desired
+results on your system.  Then again, they may.  If they don't,
+it's because someone like you hasn't fixed them yet.  Perhaps someone
+like you should pitch in and help.</p>
+
+<a name="INDEX-3215"></a><a name="INDEX-3216"></a>
+
+
+
+<a name="INDEX-3217"></a><a name="INDEX-3218"></a>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch17_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch18_01.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">17.1. The Process Model</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">18. Compiling</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

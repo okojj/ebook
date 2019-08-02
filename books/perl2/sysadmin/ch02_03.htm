@@ -1,0 +1,587 @@
+<html>
+<head>
+<title>Walking or Traversing the Filesystem  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Walking or Traversing the Filesystem">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch02_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch02_01.htm">Chapter 2: Filesystems</a></td><td align="right" valign="top" width="172"><a href="ch02_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">2.3. Walking or Traversing the Filesystem</h2>
+
+
+
+
+
+<p>
+<a name="INDEX-71"></a>By
+now you are probably itching to get to some practical applications of
+Perl. We'll begin by examining the process of "walking
+the filesystem," one of the most common system administration
+tasks associated with filesystems. Typically this entails searching
+an entire set of directory trees and taking action based on the files
+or directories we find. Each OS provides a tool for this task. Under
+Unix it is the <tt class="command">find</tt> command, under NT and Windows
+2000 it is <tt class="command">Find Files or Folders </tt>or
+<tt class="command">Search For Files or Folders</tt>, and in MacOS it is
+<tt class="command">Find File</tt> or <tt class="command">Sherlock</tt>. All of
+these commands are useful for searching, but they lack the power by
+themselves to perform arbitrary and complex operations as they
+encounter their desired search targets. We're going to see how
+Perl allows us to write more sophisticated file walking code
+beginning with the very basics and ratcheting up the complexity as we
+go on.</p>
+
+
+
+
+
+<p>To get started, let's take a common scenario that provides a
+clear problem for us to solve. In this scenario, we're a Unix
+system administrator with overflowing user filesystems and an empty
+budget. (Unix is being picked on first, but the other operating
+systems will get their turns in a moment.) <a name="INDEX-72"></a><a name="INDEX-73"></a>
+</p>
+
+
+
+
+
+<p>
+<a name="INDEX-74"></a>We
+can't add more disk space without any money, so we've got
+to make better use of our existing resources. Our first step is to
+remove all the files on our filesystems that can be eliminated. Under
+Unix, good candidates for elimination are the core files left around
+by programs that have died nasty deaths. Most users either do not
+notice that these files are created, or just ignore them in their
+directory, leaving large amounts of disk space claimed for no reason.
+We need something to search through a filesystem and delete these
+varmints.</p>
+
+
+
+
+
+<p>To walk a filesystem, we start by reading the contents of a single
+directory and work our way down from there. Let's ease into the
+process and begin with code that examines the contents of the current
+directory and reports on either a core file or another directory to
+be searched.</p>
+
+
+
+
+
+<p>We start by opening the directory using roughly the same syntax used
+for opening a file. If the open fails, we exit the program and print
+the error message set by the <tt class="literal">opendir( )</tt> call
+(<tt class="literal">$!</tt>):</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">opendir(DIR,".") or die "Can't open the current directory: $!\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>This provides us with a directory handle, <tt class="literal">DIR</tt> in
+this case, which we can pass to <tt class="literal">readdir( )</tt> to
+get a list of all of the files and directories in the current
+directory. If <tt class="literal">readdir( )</tt> can't read that
+directory, our code prints an error message (which hopefully explains
+why it failed) and the program exits:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># read file/directory names in that directory into @names 
+@names = readdir(DIR) or die "Unable to read current dir:$!\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>We then close the open directory handle:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">closedir(DIR);</pre>
+</blockquote>
+
+
+
+
+
+<p>Now we can work with those names:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">foreach $name (@names) {
+   next if ($name eq ".");   # skip the current directory entry
+   next if ($name eq "..");  # skip the parent  directory entry
+
+   if (-d $name){            # is this a directory?
+      print "found a directory: $name\n";
+      next;                  # can skip to the next name in the for loop 
+   }
+   if ($name eq "core") {    # is this a file named "core"?
+     print "found one!\n"; 
+  }
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Now we have some very simple code that scans a single directory. This
+isn't even "crawling" a filesystem, never mind
+walking it. To walk the filesystem we'll have enter all of the
+directories we find as we scan and look at their contents as well. If
+these subdirectories have subdirectories, we'll need to check
+them out also.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-75"></a>Whenever
+you have a hierarchy of containers and an operation that gets
+performed the exact same way on every container and subcontainer in
+that hierarchy, this calls out for a recursive solution (at least to
+computer science majors). As long as the hierarchy is not too deep
+and doesn't loop back upon itself (i.e., all containers hold
+only their immediate children and do not reference some other part of
+the hierarchy), recursive solutions tend to make the most sense. This
+is the case with our example; we're going to be scanning a
+directory, all of its subdirectories, all of their subdirectories,
+and so on.</p>
+
+
+
+
+
+<p>If you've never seen recursive code (i.e., code that calls
+itself), you may find it a bit strange at first. Recursive code is a
+bit like the process of painting a set of the
+<em class="emphasis">Matreskha</em> nesting Russian dolls. These are the
+dolls that contain another smaller doll of the exact same shape, that
+contains another doll, and so on until you get to a very small doll
+in the center.</p>
+
+
+
+
+
+<p>A recipe for painting these dolls might go something like this:</p>
+
+
+
+
+
+<ol>
+<li>
+<p>Examine the doll in front of you. Does it contain a smaller doll? If
+so, remove the contents and set aside the outer doll.</p>
+</li>
+<li>
+<p>Repeat step 1 with the contents you just removed until you reach the
+center.</p>
+</li>
+<li>
+<p>Paint the center doll. When it is dry, put it back in its container
+and repeat step 3 with the next container.</p>
+</li>
+</ol>
+<p>The process is the same every step of the way. If the thing in your
+hand has sub-things, put off dealing with what you have in hand and
+deal with the sub-things first. If the thing you have in your hand
+doesn't have sub-things, do something with it, and then return
+to the last thing you put off.</p>
+
+
+
+
+
+<p>In coding terms, this typically consists of a subroutine that deals
+with containers. It first looks to see if the current container has
+subcontainers. If it does, it calls <em class="emphasis">itself</em> to
+deal with the subcontainer. If it doesn't, it performs some
+operation and returns back from whoever called it. If you
+haven't seen code that calls itself, I recommend sitting down
+with a paper and a pencil and tracing the program flow until you are
+convinced it actually works.</p>
+
+
+
+
+
+<p>Let's see some recursive code. To make our code recursive, we
+first encapsulate the operation of scanning a directory and acting
+upon its contents in a subroutine called <tt class="literal">ScanDirectory(
+)</tt>. <tt class="literal">ScanDirectory( )</tt> takes a single
+argument, the directory it is supposed to scan. It figures out its
+current directory, enters the requested directory, and scans it. When
+it has completed this scan, it returns to the directory it was called
+from. Here's the new code:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">
+#!/usr/bin/perl -s
+
+# note the use of -s for switch processing. Under NT/2000, you will need to
+# call this script explicitly with -s (i.e., perl -s script) if you do not
+# have perl file associations in place. 
+# -s is also considered 'retro', many programmers prefer to load
+# a separate module (from the Getopt:: family) for switch parsing.
+
+use Cwd; # module for finding the current working directory
+
+# This subroutine takes the name of a directory and recursively scans 
+# down the filesystem from that point looking for files named "core"
+sub ScanDirectory{
+    my ($workdir) = shift; 
+
+    my ($startdir) = &amp;cwd; # keep track of where we began
+
+    chdir($workdir) or die "Unable to enter dir $workdir:$!\n";
+    opendir(DIR, ".") or die "Unable to open $workdir:$!\n";
+    my @names = readdir(DIR) or die "Unable to read $workdir:$!\n";
+    closedir(DIR);
+
+    foreach my $name (@names){
+        next if ($name eq "."); 
+        next if ($name eq "..");
+
+        if (-d $name){                  # is this a directory?
+            &amp;ScanDirectory($name);
+<tt class="userinput"><b>            </b></tt>next;
+        }
+        if ($name eq "core") {          # is this a file named "core"?
+            # if -r specified on command line, actually delete the file
+            if (defined $r){
+	             unlink($name) or die "Unable to delete $name:$!\n";
+            }
+            else {
+                print "found one in $workdir!\n"; 
+            }
+        }
+        chdir($startdir) or 
+           die "Unable to change to dir $startdir:$!\n";
+    }
+}
+
+&amp;ScanDirectory(".");     </pre>
+</blockquote>
+
+
+
+
+
+<p>The most important change from the previous example is our
+code's behavior when it finds a subdirectory in the directory
+it has been requested to scan. If it finds a directory, instead of
+printing "found a directory!" as our previous sample did,
+it recursively calls itself to examine that directory first. Once
+that entire subdirectory has been scanned (i.e., the call to
+<tt class="literal">ScanDirectory( )</tt> returns), it returns to looking
+at the rest of the contents of the current directory.</p>
+
+
+
+
+
+<p>To make our code fully functional as a core file-destroyer,
+we've also added file deletion functionality to it. Pay
+attention to how that code is written: it will only delete files if
+the script is started with a certain command-line switch,
+-<tt class="command">r</tt> (for remove).</p>
+
+
+
+
+
+<p>
+<a name="INDEX-76"></a>We're using Perl's
+built-in <em class="emphasis">-s</em> switch for automatic option parsing
+as part of the invocation line (<tt class="literal">#!/usr/bin/perl
+-s</tt>). This is the simplest way to parse command-line
+options; for more sophistication, we'd probably use something
+from the <tt class="literal">Getopt</tt> module family. If a command-line
+switch is present (e.g., -r) then a global scalar variable with the
+same name (e.g., <tt class="literal">$r</tt>) is set when the script is
+run. In our code, if Perl is not invoked with
+<em class="emphasis">-r,</em> we revert to the past behavior of just
+announcing that we found a core file.<a name="INDEX-77"></a><a name="INDEX-78"></a>
+</p>
+
+
+
+
+
+<a name="ch02-8-fm2xml"></a>
+<blockquote class="note">
+<h4 class="objtitle">WARNING</h4>
+<p>When you write automatic tools, make destructive actions harder to
+perform. Take heed: Perl, like most powerful languages, allows you to
+nuke your filesystem without breaking a sweat.</p>
+
+
+
+
+</blockquote>
+
+<p>
+<a name="INDEX-79"></a>Now, lest the NT/2000-focused readers
+think the previous example didn't apply to them, let me point
+out this code could be useful for them as well. A single line change
+from:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">if ($name eq "core") {</pre>
+</blockquote>
+
+
+
+
+
+<p>to:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">
+if ($name eq "MSCREATE.DIR") {</pre>
+</blockquote>
+
+
+
+
+
+<p>will create a program that deletes the annoying hidden zero-length
+files certain Microsoft program installers leave behind.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-80"></a><a name="INDEX-81"></a>With this code under our belt, let's
+return to the quandary that started this chapter. After my laptop
+kissed the floor, I found myself in desperate need of a way to
+determine which files could be read off the disk and which files were
+damaged.</p>
+
+
+
+
+
+<p>Here's the actual code I used:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Cwd; # module for finding the current working directory<a name="INDEX-82"></a>
+$|=1;    # turn off I/O buffering
+
+sub ScanDirectory {
+    my ($workdir) = shift; 
+
+    my($startdir) = &amp;cwd; # keep track of where we began
+
+    chdir($workdir) or die "Unable to enter dir $workdir:$!\n";
+
+    opendir(DIR, ".") or die "Unable to open $workdir:$!\n";
+    my @names = readdir(DIR);
+    closedir(DIR);
+ 
+    foreach my $name (@names){
+        next if ($name eq "."); 
+        next if ($name eq "..");
+	
+        if (-d $name){                     # is this a directory?
+            &amp;ScanDirectory($name);
+            next;
+        }
+        unless (&amp;CheckFile($name)){           
+            print &amp;cwd."/".$name."\n"; # print the bad filename
+        }
+    }
+    chdir($startdir) or die "Unable to change to dir $startdir:$!\n";
+}
+
+sub CheckFile{
+    my($name) = shift;
+    
+    print STDERR "Scanning ". &amp;cwd."/".$name."\n";
+    # attempt to read the directory entry for this file
+    my @stat = stat($name);
+    if (!$stat[4] &amp;&amp; !$stat[5] &amp;&amp; !$stat[6] &amp;&amp; !$stat[7] &amp;&amp; !$stat[8]){
+        return 0;
+    }
+    # attempt to open this file
+    unless (open(T,"$name")){
+        return 0;
+    }	
+    # read the file one byte at a time
+    for (my $i=0;$i&lt; $stat[7];$i++){
+        my $r=sysread(T,$i,1);
+        if ($r !=1) {
+            close(T);
+            return 0;
+        }
+    }
+    close(T);
+    return 1;
+}
+ 
+&amp;ScanDirectory(".");</pre>
+</blockquote>
+
+
+
+
+
+<p>The difference between this code and our last example is the addition
+of a subroutine to check each file encountered. For every file, we
+use the <tt class="literal">stat</tt> function to see if we can read that
+file's directory information (e.g., its size). If we
+can't, we know the file is damaged. If we can read the
+directory information, we attempt to open the file. And for a final
+test, we attempt to read every single byte of the file. This
+doesn't guarantee that the file hasn't been damaged (the
+contents could have been modified) but it does at least show that the
+file is readable.</p>
+
+
+
+
+
+<p>You may wonder why we use an esoteric function like
+<tt class="literal">sysread( )</tt> to read the file instead of using
+<tt class="literal">&lt; &gt;</tt> or <tt class="literal">read( )</tt>,
+Perl's usual file reading operator and function.
+<tt class="literal">sysread( )</tt> gives us the ability to read the file
+byte-by-byte without any of the usual buffering. If a file is damaged
+at location <tt class="literal">X</tt>, we don't want to waste time
+waiting for the standard library routines to attempt to read the
+bytes at location <tt class="literal">X+1</tt>, <tt class="literal">X+2</tt>,
+<tt class="literal">X+3</tt>, etc., as part of their usual pre-fetch. We
+want the code to quit trying to read the file immediately. In
+general, you really want file reads to fetch whole chunks at a time
+for performance sake, but here that's undesirable because it
+means the laptop would spend long prolonged periods of time making
+awful noises every time it found a damaged file.<a name="INDEX-83"></a>
+</p>
+
+
+
+
+
+<p>Now that you've seen the code I used, let me offer some closure
+to this story. After the script you just saw ran all night long
+(literally), it found 95 bad files out of 16,000 total. Fortunately,
+none of those files were files from the book you are now reading; I
+backed up the good files and moved them. Perl saved the
+day.<a name="INDEX-84"></a><a name="INDEX-85"></a>
+</p>
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch02_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch02_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">2.2. Filesystem Differences</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">2.4. Walking the Filesystem Using the File::Find Module</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

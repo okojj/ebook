@@ -1,0 +1,148 @@
+<html><head>
+<title>Recipe 13.11. Generating Attribute Methods Using AUTOLOAD</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:42:27Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch13_01.htm" title="13. Classes, Objects, and Ties"><link rel="prev" href="ch13_11.htm" title="13.10. Accessing Overridden Methods"><link rel="next" href="ch13_13.htm" title="13.12. Solving the Data Inheritance Problem"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_11.htm" title="13.10. Accessing Overridden Methods"><img src="../gifs/txtpreva.gif" alt="Previous: 13.10. Accessing Overridden Methods" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch13_01.htm" title="13. Classes, Objects, and Ties">Chapter 13<br>Classes, Objects, and Ties</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_13.htm" title="13.12. Solving the Data Inheritance Problem"><img src="../gifs/txtnexta.gif" alt="Next: 13.12. Solving the Data Inheritance Problem" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch13-39267">13.11. Generating Attribute Methods Using AUTOLOAD</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-1353">Problem<a class="indexterm" name="ch13-idx-1000004584-0"></A
+><a class="indexterm" name="ch13-idx-1000004584-1"></A
+><a class="indexterm" name="ch13-idx-1000004584-2"></A
+></A
+></H3
+><p class="para">Your object needs accessor methods to set or get its data fields, and you're tired of writing them all out one at a time.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-1359">Solution</A
+></H3
+><p class="para">Carefully use Perl's AUTOLOAD mechanism as a proxy method generator so you don't have to create them all yourself each time you want to add a new data field.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-1365">Discussion</A
+></H3
+><p class="para">Perl's AUTOLOAD mechanism intercepts all possible undefined method calls. So as not to permit arbitrary data names, we'll store the list of permitted fields in a hash. The AUTOLOAD method will check to verify that the accessed field is in that hash.</P
+><pre class="programlisting">package Person;
+use strict;
+use Carp;
+use vars qw($AUTOLOAD %ok_field);
+
+# Authorize four attribute fields
+for my $attr ( qw(name age peers parent) ) { $ok_field{$attr}++; } 
+
+sub AUTOLOAD {
+    my $self = shift;
+    my $attr = $AUTOLOAD;
+    $attr =~ s/.*:://;
+    return unless $attr =~ /[^A-Z]/;  # skip DESTROY and all-cap methods
+    croak &quot;invalid attribute method: -&gt;<code class="literal">$attr()&quot;</CODE
+> unless $ok_field{$attr};
+    $self-&gt;{uc $attr} = shift if @_;
+    return $self-&gt;{uc $attr};
+}
+sub new {
+    my $proto  = shift;
+    my $class  = ref($proto) || $proto;
+    my $parent = ref($proto) &amp;&amp; $proto;
+    my $self = {};
+    bless($self, $class);
+    $self-&gt;parent($parent);
+    return $self;
+} 
+1;</PRE
+><p class="para">This class supports a constructor named <code class="literal">new</CODE
+>, and four attribute methods: <code class="literal">name</CODE
+>, <code class="literal">age</CODE
+>, <code class="literal">peers</CODE
+>, and <code class="literal">parent</CODE
+>. Use the module this way:</P
+><pre class="programlisting">use Person;
+my ($dad, $kid);
+$dad = Person-&gt;new;
+$dad-&gt;name(&quot;Jason&quot;);
+$dad-&gt;age(23);
+$kid = $dad-&gt;new;
+$kid-&gt;name(&quot;Rachel&quot;);
+$kid-&gt;age(2);
+printf &quot;Kid's parent is %s\n&quot;, $kid-&gt;parent-&gt;name;
+<code class="userinput"><b><code class="replaceable"><i>Kid's parent is Jason</I
+></CODE
+></B
+></CODE
+></PRE
+><p class="para">This is tricky when producing inheritance trees. Suppose you'd like an Employee class that had every data attribute of the Person class, plus two new ones, like <code class="literal">salary</CODE
+> and <code class="literal">boss</CODE
+>. Class Employee can't rely upon an inherited <code class="literal">Person::AUTOLOAD</CODE
+> to determine what Employee's attribute methods are. So each class would need its own <code class="literal">AUTOLOAD</CODE
+> function. This would check just that class's known attribute fields, but instead of croaking when incorrectly triggered, it would call its overridden superclass version.</P
+><p class="para">Here's a version that takes this into consideration:</P
+><pre class="programlisting">sub AUTOLOAD {
+    my $self = shift;
+    my $attr = $AUTOLOAD;
+    $attr =~ s/.*:://;
+    return if $attr eq 'DESTROY';   
+
+    if ($ok_field{$attr}) {
+        $self-&gt;{uc $attr} = shift if @_;
+        return $self-&gt;{uc $attr};
+    } else {
+        my $superior = &quot;SUPER::$attr&quot;;
+        $self-&gt;$superior(@_);
+    } 
+}</PRE
+><p class="para">If the attribute isn't in our OK list, we'll pass it up to our superior, hoping that it can cope with it. But you can't inherit this <code class="literal">AUTOLOAD</CODE
+>; each class has to have its own, because it is unwisely accessing class data directly, not through the object. Even worse, if a class A inherits from two classes B and C, both of which define their own <code class="literal">AUTOLOAD</CODE
+>, an undefined method call on A will hit the <code class="literal">AUTOLOAD</CODE
+> in only one of the two parent classes.</P
+><p class="para">We could try to cope with these limitations, but <code class="literal">AUTOLOAD</CODE
+> eventually begins to feel like a kludge piled on a hack piled on a workaround. There are better approaches for the more complex situations.<a class="indexterm" name="ch13-idx-1000004594-0"></A
+><a class="indexterm" name="ch13-idx-1000004594-1"></A
+><a class="indexterm" name="ch13-idx-1000004594-2"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-1485">See Also</A
+></H3
+><p class="para">The examples using AUTOLOAD in <i class="filename">perltoot </I
+>(1); <a class="olink" href="../prog/ch05_01.htm">Chapter 5</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; <a class="xref" href="ch10_16.htm" title="Trapping Undefined Function Calls with AUTOLOAD">Recipe 10.15</A
+>; <a class="xref" href="ch13_13.htm" title="Solving the Data Inheritance Problem">Recipe 13.12</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_11.htm" title="13.10. Accessing Overridden Methods"><img src="../gifs/txtpreva.gif" alt="Previous: 13.10. Accessing Overridden Methods" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_13.htm" title="13.12. Solving the Data Inheritance Problem"><img src="../gifs/txtnexta.gif" alt="Next: 13.12. Solving the Data Inheritance Problem" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">13.10. Accessing Overridden Methods</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">13.12. Solving the Data Inheritance Problem</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

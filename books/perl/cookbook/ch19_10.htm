@@ -1,0 +1,280 @@
+<html><head>
+<title>Recipe 19.9. Debugging the Raw HTTP Exchange</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:45:42Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch19_01.htm" title="19. CGI Programming"><link rel="prev" href="ch19_09.htm" title="19.8. Redirecting to a Different Location"><link rel="next" href="ch19_11.htm" title="19.10. Managing Cookies"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch19_09.htm" title="19.8. Redirecting to a Different Location"><img src="../gifs/txtpreva.gif" alt="Previous: 19.8. Redirecting to a Different Location" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch19_01.htm" title="19. CGI Programming">Chapter 19<br>CGI Programming</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch19_11.htm" title="19.10. Managing Cookies"><img src="../gifs/txtnexta.gif" alt="Next: 19.10. Managing Cookies" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch19-41372">19.9. Debugging the Raw HTTP Exchange</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch19-pgfId-954">Problem<a class="indexterm" name="ch19-idx-1000005482-0"></A
+><a class="indexterm" name="ch19-idx-1000005482-1"></A
+><a class="indexterm" name="ch19-idx-1000005482-2"></A
+></A
+></H3
+><p class="para">Your CGI script is misbehaving strangely with your browser, and you suspect something in the HTTP header is missing. You want to find out exactly what your browser is sending to the server in the HTTP header.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch19-pgfId-960">Solution</A
+></H3
+><p class="para">Create your own fake web server, and point your browser at it, as shown in <a class="xref" href="#ch19-25651" title="dummyhttpd">Example 19.6</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch19-25651">Example 19.6: dummyhttpd</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch19-idx-1000005483-0"></A
+>dummyhttpd - start an HTTP daemon and print what the client sends
+
+use strict;
+use HTTP::Daemon;  # need LWP-5.32 or better
+
+my $server = HTTP::Daemon-&gt;new(Timeout =&gt; 60, LocalPort =&gt; 8989);
+print &quot;Please contact me at: &lt;URL:&quot;, $server-&gt;url, &quot;&gt;\n&quot;;
+
+while (my $client = $server-&gt;accept) {
+  CONNECTION:
+    while (my $answer = $client-&gt;get_request) {
+        print $answer-&gt;as_string;
+        $client-&gt;autoflush;
+      RESPONSE:
+        while (&lt;STDIN&gt;) {
+            last RESPONSE   if $_ eq &quot;.\n&quot;;
+            last CONNECTION if $_ eq &quot;..\n&quot;;
+            print $client $_;
+        }
+        print &quot;\nEOF\n&quot;;
+    }
+    print &quot;CLOSE: &quot;, $client-&gt;reason, &quot;\n&quot;;
+    $client-&gt;close;
+    undef $client;
+}</PRE
+></DIV
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch19-pgfId-1018">Discussion</A
+></H3
+><p class="para">It's hard to keep track of which versions of all the different browsers still have which bugs. The fake server program can save you days of head scratching, because sometimes a misbehaving browser doesn't send the server the right thing. Historically, we have seen aberrant browsers lose their cookies, mis-escape a URL, send the wrong status line, and do other even less obvious things.</P
+><p class="para">To use the fake server, it's best to run it on the same machine as the real server. That way your browser will still send it any cookies destined for that domain. Then instead of pointing your browser at:</P
+><pre class="programlisting">http://somewhere.com/cgi-bin/whatever</PRE
+><p class="para">use the alternate port given in the <code class="literal">new</CODE
+> constructor above. You don't need to be the superuser to run the server if you use the alternate port.</P
+><pre class="programlisting">http://somewhere.com:8989/cgi-bin/whatever</PRE
+><p class="para">If you convince yourself that the client is behaving properly but wonder about the server, it's easiest to use the <em class="emphasis">telnet</EM
+> program to manually talk to the remote server.</P
+><pre class="programlisting">% telnet www.perl.com 80
+<code class="userinput"><b><code class="replaceable"><i>GET /bogotic HTTP/1.0</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>&lt;blank line here&gt;</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>HTTP/1.1 404 File Not Found</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Date: Tue, 21 Apr 1998 11:25:43 GMT</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Server: Apache/1.2.4</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Connection: close</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Content-Type: text/html</I
+></CODE
+></B
+></CODE
+>
+
+<code class="userinput"><b><code class="replaceable"><i>&lt;HTML&gt;&lt;HEAD&gt;</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>&lt;TITLE&gt;404 File Not Found&lt;/TITLE&gt;</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>&lt;/HEAD&gt;&lt;BODY&gt;</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>&lt;H1&gt;File Not Found&lt;/H1&gt;</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>The requested URL /bogotic was not found on this server.&lt;P&gt;</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>&lt;/BODY&gt;&lt;/HTML&gt;</I
+></CODE
+></B
+></CODE
+></PRE
+><p class="para">If you have LWP installed on your system, you can use the <i class="function">GET</I
+> alias for the <em class="emphasis">lwp-request</EM
+> program. This will follow any redirection chains, which can shed light on your problem. For example:</P
+><pre class="programlisting">% GET -esuSU http://mox.perl.com/perl/bogotic
+<code class="userinput"><b><code class="replaceable"><i>GET http://language.perl.com/bogotic</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Host: mox.perl.com</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>User-Agent: lwp-request/1.32</I
+></CODE
+></B
+></CODE
+>
+
+<code class="userinput"><b><code class="replaceable"><i>GET http://mox.perl.com/perl/bogotic --&gt; 302 Moved Temporarily</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>GET http://www.perl.com/perl/bogotic --&gt; 302 Moved Temporarily</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>GET http://language.perl.com/bogotic --&gt; 404 File Not Found</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Connection: close</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Date: Tue, 21 Apr 1998 11:29:03 GMT</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Server: Apache/1.2.4</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Content-Type: text/html</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Client-Date: Tue, 21 Apr 1998 12:29:01 GMT</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Client-Peer: 208.201.239.47:80</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>Title: Broken perl.com Links</I
+></CODE
+></B
+></CODE
+>
+
+<code class="userinput"><b><code class="replaceable"><i>&lt;HTML&gt;</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>&lt;HEAD&gt;&lt;TITLE&gt;An Error Occurred&lt;/TITLE&gt;&lt;/HEAD&gt;</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>&lt;BODY&gt;</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>&lt;H1&gt;An Error Occurred&lt;/h1&gt;</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>404 File Not Found</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>&lt;/BODY&gt;</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>&lt;/HTML&gt;</I
+></CODE
+></B
+></CODE
+><a class="indexterm" name="ch19-idx-1000005485-0"></A
+><a class="indexterm" name="ch19-idx-1000005485-1"></A
+><a class="indexterm" name="ch19-idx-1000005485-2"></A
+></PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch19-pgfId-1112">See Also</A
+></H3
+><p class="para">The documentation for the standard CGI module; <a class="xref" href="ch19_11.htm" title="Managing Cookies">Recipe 19.10</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch19_09.htm" title="19.8. Redirecting to a Different Location"><img src="../gifs/txtpreva.gif" alt="Previous: 19.8. Redirecting to a Different Location" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch19_11.htm" title="19.10. Managing Cookies"><img src="../gifs/txtnexta.gif" alt="Next: 19.10. Managing Cookies" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">19.8. Redirecting to a Different Location</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">19.10. Managing Cookies</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

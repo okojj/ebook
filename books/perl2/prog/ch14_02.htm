@@ -1,0 +1,535 @@
+<html>
+<head>
+<title>Tying Arrays (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Tying Arrays">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch14_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch14_01.htm">Chapter 14: Tied Variables</a></td><td align="right" valign="top" width="172"><a href="ch14_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">14.2. Tying Arrays</h2>
+
+<p>
+<a name="INDEX-2702"></a><a name="INDEX-2703"></a><a name="INDEX-2704"></a><a name="INDEX-2705"></a><a name="INDEX-2706"></a><a name="INDEX-2707"></a>
+A class implementing a tied array must define at least the methods
+<tt class="literal">TIEARRAY</tt>, <tt class="literal">FETCH</tt>, and
+<tt class="literal">STORE</tt>.  There are many optional methods: the
+ubiquitous <tt class="literal">DESTROY</tt> method, of course, but also the
+<tt class="literal">STORESIZE</tt> and <tt class="literal">FETCHSIZE</tt> methods
+used to provide <tt class="literal">$#array</tt> and
+<tt class="literal">scalar(@array)</tt> access.  In addition,
+<tt class="literal">CLEAR</tt> is triggered when Perl needs to empty the
+array, and <tt class="literal">EXTEND</tt> when Perl would have pre-extended
+allocation in a real array.</p>
+
+<p>You may also define the
+<tt class="literal">POP</tt>, <tt class="literal">PUSH</tt>,
+<tt class="literal">SHIFT</tt>, <tt class="literal">UNSHIFT</tt>,
+<tt class="literal">SPLICE</tt>, <tt class="literal">DELETE</tt>, and
+<tt class="literal">EXISTS</tt> methods if you want the corresponding Perl
+functions to work on the tied array. The <tt class="literal">Tie::Array</tt>
+class can serve as a base class to implement the first five of those
+functions in terms of <tt class="literal">FETCH</tt> and
+<tt class="literal">STORE</tt>.  (<tt class="literal">Tie::Array</tt>'s default
+implementation of <tt class="literal">DELETE</tt> and
+<tt class="literal">EXISTS</tt> simply calls <tt class="literal">croak</tt>.)  As
+long as you define <tt class="literal">FETCH</tt> and
+<tt class="literal">STORE</tt>, it doesn't matter what kind of data
+structure your object contains.</p>
+
+<p>On the other hand, the
+<tt class="literal">Tie::StdArray</tt> class (defined in the standard
+<tt class="literal">Tie::Array</tt> module) provides a base class with
+default methods that assume the object contains a regular array.
+Here's a simple array-tying class that makes use of this.  Because it
+uses <tt class="literal">Tie::StdArray</tt> as its base class, it only needs
+to define the methods that should be treated in a nonstandard way.
+<blockquote>
+<pre class="programlisting">#!/usr/bin/perl
+package ClockArray;
+use Tie::Array;
+our @ISA = 'Tie::StdArray';
+sub FETCH {
+    my($self,$place) = @_;
+    $self-&gt;[ $place % 12 ];
+}
+sub STORE {
+    my($self,$place,$value) = @_;
+    $self-&gt;[ $place % 12 ] = $value;
+}
+
+package main;
+tie my @array, 'ClockArray';
+@array = ( "a" ... "z" );
+print "@array\n";</pre>
+</blockquote>
+
+When run, the program prints out "<tt class="literal">y z o p q r s t u v w
+x</tt>".  This class provides an array with only a dozen slots,
+like hours of a clock, numbered 0 through 11.  If you ask for the 15th
+array index, you really get the 3rd one.  Think of it as a travel aid
+for people who haven't learned how to read 24-hour clocks.</p>
+
+
+<h3 class="sect2">14.2.1. Array-Tying Methods</h3>
+
+<p>
+<a name="INDEX-2708"></a><a name="INDEX-2709"></a><a name="INDEX-2710"></a>
+That's the simple way.  Now for some nitty-gritty details.  To
+demonstrate, we'll implement an array whose bounds are fixed at its
+creation. If you try to access anything beyond those bounds, an
+exception is raised.  For example:
+<blockquote>
+<pre class="programlisting">use BoundedArray;
+tie @array, "BoundedArray", 2;
+
+$array[0] = "fine";
+$array[1] = "good";
+$array[2] = "great";
+$array[3] = "whoa";   # Prohibited; displays an error message.</pre>
+</blockquote>
+
+The preamble code for the class is as follows:
+<blockquote>
+<pre class="programlisting">package BoundedArray;
+use Carp;
+use strict;</pre>
+</blockquote>
+To avoid having to define <tt class="literal">SPLICE</tt> later, we'll inherit from the <tt class="literal">Tie::Array</tt> class:
+<blockquote>
+<pre class="programlisting">use Tie::Array;
+our @ISA = ("Tie::Array");</pre>
+</blockquote>
+</p>
+
+<dl>
+<dt>
+<b><em class="replaceable">CLASSNAME</em><tt class="literal">-&gt;TIEARRAY(</tt><em class="replaceable">LIST</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p> 
+As the constructor for the class,
+<tt class="literal">TIEARRAY</tt> should return a blessed reference through
+which the tied array will be emulated.
+<a name="INDEX-"></a>
+</p>
+
+<p>In this next example, just to show you that you don't
+<em class="emphasis">really</em> have to return an array reference, we'll
+choose a hash reference to represent our object. A hash works out well
+as a generic record type: the value in the hash's
+"<tt class="literal">BOUND</tt>" key will store the maximum bound allowed,
+and its "<tt class="literal">DATA</tt>" value will hold the actual data.  If
+someone outside the class tries to dereference the object returned
+(doubtless thinking it an array reference), an exception is raised.
+<blockquote>
+<pre class="programlisting">sub TIEARRAY {
+    my $class = shift;
+    my $bound = shift;
+    confess "usage: tie(\@ary, 'BoundedArray', max_subscript)"
+        if @_ || $bound =~ /\D/;
+    return bless { BOUND =&gt; $bound, DATA =&gt; [] }, $class;
+}</pre>
+</blockquote>
+
+We can now say:
+<blockquote>
+<pre class="programlisting">tie(@array, "BoundedArray", 3);  # maximum allowable index is 3</pre>
+</blockquote>
+
+to ensure that the array will never have more than four elements. Whenever an individual element of the array is accessed or stored,
+<tt class="literal">FETCH</tt> and <tt class="literal">STORE</tt> will be called just as they were for scalars, but
+with an extra index argument.</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;FETCH(</tt><em class="replaceable">INDEX</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a>
+This method is run whenever an individual element in the tied
+array is accessed.  It receives one argument after the object: the
+index of the value we're trying to fetch.
+<blockquote>
+<pre class="programlisting">sub FETCH {
+    my ($self, $index) = @_;
+    if ($index &gt; $self-&gt;{BOUND}) {
+        confess "Array OOB: $index &gt; $self-&gt;{BOUND}";
+    }
+    return $self-&gt;{DATA}[$index];
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;STORE(</tt><em class="replaceable">INDEX</em><tt class="literal">,</tt> <em class="replaceable">VALUE</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a>
+This method is invoked whenever an element in the tied array is
+set.  It takes two arguments after the object: the index at which
+we're trying to store something and the value we're trying to put
+there.  For example:
+<blockquote>
+<pre class="programlisting">sub STORE {
+    my($self, $index, $value) = @_;
+    if ($index &gt; $self-&gt;{BOUND} ) {
+        confess "Array OOB: $index &gt; $self-&gt;{BOUND}";
+    }
+    return $self-&gt;{DATA}[$index] = $value;
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;DESTROY</tt></b>
+</dt>
+<dd>
+<p>Perl calls this method when the tied variable needs to be destroyed and
+its memory reclaimed.  This is almost never needed in a language with
+garbage collection, so for this example we'll just leave it out.</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;FETCHSIZE</tt></b>
+</dt>
+<dd>
+<p>The <tt class="literal">FETCHSIZE</tt> method should return the total number of items in the tied
+array associated with <em class="replaceable">SELF</em>.  It's equivalent to <tt class="literal">scalar(@array)</tt>,
+which is usually equal to <tt class="literal">$#array + 1</tt>.
+<blockquote>
+<pre class="programlisting">sub FETCHSIZE {
+    my $self = shift;
+    return scalar @{$self-&gt;{DATA}};
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;STORESIZE(</tt><em class="replaceable">COUNT</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>This method sets the total number of items in the tied array associated
+with <em class="replaceable">SELF</em> to be <em class="replaceable">COUNT</em>.  If the array shrinks, you should remove
+entries beyond <em class="replaceable">COUNT</em>.  If the array grows, you should make sure the
+new positions are undefined.  For our <tt class="literal">BoundedArray</tt> class, we also
+ensure that the array doesn't grow beyond the limit initially set.
+<blockquote>
+<pre class="programlisting">sub STORESIZE {
+    my ($self, $count) = @_;
+    if ($count &gt; $self-&gt;{BOUND}) {
+        confess "Array OOB: $count &gt; $self-&gt;{BOUND}";
+    }
+    $#{$self-&gt;{DATA}} = $count;
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;EXTEND(</tt><em class="replaceable">COUNT</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>Perl uses the <tt class="literal">EXTEND</tt> method to indicate that the
+array is likely to expand to hold <em class="replaceable">COUNT</em>
+entries.  That way you can can allocate memory in one big chunk
+instead of in many successive calls later on.  Since our
+<tt class="literal">BoundedArray</tt>s have fixed upper bounds, we won't
+define this method.</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;EXISTS(</tt><em class="replaceable">INDEX</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>This method verifies that the element at
+<em class="replaceable">INDEX</em> exists in the tied array.  For our
+<tt class="literal">BoundedArray</tt>, we just employ Perl's built-in
+<tt class="literal">exists</tt> after verifying that it's not an attempt to
+look past the fixed upper bound.
+<blockquote>
+<pre class="programlisting">sub EXISTS  {
+    my ($self, $index) = @_;
+    if ($index &gt; $self-&gt;{BOUND}) {
+        confess "Array OOB: $index &gt; $self-&gt;{BOUND}";
+    }
+    exists $self-&gt;{DATA}[$index];
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;DELETE(</tt><em class="replaceable">INDEX</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>The <tt class="literal">DELETE</tt> method removes the element at
+<em class="replaceable">INDEX</em> from the tied array
+<em class="replaceable">SELF</em>.  For our
+<tt class="literal">BoundedArray</tt> class, the method looks nearly
+identical to <tt class="literal">EXISTS</tt>, but this is not the norm.
+<blockquote>
+<pre class="programlisting">sub DELETE {
+    my ($self, $index) = @_;
+    print STDERR "deleting!\n";
+    if ($index &gt; $self-&gt;{BOUND}) {
+        confess "Array OOB: $index &gt; $self-&gt;{BOUND}";
+    }
+    delete $self-&gt;{DATA}[$index];
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;CLEAR</tt></b>
+</dt>
+<dd>
+<p>This method is called whenever the array has to be emptied.  That
+happens when the array is set to a list of new values (or an empty
+list), but not when it's provided to the <tt class="literal">undef</tt>
+function.  Since a cleared <tt class="literal">BoundedArray</tt> always
+satisfies the upper bound, we don't need check anything here:
+<blockquote>
+<pre class="programlisting">sub CLEAR {
+    my $self = shift;
+    $self-&gt;{DATA} = [];
+}</pre>
+</blockquote>
+
+If you set the array to a list, <tt class="literal">CLEAR</tt> will trigger
+but won't see the list values.  So if you violate the upper bound like
+so:
+<blockquote>
+<pre class="programlisting">tie(@array, "BoundedArray", 2);
+@array = (1, 2, 3, 4);</pre>
+</blockquote>
+
+the <tt class="literal">CLEAR</tt> method will still return successfully.
+The exception will only be raised on the subsequent
+<tt class="literal">STORE</tt>.  The assignment triggers one
+<tt class="literal">CLEAR</tt> and four <tt class="literal">STORE</tt>s.</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;PUSH(</tt><em class="replaceable">LIST</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>This method appends the elements of <em class="replaceable">LIST</em> to
+the array.  Here's how it might look for our
+<tt class="literal">BoundedArray</tt> class:
+<blockquote>
+<pre class="programlisting">sub PUSH    {
+    my $self = shift;
+    if (@_ + $#{$self-&gt;{DATA}} &gt; $self-&gt;{BOUND}) {
+        confess "Attempt to push too many elements";
+    }
+    push @{$self-&gt;{DATA}}, @_;
+}</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;UNSHIFT(</tt><em class="replaceable">LIST</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>This method prepends the elements of <em class="replaceable">LIST</em>
+to the array.  For our <tt class="literal">BoundedArray</tt> class, the
+subroutine would be similar to <tt class="literal">PUSH</tt>.</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;POP</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a>
+The <tt class="literal">POP</tt> method removes the last element of the
+array and returns it.  For <tt class="literal">BoundedArray</tt>, it's a
+one-liner:
+<blockquote>
+<pre class="programlisting">sub POP { my $self = shift; pop @{$self-&gt;{DATA}} }</pre>
+</blockquote>
+</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;SHIFT</tt></b>
+</dt>
+<dd>
+<p>The <tt class="literal">SHIFT</tt> method removes the first element of the
+array and returns it.  For <tt class="literal">BoundedArray</tt>, it's
+similar to <tt class="literal">POP</tt>.</p>
+</dd>
+
+
+<dt>
+<b><em class="replaceable">SELF</em><tt class="literal">-&gt;SPLICE(</tt><em class="replaceable">OFFSET</em><tt class="literal">,</tt> <em class="replaceable">LENGTH</em><tt class="literal">,</tt> <em class="replaceable">LIST</em><tt class="literal">)</tt></b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-"></a><a name="INDEX-"></a>
+This method lets you splice the <em class="replaceable">SELF</em> array.
+To mimic Perl's built-in <tt class="literal">splice</tt>,
+<em class="replaceable">OFFSET</em> should be optional and default to
+zero, with negative values counting back from the end of the array.
+<em class="replaceable">LENGTH</em> should also be optional, defaulting
+to rest of the array.  <em class="replaceable">LIST</em> can be empty.
+If it's properly mimicking the built-in, the method will return a list
+of the original <em class="replaceable">LENGTH</em> elements at
+<em class="replaceable">OFFSET</em> (that is, the list of elements to be
+replaced by <tt class="literal">LIST</tt>).</p>
+
+<p>Since splicing is a somewhat complicated operation, we won't define it
+at all; we'll just use the <tt class="literal">SPLICE</tt> subroutine from
+the <tt class="literal">Tie::Array</tt> module that we got for free when we
+inherited from <tt class="literal">Tie::Array</tt>.  This way we define
+<tt class="literal">SPLICE</tt> in terms of other
+<tt class="literal">BoundedArray</tt> methods, so the bounds checking will
+still occur.</p>
+</dd>
+
+</dl>
+
+<p>
+</p>
+
+<p>That completes our <tt class="literal">BoundedArray</tt> class.  It warps
+the semantics of arrays just a little.  But we can do better, and in
+very much less space.</p>
+
+<a name="INDEX-2711"></a><a name="INDEX-2712"></a>
+
+
+
+
+
+
+<h3 class="sect2">14.2.2. Notational Convenience</h3>
+
+<p>
+<a name="INDEX-2713"></a><a name="INDEX-2714"></a><a name="INDEX-2715"></a><a name="INDEX-2716"></a>
+One of the nice things about variables is that they interpolate.  One of
+the not-so-nice things about functions is that they don't.  You can use
+a tied array to make a function that can be interpolated.  Suppose you
+want to interpolate random integers in a string.  You can just say:
+<blockquote>
+<pre class="programlisting">#!/usr/bin/perl
+package RandInterp;
+sub TIEARRAY { bless \my $self };
+sub FETCH { int rand $_[1] };
+
+package main;
+tie @rand, "RandInterp";
+
+for (1,10,100,1000) {
+    print "A random integer less than $_ would be $rand[$_]\n";
+}
+$rand[32] = 5;    # Will this reformat our system disk?</pre>
+</blockquote>
+
+When run, this prints:
+<blockquote>
+<pre class="programlisting">A random integer less than 1 would be 0
+A random integer less than 10 would be 3
+A random integer less than 100 would be 46
+A random integer less than 1000 would be 755
+Can't locate object method "STORE" via package "RandInterp" at foo line 10.</pre>
+</blockquote>
+
+As you can see, it's no big deal that we didn't even implement <tt class="literal">STORE</tt>.
+It just blows up like normal.</p>
+
+<a name="INDEX-2717"></a><a name="INDEX-2718"></a><a name="INDEX-2719"></a>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch14_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch14_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">14.1. Tying Scalars</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">14.3. Tying Hashes</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

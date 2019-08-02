@@ -1,0 +1,203 @@
+<html>
+<head>
+<title>Performance Tuning (Java Servlet Programming)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jason Hunter and William Crawford">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-391-XE" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Performance Tuning">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm" alt="Java Servlet Programming"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch13_07.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch13_07.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch13_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch13_01.htm">Chapter 13: Odds and Ends</a></td><td align="right" valign="top" width="172"><a href="appa_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/appa_01.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">13.8. Performance Tuning</h2>
+
+<p>
+<a name="INDEX-2338"></a><a name="INDEX-2339"></a>
+Performance tuning servlets requires a slightly different mindset
+than performance tuning normal Java applications or applets. The
+reason is that the JVM running the servlets is expected to
+simultaneously handle dozens, if not hundreds, of threads, each
+executing a servlet. These coexisting servlets have to share the
+resources of the JVM in a way that normal applications do not. The
+traditional performance-tuning tricks still apply, of course, but
+they have a different impact when used in a heavily multithreaded
+system. What follows are some of the tricks that have the largest
+special impact on servlet developers.
+</p>
+
+<a name="ch13-17-fm2xml"></a>
+<h3 class="sect2">13.8.1. Go Forth, but Don't Prosper</h3>
+
+<p>Avoid the unnecessary creation of objects. This has always been good
+advice--creating unnecessary objects wastes memory and wastes a
+fair amount of time as the objects are created. With servlets,
+it's even better advice. All but the most recent JVMs have a
+global object heap that must be locked for each new memory
+allocation. While any servlet is creating a new object or allocating
+additional memory, no other servlet can do so.
+</p>
+
+
+<a name="ch13-18-fm2xml"></a>
+<h3 class="sect2">13.8.2. Don't Append by Concatenation </h3>
+
+<p>Avoid <a name="INDEX-2340"></a>concatenating several strings together.
+Use the<tt class="literal"> append()</tt> method of
+<tt class="literal">StringBuffer</tt> instead. This too has always been
+good advice, but with servlets it's particularly tempting to
+write code like this to prepare a string for later output:
+</p>
+
+<blockquote>
+<pre class="programlisting">String output;
+output += "&lt;TITLE&gt;";
+output += "Hello, " + user;
+output += "&lt;/TITLE&gt;";</pre>
+</blockquote>
+
+<p>Although this code looks nice and neat, when it runs it executes as
+if written roughly as follows, with a new
+<tt class="literal">StringBuffer</tt> and new <tt class="literal">String</tt>
+created on each line:
+</p>
+
+<blockquote>
+<pre class="programlisting">String output;
+output = new StringBuffer().append("&lt;TITLE&gt;").toString();
+output = new StringBuffer(output).append("Hello, ").toString();
+output = new StringBuffer(output).append(user).toString();
+output = new StringBuffer(output).append("&lt;/TITLE&gt;").toString();</pre>
+</blockquote>
+
+<p>When efficiency counts, rewrite the original code to look like the
+following, so just one <tt class="literal">StringBuffer</tt> and one
+<tt class="literal">String</tt> are created:
+</p>
+
+<blockquote>
+<pre class="programlisting">StringBuffer buf = new StringBuffer();
+buf.append("&lt;TITLE&gt;");
+buf.append("Hello, ").append(user);
+buf.append("&lt;/TITLE);
+output = buf.toString();</pre>
+</blockquote>
+
+<p>Note that using an array of bytes is even more efficient.</p>
+
+
+<a name="ch13-19-fm2xml"></a>
+<h3 class="sect2">13.8.3. Limit Synchronization</h3>
+
+<p>
+<a name="INDEX-2341"></a>Synchronize whenever necessary,
+but no more. Every synchronized block in a servlet slows the
+servlet's response time. Because the same servlet instance may
+handle multiple concurrent requests, it must, of course, take care to
+protect its class and instance variables with synchronized blocks.
+All the time one request thread is in a servlet's synchronized
+block, however, no other thread can enter the block. Therefore,
+it's generally best to keep these blocks as small as possible.
+</p>
+
+<p>You should also take a look at the worst-case result of thread
+contention. If the worst case is bearable (as with the counter
+example from <a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch03_01.htm">Chapter 3, "The Servlet Life Cycle"</a>), you can consider removing
+synchronization blocks entirely. Also consider using the
+<tt class="literal">SingleThreadModel</tt> tag interface, where the server
+manages a pool of servlet instances to guarantee each instance is
+used at most by one thread at a time. Servlets that implement
+<tt class="literal">SingleThreadModel</tt> don't need to synchronize
+access to their instance variables.
+</p>
+
+
+<a name="ch13-20-fm2xml"></a>
+<h3 class="sect2">13.8.4. Buffer Your Input and Output</h3>
+
+<p>
+<a name="INDEX-2342"></a>
+Buffer your input and your output, all your storage files, any
+streams loaded from a database, and so on. This almost always
+improves performance, but the improvement can be especially profound
+with servlets. The reason is that reading and writing one unit at a
+time can slow down the entire server due to the frequent context
+switches that have to be made. Fortunately, you generally don't
+need to buffer when writing to a servlet's
+<tt class="literal">PrintWriter</tt> or
+<tt class="literal">ServletOutputStream</tt> or when reading from a
+servlet's <tt class="literal">BufferedReader</tt> or
+<tt class="literal">ServletInputStream</tt>. Most server implementations
+already buffer these streams.<a name="INDEX-2343"></a><a name="INDEX-2344"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch13_07.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch13_07.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="appa_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/appa_01.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">13.7. Debugging</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">A. Servlet API Quick Reference</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

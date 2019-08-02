@@ -1,0 +1,1901 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 12] 12.2 DBMS_SHARED_POOL: Pinning Objects</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein, Charles Dye &amp; John Beresniewicz"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T17:58:50Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates-1-56592-375-8E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-375-8E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle Packages"><META
+NAME="DC.Title"
+CONTENT="Oracle Built-in Packages"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch12_01.htm"
+TITLE="12. Managing Server Resources"><LINK
+REL="prev"
+HREF="ch12_01.htm"
+TITLE="12.1 DBMS_SPACE: Obtaining Space Information"><LINK
+REL="next"
+HREF="ch13_01.htm"
+TITLE="13. Job Scheduling in the Database"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle Built-in Packages"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle Built-in Packages"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch12_01.htm"
+TITLE="12.1 DBMS_SPACE: Obtaining Space Information"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 12.1 DBMS_SPACE: Obtaining Space Information"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch12_01.htm"
+TITLE="12. Managing Server Resources"
+>Chapter 12<BR>Managing Server Resources</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch13_01.htm"
+TITLE="13. Job Scheduling in the Database"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 13. Job Scheduling in the Database"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch12-36719"
+>12.2 DBMS_SHARED_POOL: Pinning Objects</A
+></H2
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12685-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12685-1"
+></A
+>The DBMS_SHARED_POOL package provides procedures that allow PL/SQL objects and SQL cursors to be <A
+CLASS="indexterm"
+NAME="ch12-idx-12687-0"
+></A
+>pinned (kept) in the Oracle shared pool. Once pinned, objects are not subject to the normal aging-out processes of the shared pool.</P
+><P
+CLASS="para"
+>DBMS_SHARED_POOL is used primarily by DBAs to help solve memory management and performance issues that can arise when applications make use of large PL/SQL objects or SQL cursors. Two problems can arise when large objects need to be loaded into the shared pool:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>ORA-04031 errors where insufficient memory is available and the user call fails to execute.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Degraded performance due to the memory management overhead involved in finding and making room to load large objects.</P
+></LI
+></UL
+><P
+CLASS="para"
+>Pinning large objects into the shared pool when the Oracle instance is first started can reduce or eliminate these problems. Some DBAs use DBMS_SHARED_POOL in their database startup scripts to help ensure that shared pool memory is used efficiently.</P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch12-SECT-2.1"
+>12.2.1 Getting Started with DBMS_SHARED_POOL</A
+></H3
+><P
+CLASS="para"
+>The DBMS_SHARED_POOL package is <A
+CLASS="indexterm"
+NAME="ch12-idx-12688-0"
+></A
+>created when the Oracle database is installed. The <I
+CLASS="filename"
+>dbmspool.sql </I
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12689-0"
+></A
+>script (found in the built-in packages source code directory, as described in <A
+CLASS="xref"
+HREF="ch01_01.htm"
+>Chapter 1</A
+>) contains the source code for this package's specification. Unlike many of the other built-in package scripts, this script is not called by <I
+CLASS="filename"
+>catproc.sql</I
+>. Thus, the DBA must manually build this package. This is accomplished by executing the <I
+CLASS="filename"
+>dbmspool.sql</I
+> and <I
+CLASS="filename"
+>prvtpool.plb</I
+><A
+CLASS="indexterm"
+NAME="ch12-idx-13686-0"
+></A
+> scripts (in order) from SQLDBA or Server Manager when connected as the INTERNAL user. </P
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch12-idx-13687-0"
+></A
+>Access to the DBMS_SHARED_POOL package is not automatically granted to any users, nor is a public synonym referencing the package created. The package is intended for use strictly by the Oracle DBA, usually when connected as the SYS user. Under Oracle8, the EXECUTE_CATALOG_ROLE role is granted EXECUTE privilege on DBMS_SHARED_POOL, so any users with this role can use the package.</P
+><P
+CLASS="para"
+>Table 12-2 <A
+CLASS="indexterm"
+NAME="ch12-idx-12691-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12691-1"
+></A
+>lists the programs available in this package.</P
+><BR><TABLE
+CLASS="table"
+BORDER="1"
+CELLPADDING="3"
+><CAPTION
+CLASS="table"
+><A
+CLASS="title"
+NAME="AUTOID-25020"
+>Table 12.2: DBMS_SHARED_POOL Programs</A
+></CAPTION
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Use in </P
+><P
+CLASS="para"
+>SQL?</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12695-0"
+></A
+>ABORTED_REQUEST_</P
+><P
+CLASS="para"
+>THRESHOLD</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Sets size threshold for aborting object loads if memory is low</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>KEEP</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Pins object into shared pool</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12694-0"
+></A
+>SIZES</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Displays shared pool objects larger than given size</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12693-0"
+></A
+>UNKEEP</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Unpins object from shared pool</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>No</P
+></TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch12-idx-13688-0"
+></A
+>DBMS_SHARED_POOL does not declare any exceptions or nonprogram elements.</P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch12-SECT-2.2"
+>12.2.2 Pinning and Unpinning Objects</A
+></H3
+><P
+CLASS="para"
+>The KEEP and UNKEEP procedures are used to pin and unpin objects in the Oracle shared pool.</P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch12-SECT-2.2.1"
+>12.2.2.1 The DBMS_SHARED_POOL.KEEP procedure</A
+></H4
+><P
+CLASS="para"
+>The <A
+CLASS="indexterm"
+NAME="ch12-idx-12696-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12696-1"
+></A
+>KEEP procedure allows DBAs to pin PL/SQL or cursor objects into the Oracle shared pool. Pinning objects into the shared pool eliminates the need for Oracle to do dynamic memory management when users reference the object. The program header follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_SHARED_POOL.KEEP
+   (name IN VARCHAR2
+   ,flag IN CHAR DEFAULT 'P');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Parameters are summarized in the following table.</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Parameter</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>name</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the object to pin</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>flag</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Notifies the KEEP procedure of the kind of object specified in the name parameter</P
+></TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+>The flag parameter can take the following values:</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>flag Value</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Object Type</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>P or p</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Package, procedure, or function  name </P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Q or q (v8 only)</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Sequence name</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>R or r</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Trigger name</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Any other character</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Cursor specified by address and hash value</P
+></TD
+></TR
+></TBODY
+></TABLE
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-25142"
+>12.2.2.1.1 Exceptions</A
+></H4
+><P
+CLASS="para"
+>The KEEP procedure does not raise any package exceptions. It can raise the following Oracle exceptions if the name parameter does not resolve to a real object or an object of the proper type:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+>ORA-06564</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Object &lt;object name&gt; does not exist.</P
+></DD
+><DT
+CLASS="term"
+>ORA-06502</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>PL/SQL: numeric or value error.</P
+></DD
+></DL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-25154"
+>12.2.2.1.2 Restrictions</A
+></H4
+><P
+CLASS="para"
+>Note the following restrictions on calling KEEP:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>TABLE and VIEW objects cannot be pinned using KEEP. Pinning sequences are supported in the Oracle8 version only.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Oracle warns that the KEEP procedure may not be supported in future releases.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The program does not assert a purity level with the RESTRICT_REFERENCES pragma.</P
+></LI
+></UL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-25164"
+>12.2.2.1.3 Example</A
+></H4
+><P
+CLASS="para"
+>This example illustrates using SQL*Plus to pin the package SYS.STANDARD into the shared pool:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; BEGIN
+  2     SYS.DBMS_SHARED_POOL.KEEP('SYS.STANDARD','P');
+  3  END;
+  4  /
+
+PL/SQL procedure successfully completed.</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In the example for DBMS_SHARED_POOL.SIZES, we see that the SYS.STANDARD package is 119 kilobytes in size. This is a good candidate for routinely pinning into the shared pool. Other Oracle packages that are probably good to keep in the shared pool are SYS.DBMS_STANDARD, SYS.DIUTIL, and SYS.DBMS_SYS_SQL.</P
+><P
+CLASS="para"
+>It is best to pin any objects that are relatively large (larger than 10-20 kilobytes), especially if they are used intermittently. Doing so minimizes the likelihood that dynamic object loading will flush items out of the shared pool to make room for the object.</P
+><P
+CLASS="para"
+>For an example of pinning a cursor into the shared pool, see the <A
+CLASS="xref"
+HREF="ch12_02.htm#ch12-24554"
+>Section 12.2.4, "DBMS_SHARED_POOL Examples"</A
+>" <A
+CLASS="indexterm"
+NAME="ch12-idx-12698-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12698-1"
+></A
+>section.</P
+></DIV
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch12-SECT-2.2.2"
+>12.2.2.2 The DBMS_SHARED_POOL.UNKEEP procedure</A
+></H4
+><P
+CLASS="para"
+>The <A
+CLASS="indexterm"
+NAME="ch12-idx-12704-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12704-1"
+></A
+>UNKEEP procedure allows the DBA to release from the Oracle shared pool a pinned object that has previously been pinned using the KEEP procedure. Once unpinned, the object is subject to the normal shared pool memory management aging and flushing routines. Here's the header for this program:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_SHARED_POOL.UNKEEP
+   (name IN VARCHAR2
+   ,flag IN CHAR DEFAULT 'P');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Parameters are summarized in the following table.</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Parameter</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>name</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the object to unpin</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>flag</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Notifies the UNKEEP procedure of the kind of object specified in the name parameter</P
+></TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+>The flag parameter can take the following values:</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>flag Value</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+> Object Type</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>P or p</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Package, procedure, or function  name </P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Q or q (v8 only)</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Sequence name</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>R or r</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Trigger name</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Any other character</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Cursor specified by address and hash value</P
+></TD
+></TR
+></TBODY
+></TABLE
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-25237"
+>12.2.2.2.1 Exceptions</A
+></H4
+><P
+CLASS="para"
+>The UNKEEP procedure does not raise any package exceptions. It can raise the following Oracle exceptions if the name parameter does not resolve to a real object or an object of the proper type:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+>ORA-06564</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Object &lt;object name&gt; does not exist.</P
+></DD
+><DT
+CLASS="term"
+>ORA-06502</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>PL/SQL: numeric or value error.</P
+></DD
+></DL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-25249"
+>12.2.2.2.2 Restrictions</A
+></H4
+><P
+CLASS="para"
+>Note the following restrictions on calling UNKEEP:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Oracle warns that the UNKEEP procedure may not be supported in future releases. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The program does not assert a purity level with the RESTRICT_REFERENCES pragma.</P
+></LI
+></UL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-25257"
+>12.2.2.2.3 Example</A
+></H4
+><P
+CLASS="para"
+>This example releases the object pinned by the KEEP procedure (see the example for KEEP earlier):</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; BEGIN
+  2     SYS.DBMS_SHARED_POOL.UNKEEP('SYS.STANDARD','P');
+  3  END;
+  4  /
+
+PL/SQL procedure successfully completed.</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Usually an object is pinned into the shared pool for a reason, so it is not likely that you would need to call UNKEEP regularly. However, if large objects that have been pinned into the shared pool are definitely no longer needed, then memory can be made available to the shared pool by executing UNKEEP on these <A
+CLASS="indexterm"
+NAME="ch12-idx-12706-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12706-1"
+></A
+>objects.</P
+></DIV
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch12-SECT-2.3"
+>12.2.3 Monitoring and Modifying Shared Pool Behavior</A
+></H3
+><P
+CLASS="para"
+>You can monitor the behavior of objects in the shared pool with the SIZES procedure. You can modify that behavior with the ABORTED_REQUEST_THRESHOLD procedure.</P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch12-SECT-2.3.1"
+>12.2.3.1 The DBMS_SHARED_POOL.SIZES procedure</A
+></H4
+><P
+CLASS="para"
+>The <A
+CLASS="indexterm"
+NAME="ch12-idx-12708-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12708-1"
+></A
+>SIZES procedure displays objects (including cursors and anonymous PL/SQL blocks) that are currently in the shared pool and that exceed the size (in kilobytes) specified by the minsize parameter. The program header follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_SHARED_POOL.SIZES
+   (minsize IN NUMBER);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The minsize parameter specifies the minimum size in kilobytes of shared pool objects that are displayed.</P
+><P
+CLASS="para"
+>The program does not raise any package exceptions, nor does it assert a purity level with the RESTRICT_REFERENCES pragma.</P
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-25278"
+>12.2.3.1.1 Example</A
+></H4
+><P
+CLASS="para"
+>The following example demonstrates using the SIZES procedure in a SQL*Plus session to find all objects currently in the Oracle shared pool using more than 70 kilobytes of memory:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; set serveroutput on size 100000
+SQL&gt; execute SYS.DBMS_SHARED_POOL.SIZES(70);
+
+SIZE(K)	KEPT                                                    NAME
+------	-------------------------------------------------	----------	
+119	SYS.STANDARD                                            (PACKAGE)
+87	YES   QDBA.Q$INSTAT                                     (PACKAGE BODY)
+80	YES   QDBA.Q$BGPROC                                     (PACKAGE BODY)
+77	YES   QDBA.Q$CVAR                                       (PACKAGE)
+72	begin :r:=&quot;LOADX&quot;.&quot;RAND1&quot;;end;    (0D953BE8,3990841093)	(CURSOR)
+
+PL/SQL procedure successfully completed.</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice that a cursor object's name is composed of the address and hash value for the cursor. These are the values to use in calls to DBMS_SHARED_POOL.KEEP for pinning cursor objects. See the <A
+CLASS="xref"
+HREF="ch12_02.htm#ch12-24554"
+>Section 12.2.4</A
+>" section for an example of pinning a cursor.</P
+><P
+CLASS="para"
+>The SIZES procedure is normally used from the SQL*Plus, SQLDBA, or Sever Manager utilities. In order to display the results, issue the SET SERVEROUTPUT ON SIZE NNNNNN command prior to calling this program, as shown in the <A
+CLASS="indexterm"
+NAME="ch12-idx-12710-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12710-1"
+></A
+>example.</P
+></DIV
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch12-SECT-2.3.2"
+>12.2.3.2 The DBMS_SHARED_POOL.ABORTED_REQUEST_THRESHOLD procedure</A
+></H4
+><P
+CLASS="para"
+>The <A
+CLASS="indexterm"
+NAME="ch12-idx-12712-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12712-1"
+></A
+>ABORTED_REQUEST_THRESHOLD procedure allows the DBA to set a size threshold for restricting Oracle from dynamically flushing unpinned shared pool objects in order to make room for a large object greater than this size. When the threshold is set, any objects larger than the threshold for which sufficient free memory does not exist in the shared pool will fail to load with an ORA-4031 error (rather than flush other objects to make room). The program header follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE DBMS_SHARED_POOL.ABORTED_REQUEST_THRESHOLD
+    (threshold_size IN NUMBER);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The threshold_size is a NUMBER, in bytes, that specifies the maximum size of objects that can be loaded if shared pool space is not available.</P
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-25297"
+>12.2.3.2.1 Exceptions</A
+></H4
+><P
+CLASS="para"
+>The ABORTED_THRESHOLD_REQUEST procedure does not raise any package exceptions. It can raise the following Oracle exceptions if the threshold_size parameter is out of range:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+>ORA-20000 </DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>threshold_size not in valid range: (5000 - 2147483647).</P
+></DD
+></DL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-25305"
+>12.2.3.2.2 Restrictions</A
+></H4
+><P
+CLASS="para"
+>Note the following restrictions on calling ABORTED_THRESHOLD_REQUEST:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The range of valid values for the threshold_size is 5000 to 2147483647, inclusive. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The program does not assert a purity level with the RESTRICT_REFERENCES pragma.</P
+></LI
+></UL
+></DIV
+><DIV
+CLASS="sect4"
+><H4
+CLASS="sect4"
+><A
+CLASS="title"
+NAME="AUTOID-25313"
+>12.2.3.2.3 Example</A
+></H4
+><P
+CLASS="para"
+>The following shows how to keep objects larger than 50,000 bytes in size from flushing the shared pool when there is insufficient memory to load them:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; BEGIN
+  2     SYS.DBMS_SHARED_POOL.ABORTED_REQUEST_THRESHOLD(50000);
+  3  END;
+  4  /
+
+PL/SQL procedure successfully completed.</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>ABORTED_REQUEST_THRESHOLD allows the DBA to control the negative impact of dynamically loading large objects into a fragmented or very active Oracle shared pool. Normally, these objects should be pinned into the shared pool using the KEEP procedure.</P
+><P
+CLASS="para"
+>By setting the aborted request threshold, the DBA can avoid performance degradation for all users in cases of extreme pressure on shared pool resources. However, this may result in some users receiving the ORA-4031 error. In these cases, the DBA should determine the source of the ORA-4031 errors and pin the appropriate objects into the shared pool using <A
+CLASS="indexterm"
+NAME="ch12-idx-12714-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12714-1"
+></A
+>KEEP. </P
+></DIV
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch12-24554"
+>12.2.4 DBMS_SHARED_POOL Examples</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12716-0"
+></A
+>The DBMS_SHARED_POOL package is quite specialized and is intended for use by Oracle DBAs to help manage shared pool memory allocation problems. It would be unusual to see it used in applications, although a package-based application may try to pin itself into the shared pool using the KEEP procedure.</P
+><P
+CLASS="para"
+>One problem with the SIZES procedure is that it uses DBMS_OUTPUT to display its results. It is used primarily interactively from the SQL*Plus, SQLDBA, or Server Manager utilities. This is unfortunate, because the natural way to use these results programmatically would be as input to the KEEP procedure. Ambitious DBAs might explore using the UTL_FILE package to pass results from SIZES to KEEP.</P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch12-SECT-2.4.1"
+>12.2.4.1 Pinning packages automatically</A
+></H4
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12720-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12720-1"
+></A
+>The best time to pin packages into the shared pool is immediately after the Oracle instance is first started and the database mounted. This is when shared pool memory is largely unallocated and has not become fragmented. It is a good DBA practice to call KEEP for any large packages as part of the database startup routine. Under UNIX, the Oracle-supplied script <I
+CLASS="filename"
+>dbstart</I
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12724-0"
+></A
+> is often used to start databases. The DBA can customize this script to call KEEP and be sure the objects are pinned.</P
+><P
+CLASS="para"
+>One thing about database startup and shutdown scripts is that once they are working, you really do not want to modify them unless absolutely necessary. However, the need to pin new packages into the shared pool can come up at any time, and different databases may need to pin different sets of objects. In order to minimize maintenance of database startup scripts, I decided to write a simple procedure called <A
+CLASS="indexterm"
+NAME="ch12-idx-12725-0"
+></A
+>object_keeper, which uses a table of object names and pins all objects in the table when called. Each database's startup script can call object_keeper once to pin all objects, eliminating script maintenance to add or delete objects from the list. The table also allows each database to maintain a separate list of objects to pin.</P
+><P
+CLASS="para"
+>The table that object_keeper uses is called keep_objects and is created as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>//* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch12-idx-12726-0"
+></A
+>keeper.sql */*
+CREATE TABLE keep_objects
+   (
+    obj_schema    VARCHAR2(30)  NOT NULL
+   ,obj_name      VARCHAR2(30)  NOT NULL
+   ,CONSTRAINT ko_PK PRIMARY KEY 
+                  (obj_schema, obj_name)
+   )
+TABLESPACE USER_DATA
+STORAGE (INITIAL 2
+         NEXT    2
+         PCTINCREASE 0);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The object_keeper procedure opens a cursor that joins keep_objects to DBA_OBJECTS and attempts to pin each of the objects in the cursor. Objects in keep_objects not found in DBA_OBJECTS will not be in the cursor, and thus will not attempt to be pinned. The call to DBMS_SHARED_POOL is contained in a BEGIN...END sub-block to allow exception trapping and continuation to the next object in the cursor. </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>//* Filename on companion disk:<A
+CLASS="indexterm"
+NAME="ch12-idx-13698-0"
+></A
+> keeper.sql */*
+CREATE OR REPLACE PROCEDURE object_keeper
+   /*
+   || Procedure to pin objects into the shared pool
+   || using DBMS_SHARED_POOL.KEEP procedure.  All 
+   || objects found in the keep_objects table will
+   || be KEEPed.
+   ||
+   || For best results, procedure should be created
+   || in the SYS schema.
+   ||
+   || Author:  John Beresniewicz, Savant Corp
+   || Created: 09/18/97
+   ||
+   || Compilation Requirements:
+   ||
+   || SELECT on SYS.DBA_OBJECTS
+   || EXECUTE on SYS.DBMS_SHARED_POOL
+   ||
+   || Execution Requirements:
+   ||
+   || Some SYS objects may get ORA-1031 unless
+   || the procedure is run by SYS
+   ||
+   */
+IS
+   CURSOR keep_objects_cur
+   IS
+   SELECT  DO.owner||'.'||DO.object_name  object
+          ,DECODE(DO.object_type
+                  ,'PACKAGE','P'
+                  ,'PROCEDURE','P'
+                  ,'FUNCTION','P'
+                  ,'TRIGGER','R'
+                  ,null
+                 )                        type
+     FROM  keep_objects  KO
+          ,dba_objects   DO
+    WHERE UPPER(KO.obj_schema) = DO.owner
+      AND UPPER(KO.obj_name)   = DO.object_name
+      AND DO.object_type IN 
+            ('PACKAGE','PROCEDURE','FUNCTION','TRIGGER');
+BEGIN
+   FOR ko_rec IN keep_objects_cur
+   LOOP
+      BEGIN
+         SYS.DBMS_SHARED_POOL.KEEP
+            (ko_rec.object, ko_rec.type);
+         DBMS_OUTPUT.PUT_LINE
+            ('KEPT:  '||ko_rec.object);
+
+      EXCEPTION
+         WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE(SQLERRM);
+            DBMS_OUTPUT.PUT_LINE
+               ('KEEP FAIL: '||ko_rec.object||' '||ko_rec.type);
+      END;
+   END LOOP;
+END object_keeper;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The object_keeper procedure uses DBMS_OUTPUT to display the results of the calls to KEEP. This is primarily for testing to make sure that all objects actually do get pinned. Use the SET SERVEROUTPUT ON SIZE nnnnnn command to enable the output display. </P
+><P
+CLASS="para"
+>The following shows the results in SQL*Plus of inserting several rows into keep_objects and executing the object_keeper procedure. This script is available on the disk in the <I
+CLASS="filename"
+>keeptst.sql</I
+><A
+CLASS="indexterm"
+NAME="ch12-idx-13701-0"
+></A
+> file.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; INSERT INTO keep_objects
+  2  VALUES ('SYS','STANDARD');
+
+1 row created.
+
+SQL&gt; INSERT INTO keep_objects
+  2  VALUES ('SYS','DBMS_STANDARD');
+
+1 row created.
+
+SQL&gt; INSERT INTO keep_objects
+  2  VALUES ('BOGUS','PACKAGE');
+
+1 row created.
+
+SQL&gt; INSERT INTO keep_objects
+  2  VALUES ('SYS','DIUTIL');
+
+1 row created.
+
+SQL&gt; INSERT INTO keep_objects
+  2  VALUES ('SYS','DBMS_SQL');
+
+1 row created.
+
+SQL&gt; set serveroutput on size 100000
+SQL&gt; execute <A
+CLASS="indexterm"
+NAME="ch12-idx-12727-0"
+></A
+>object_keeper;
+KEEPED:  SYS.DBMS_SQL                                                                               
+KEEPED:  SYS.DBMS_STANDARD                                                                          
+KEEPED:  SYS.DIUTIL                                                                                 
+KEEPED:  SYS.STANDARD                                                                               
+
+PL/SQL procedure successfully <A
+CLASS="indexterm"
+NAME="ch12-idx-12722-0"
+></A
+>completed.</PRE
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch12-SECT-2.4.2"
+>12.2.4.2 Pinning cursors into the shared pool</A
+></H4
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12728-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12728-1"
+></A
+>The DBMS_SHARED_POOL.KEEP procedure can be used to pin large cursors into the shared pool, as well as packages, procedures, and functions. In practice, it would be very unusual to need to do this. One reason might be in the case of a very large and complex view definition. Pinning the cursor associated with the view's SELECT statement into the shared pool may avoid memory management issues when users access the view.</P
+><P
+CLASS="para"
+>In order to pin a cursor, the DBMS_SHARED_POOL.SIZES procedure is used to identify the cursor's address and hash value. These values are then passed as the name parameter in the call to DBMS_SHARED_POOL.KEEP. Note that because the cursor address is not identifiable until after the cursor is already in the shared pool, it is impossible to pre-pin a cursor object prior to its first reference by a user.</P
+><P
+CLASS="para"
+>The following is output from a SQL*Plus session in which a cursor is identified using the SIZES procedure and is then pinned into the shared pool using KEEP:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; execute dbms_shared_pool.sizes(50);
+
+SIZE(K) 	KEPT   		                                NAME	
+------		------------------------------------------	--------------
+180		SYS.STANDARD	                                (PACKAGE)                    
+78	YES	QDBA.Q$CVAR	                                (PACKAGE)
+74	SELECT JOB   FROM SYS.DBA_JOBS_RUNNING  WHERE JOB = :b1 
+		(0F884588,518752523)                            (CURSOR)
+71	YES	QDBA.Q$INSTAT                                   (PACKAGE BODY)
+62	YES	QDBA.Q$BGPROC                                   (PACKAGE BODY)
+
+PL/SQL procedure successfully completed.
+
+SQL&gt; execute dbms_shared_pool.keep('0F884588,518752523','C');
+
+PL/SQL procedure successfully completed.
+
+SQL&gt; execute dbms_shared_pool.sizes(50);
+
+SIZE(K) KEPT   NAME                                                                                 
+
+
+SIZE(K) 	KEPT   		                                NAME	
+------		------------------------------------------	--------------
+180		SYS.STANDARD                                    (PACKAGE) 
+78	YES	QDBA.Q$CVAR                                     (PACKAGE)	
+74	YES(1) 	SELECT JOB   FROM SYS.DBA_JOBS_RUNNING  WHERE JOB = :b1                                   
+		(0F884588,518752523)                            (CURSOR)                  
+71	YES   	 QDBA.Q$INSTAT                                  (PACKAGE BODY)                    
+62	YES    	QDBA.Q$BGPROC                                   (PACKAGE BODY)
+PL/SQL procedure successfully completed.</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>After the cursor is pinned, the second call to the SIZES procedure indicates this by showing "YES" in the KEPT output column. It is interesting (and somewhat confusing) that such a simple SELECT statement results in a cursor that uses 74K of shared pool <A
+CLASS="indexterm"
+NAME="ch12-idx-12730-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12730-1"
+></A
+>memory. </P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch12-SECT-2.4.3"
+>12.2.4.3 The DBA_KEEPSIZES view</A
+></H4
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12732-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12732-1"
+></A
+>DBA_KEEPSIZES is a view that makes available the size PL/SQL objects will occupy in the shared pool when kept using the DBMS_SHARED_POOL.KEEP procedure. This view can be used by the DBA to plan for shared pool memory requirements of large PL/SQL objects. The actual view definition, contained in the <I
+CLASS="filename"
+>dbmspool.plb</I
+> file, follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE VIEW DBA_KEEPSIZES 
+   (totsize, owner, name) 
+AS
+SELECT  TRUNC((SUM(parsed_size)+SUM(code_size))/1000)
+       ,owner
+       ,name
+  FROM dba_object_size
+ WHERE TYPE IN
+        ('PACKAGE','PROCEDURE','FUNCTION','PACKAGE BODY','TRIGGER')
+ GROUP BY owner, name;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The columns for DBA_KEEPSIZES are defined in the following table.</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Column</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Datatype</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Description</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>TOTSIZE</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>NUMBER</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Size in shared pool if object kept (via KEEP)</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>OWNER</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>VARCHAR2(30)</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Schema of the stored PL/SQL object</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>NAME</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>VARCHAR2(30)</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name of the stored PL/SQL object</P
+></TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+>You can query DBA_KEEPSIZES to get an idea of which packages, procedures, and functions are relatively large, and thus may be good candidates for pinning <A
+CLASS="indexterm"
+NAME="ch12-idx-12734-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12734-1"
+></A
+>into <A
+CLASS="indexterm"
+NAME="ch12-idx-12718-0"
+></A
+>the <A
+CLASS="indexterm"
+NAME="ch12-idx-12686-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12686-1"
+></A
+>shared <A
+CLASS="indexterm"
+NAME="ch12-idx-12597-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-12597-1"
+></A
+>pool.</P
+><P
+CLASS="para"
+></P
+></DIV
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch12_01.htm"
+TITLE="12.1 DBMS_SPACE: Obtaining Space Information"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 12.1 DBMS_SPACE: Obtaining Space Information"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle Built-in Packages"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle Built-in Packages"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch13_01.htm"
+TITLE="13. Job Scheduling in the Database"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 13. Job Scheduling in the Database"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>12.1 DBMS_SPACE: Obtaining Space Information</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>13. Job Scheduling in the Database</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

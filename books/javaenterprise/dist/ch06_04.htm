@@ -1,0 +1,1121 @@
+<html>
+<head>
+<title>Fixed Protocols (Java Distributed Computing)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jim Farley">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-206-9E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Fixed Protocols">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm" alt="Java Distributed Computing"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_03.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch06_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_01.htm">Chapter 6: Message-Passing Systems</a></td><td align="right" valign="top" width="172"><a href="ch06_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_05.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">6.4. Fixed Protocols</h2>
+
+<p>
+<a name="INDEX-858"></a><a name="INDEX-859"></a>If we recall our definition of
+a message as an identifier followed by a set of arguments, we can
+break down the possible message protocols into
+<em class="emphasis">fixed</em> and <em class="emphasis">adaptable</em> types.
+In this section we'll discuss fixed protocols, where the set of
+possible identifiers and the arguments for each type of message are
+known beforehand and don't change during a communication
+session. Adaptable protocols have variable argument lists on
+messages, or variable sets of message types, or both.
+</p>
+
+<p>Let's return to the<a name="INDEX-860"></a><a name="INDEX-861"></a> chess-player agents that we mentioned
+earlier and define a fixed protocol that they could use to engage in
+a game of chess. We'll define a protocol that will let them
+pass moves back and forth, confirm each other's moves, and
+concede a game. Then we'll implement this message protocol
+using our <tt class="literal">BasicMessage</tt> and
+<tt class="literal">BasicMsgHandler</tt> classes.
+</p>
+
+<p>
+<a href="#JDP-CH-6-FIG-1">Figure 6-1</a> shows the architecture of the
+chess-playing system we'll be building in the following
+sections. On each player's host computer, a
+<tt class="literal">ChessPlayer</tt><a name="INDEX-862"></a> object keeps track of the current
+board layout and comes up with the player's next move. A
+<tt class="literal">ChessServer</tt><a name="INDEX-863"></a><a name="INDEX-864"></a> object handles all of the
+communication with the remote opponent; it packages up moves from the
+local player into messages, and ships them off to the
+opponent's <tt class="literal">ChessServer</tt>. (It also takes
+messages from the remote opponent and calls the required methods on
+the local <tt class="literal">ChessPlayer</tt>.)
+</p>
+
+<a name="JDP-CH-6-FIG-1"></a>
+<div class="figure">
+<img alt="figure" src="figs/jdc_0601.gif" webstripperlinkwas="figs/jdc_0601.gif"></div>
+<h4 class="objtitle">Figure 6-1. Chess system architecture</h4>
+
+<p>Before we define the protocol that the distributed chess system will
+use, let's put together the application-level classes that act
+as our chess players. The <tt class="literal">ChessPlayer</tt> class in
+<a href="#JDP-CH-6-EX-4">Example 6-3</a> demonstrates the interface to our chess
+player agents. The <tt class="literal">ChessPlayer</tt> maintains the
+state of the chess board internally. (We don't show the details
+of the data structures here, since they're not directly
+relevant to the topic at hand.) The methods defined on the
+<tt class="literal">ChessPlayer</tt> interface provide the means for
+telling the chess player the opposing player's moves, and
+asking the chess player for its moves.
+</p>
+
+<p>The
+<tt class="literal">acceptMove()</tt><a name="INDEX-865"></a>
+method is called on a <tt class="literal">ChessPlayer</tt> when a move
+from the opposing player has been received. The requested move is
+given to the chess player to be confirmed as valid against the
+current state of the board. Game moves are represented as a
+"from" position, a "to" position, and a flag
+indicating whether the move results in a "check," a
+"checkmate," or neither. The "from" and
+"to" positions are represented as strings, such as
+"K3" for "King's 3," "R4"
+for "Rook's 4," etc. The
+<tt class="literal">nextMove()</tt><a name="INDEX-866"></a>
+method asks the chess player for its next move based on the current
+board position. The move is returned as the value of the reference
+arguments. The generated move will not be applied to the game board
+until the
+<tt class="literal">moveAccepted()</tt><a name="INDEX-867"></a>
+method is called. This indicates that the opposing player has
+accepted the move and applied it to its copy of the game board. These
+three methods are used by the two players to submit and confirm each
+other's moves during a game. Calling a player's
+<tt class="literal">concede()</tt><a name="INDEX-868"></a>
+method tells it that the opponent has conceded the game.
+</p>
+
+<p>We've designed this application object independently of the
+fact that we're planning on using message passing. We could be
+using any communication scheme at all to pass moves between two
+<tt class="literal">ChessPlayer</tt>s. We could even create two
+<tt class="literal">ChessPlayer</tt> objects within one process and
+engage in a game by calling methods on each of them in turn.
+</p>
+
+<a name="JDP-CH-6-EX-4"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-3. A Chess Player Agent</h4>
+<blockquote>
+<pre class="programlisting">package dcj.examples.messageV1;
+
+public class ChessPlayer {
+  // Data structures for maintaining chess board state
+  // ...            
+
+  public static final int CHECK = 0;
+  public static final int CHECKMATE = 1;
+  public static final int NO_CHECK = 2;
+
+  public ChessPlayer() {
+    // Initialize chess board
+  }
+
+  public boolean acceptMove(String from, String to,
+                            int checkOrMate) {
+    // Check validity of requested move.
+    // If valid, apply to chess board and return true.
+    // If invalid, return false.
+    // ...            
+    return true;
+  }
+
+  public boolean nextMove(String from, String to,
+                          int checkOrMate) {
+    // Generate our next move based on the current 
+    // state of the game board...
+    // ...            
+    return true;
+  }
+
+  public void moveAccepted(String from, String to,
+                           int checkOrMate) {
+    // Our move was accepted as valid, apply it to the 
+    // game board...
+    // ...            
+  }
+
+  public void conceded() {
+    // We've won!
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="INDEX-869"></a>
+
+<p>Now that we've defined the agents that will be playing the
+chess game, we can define the message protocol they'll use.
+First, they'll need a message to pass moves back and forth:
+</p>
+
+<ol>
+<li>
+<p>
+<tt class="literal">move</tt><tt class="literal">from</tt><tt class="literal">to</tt><tt class="literal">checkOrMate</tt>
+</p>
+
+<p>The message identifier is "move," and it contains three
+arguments. The first is the "from" position (a string),
+the second is the "to" position (a string), and the third
+is the integer flag indicating check, checkmate, or neither.
+</p>
+</li>
+</ol>
+<p>Next, they will need messages to confirm or reject each other's
+moves:
+</p>
+
+<ol>
+<li>
+<p>
+<tt class="literal">confirm</tt><tt class="literal">from</tt><tt class="literal">to</tt><tt class="literal">checkFlag</tt>
+</p>
+
+<p>The arguments indicate the particular move that was accepted by the
+opponent.
+</p>
+</li>
+<li>
+<p>
+<tt class="literal">reject</tt>
+</p>
+
+<p>The last move was rejected as invalid by the opponent.</p>
+</li>
+</ol>
+<p>Finally, they need a message to use when a game is being conceded:</p>
+
+<ol>
+<li>
+<p>
+<tt class="literal">concede</tt>
+</p>
+
+<p>The opposing player is conceding the game.</p>
+</li>
+</ol>
+<p>The next step is to define the link from these messages to our chess
+player agents and their corresponding methods. Using our
+<tt class="literal">BasicMessage</tt> and
+<tt class="literal">BasicMsgHandler</tt> classes, we first need to
+define subclasses of <tt class="literal">BasicMessage</tt> corresponding
+to each of the message types in our protocol. Then we need to extend
+the <tt class="literal">BasicMsgHandler</tt> class to implement a chess
+server, which will convert incoming messages into corresponding
+<tt class="literal">BasicMessage</tt> subclasses and call their
+<tt class="literal">Do()</tt> methods.
+</p>
+
+<p>
+<a href="#JDP-CH-6-EX-5">Example 6-4</a> shows the subclasses of
+<tt class="literal">BasicMessage</tt> corresponding to the message types
+in our chess-playing protocol. Each of the message objects will need
+access to the local chess player object in order to translate an
+incoming message into the appropriate method call on the chess player
+agent. The <tt class="literal">ChessMessage</tt><a name="INDEX-870"></a> class acts as a base class for our
+message objects, providing a reference to a
+<tt class="literal">ChessPlayer</tt>. Now we derive a class for each type
+of message in our chess protocol. Each of the message objects shown
+in <a href="#JDP-CH-6-EX-5">Example 6-4</a> can be used for both processing an
+incoming message of a given type and generating an outgoing message
+of the same type. Each has a pair of constructors: one accepts a
+<tt class="literal">ChessPlayer</tt> object and a list of arguments for
+the message, and one just accepts a list of the message's
+arguments. The former is used when an incoming message is being
+processed, and a call to a method on the
+<tt class="literal">ChessPlayer</tt> will be required. The latter is used
+for generating outgoing messages, where the local
+<tt class="literal">ChessPlayer</tt> object is not necessary.
+</p>
+
+<a name="JDP-CH-6-EX-5"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-4. Messages in a Chess Protocol</h4>
+<blockquote>
+<pre class="programlisting">package dcj.examples.messageV1;
+
+import java.io.*;
+
+abstract class ChessMessage extends BasicMessage {
+  protected ChessPlayer player;
+
+  public ChessMessage(ChessPlayer p) { player = p; }
+  public ChessMessage()              { player = null; }
+}
+
+class MoveMessage extends ChessMessage {
+  public MoveMessage(ChessPlayer p) {
+    super(p);
+    setId("move");
+  }
+
+  public MoveMessage(String from, String to, int checkFlag) {
+    setId("move");
+    addArg(from);
+    addArg(to);
+    addArg(Integer.toString(checkFlag));
+  }
+
+  public boolean Do() {
+    boolean success = true;
+    BasicMsgHandler handler = BasicMsgHandler.current;
+
+    String from = (String)argList.elementAt(0);
+    String to = (String)argList.elementAt(1);
+    String checkStr = (String)argList.elementAt(2);
+    int checkFlag = Integer.valueOf(checkStr).intValue();
+
+    try {
+      if (!player.acceptMove(from, to, checkFlag)) {
+        handler.sendMsg(new RejectMoveMessage());
+      }
+      else {
+        ConfirmMoveMessage cmmsg =
+          new ConfirmMoveMessage(from, to, checkFlag);
+        handler.sendMsg(cmmsg);
+
+        // We accepted the opponent's move, now send them
+        // our countermove, unless they just mated us...
+        if (checkFlag == ChessPlayer.CHECKMATE) {
+          ConcedeMessage cmsg = new ConcedeMessage();
+          handler.sendMsg(cmsg);
+        }
+        else {
+          player.nextMove(from, to, checkFlag);
+          MoveMessage mmsg = new MoveMessage(from, to, checkFlag);
+          handler.sendMsg(mmsg);
+        }
+      }
+    }
+    catch (IOException e) {
+      success = false;
+    }
+    return success;
+  }
+}
+
+class ConfirmMoveMessage extends ChessMessage {
+  public ConfirmMoveMessage(String from, String to, int checkFlag) {
+    setId("confirm");
+    addArg(from);
+    addArg(to);
+    addArg(Integer.toString(checkFlag));
+  }
+
+  public ConfirmMoveMessage(ChessPlayer p) {
+    super(p);
+    setId("confirm");
+  }
+
+  public boolean Do() {
+    boolean success = true;
+
+    // Opponent accepted our last move, so record it on our
+    // copy of the game board.
+    String from = (String)argList.elementAt(0);
+    String to = (String)argList.elementAt(1);
+    String cmateStr = (String)argList.elementAt(2);
+    int checkOrMate = Integer.valueOf(cmateStr).intValue();
+    player.moveAccepted(from, to, checkOrMate);
+    return success;
+  }
+}
+
+class RejectMoveMessage extends ChessMessage {
+  public RejectMoveMessage() {
+    setId("reject");
+  }
+
+  public RejectMoveMessage(ChessPlayer p) {
+    super(p);
+    setId("reject");
+  }
+
+  public boolean Do() {
+    boolean success = true;
+    String newFrom = "";
+    String newTo = "";
+    int newCheckFlag = ChessPlayer.NO_CHECK;
+    BasicMsgHandler handler = BasicMsgHandler.current;
+
+    try {
+      if (player.nextMove(newFrom, newTo, newCheckFlag)) {
+        MoveMessage mmsg =
+          new MoveMessage(newFrom, newTo, newCheckFlag);
+        handler.sendMsg(mmsg);
+      }
+      else {
+        // Our player didn't come up with another move, so
+        // concede the game
+        handler.sendMsg(new ConcedeMessage());
+      }
+    }
+    catch (IOException e) {
+      success = false;
+    }
+
+    return success;
+  }
+}
+
+class ConcedeMessage extends ChessMessage {
+  public ConcedeMessage() {
+    setId("concede");
+  }
+
+  public ConcedeMessage(ChessPlayer p) {
+    super(p);
+    setId("concede");
+  }
+
+  public boolean Do() {
+    player.conceded();
+    return true;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="INDEX-871"></a>
+<a name="INDEX-872"></a>
+<a name="INDEX-873"></a>
+<a name="INDEX-874"></a>
+<a name="INDEX-875"></a>
+<a name="INDEX-876"></a>
+<a name="INDEX-877"></a>
+
+<p>These message classes are used by the
+<tt class="literal">ChessServer</tt><a name="INDEX-878"></a><a name="INDEX-879"></a> class in <a href="#JDP-CH-6-EX-6">Example 6-5</a> to convert incoming messages into method calls
+on the local <tt class="literal">ChessPlayer</tt>, and to generate
+outgoing messages for the remote chess player. A
+<tt class="literal">ChessServer</tt> is constructed with an input and
+output stream connecting it to the remote opponent. The
+<tt class="literal">ChessServer</tt> makes a new
+<tt class="literal">ChessPlayer</tt> in its constructor to act as the
+local player. The <tt class="literal">ChessServer</tt>'s
+<tt class="literal">buildMessage()</tt> method checks each incoming
+message identifier and constructs the appropriate message object for
+each, passing the local <tt class="literal">ChessPlayer</tt> reference
+into each constructor. When the message's
+<tt class="literal">Do()</tt> method is called in the implementation of
+<tt class="literal">run()</tt> inherited from
+<tt class="literal">BasicMsgHandler</tt>, the message arguments, if any,
+will be parsed, and the appropriate method will be called on the
+local <tt class="literal">ChessPlayer</tt>.
+</p>
+
+<a name="JDP-CH-6-EX-6"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-5. A Chess Server</h4>
+<blockquote>
+<pre class="programlisting">package dcj.examples.messageV1;
+
+import java.io.*;
+
+public class ChessServer extends BasicMsgHandler
+{
+  ChessPlayer player;
+
+  public ChessServer(InputStream in, OutputStream out) {
+    super(in, out);
+    player = new ChessPlayer();
+  }
+
+  public ChessPlayer getPlayer() {
+    return player;
+  }
+
+  protected BasicMessage buildMessage(String msgId) {
+    BasicMessage msg = null;
+
+    System.out.println("Got message type \"" + msgId + "\"");
+
+    if (msgId.compareTo("move") == 0) {
+      msg = new MoveMessage(player);
+    }
+    else if (msgId.compareTo("confirm") == 0) {
+      msg = new ConfirmMoveMessage(player);
+    }
+    else if (msgId.compareTo("reject") == 0) {
+      msg = new RejectMoveMessage(player);
+    }
+    else if (msgId.compareTo("concede") == 0) {
+      msg = new ConcedeMessage(player);
+    }
+
+    return msg;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="INDEX-880"></a>
+<a name="INDEX-881"></a>
+
+<p>To see the chess message protocol in action, let's walk through
+a hypothetical game played between two players on the network. First,
+the two processes containing the player objects need to establish a
+socket connection with corresponding input/output streams. (We
+won't show the details of this, since we've already seen
+some examples of creating socket connections, and there's
+nothing new or exciting about this one.) Once the socket connection
+is made, each player process passes the input and output streams from
+the socket to the constructor for a <tt class="literal">ChessServer</tt>.
+The <tt class="literal">ChessServer</tt> constructor passes the input and
+output streams to the <tt class="literal">BasicMsgHandler</tt>
+constructor, then creates a local <tt class="literal">ChessPlayer</tt>
+object. One of the player processes (let's call it the
+"white" player) starts the game by requesting a move from
+the <tt class="literal">ChessPlayer</tt>, wraps the move into a
+<tt class="literal">MoveMessage</tt> object, and tells the
+<tt class="literal">ChessServer</tt> to send the message by calling its
+<tt class="literal">sendMsg()</tt> method with the message object. A
+section of code like the following is used:
+</p>
+
+<blockquote>
+<pre class="programlisting">// Create the server and get the local player object
+ChessServer server = new ChessServer(ins, outs);
+ChessPlayer player = server.getPlayer();
+
+// Get the player's first move, and generate a move message
+String from, to;
+int checkFlag;
+player.nextMove(from, to, checkFlag);
+MoveMessage mmsg = new MoveMessage(from, to, checkFlag);
+
+// Send the move message to the opponent
+server.sendMsg(mmsg);</pre>
+</blockquote>
+
+<p>The opponent player process (the "black" player) can
+start off by wrapping its <tt class="literal">ChessServer</tt> in a
+<tt class="literal">Thread</tt> and calling its
+<tt class="literal">run()</tt> method, causing it to enter its
+message-reading loop. The black player receives the move message from
+the white player, converts the message into a
+<tt class="literal">MoveMessage</tt> object, then calls the
+<tt class="literal">Do()</tt> method on the message object. The
+<tt class="literal">Do()</tt> method on <tt class="literal">MoveMessage</tt>
+takes the move from the white player and passes it to the black
+<tt class="literal">ChessPlayer</tt> through its
+<tt class="literal">acceptMove()</tt> method. If the black
+<tt class="literal">ChessPlayer</tt> accepts the move, then a
+<tt class="literal">ConfirmMoveMessage</tt> is constructed and returned
+to the white player to signal that the move has been accepted. The
+white player's <tt class="literal">ChessServer</tt> will receive
+the confirmation message, and the <tt class="literal">Do()</tt> method on
+the <tt class="literal">ConfirmMoveMessage</tt> object will tell the
+white player that its last move was accepted. If the white
+player's move was a checkmate, then a
+<tt class="literal">ConcedeMessage</tt> is also constructed and sent to
+the white player. If not, then the black player is asked for its
+countermove, and it's sent as a
+<tt class="literal">MoveMessage</tt> to the white player. The black
+player's <tt class="literal">ChessServer</tt> then waits for a
+confirmation or rejection of the move from the white player.
+</p>
+
+<p>If the white player's first move was not accepted by the black
+player, then a <tt class="literal">RejectMoveMessage</tt> is constructed
+and sent to the white player. The white player's
+<tt class="literal">ChessServer</tt> receives the rejection message,
+converts it into a local <tt class="literal">RejectMoveMessage</tt>
+object, and the message's <tt class="literal">Do()</tt> method asks
+the white player for another move. If a new move is given, it is
+wrapped in a <tt class="literal">MoveMessage</tt> object and sent back to
+the black player. If not, this is taken as a concession of the game,
+and a <tt class="literal">ConcedeMessage</tt> object is constructed to
+send a concede message to the black player.
+</p>
+
+<p>This message passing continues until one of the players receives and
+accepts a checkmate move and concedes the game, or until one of the
+players fails to generate a countermove, which acts as a forfeit of
+the game.
+</p>
+
+<a name="JDP-CH-6-SECT-4.1"></a>
+<h3 class="sect2">6.4.1. Heterogeneous Argument Lists</h3>
+
+<p>
+<a name="INDEX-882"></a><a name="INDEX-883"></a>This message-passing example
+was kept simple by avoiding some of the common issues that arise even
+with fixed message protocols. The messages in the chess protocol
+consist only of string tokens, delimited by a set of special
+characters. This allowed us to define a single
+<tt class="literal">readMsg()</tt><a name="INDEX-884"></a>
+method on our <tt class="literal">BasicMsgHandler</tt> class that we
+could reuse in our chess game example. It also allowed us to
+represent all message arguments using a list of strings in our
+<tt class="literal">BasicMessage</tt> class. If we know that every
+message is a sequence of strings ending with a special
+"end-of-message" string, then we can read and store each
+message from the input stream in the same way, without knowing what
+type of message was being read. This is just what the
+<tt class="literal">readMsg()</tt> method does--after checking the
+message identifier in the <tt class="literal">buildMessage()</tt> method
+to see which message object to create, <tt class="literal">readMsg()</tt>
+reads each message from the input stream the same way:
+</p>
+
+<blockquote>
+<pre class="programlisting">while (!msgEnd) {
+    token = din.readUTF();
+    if (token.compareTo(msgEndToken) == 0)
+        msgEnd = true;
+    else {
+        msg.addArg(token);
+    }
+}</pre>
+</blockquote>
+
+<p>Typically, we can't be this simplistic, since messages may need
+to contain data of various types. Actually, we didn't
+completely escape this issue; notice that the "move"
+message has an argument (the "checkFlag" argument) that
+is supposed to be an integer, not a string. We got around the
+limitation of our message-passing facility by converting the integer
+to a string on sending the message, and then converting back to an
+integer on the receiving end.
+</p>
+
+<p>In order to add the ability to send and receive heterogeneous
+argument lists on messages, we would need to update our
+message-passing facility so that each message class reads and
+converts its own arguments from the input stream. Another option
+would be to have <tt class="literal">BasicMsgHandler</tt> convert the
+arguments to their proper types in its <tt class="literal">readMsg()</tt>
+method. This could be done by having the
+<tt class="literal">readMsg()</tt> method know the format of all of the
+message types the <tt class="literal">BasicMsg-Handler</tt> supports.
+This would put the entire protocol definition in the
+<tt class="literal">BasicMsgHandler</tt> class, which makes updating the
+message protocol more difficult. Overall, having the message objects
+parse their own arguments leaves our message-passing facility more
+flexible for future changes.<tt class="literal"></tt><a name="INDEX-885"></a>
+</p>
+
+<p>
+<a href="#JDP-CH-6-EX-7">Example 6-6</a> shows a new version of the
+<tt class="literal">BasicMessage</tt><a name="INDEX-886"></a> class
+that handles heterogeneous argument lists. The argument list is still
+implemented using a <tt class="literal">Vector</tt>, but the
+<tt class="literal">Vector</tt> now contains references to
+<tt class="literal">Object</tt>s rather than
+<tt class="literal">String</tt>s. Message arguments are offered and
+accepted by the new <tt class="literal">BasicMessage</tt> class as
+<tt class="literal">Object</tt>s as well.
+</p>
+
+<a name="JDP-CH-6-EX-7"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-6. Updated Basic Message Class</h4>
+<blockquote>
+<pre class="programlisting">package dcj.examples.messageV2;
+
+import java.util.Vector;
+import java.io.*;
+
+abstract class BasicMessage
+{
+  protected String id;
+  protected Vector argList;
+  String endToken = "END";
+
+  public BasicMessage() {
+    argList = new Vector();
+  }
+
+  public BasicMessage(String mid) {
+    id = mid;
+    argList = new Vector();
+  }
+
+  protected void setId(String mid) {
+    id = mid;
+  }
+
+  public void addArg(Object arg) {
+    argList.addElement(arg);
+  }
+
+  public String messageID() {
+    return id;
+  }
+
+  public Vector argList() {
+    Vector listCopy = (Vector)argList.clone();
+    return listCopy;
+  }
+
+  public boolean readArgs(InputStream ins) {
+    boolean success = true;
+    DataInputStream din = new DataInputStream(ins);
+
+    // Read tokens until the "end-of-message" token is seen.
+    try {
+      String token = din.readUTF();
+      while (token.compareTo(endToken) != 0) {
+        addArg(token);
+        token = din.readUTF();
+      }
+    }
+    catch (IOException e) {
+      // Failed to read complete argument list.
+      success = false;
+    }
+    return success;
+  }
+
+  public boolean writeArgs(OutputStream outs) {
+    int len = argList.size();
+    boolean success = true;
+    DataOutputStream dout = new DataOutputStream(outs);
+
+    // Write each argument in order
+    try {
+      for (int i = 0; i &lt; len; i++) {
+        String arg = (String)argList.elementAt(i);
+        dout.writeUTF(arg);
+      }
+
+      // Finish with the end-of-message token
+      dout.writeUTF(endToken);
+    }
+    catch (IOException e) {
+      success = false;
+    }
+    return success;
+  }
+
+  public abstract String Do();
+}</pre>
+</blockquote>
+</div>
+
+<p>To allow message objects to parse their own arguments,
+<tt class="literal">BasicMessage</tt> has two additional methods:
+<tt class="literal">readArgs()</tt><a name="INDEX-887"></a><a name="INDEX-888"></a>
+and <tt class="literal">writeArgs()</tt>. The
+<tt class="literal">readArgs()</tt> method takes an
+<tt class="literal">InputStream</tt> as its only argument, and is meant
+to read the arguments for the message from the
+<tt class="literal">InputStream</tt>. The default implementation of
+<tt class="literal">readArgs()</tt> provided on the
+<tt class="literal">BasicMessage</tt> class is stolen from the
+<tt class="literal">readMsg()</tt> method from the original
+<tt class="literal">BasicMsgHandler</tt> class; it treats the incoming
+message as a sequence of string tokens ending with a known
+"end-of-message" token. The
+<tt class="literal">writeArgs()</tt> method takes an
+<tt class="literal">OutputStream</tt> as an argument, and writes the
+message arguments to the output stream. The default implementation is
+copied from the <tt class="literal">sendMsg()</tt> method from the
+original <tt class="literal">BasicMsgHandler</tt>; it converts each
+argument to a <tt class="literal">String</tt> and writes it to the output
+stream. The "end-of-message" token is sent after the
+message arguments to mark the end of the
+message.<a name="INDEX-889"></a>
+</p>
+
+<p>The message classes for our chess protocol need to be updated to
+match the new <tt class="literal">BasicMessage</tt> class. The most
+significant changes are to the
+<tt class="literal">MoveMessage</tt><a name="INDEX-890"></a> and
+<tt class="literal">ConfirmMoveMessage</tt><a name="INDEX-891"></a> classes, since they now need to
+provide their own implementations of the
+<tt class="literal">readArgs()</tt> and <tt class="literal">writeArgs()</tt>
+methods. <a href="#JDP-CH-6-EX-8">Example 6-7</a> shows the updated
+<tt class="literal">MoveMessage</tt> class. Its
+<tt class="literal">readArgs()</tt> method reads the arguments defining
+the chess move ( <em class="emphasis">from</em> and
+<em class="emphasis">to</em> strings, and a
+<em class="emphasis">check/checkmate</em> flag) from the
+<tt class="literal">InputStream</tt>, and its
+<tt class="literal">writeArgs()</tt> method writes the same arguments to
+the <tt class="literal">OutputStream</tt>.
+</p>
+
+<a name="JDP-CH-6-EX-8"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-7. Updated MoveMessage Class</h4>
+<blockquote>
+<pre class="programlisting">class MoveMessage extends ChessMessage {
+  public MoveMessage(ChessPlayer p) {
+    super(p);
+    setId("move");
+  }
+
+  public MoveMessage(String from, String to, int checkFlag) {
+    setId("move");
+    addArg(from);
+    addArg(to);
+    addArg(new Integer(checkFlag));
+  }
+
+  public boolean Do() {
+    boolean success = true;
+    BasicMsgHandler handler = BasicMsgHandler.current;
+
+    String from = (String)argList.elementAt(0);
+    String to = (String)argList.elementAt(1);
+    Integer checkInt = (Integer)argList.elementAt(2);
+    int checkFlag = checkInt.intValue();
+
+    try {
+      if (!player.acceptMove(from, to, checkFlag)) {
+        handler.sendMsg(new RejectMoveMessage());
+      }
+      else {
+        ConfirmMoveMessage ccmsg =
+          new ConfirmMoveMessage(from, to, checkFlag);
+        handler.sendMsg(ccmsg);
+
+        // We accepted the opponent's move, now send them
+        // our countermove, unless they just mated us...
+        if (checkFlag == ChessPlayer.CHECKMATE) {
+          ConcedeMessage cmsg = new ConcedeMessage();
+          handler.sendMsg(cmsg);
+        }
+        else {
+          player.nextMove(from, to, checkFlag);
+          MoveMessage mmsg = new MoveMessage(from, to, checkFlag);
+          handler.sendMsg(mmsg);
+        }
+      }
+    }
+    catch (IOException e) {
+      success = false;
+    }
+    return success;
+  }
+
+  public boolean readArgs(InputStream ins) {
+    boolean success = true;
+
+    DataInputStream din = new DataInputStream(ins);
+
+    try {
+      String from = din.readUTF();
+      addArg(from);
+      String to = din.readUTF();
+      addArg(to);
+      int checkFlag = din.readInt();
+      addArg(new Integer(checkFlag));
+
+      // Got all of our arguments, now watch for the
+      // end-of-message token
+      String temp = din.readUTF();
+      while (temp.compareTo(endToken) != 0) {
+        temp = din.readUTF();
+      }
+    }
+    catch (Exception e) {
+      success = false;
+    }
+
+    return success;
+  }
+
+  public boolean writeArgs(OutputStream outs) {
+    boolean success = true;
+    DataOutputStream dout = new DataOutputStream(outs);
+
+    String from = (String) argList.elementAt(0);
+    String to = (String)argList.elementAt(1);
+    Integer tmpInt = (Integer)argList.elementAt(2);
+    int checkFlag = tmpInt.intValue();
+
+    try {
+      dout.writeUTF(from);
+      dout.writeUTF(to);
+      dout.writeInt(checkFlag);
+      dout.writeUTF(endToken);
+    }
+    catch (IOException e) {
+      success = false;
+    }
+    return success;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="INDEX-892"></a>
+
+<p>The only change required to the
+<tt class="literal">BasicMsgHandler</tt><a name="INDEX-893"></a><a name="INDEX-894"></a> class is to update its
+<tt class="literal">readMsg()</tt> and <tt class="literal">sendMsg()</tt>
+methods to delegate the reading and writing of arguments to the
+message objects they create:
+</p>
+
+<blockquote>
+<pre class="programlisting">public BasicMessage readMsg() throws IOException {
+    BasicMessage msg;
+    String token;
+    DataInputStream din = new DataInputStream(msgIn);
+
+    // Get message ID and build corresponding BasicMessage
+    token = din.readUTF();
+    msg = buildMessage(token);
+
+    // Tell message to read its args
+    if (msg != null &amp;&amp; msg.readArgs(msgIn))
+      return msg;
+    else
+      return null;
+}
+public void sendMsg(BasicMessage msg) throws IOException {
+    boolean success = true;
+    DataOutputStream dout = new DataOutputStream(msgOut);
+    // Send message ID
+    dout.writeUTF(msg.messageID());
+    // Tell message to send its arguments
+    msg.writeArgs(msgOut);
+}</pre>
+</blockquote>
+
+<a name="INDEX-895"></a>
+<a name="INDEX-896"></a>
+<a name="INDEX-897"></a>
+<a name="INDEX-898"></a>
+<a name="INDEX-899"></a>
+<a name="INDEX-900"></a>
+
+
+<a name="JDP-CH-6-SECT-4.2"></a>
+<h3 class="sect2">6.4.2. Objects as Message Arguments</h3>
+
+<p>
+<a name="INDEX-901"></a><a name="INDEX-902"></a>With this new version of our
+message-passing facility, we can define message types that have
+arguments of any data type that can be transmitted over an I/O
+stream. We can even use the object serialization facility built into
+the Java I/O package to use objects as message arguments.
+</p>
+
+<p>Suppose we define an object to represent a chess move in our chess
+protocol example. <a href="#JDP-CH-6-EX-9">Example 6-8</a> shows a
+<tt class="literal">ChessMove</tt><a name="INDEX-903"></a> class that encapsulates in a single
+object the <em class="emphasis">from</em>, <em class="emphasis">to</em>, and
+<em class="emphasis">checkFlag</em> arguments corresponding to a chess
+move. We can easily alter our
+<tt class="literal">MoveMessage</tt><a name="INDEX-904"></a> and
+<tt class="literal">ConfirmMoveMessage</tt> classes to use a
+<tt class="literal">ChessMove</tt> object as its single message argument.
+The updated <tt class="literal">MoveMessage</tt> class is shown in <a href="#JDP-CH-6-EX-10">Example 6-9</a>. The <tt class="literal">readArgs()</tt> and
+<tt class="literal">writeArgs()</tt> methods now use
+<tt class="literal">ObjectInputStream</tt>s and
+<tt class="literal">ObjectOutputStream</tt>s to read and write the
+<tt class="literal">ChessMove</tt> argument over the network.
+</p>
+
+<a name="JDP-CH-6-EX-9"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-8. A ChessMove Class</h4>
+<blockquote>
+<pre class="programlisting">package dcj.examples.messageV2;
+
+class ChessMove {
+  String fromPos;
+  String toPos;
+  int checkFlag;
+
+  public ChessMove(String from, String to, int ckFlag) {
+    fromPos = from;
+    toPos = to;
+    checkFlag = ckFlag;
+  }
+
+  public String from() {
+    return fromPos;
+  }
+
+  public String to() {
+    return toPos;
+  }
+ 
+  public int checkFlag() {
+    return checkFlag;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="INDEX-905"></a>
+
+<a name="JDP-CH-6-EX-10"></a>
+<div class="example">
+<h4 class="objtitle">Example 6-9. A MoveMessage Class with Object Argument</h4>
+<blockquote>
+<pre class="programlisting">class MoveMessage extends ChessMessage {
+  public MoveMessage(ChessPlayer p) {
+    super(p);
+    setId("move");
+  }
+
+  public MoveMessage(String from, String to, int checkFlag) {
+    setId("move");
+    ChessMove move = new ChessMove(from, to, checkFlag);
+    addArg(move);
+  }
+
+  public String Do() {
+    BasicMsgHandler handler = BasicMsgHandler.current;
+    ChessMove move = (ChessMove)argList.elementAt(0);
+
+    if (!player.acceptMove(move.from(), move.to(), move.checkFlag())) {
+      handler.sendMsg(new RejectMoveMessage());
+    }
+    else {
+      ConfirmMoveMessage ccmsg =
+        new ConfirmMoveMessage(move.from(), move.to(), move.checkFlag());
+      handler.sendMsg(ccmsg);
+
+      // We accepted the opponent's move, now send them
+      // our countermove, unless they just mated us...
+      if (checkFlag == ChessPlayer.CHECKMATE) {
+        ConcedeMessage cmsg = new ConcedeMessage();
+        handler.sendMsg(cmsg);
+      }
+      else {
+        String from, to;
+        int checkFlag;
+        player.nextMove(from, to, checkFlag);
+        MoveMessage mmsg = new MoveMessage(from, to, checkFlag);
+        handler.sendMsg(mmsg);
+      }
+    }
+  }
+
+  public boolean readArgs(InputStream ins) {
+    boolean success = true;
+
+    DataInputStream din = new DataInputStream(ins);
+    ObjectInputStream oin = new ObjectInputStream(ins);
+
+    try {
+      ChessMove move = (ChessMove)oin.readObject();
+      addArg(move);
+
+      // Got all of our arguments, now watch for the
+      // end-of-message token
+      String temp = din.readUTF();
+      while (temp.compareTo(endToken) != 0) {
+        temp = din.readUTF();
+      }
+    }
+    catch (Exception e) {
+      success = false;
+    }
+
+    return success;
+  }
+
+
+  public boolean writeArgs(OutputStream outs) {
+    boolean success = true;
+    DataOutputStream dout = new DataOutputStream(outs);
+    ObjectOutputStream oout = new ObjectOutputStream(outs);
+    ChessMove move = (ChessMove)argList.elementAt(0);
+
+    try {
+      oout.writeObject(move);
+      dout.writeUTF(endToken);
+    }
+    catch (IOException e) {
+      success = false;
+    }
+    return success;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="INDEX-906"></a>
+<a name="INDEX-907"></a>
+<a name="INDEX-908"></a>
+<a name="INDEX-909"></a>
+<a name="INDEX-910"></a>
+<a name="INDEX-911"></a>
+<a name="INDEX-912"></a>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch06_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_03.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch06_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch06_05.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">6.3. Message Processing</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">6.5. Adaptable Protocols</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

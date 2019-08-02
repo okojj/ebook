@@ -1,0 +1,227 @@
+<!doctype html public "-//ORA//DTD CD HTML 3.2//EN">
+<html>
+<head>
+<title>[Chapter 9] 9.2 Custom Serialization</TITLE>
+<meta name="author" content="David Flanagan">
+<meta name="date" content="Thu Jul 31 15:56:44 1997">
+<meta name="form" content="html">
+<meta name="metadata" content="dublincore.0.1">
+<meta name="objecttype" content="book part">
+<meta name="otheragent" content="gmat dbtohtml">
+<meta name="publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="source" content="SGML">
+<meta name="subject" content="Java">
+<meta name="title" content="Java in a Nutshell">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+</HEAD>
+<body bgcolor="#FFFFFF">
+
+<div class=htmlnav>
+<h1><a href='index.htm'><img src="gifs/smbanner.gif" alt="Java in a Nutshell" border=0></a></H1>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch09_01.htm"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 9<br>Object Serialization</FONT></B></TD>
+<td width=172 align=right valign=top><a href="ch09_03.htm"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+</table>
+
+&nbsp;
+<hr align=left width=515>
+</DIV>
+<div class=sect1>
+<h2 class=sect1><a class="TITLE" name="JNUT2-CH-9-SECT-2">9.2 Custom Serialization</A></h2>
+
+<p class=para>
+Not every piece of program state can, or should be,
+serialized.  Some things, like <tt class=literal>FileDescriptor</tt>
+objects, are inherently platform-specific or
+virtual-machine-dependent.  If a <tt class=literal>FileDescriptor</tt> were
+serialized, it would have no meaning when deserialized in a
+different virtual machine.
+For this reason, and also for important security reasons,
+not all objects can be serialized.
+
+<p class=para>
+Only classes that
+implement the <tt class=literal>Serializable</tt> or <tt class=literal>Externalizable</tt>
+interface can be written to or read from an object stream.
+<tt class=literal>Serializable</tt> is a marker interface, like
+<tt class=literal>Cloneable</tt>: it doesn't define any methods and serves
+only to specify whether an object is allowed to be
+serialized.  The <tt class=literal>Externalizable</tt> interface does
+define methods, and is used by objects that want advanced
+control over the way they are written and read.  We'll see
+more about <tt class=literal>Externalizable</tt> objects later in this
+chapter.  It is worth noting at this point that
+<tt class=literal>Component</tt> implements <tt class=literal>Serializable</tt>, which
+means that all AWT components can be serialized.
+
+<p class=para>
+Even when an object is serializable, it may not make sense
+for it to serialize all of its state.  For example, in the
+<tt class=literal>Scribble</tt> example shown in <a href="ch08_01.htm">Chapter 8, <i>New AWT Features</i></A>, the
+<tt class=literal>last_x</tt> and <tt class=literal>last_y</tt> fields store the current
+position of the mouse and only contain valid data while the
+user has a mouse button pressed.
+The values of these fields will never be of interest (or use)
+when such an object is deserialized, so
+there is no need to bother saving the values of these
+fields as part of the <tt class=literal>Scribble</tt> object's state.  To
+tell the serialization mechanism that a field should not be
+saved, simply declare it <tt class=literal>transient</tt>:
+
+<p class=para>
+<div class=screen>
+<p>
+<pre>
+protected transient short last_x, last_y; // Temporary fields for mouse pos.
+</PRE>
+</DIV>
+
+<p class=para>
+The <tt class=literal>transient</tt> modifier keyword has always been a
+legal part of the Java language, but it was not assigned any
+meaning until Java 1.1.
+
+<p class=para>
+There are situations where a field is not transient--i.e.,
+it does contain an important part of an object's state--but
+for some reason it cannot be successfully serialized.  One
+example is a custom AWT component that computes its
+preferred size based on the size of the text it displays.
+Because fonts have slight size variations from platform to
+platform, this pre-computed preferred size will not be
+valid if the component is serialized on one type of
+platform and deserialized on another.  Since the preferred
+size fields will not be valid when deserialized, they should be
+declared <tt class=literal>transient</tt> so that they don't take up space
+in the serialized object.  But in this case, their values
+should be re-computed when the object is deserialized.
+
+<p class=para>
+A class can define custom serialization and
+deserialization behavior for its objects by implementing
+<tt class=literal>writeObject()</tt> and <tt class=literal>readObject()</tt> methods.
+Suprisingly, these methods are not defined by any interface.
+The methods must be declared
+<tt class=literal>private</tt>, which is also suprising if you think about it,
+as they are called from outside of the class during
+serialization and deserialization.
+If a class defines these
+methods, the appropriate one is invoked by the
+<tt class=literal>ObjectOutputStream</tt> or <tt class=literal>ObjectInputStream</tt> when
+an object is serialized or deserialized.
+
+<p class=para>
+For example, our custom
+component might define a <tt class=literal>readObject()</tt> method to give
+it an opportunity to re-compute its preferred size upon
+deserialization.  The method might look like this:
+
+<p class=para>
+<div class=screen>
+<p>
+<pre>
+private void readObject(ObjectInputStream in)
+             throws IOException, ClassNotFoundException {
+  in.defaultReadObject();      // Deserialize the component in the usual way.
+  this.computePreferredSize(); // But then go recompute its size.
+}
+</PRE>
+</DIV>
+
+<p class=para>
+This method calls the <tt class=literal>defaultReadObject()</tt> method of
+the <tt class=literal>ObjectInputStream</tt> to deserialize the object as
+normal, and then takes care of the post-processing it needs to
+perform.
+
+<p class=para>
+<a href="#JNUT2-CH-9-EX-2">Example 9.2</A>
+is a more complete example of custom serialization.  It
+shows a class that implements a growable array of numbers.
+This class defines a <tt class=literal>writeObject()</tt> method to do some
+pre-processing before being serialized and a
+<tt class=literal>readObject()</tt> method to do post-processing after
+deserialization.
+
+<div class=example>
+<h4 class=example><a class="TITLE" name="JNUT2-CH-9-EX-2">Example 9.2: Serialization with Pre- and Post-Processing</A></h4>
+
+<div class=screen>
+<p>
+<pre>
+import java.io.*;
+/** A simple class that implements a growable array or ints, and knows
+ *  how to serialize itself as efficiently as a non-growable array. */
+public class IntList implements Serializable
+{
+  private int[] nums = new int[8]; // An array to store the numbers.
+  private transient int size = 0;  // Index of next unused element of nums[].
+  /** Return an element of the array */
+  public int elementAt(int index) throws ArrayIndexOutOfBoundsException {
+    if (index &gt;= size) throw new ArrayIndexOutOfBoundsException(index);
+    else return nums[index];
+  }
+  /** Add an int to the array, growing the array if necessary. */
+  public void add(int x) {
+    if (nums.length == size) resize(nums.length*2); // Grow array, if needed.
+    nums[size++] = x;                               // Store the int in it.
+  }
+  /** An internal method to change the allocated size of the array. */
+  protected void resize(int newsize) {
+    int[] oldnums = nums;
+    nums = new int[newsize];                     // Create a new array.
+    System.arraycopy(oldnums, 0, nums, 0, size); // Copy array elements.
+  }
+  /** Get rid of unused array elements before serializing the array. */
+  private void writeObject(ObjectOutputStream out) throws IOException {
+    if (nums.length &gt; size) resize(size);  // Compact the array.
+    out.defaultWriteObject();              // Then write it out normally.
+  }
+  /** Compute the transient size field after deserializing the array. */
+  private void readObject(ObjectInputStream in)
+          throws IOException, ClassNotFoundException {
+    in.defaultReadObject();                // Read the array normally.
+    size = nums.length;                    // Restore the transient field.
+  }
+}
+</PRE>
+</DIV>
+
+</DIV>
+
+</DIV>
+
+
+<div class=htmlnav>
+
+<p>
+<hr align=left width=515>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch09_01.htm"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><a href="index.htm"><img src='gifs/txthome.gif' border=0 alt='Home'></a></td>
+<td width=172 align=right valign=top><a href="ch09_03.htm"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+<tr>
+<td width=172 align=left valign=top>Simple Serialization</td>
+<td width=171 align=center valign=top><a href="index/idx_0.htm"><img src='gifs/index.gif' alt='Book Index' border=0></a></td>
+<td width=172 align=right valign=top>Serialization and Class Versioning</td>
+</tr>
+</table>
+<hr align=left width=515>
+
+<img src="gifs/smnavbar.gif" usemap="#map" border=0> 
+<map name="map"> 
+<area shape=RECT coords="0,0,108,15" href="index.htm" alt="Java in a Nutshell"> 
+<area shape=RECT coords="109,0,200,15" href="../langref/index.htm" alt="Java Language Reference"> 
+<area shape=RECT coords="203,0,290,15" href="../awt/index.htm" alt="Java AWT"> 
+<area shape=RECT coords="291,0,419,15" href="../fclass/index.htm" alt="Java Fundamental Classes"> 
+<area shape=RECT coords="421,0,514,15" href="../exp/index.htm" alt="Exploring Java"> 
+</MAP>
+</DIV>
+
+</BODY>
+</HTML>

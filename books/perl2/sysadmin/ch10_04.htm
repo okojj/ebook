@@ -1,0 +1,1063 @@
+<html>
+<head>
+<title>Danger on the Wire  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Danger on the Wire">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch10_03.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch10_01.htm">Chapter 10: Security and Network Monitoring</a></td><td align="right" valign="top" width="172"><a href="ch10_05.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">10.4. Danger on the Wire</h2>
+
+
+
+
+
+<p>SNMP is good for proactive monitoring (and some reactive monitoring
+situations when using SNMP traps), but it doesn't always help
+with unplanned situations like network emergencies. In these
+situations, you may need to monitor the network in ways that are not
+covered by the available SNMP variables.</p>
+
+
+
+
+
+<a name="ch10-8-fm2xml"></a>
+<h3 class="sect2">10.4.1. Perl Saves the Day</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-1050"></a><a name="INDEX-1051"></a>Here's a true
+story that shows how Perl can help in these times. One Saturday
+evening I casually logged into a machine on my network to read my
+email. Much to my surprise, I found our mail and web servers near
+death and fading fast. Attempts to read and send mail or look at web
+content yielded slow responses, hung connections, and outright
+connection failures. Our mail queue was starting to reach critical
+mass.</p>
+
+
+
+
+
+<p>I looked first at the state of the servers. Interactive response was
+fine, and the CPU load was high, but not deadly. One sign of trouble
+was the number of mail processes running. According to the mail logs,
+there were more processes running than expected because many
+transactions were not completing. Processes that had started up to
+handle incoming connections from the outside were hanging, driving up
+the load. This load was then capping any new outgoing connections
+from initiating. This strange network behavior led me to examine the
+current connection table of the server using
+<tt class="command">netstat</tt>.</p>
+
+
+
+
+
+<p>The last column of the <tt class="command">netstat</tt> output<tt class="command">
+</tt>told me that there were indeed many connections in progress
+on that machine from many different hosts. The big shocker was the
+state of those connections. Instead of looking like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">tcp    0      0  mailhub.3322    mail.mel.aone.ne.smtp  ESTABLISHED
+tcp    0      0  mailhub.3320    edunet.edunet.dk.smtp  CLOSE_WAIT
+tcp    0      0  mailhub.1723    kraken.mvnet.wne.smtp  ESTABLISHED
+tcp    0      0  mailhub.1709    plover.net.bridg.smtp  CLOSE_WAIT</pre>
+</blockquote>
+
+
+
+
+
+<p>they looked more like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">tcp    0      0  mailhub.3322    mail.mel.aone.ne.smtp  SYN_RCVD
+tcp    0      0  mailhub.3320    edunet.edunet.dk.smtp  SYN_RCVD
+tcp    0      0  mailhub.1723    kraken.mvnet.wne.smtp  SYN_RCVD
+tcp    0      0  mailhub.1709    plover.net.bridg.smtp  CLOSE_WAIT</pre>
+</blockquote>
+
+
+
+
+
+<p>At first, this looked like a classic Denial of Service attack called
+a <tt class="literal">SYN</tt> Flood or a <tt class="literal">SYN-ACK</tt>
+attack. To understand these attacks, we have to digress for a moment
+and talk a little bit about how the TCP/IP protocol
+works.<a name="INDEX-1052"></a><a name="INDEX-1053"></a>
+</p>
+
+
+
+
+
+<p>
+<a name="INDEX-1054"></a><a name="INDEX-1055"></a>Every TCP/IP connection begins with a
+handshake between the participants. This little dance lets both the
+initiator and the recipient signal their readiness to enter into a
+conversation. The first step is taken by the initiating network
+entity. It sends a <tt class="literal">SYN</tt> (for SYNchronize) packet to
+the recipient. If the recipient wishes to talk, it will send back a
+<tt class="literal">SYN-ACK</tt>, an ACKnowledgment of the request, and
+record that a conversation is about to begin in its pending
+connection table. The initiator then replies to the
+<tt class="literal">SYN-ACK</tt> with an <tt class="literal">ACK</tt> packet,
+confirming the <tt class="literal">SYN-ACK</tt> was heard. The recipient
+hears the <tt class="literal">ACK</tt>, removes the entry from its pending
+table, and away they go.</p>
+
+
+
+
+
+<p>At least, that's what should happen. In a
+<tt class="literal">SYN</tt> Flood situation, a nogoodnik will send a flood
+of <tt class="literal">SYN</tt> packets to a machine, often with spoofed
+source addresses. The unsuspecting machine will send
+<tt class="literal">SYN-ACK</tt> s to the spoofed source addresses and open
+an entry in its pending communication table for each
+<tt class="literal">SYN</tt> packet it has received. These bogus connection
+entries will stay in the pending table until the OS ages them out
+using some default timeout value. If enough packets are sent, the
+pending communication table will fill up and no legitimate connection
+attempts will succeed. This leads to symptoms like those I was
+experiencing at the time, and similar <tt class="command">netstat</tt>
+output.</p>
+
+
+
+
+
+<p>The one anomaly in the <tt class="command">netstat</tt> output that made me
+question this diagnosis was the variety of hosts represented in the
+table. It was possible that someone had a program with superb
+spoofing capabilities, but you usually expect to see many connections
+from a smaller set of bogus hosts. Many of these hosts also seemed
+perfectly legitimate. Further clouding the situation was the result
+of a few connectivity tests I ran. Sometimes I could
+<tt class="command">ping</tt> or <tt class="command">traceroute</tt> to a
+randomly selected host listed in my <tt class="command">netstat</tt>
+output, sometimes I couldn't. I needed more data. I needed to
+get a better grasp on the connectivity to these remote hosts.
+That's where Perl came in.</p>
+
+
+
+
+
+<p>Because I was writing code under the gun, I wrote a very simple
+script that relied on the output of two other external network
+programs to handle the hard parts of the task. Let me show you that
+version, and then we'll use this task as a springboard for some
+more advanced programming.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-1056"></a><a name="INDEX-1057"></a><a name="INDEX-1058"></a><a name="INDEX-1059"></a>The task in this case boiled down to
+one question: could I reach the hosts that appeared to be trying to
+connect to me? To find out which hosts were trying to contact my
+machine, I turned to a program called <tt class="command">clog</tt> written
+by Brian Mitchell, found at ftp://coast.cs.purdue.edu/pub/mirrors/ftp.saturn.net/clog.
+<tt class="command">clog </tt>uses the Unix <tt class="command">libpcap</tt>
+library from Lawrence Berkeley National Laboratory's Network
+Research Group to sniff the network for TCP connection requests,
+i.e., <tt class="literal">SYN</tt> packets. This is the same library used
+by the seminal network monitoring program <tt class="command">tcpdump</tt>.
+Found at ftp://ftp.ee.lbl.gov/libpcap.tar.Z,
+<tt class="command">libpcap</tt> works for Linux machines as well. A
+<tt class="command">libpcap</tt> port for NT/2000 can be found at
+<a href="http://netgroup-serv.polito.it/windump/">http://netgroup-serv.polito.it/windump/</a>or <a href="http://www.ntop.org/libpcap.html">http://www.ntop.org/libpcap.html</a>, but I have
+yet to see one for MacOS.</p>
+
+
+
+
+
+<p>
+<tt class="command">clog</tt> reports <tt class="literal">SYN</tt> packets like
+this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Mar 02 11:21|192.168.1.51|1074|192.168.1.104|113
+Mar 02 11:21|192.168.1.51|1094|192.168.1.104|23</pre>
+</blockquote>
+
+
+
+
+
+<p>The output above shows two connection requests from 192.168.1.51 to
+192.168.1.104. The first was an attempt to connect to port 113
+(ident), the second to port 23 (telnet).</p>
+
+
+
+
+
+<p>
+<a name="INDEX-1060"></a>With
+<tt class="command">clog</tt> I was able to learn which hosts were
+attempting connections to me. And now I needed to know whether I
+could also reach them. That task was left to a program called
+<tt class="command">fping</tt> by Roland J. Schemers III.
+<tt class="command">fping,</tt> which can be found at <a href="http://www.stanford.edu/~schemers/docs/fping/fping.html">http://www.stanford.edu/~schemers/docs/fping/fping.html</a>, is a fast and fancy <tt class="command">ping</tt>
+program for testing network connectivity on Unix and variants.
+Putting these external commands together, we get this little Perl
+program:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$clogex   = "/usr/local/bin/clog";      # location/switches for clog
+$fpingex  = "/usr/local/bin/fping -r1"; # location/switches for fping
+
+$localnet = "192.168.1";                # local network prefix
+
+open CLOG, "$clogex|" or die "Unable to run clog:$!\n";
+while(&lt;CLOG&gt;){
+    ($date,$orighost,$origport,$desthost,$destport) = split(/\|/);
+    next if ($orighost =~ /^$localnet/);
+    next if (exists $cache{$orighost});
+    print `$fpingex $orighost`;
+    $cache{$orighost}=1;
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>This program runs the <tt class="command">clog</tt> command and reads its
+output <em class="emphasis">ad infinitum</em>. Since our internal network
+connectivity wasn't suspect, each originating host is checked
+against our local network's addressing prefix. Traffic from our
+local network is ignored.</p>
+
+
+
+
+
+<p>Like our last SNMP example, we perform some rudimentary caching. To
+be a good net citizen we want to avoid hammering outside machines
+with multiple <tt class="command">ping</tt> packets, so we keep track of
+every host we've already queried. The -<tt class="command">r1</tt>
+flag to <tt class="command">fping</tt> is used to restrict the number of
+times <tt class="command">fping</tt> will retry a host (the default is
+three retries).</p>
+
+
+
+
+
+<p>This program has to be run with elevated privileges, since both
+<tt class="command">clog</tt> and <tt class="command">fping</tt> need privileged
+access to the computer's network interface. This program
+printed output like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">199.174.175.99 is unreachable
+128.148.157.143 is unreachable
+204.241.60.5 is alive
+199.2.26.116 is unreachable
+199.172.62.5 is unreachable
+130.111.39.100 is alive
+207.70.7.25 is unreachable
+198.214.63.11 is alive
+129.186.1.10 is alive</pre>
+</blockquote>
+
+
+
+
+
+<p>Clearly something fishy was going on here. Why would half of the
+sites be reachable, and the other half unreachable? Before we answer
+that question, let's look at what we could do to improve this
+program. A first step would be to remove the external program
+dependencies. Learning how to sniff the network and send
+<tt class="command">ping</tt> packets from Perl could open up a whole range
+of possibilities. Let's take care of removing the easy
+dependency first.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-1061"></a><a name="INDEX-1062"></a><a name="INDEX-1063"></a><a name="INDEX-1064"></a>The
+<tt class="literal">Net::Ping</tt> module by Russell Mosemann, found in the
+Perl distribution, can help us with testing connectivity to network
+hosts. <tt class="literal">Net::Ping</tt> allows us to send three different
+flavors of <em class="emphasis">ping</em> packets and check for a return
+response: ICMP, TCP, and UDP. Internet Control Message Protocol
+(ICMP) echo packets are "<tt class="command">ping</tt>
+classic," the kind of packet sent by the vast majority of the
+command-line <tt class="command">ping</tt> programs. This particular packet
+flavor has two disadvantages:</p>
+
+
+
+
+
+<ol>
+<li>
+<p>Like our previous <tt class="command">clog </tt>/<tt class="command">fping</tt>
+code, any <tt class="literal">Net::Ping</tt> scripts using ICMP need to be
+run with elevated privileges.</p>
+</li>
+<li>
+<p>Perl on MacOS does not currently support ICMP. This may be remedied
+in the future, but you should be aware of this portability
+constraint.</p>
+</li>
+</ol>
+<p>The other two choices for <tt class="literal">Net::Ping</tt> packets are
+TCP and UDP. Both of these choices send packets to a remote
+machine's <em class="emphasis">echo</em> service port. Using these
+two options gains you portability, but you may find them less
+reliable than ICMP. ICMP is built into all standard TCP/IP stacks,
+but all machines may not be running the echo service. As a result,
+unless ICMP is deliberately filtered, you are more likely to receive
+a response to an ICMP packet than to the other types.</p>
+
+
+
+
+
+<p>
+<tt class="literal">Net::Ping</tt> uses the standard object-oriented
+programming model, so the first step is the creation of a new
+<em class="emphasis">ping</em> object instance:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Net::Ping;
+$p = new Net::Ping("icmp");</pre>
+</blockquote>
+
+
+
+
+
+<p>Using this object is simple:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">if ($p-&gt;ping("host")){
+    print "ping succeeded.\n";
+else{
+    print "ping failed\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Now let's dig into the hard part of our initial script, the
+network sniffing handled by <tt class="command">clog</tt>. Unfortunately,
+at this point we may need to let our MacOS readers off the bus. The
+Perl code we are about to explore is tied to the
+<tt class="command">libpcap</tt> library we mentioned earlier, so using it
+on anything but a Unix variant may be dicey or impossible.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-1065"></a><a name="INDEX-1066"></a><a name="INDEX-1067"></a>The first step is to build
+<tt class="command">libpcap</tt> on your machine. I recommend you also
+build <tt class="command">tcpdump</tt> as well. Like our use of the
+UCD-SNMP command-line utilities earlier, <tt class="command">tcpdump</tt>
+can be used to explore <tt class="command">libpcap</tt> functionality
+before coding Perl or to double-check that code.</p>
+
+
+
+
+
+<p>With <tt class="command">libpcap</tt> built, it is easy to build the
+<tt class="literal">Net::Pcap</tt> module, originally by Peter Lister and
+later completely rewritten by Tim Potter. This module gives full
+access to the power of <tt class="command">libpcap</tt>. Let's see
+how we can use it to find <tt class="literal">SYN</tt> packets, &amp;#224;
+la<tt class="command"> clog</tt>.</p>
+
+
+
+
+
+<p>Our code begins by querying the machine for an available/sniffable
+network interface and the settings for that interface:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Net::Pcap;
+
+# find the sniffable network device
+$dev = Net::Pcap::lookupdev(\$err) ;
+die "can't find suitable device: $err\n" unless $dev;
+
+# figure out the network number and mask of that device
+die "can't figure out net info for dev:$err\n"
+  if (Net::Pcap::lookupnet($dev,\$netnum,\$netmask,\$err));</pre>
+</blockquote>
+
+
+
+
+
+<p>Most of the <tt class="command">libpcap</tt> functions use the C convention
+of returning <tt class="literal">0</tt> for success, or
+-<tt class="literal">1</tt> for failure, hence the <tt class="literal">die if . . .
+</tt>idiom is used often in <tt class="literal">Net::Pcap</tt> Perl
+code. The meaning of the arguments fed to each of the functions
+we'll be using can be found in the
+<em class="citetitle">pcap(3)</em> manual page.</p>
+
+
+
+
+
+<p>Given the network interface information, we can tell
+<tt class="command">libpcap</tt> we want to sniff the live network (as
+opposed to reading packets from a previously saved packet file).
+<tt class="literal">Net::Pcap::open_live</tt> will hand us back a packet
+capture descriptor to refer to this session:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># open that interface for live capture
+$descript = Net::Pcap::open_live($dev,100,1,1000,\$err) ;
+die "can't obtain pcap descriptor:$err\n" unless $descript;</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="command">libpcap</tt> gives you the ability to capture all
+network traffic or a select subset based on filter criteria of your
+choosing. Its filtering mechanism is very efficient, so it is often
+best to invoke it up front, rather than sifting through all of the
+packets via Perl code. In our case, we need to only look at
+<tt class="literal">SYN</tt> packets.</p>
+
+
+
+
+
+<p>So what's a <tt class="literal">SYN</tt> packet? To understand that,
+you need to know a little bit about how TCP packets are put together.
+<a href="ch10_04.htm#ch10-62742">Figure 10-2</a> shows a picture from RFC793 of a TCP
+packet and its header.</p>
+
+
+
+
+
+<a name="ch10-62742"></a>
+<div class="figure">
+<img alt="figure" src="figs/psa_1002.gif"></div>
+<h4 class="objtitle">Figure 10.2. Diagram of a TCP packet</h4>
+
+<p>A <tt class="literal">SYN</tt> packet, for our purposes, is simply one that
+has only the <tt class="literal">SYN</tt> flag (highlighted in <a href="ch10_04.htm#ch10-62742">Figure 10-2</a>) in the packet header set. In order to tell
+<tt class="command">libpcap </tt>to capture packets like this, we need to
+specify which byte it should look at in the packet. Each tick mark
+above is a bit, so let's count bytes. <a href="ch10_04.htm#ch10-87060">Figure 10-3</a> shows the same packet with byte numbers.</p>
+
+
+
+
+
+<a name="ch10-87060"></a>
+<div class="figure">
+<img alt="figure" src="figs/psa_1003.gif"></div>
+<h4 class="objtitle">Figure 10.3. Finding the right byte in a TCP packet</h4>
+
+<p>We'll need to check if byte 13 is set to binary 00000010, or 2.
+The filter string we'll need is <tt class="literal">tcp[13] = 2</tt>.
+If we wanted to check for packets which had <em class="emphasis">at
+least</em> the <tt class="literal">SYN</tt> flag set, we could use
+<tt class="literal">tcp[13] &amp; 2 != 0</tt>. This filter string then gets
+compiled into a <em class="emphasis">filter program</em> and set:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$prog = "tcp[13] = 2"; 
+
+# compile and set our "filter program" 
+die "unable to compile $prog\n" 
+  if (Net::Pcap::compile($descript ,\$compprog,$prog,0,$netmask)) ;
+die "unable to set filter\n" 
+  if (Net::Pcap::setfilter($descript,$compprog));</pre>
+</blockquote>
+
+
+
+
+
+<p>We're seconds away from letting <tt class="command">libpcap</tt> do
+its stuff. Before we can, we need to tell it what to do with the
+packets it retrieves for us. For each packet it sees that matches our
+filter program, it will execute a callback subroutine of our choice.
+This subroutine is handed three arguments:</p>
+
+
+
+
+
+<ol>
+<li>
+<p>A user ID string, optionally set when starting a capture, that allows
+a callback procedure to distinguish between several open packet
+capture sessions.</p>
+</li>
+<li>
+<p>A reference to a hash describing the packet header (timestamps, etc.).</p>
+</li>
+<li>
+<p>A copy of the entire packet.</p>
+</li>
+</ol>
+<p>We'll start with a very simple callback subroutine that prints
+the length of the packet we receive:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub printpacketlength {
+  print length($_[2]),"\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>With our callback subroutine in place, we begin watching the wire for
+<tt class="literal">SYN</tt> packets:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">die "Unable to perform capture:".Net::Pcap::geterr($descript)."\n"
+  if (Net::Pcap::loop($descript,-1,\&amp;printpacketlength, ''));
+
+die "Unable to close device nicely\n" 
+  if (Net::Pcap::close($descript));</pre>
+</blockquote>
+
+
+
+
+
+<p>The second argument of <tt class="literal">-1</tt> to
+<tt class="literal">Net::Pcap::loop( )</tt> specifies the number of
+packets we wish to capture before exiting. In this case we've
+signaled it to capture packets <em class="emphasis">ad infinitum</em>.</p>
+
+
+
+
+
+<p>The code you've just seen captures <tt class="literal">SYN</tt>
+packets and prints their lengths, but that's not quite where we
+wanted be when we started this section. We need a program that
+watches for <tt class="literal">SYN</tt> packets from another network and
+attempts to ping the originating hosts. We have almost all of the
+pieces; the only thing we are missing is a way to take the
+<tt class="literal">SYN</tt> packets we've received and determine
+their source.</p>
+
+
+
+
+
+<p>Like our nitty-gritty DNS example in <a href="ch05_01.htm">Chapter 5, "TCP/IP Name Services"</a>,
+we'll need to take a raw packet and dissect it. Usually this
+entails reading the specifications (RFCs) and constructing the
+necessary <tt class="literal">unpack( )</tt> templates. Tim Potter has
+done this hard work, producing a set of <tt class="literal">NetPacket</tt>
+modules: <tt class="literal">NetPacket::Ethernet</tt>,
+<tt class="literal">NetPacket::IP</tt>, <tt class="literal">NetPacket::TCP</tt>,
+<tt class="literal">NetPacket::ICMP</tt>, and so on. Each of these modules
+provides two methods: <tt class="literal">strip( )</tt> and
+<tt class="literal">decode( )</tt>. <a name="INDEX-1068"></a><a name="INDEX-1069"></a>
+</p>
+
+
+
+
+
+<p>
+<tt class="literal">strip( )</tt> simply returns the packet data with
+that network layer stripped from it. Remember, a TCP/IP packet on an
+Ethernet network is really just a TCP packet embedded in an IP packet
+embedded in an Ethernet packet. So if <tt class="literal">$pkt</tt> holds a
+TCP/IP packet, <tt class="literal">NetPacket::Ethernet::strip($pkt)</tt>
+would return an IP packet (having stripped off the Ethernet layer).
+If you needed to get at the TCP portion of <tt class="literal">$pkt</tt>,
+you could use
+<tt class="literal">NetPacket::IP::strip(NetPacket::Ethernet::strip($packet))</tt>
+to strip off both the IP and Ethernet layers.</p>
+
+
+
+
+
+<p>
+<tt class="literal">decode( )</tt> takes this one step further. It
+actually breaks a packet into its component parts and returns an
+instance of an object that contains all of these parts. For instance:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">NetPacket::TCP-&gt;decode(
+<tt class="userinput"><b>   </b></tt>NetPacket::IP::strip(NetPacket::Ethernet::strip($packet)))</pre>
+</blockquote>
+
+
+
+
+
+<p>This returns an object instance with the following fields:</p>
+
+
+
+
+
+<a name="ch10-9-fm2xml"></a>
+<table border="1">
+
+
+
+<tr>
+<th>
+<p>Field Name</p>
+</th>
+<th>
+<p>Description</p>
+</th>
+</tr>
+
+
+
+
+
+
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">src_port</tt>
+</p>
+</td>
+<td>
+<p>Source TCP port</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">dest_port</tt>
+</p>
+</td>
+<td>
+<p>Destination TCP port</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">Seqnum</tt>
+</p>
+</td>
+<td>
+<p>TCP sequence number</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">Acknum</tt>
+</p>
+</td>
+<td>
+<p>TCP acknowledgment number</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">Hlen</tt>
+</p>
+</td>
+<td>
+<p>Header length</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">Reserved</tt>
+</p>
+</td>
+<td>
+<p>6-bit "reserved" space in the TCP header</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">Flags</tt>
+</p>
+</td>
+<td>
+<p>URG, ACK, PSH, RST, SYN, and FIN flags</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">Winsize</tt>
+</p>
+</td>
+<td>
+<p>TCP window size</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">Cksum</tt>
+</p>
+</td>
+<td>
+<p>TCP checksum</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">Urg</tt>
+</p>
+</td>
+<td>
+<p>TCP urgent pointer</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">Options</tt>
+</p>
+</td>
+<td>
+<p>Any TCP options in binary form</p>
+</td>
+</tr>
+
+
+
+
+<tr>
+<td>
+<p>
+<tt class="literal">Data</tt>
+</p>
+</td>
+<td>
+<p>Encapsulated data (payload) for this packet</p>
+</td>
+</tr>
+
+
+
+
+
+</table>
+
+<p>These should look familiar to you from <a href="ch10_04.htm#ch10-62742">Figure 10-2</a>. To get the
+destination TCP port for a packet, we can use:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$pt =<tt class="userinput"><b> </b></tt>NetPacket::TCP-&gt;decode(
+         NetPacket::IP::strip(
+             NetPacket::Ethernet::strip($packet)))-&gt;{dest_port};</pre>
+</blockquote>
+
+
+
+
+
+<p>Let's tie this all together and throw in one more dash of
+variety. Potter has created a small wrapper for the
+<tt class="literal">Net::Pcap</tt> initialization and loop code and
+released it in his <tt class="literal">Net::PcapUtils</tt> module. It
+handles several of the steps we performed, making our code shorter.
+Here it is in action, along with everything else we've learned
+along the way in the last
+section:<a name="INDEX-1070"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Net::PcapUtils;
+
+use NetPacket::Ethernet;
+use NetPacket::IP;
+
+use Net::Ping;
+
+# local network 
+$localnet = "192.168.1";
+# filter string that looks for SYN-only packets not originating from 
+# local network
+$prog = "tcp[13] = 2 and src net not $localnet"; 
+
+$| = 1; # unbuffer STDIO
+
+# construct the ping object we'll use later
+$p = new Net::Ping("icmp");
+
+# and away we go
+die "Unable to perform capture:".Net::Pcap::geterr($descript)."\n"
+  if (Net::PcapUtils::open_live(\&amp;grab_ip_and_ping, FILTER =&gt; $prog));
+
+# find the source IP address of a packet, and ping it (once per run)
+sub grab_ip_and_ping{
+    my ($arg,$hdr,$pkt) = @_ ;
+
+    # get the source IP adrress
+    $src_ip = NetPacket::IP-&gt;decode(
+                 NetPacket::Ethernet::strip($pkt))-&gt;{src_ip};
+
+    print "$src_ip is ".(($p-&gt;ping($src_ip)) ? 
+                         "alive" : "unreachable")."\n" 
+      unless $cache{$src_ip}++;
+}<a name="INDEX-1071"></a>
+<a name="INDEX-1072"></a>
+<a name="INDEX-1073"></a>
+</pre>
+</blockquote>
+
+
+
+
+
+<p>Now that we've achieved our goal of writing a program
+completely in Perl that would have helped diagnose my server problem
+(albeit using some modules that are Perl wrappers around C code), let
+me tell you the end of the story.</p>
+
+
+
+
+
+<p>On Sunday morning, the central support group outside of my department
+discovered an error in their router configuration. A student in one
+of the dorms had installed Linux on his machine and misconfigured the
+network routing daemon. This machine was broadcasting to the rest of
+the university that it was a default route to the Internet. The
+misconfigured router that fed our department was happy to listen to
+this broadcast and promptly changed its routing table to add a second
+route to the rest of the universe. Packets would come to us from the
+outside world, and this router dutifully doled out our response
+packets evenly between both destinations. This "a packet for
+the real router to the Internet, a packet for the student's
+machine, a packet for the real router, a packet for the
+student's machine..." distribution created an asymmetric
+routing situation. Once the bogus route was cleared and filters put
+in place to prevent it from returning, our life returned to normal. I
+won't tell you what happened to the student who caused the
+problem.</p>
+
+
+
+
+
+<p>In this section, you have now seen one diagnostic application of the
+<tt class="literal">Net::Pcap</tt>, <tt class="literal">Net::PcapUtils</tt>, and
+<tt class="literal">NetPacket::*</tt> family of modules. Don't stop
+there! These modules give you the flexibility to construct a whole
+variety of programs that can help you debug network problems or
+actively watch your wire for danger.<a name="INDEX-1074"></a><a name="INDEX-1075"></a>
+</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch10_03.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch10_05.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">10.3. SNMP</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">10.5. Preventing Suspicious Activities</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

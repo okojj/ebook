@@ -1,0 +1,139 @@
+<html><head>
+<title>[Chapter 14] 14.4 Using fork</TITLE>
+<meta name="DC.title" content="Learning Perl"><meta name="DC.creator" content="Randal Schwartz, Tom Christiansen &amp; Larry Wall"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:35:05Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-284-0" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch14_01.htm" title="14. Process Management"><link rel="prev" href="ch14_03.htm" title="14.3 Using Processes as Filehandles"><link rel="next" href="ch14_05.htm" title="14.5 Summary of Process Operations"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Learning Perl" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Learning Perl"><area shape="RECT" coords="467,0,514,18" href="../search/lsrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch14_03.htm" title="14.3 Using Processes as Filehandles"><img src="../gifs/txtpreva.gif" alt="Previous: 14.3 Using Processes as Filehandles" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch14_01.htm" title="14. Process Management">Chapter 14<br>Process Management</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch14_05.htm" title="14.5 Summary of Process Operations"><img src="../gifs/txtnexta.gif" alt="Next: 14.5 Summary of Process Operations" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch14-14964">14.4 Using fork</A
+></H2
+><p class="para">Still another way of creating an additional process is to clone the current Perl process using a UNIX primitive called <code class="literal">fork</CODE
+>. The <a class="indexterm" name="ch14-idx-744345-0"></A
+><code class="literal">fork</CODE
+> function simply does what the<em class="emphasis"> fork </EM
+><a class="indexterm" name="ch14-idx-744346-0"></A
+>(2) system call does: it creates a clone of the current process. This clone (called the <a class="indexterm" name="ch14-idx-744347-0"></A
+>child, with the original called the <a class="indexterm" name="ch14-idx-744348-0"></A
+>parent) shares the same executable code, variables, and even open files. To distinguish the two processes, the <a class="indexterm" name="ch14-idx-744349-0"></A
+>return value from <code class="literal">fork</CODE
+> is zero for the child, and nonzero for the parent (or <code class="literal">undef</CODE
+> if the system call fails). The nonzero value received by the parent happens to be the child's process ID. You can check for the return value and act accordingly:</P
+><pre class="programlisting">if (!defined($child_pid = fork())) {
+    die &quot;cannot fork: $!&quot;;
+} elsif ($child_pid) {
+    # I'm the parent
+} else {
+    # I'm the child
+} </PRE
+><p class="para">To best use this clone, we need to learn about a few more things that parallel their UNIX namesakes closely: the <code class="literal">wait</CODE
+>, <code class="literal">exit</CODE
+>, and <code class="literal">exec</CODE
+> functions.</P
+><p class="para">The simplest of these is the <a class="indexterm" name="ch14-idx-744350-0"></A
+><code class="literal">exec</CODE
+> function. It's just like the <code class="literal">system</CODE
+> function, except that instead of firing off a new process to execute the shell command, Perl replaces the current process with the shell. (In UNIX parlance, Perl <code class="literal">exec</CODE
+>'s the shell.) After a successful <code class="literal">exec</CODE
+>, the Perl program is gone, having been replaced by the requested program. For example,</P
+><pre class="programlisting">exec &quot;date&quot;;</PRE
+><p class="para">replaces the current Perl program with the <em class="emphasis">date</EM
+> command, causing the output of the <em class="emphasis">date</EM
+> to go to the standard output of the Perl program. When the <em class="emphasis">date</EM
+> command finishes, there's nothing more to do because the Perl program is long gone.</P
+><p class="para">Another way of looking at this is that the <a class="indexterm" name="ch14-idx-744351-0"></A
+><code class="literal">system</CODE
+> function is like a <code class="literal">fork</CODE
+> followed by an <code class="literal">exec</CODE
+>, as follows:</P
+><pre class="programlisting"># METHOD 1... using system:
+system(&quot;date&quot;);
+
+# METHOD 2... using fork/exec:
+unless (fork) {
+    # fork returned zero, so I'm the child, and I exec:
+    exec(&quot;date&quot;); # child process becomes the date command
+}</PRE
+><p class="para">Using <code class="literal">fork</CODE
+> and <code class="literal">exec</CODE
+> this way isn't quite right though, because the <em class="emphasis">date</EM
+> command and the parent process are both chugging along at the same time, possibly intermingling their output and generally mucking things up. What we need is a way to tell the parent to wait until the child process completes. That's exactly what the <a class="indexterm" name="ch14-idx-744352-0"></A
+><code class="literal">wait</CODE
+> function does; it waits until the <a class="indexterm" name="ch14-idx-744353-0"></A
+>child (any child, to be precise) has completed. The <code class="literal">waitpid</CODE
+> function is more discriminating: it waits for a specific child process to complete rather just any kid:</P
+><pre class="programlisting">if (!defined($kidpid = fork())) {
+    # fork returned undef, so failed
+    die &quot;cannot fork: $!&quot;;
+} elsif ($kidpid == 0) {
+                # fork returned 0, so this branch is the child
+    exec(&quot;date&quot;);
+                # if the exec fails, fall through to the next statement
+    die &quot;can't exec date: $!&quot;;
+} else { 
+                # fork returned neither 0 nor undef, 
+                # so this branch is the parent
+    waitpid($kidpid, 0);
+} </PRE
+><p class="para">If this all seems rather fuzzy to you, you should probably study up on the <em class="emphasis">fork </EM
+>(2) and <em class="emphasis">exec </EM
+>(2) system calls in a traditional UNIX text, because Perl is pretty much just passing the function calls right down to the UNIX system calls.</P
+><p class="para">The <a class="indexterm" name="ch14-idx-744354-0"></A
+><code class="literal">exit</CODE
+> function causes an immediate exit from the current Perl process. You'd use this to abort a Perl program from somewhere in the middle, or with <code class="literal">fork</CODE
+> to execute some Perl code in a process and then quit. Here's a case of removing some files in <em class="emphasis">/tmp </EM
+>in the background using a forked Perl process:</P
+><pre class="programlisting">unless (defined ($pid = fork)) {
+    die &quot;cannot fork: $!&quot;;
+} 
+unless ($pid) {
+    unlink &lt;/tmp/badrock.*&gt;;     # blast those files
+    exit;                        # the child stops here
+} 
+                                 # Parent continues here
+waitpid($pid, 0);                # must clean up after dead kid</PRE
+><p class="para">Without the <code class="literal">exit</CODE
+>, the child process would continue executing Perl code (at the line marked <code class="literal">Parent</CODE
+> <code class="literal">continues</CODE
+> <code class="literal">here</CODE
+>), and that's definitely not what we want.</P
+><p class="para">The <code class="literal">exit</CODE
+> function takes an optional parameter, which serves as the numeric <a class="indexterm" name="ch14-idx-744355-0"></A
+><a class="indexterm" name="ch14-idx-744355-1"></A
+>exit value that can be noticed by the parent process. The default is to exit with a zero value, indicating that everything went OK.</P
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch14_03.htm" title="14.3 Using Processes as Filehandles"><img src="../gifs/txtpreva.gif" alt="Previous: 14.3 Using Processes as Filehandles" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Learning Perl"><img src="../gifs/txthome.gif" alt="Learning Perl" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch14_05.htm" title="14.5 Summary of Process Operations"><img src="../gifs/txtnexta.gif" alt="Next: 14.5 Summary of Process Operations" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">14.3 Using Processes as Filehandles</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">14.5 Summary of Process Operations</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

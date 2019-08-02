@@ -1,0 +1,133 @@
+<html><head>
+<title>Recipe 6.11. Testing for a Valid Pattern</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:34:28Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch06_01.htm" title="6. Pattern Matching"><link rel="prev" href="ch06_11.htm" title="6.10. Speeding Up Interpolated Matches"><link rel="next" href="ch06_13.htm" title="6.12. Honoring Locale Settings in Regular Expressions"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch06_11.htm" title="6.10. Speeding Up Interpolated Matches"><img src="../gifs/txtpreva.gif" alt="Previous: 6.10. Speeding Up Interpolated Matches" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch06_01.htm" title="6. Pattern Matching">Chapter 6<br>Pattern Matching</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch06_13.htm" title="6.12. Honoring Locale Settings in Regular Expressions"><img src="../gifs/txtnexta.gif" alt="Next: 6.12. Honoring Locale Settings in Regular Expressions" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch06-chap06_testing_0">6.11. Testing for a Valid Pattern</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch06-pgfId-1363">Problem<a class="indexterm" name="ch06-idx-1000007632-0"></A
+><a class="indexterm" name="ch06-idx-1000007632-1"></A
+></A
+></H3
+><p class="para">You want to let users enter their own patterns, but an invalid one would abort your program the first time you tried to use it.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch06-pgfId-1369">Solution</A
+></H3
+><p class="para">Test the pattern in an <code class="literal">eval</CODE
+> <code class="literal">{}</CODE
+> construct first, matching against some dummy string. If <code class="literal">$@</CODE
+> is not set, no exception occurred, so you know the pattern successfully compiled as a valid regular expression. Here is a loop that continues prompting until the user supplies a valid pattern:</P
+><pre class="programlisting">do {
+    print &quot;Pattern? &quot;;
+    chomp($pat = &lt;&gt;);
+    eval { &quot;&quot; =~ /$pat/ };
+    warn &quot;INVALID PATTERN $@&quot; if $@;
+} while $@;
+</PRE
+><p class="para">Here's a standalone subroutine that verifies whether a pattern is valid.</P
+><pre class="programlisting">sub is_valid_pattern {
+    my $pat = shift;
+    return eval { &quot;&quot; =~ /$pat/; 1 } || 0;
+}</PRE
+><p class="para">That one relies upon the block returning <code class="literal">1</CODE
+> if it completes, which in the case of an exception, never happens.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch06-pgfId-1401">Discussion</A
+></H3
+><p class="para">There's no end to patterns that won't compile. The user could mistakenly enter <code class="literal">&quot;&lt;I\s*[^&gt;&quot;</CODE
+>, <code class="literal">&quot;*** GET RICH ***&quot;</CODE
+>, or <code class="literal">&quot;+5-i&quot;</CODE
+>. If you blindly use the proffered pattern in your program, it will cause an exception, normally a fatal event.</P
+><p class="para">The tiny program in <a class="xref" href="#ch06-14487" title="paragrep">Example 6.9</A
+> demonstrates this.</P
+><div class="example"><h4 class="example"><a class="title" name="ch06-14487">Example 6.9: paragrep</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl
+# <a class="indexterm" name="ch06-idx-1000007805-0"></A
+>paragrep - trivial paragraph grepper
+die &quot;usage: $0 pat [files]\n&quot; unless @ARGV;
+$/ = '';
+$pat = shift;
+eval { &quot;&quot; =~ /$pat/; 1 }      or die &quot;$0: Bad pattern $pat: $@\n&quot;;
+while (&lt;&gt;) {
+    print &quot;$ARGV $.: $_&quot; if /$pat/o;
+}</PRE
+></DIV
+><p class="para">That <code class="literal">/o</CODE
+> is a promise to Perl that the interpolated variable's contents are constant over the program's entire run. It's an efficiency hack. Even if <code class="literal">$pat</CODE
+> changes, Perl won't notice.</P
+><p class="para">You could encapsulate this in a function call that returns 1 if the block completes and 0 if not as shown in the Solution section. Although <code class="literal">eval</CODE
+> <code class="literal">&quot;/$pat/&quot;</CODE
+> would also work to trap the exception, it has two other problems. First of all, there couldn't be any slashes (or whatever your chosen pattern delimiter is) in the string the user entered. More importantly, it would open a drastic security hole that you almost certainly want to avoid. Strings like this could really ruin your day:</P
+><pre class="programlisting">$pat = &quot;You lose @{[ system('rm -rf *')]} big here&quot;;</PRE
+><p class="para">If you don't wish to provide the user with a real pattern, you can always metaquote the string first:</P
+><pre class="programlisting">$safe_pat = quotemeta($pat);
+something() if /$safe_pat/;</PRE
+><p class="para">Or, even easier, use:</P
+><pre class="programlisting">something() if /\Q$pat/;</PRE
+><p class="para">But if you're going to do that, why are you using pattern matching at all? In that case, a simple use of <code class="literal">index</CODE
+> would be enough.</P
+><p class="para">By letting the user supply a real pattern, you give them the power into do interesting and useful things. This is a good thing. You just have to be slightly careful, that's all. Suppose they wanted to enter a case-insensitive pattern, but you didn't provide the program with an option like <em class="emphasis">grep </EM
+>'s <b class="emphasis.bold">-i</B
+> option. By permitting full patterns, the user can enter an embedded <code class="literal">/i</CODE
+> modifier as <code class="literal">(?i)</CODE
+>, as in <code class="literal">/(?i)stuff/</CODE
+>.</P
+><p class="para">What happens if the interpolated pattern expands to nothing? If <code class="literal">$pat</CODE
+> is the empty string, what does <code class="literal">/$pat/</CODE
+> match &nbsp;-  that is, what does a blank <code class="literal">//</CODE
+> match? It doesn't match the start of all possible strings. Surprisingly enough, matching the null pattern exhibits the dubiously useful semantics of reusing the previous successfully matched pattern. In practice, this is hard to make good use of in Perl.</P
+><p class="para">Even if you use <code class="literal">eval</CODE
+> to check the pattern for validity, beware: matching certain patterns takes time that is exponentially proportional to the length of the string being matched. There is no good way to detect one of these, and if the user sticks you with one, your program will appear to hang as it and the entropic heat death of the universe have a long race to see who finishes first. Setting a timer to jump out of a long-running command offers some hope for a way out of this but (as of the 5.004 release) still carries with it the possibility of a core dump if you interrupt Perl at an inopportune moment.<a class="indexterm" name="ch06-idx-1000007634-0"></A
+><a class="indexterm" name="ch06-idx-1000007634-1"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch06-pgfId-1451">See Also</A
+></H3
+><p class="para">The <code class="literal">eval</CODE
+> function in <i class="filename">perlfunc </I
+>(1) and in <a class="olink" href="../prog/ch02_01.htm">Chapter 2</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; <a class="xref" href="ch10_13.htm" title="Handling Exceptions">Recipe 10.12</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch06_11.htm" title="6.10. Speeding Up Interpolated Matches"><img src="../gifs/txtpreva.gif" alt="Previous: 6.10. Speeding Up Interpolated Matches" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch06_13.htm" title="6.12. Honoring Locale Settings in Regular Expressions"><img src="../gifs/txtnexta.gif" alt="Next: 6.12. Honoring Locale Settings in Regular Expressions" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">6.10. Speeding Up Interpolated Matches</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">6.12. Honoring Locale Settings in Regular Expressions</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

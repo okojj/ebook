@@ -1,0 +1,1305 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 19] 19.6 PLVfk: Generic Foreign Key Lookups</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T18:31:07Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates-1-56592-238-7E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-238-7E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="PL/SQL SQL Oracle Packages"><META
+NAME="DC.Title"
+CONTENT="Advanced Oracle PL/SQL Programming with Packages"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch19_01.htm"
+TITLE="19. PLVdyn and PLVfk: Dynamic SQL and PL/SQL"><LINK
+REL="prev"
+HREF="ch19_05.htm"
+TITLE="19.5 DML Operations"><LINK
+REL="next"
+HREF="ch20_01.htm"
+TITLE="20. PLVcmt and PLVrb: Commit and Rollback Processing "></HEAD>
+<BODY><DIV CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Advanced Oracle PL/SQL Programming with Packages"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Advanced Oracle PL/SQL Programming with Packages"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch19_05.htm"
+TITLE="19.5 DML Operations"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 19.5 DML Operations"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch19_01.htm"
+TITLE="19. PLVdyn and PLVfk: Dynamic SQL and PL/SQL"
+>Chapter 19<BR>PLVdyn and PLVfk: Dynamic SQL and PL/SQL</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch20_01.htm"
+TITLE="20. PLVcmt and PLVrb: Commit and Rollback Processing "
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 20. PLVcmt and PLVrb: Commit and Rollback Processing "
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch19-38582"
+>19.6 PLVfk: Generic Foreign Key Lookups</A
+></H2
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch19-idx-999343-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch19-idx-999343-1"
+></A
+>The PLVfk (PL/Vision Foreign Key) package offers a high-level, easy-to-use interface to looking up foreign key information in your tables.</P
+><P
+CLASS="para"
+>In any well-normalized relational database, you have many foreign keys. For example, a customer database has companies, contacts within companies, types of companies, types of contacts, etc. The contact table has a foreign key to the company table. The company table has a foreign key to the company type table, and so on. Normalization is a great thing for avoidance of data redundancy, but it can create anguish for developers. </P
+><P
+CLASS="para"
+>The reality of foreign keys is most succinctly expressed in the following maxim (first encountered in a scribble in the stall of an Oracle headquarters bathroom!):</P
+><TABLE
+CLASS="simplelist"
+BORDER="0"
+><TR
+><TD
+CLASS="member"
+><EM
+CLASS="emphasis"
+>Where you have foreign keys, you also have foreign key lookups.</EM
+></TD
+></TR
+></TABLE
+><P
+CLASS="para"
+>In other words, whenever I query/display a contact record, I need to look up the name of the company, the description of the contact type, and so on in order to translate my keys (usually sequentially generated numbers or cryptic string codes) into information users can understand. Furthermore, whenever a user enters a name or description, I will want to look up the corresponding key to make sure the entry is valid.</P
+><P
+CLASS="para"
+>Foreign key lookups have historically required an awful lot of custom programming. In fact, let's spend a few paragraphs exploring what you would normally have to do to handle foreign keys. Then I will show you how you can use dynamic <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> to create a generic function to handle almost all foreign key lookups.</P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch19-SECT-6.1"
+>19.6.1 Traditional Foreign Key Management</A
+></H3
+><P
+CLASS="para"
+>We'll stick to the company-contact model. The tables I will use are as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE TABLE company
+   (company_id NUMBER,
+    company_nm VARCHAR2(100),
+    company_type_id NUMBER);
+
+CREATE TABLE contact
+   (contact_id NUMBER,
+    company_id NUMBER,
+    contact_ nm VARCHAR2(100),
+    contact_type_id NUMBER);
+
+CREATE TABLE company_type
+   (company_type_id NUMBER, company_type_nm VARCHAR2(100);
+
+CREATE TABLE contact_type
+   (comntact_type_id NUMBER, contact_type_nm VARCHAR2(100);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The traditional (pre-DBMS_SQL) approach to foreign key lookups entails building a function for each separate entity that serves as a foreign key in a table. This function would take the foreign key and return the name or description. The specifications for such functions would look like:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION contact_name (contact_id_in IN contact.contact_id%TYPE) 
+   RETURN VARCHAR2;
+
+FUNCTION company_name (company_id_in IN company.company_id%TYPE) 
+   RETURN VARCHAR2;
+
+FUNCTION company_type (company_type_id_in IN company.company_type_id%TYPE) 
+   RETURN VARCHAR2;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>and so on, for as many foreign keys as you've got. And every time a new foreign key is added to the mix, you must write a new function. In addition, you would have a set of functions that take a name and return an ID. Lots of different program elements. </P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch19-SECT-6.1.1"
+>19.6.1.1 Typical foreign key lookup code</A
+></H4
+><P
+CLASS="para"
+>Here is an example of what only one of these functions would contain:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION contact_name (contact_id_in IN contact.contact_id%TYPE) 
+   RETURN VARCHAR2
+IS
+   CURSOR con_cur (id_in IN NUMBER)
+   IS
+      SELECT contact_nm
+        FROM contact
+       WHERE contact_id = id_in;
+   con_rec con_cur%ROWTYPE;
+
+   return_value contact.name%TYPE := NULL;
+BEGIN
+   OPEN con_cur (contact_id_in);
+   FETCH con_cur INTO con_rec;
+   IF con_cur%FOUND
+   THEN
+      return_value := con_rec.contact_nm;
+   END IF;
+   CLOSE con_cur;
+   RETURN return_value;
+END contact_name;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Not a terribly complicated function, but when you repeat those steps over and over again, you end up with a significant volume of code to construct, debug, and maintain. </P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch19-SECT-6.1.2"
+>19.6.1.2 A better mousetrap</A
+></H4
+><P
+CLASS="para"
+>Wouldn't it be just fabulous if you could construct a single, generic function using dynamic <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> that would work for <EM
+CLASS="emphasis"
+>all</EM
+> foreign keys? The PLVfk package offers that single function. Actually, it provides two different general-purpose functions: one that accepts a key or ID and returns the associated name (the <KBD
+CLASS="command"
+>name</KBD
+> procedure), and another that accepts a name and returns the associated key (the <KBD
+CLASS="command"
+>id</KBD
+> procedure).</P
+><P
+CLASS="para"
+>By using PLVfk, you can avoid writing functions like the <KBD
+CLASS="command"
+>contact_name</KBD
+> program shown above. Instead, you simply execute this kind of command:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>v_cname := PLVfk.name
+              (v_contact_id, 'contact', 'contact_id', 'contact_nm');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>and maybe even nothing more than this:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>v_cname := PLVfk.name (v_contact_id, 'contact');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The elements of the PLVfk package are explained in the following sections. To get more information about the implementation behind PLVfk, you can review the code on the companion disk or read <CITE
+CLASS="citetitle"
+>Chapter 15</CITE
+> of <CITE
+CLASS="citetitle"
+>Oracle PL/SQL Programming</CITE
+>. </P
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch19-SECT-6.2"
+>19.6.2 Configuring the PLVfk Package</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch19-idx-999344-0"
+></A
+>I have found that in many Oracle shops there are clear, consistent guidelines for naming tables and their columns. If you work in this kind of environment, you can leverage the predictability of these conventions into a user interface that both reflects and takes advantage of these standards.</P
+><P
+CLASS="para"
+>In the PLVfk package, this means that you can inform PLVfk through the "set" programs how the column names for primary keys and their descriptors are constructed in relation to the entity or table name. You can tell it, for example, that the string "_ID" is always attached to the table name as a suffix to form the primary key column name. Or you can tell it that the descriptor column is always formed as the string "NAME$" attached as a prefix to the table name.</P
+><P
+CLASS="para"
+>Once you have informed PLVfk of your standards, you do not have to constantly type in the names of your columns. Instead, you just pass in the table name and let PLVfk do the rest. And if you run into exceptions to your rule, you always can override the default conventions with full names or alternative conventions. All of these variations are explored in the following sections.</P
+><P
+CLASS="para"
+>PLVfk provides three different "set" programs to provide override values to default elements of the PLVfk configuration: <KBD
+CLASS="command"
+>set_id_default</KBD
+>, <KBD
+CLASS="command"
+>set_nm_default</KBD
+>, and <KBD
+CLASS="command"
+>set_vclen</KBD
+>.</P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch19-SECT-6.2.1"
+>19.6.2.1 Setting column name defaults</A
+></H4
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>set_id_default</KBD
+><A
+CLASS="indexterm"
+NAME="ch19-idx-999345-0"
+></A
+> procedure sets the default string to be used as a suffix or prefix to the specified table name. The other two set programs determine how PLVfk constructs column names to be used in the dynamic <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> that retrieves the requested data. The header for <KBD
+CLASS="command"
+>set_id_default</KBD
+> is:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE set_id_default
+   (string_in IN VARCHAR2 := c_no_change, 
+    type_in IN VARCHAR2 := c_no_change);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>where <KBD
+CLASS="command"
+>string_in</KBD
+> is the string to be used as suffix or prefix and <KBD
+CLASS="command"
+>type_in</KBD
+> is the type of concatenation action. The constant, <KBD
+CLASS="command"
+>c_no_change</KBD
+>, can be used to indicate that you do <EM
+CLASS="emphasis"
+>not</EM
+> want to change one of these settings. The following examples illustrate the different ways to call <KBD
+CLASS="command"
+>set_id_default</KBD
+>.</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Change the prefix from the default of <KBD
+CLASS="command"
+>_ID</KBD
+> to <KBD
+CLASS="command"
+>_KEY</KBD
+>. Don't provide any value for the type, since the default is prefix and you are sure that hasn't been modified.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec PLVfk.set_id_default ('_KEY');</PRE
+></BLOCKQUOTE
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Rather than use prefixes, my site uses standard suffixes of <KBD
+CLASS="command"
+>ID_</KBD
+> and <KBD
+CLASS="command"
+>NM_</KBD
+><SPAN
+CLASS="acronym"
+>.</SPAN
+> So in my call to <KBD
+CLASS="command"
+>set_id_default</KBD
+>, I only change the value of the type and leave the string itself the same (since they match the default, starting values).</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec PLVfk.set_id_default (type_in=&gt;PLVfk.c_suffix);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>set_nm_default</KBD
+><A
+CLASS="indexterm"
+NAME="ch19-idx-999346-0"
+></A
+> procedure performs the same kind of action, except that it applies to the name column and not the ID column. The header for this procedure is:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE set_nm_default
+   (string_in IN VARCHAR2 := c_no_change, 
+    type_in IN VARCHAR2 := c_no_change);</PRE
+></BLOCKQUOTE
+></LI
+></OL
+><P
+CLASS="para"
+>See the examples for <KBD
+CLASS="command"
+>set_id_default</KBD
+> to get an idea of what you can do with <KBD
+CLASS="command"
+>set_nm_default</KBD
+>.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch19-SECT-6.2.2"
+>19.6.2.2 Setting the default string length</A
+></H4
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>set_vclen</KBD
+><A
+CLASS="indexterm"
+NAME="ch19-idx-999347-0"
+></A
+> procedure can be used to set the maximum size of a value returned by DBMS_SQL with a call to COLUMN_VALUE. The header for <KBD
+CLASS="command"
+>set_vclen</KBD
+> is:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE set_vclen (length_in IN INTEGER);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The default value for this maximum length is 100. The following call to <KBD
+CLASS="command"
+>set_vclen</KBD
+> notifies PLVfk that it may encounter descriptors of up to 255 bytes in length:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec PLVfk.set_vclen (255);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Once you have set the PLVfk package to reflect as closely as possible your server environment and standards, you can use the id and name functions of PLVfk to perform effortless foreign key lookups.</P
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch19-SECT-6.3"
+>19.6.3 Looking Up the Name</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch19-idx-999348-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch19-idx-999348-1"
+></A
+>You can use the <KBD
+CLASS="command"
+>name</KBD
+> function to retrieve the name for a specific key. The header for <KBD
+CLASS="command"
+>name</KBD
+> is:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION <A
+CLASS="indexterm"
+NAME="ch19-idx-999349-0"
+></A
+>name
+   (id_in IN INTEGER,
+    table_in IN VARCHAR2, 
+    id_col_in IN VARCHAR2 := c_no_change, 
+    nm_col_in IN VARCHAR2 := c_no_change, 
+    max_length_in IN INTEGER := c_int_no_change, 
+    where_clause_in IN VARCHAR2 := NULL)
+RETURN VARCHAR2;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>where <KBD
+CLASS="command"
+>id_in</KBD
+> is the specific ID value used in the lookup and <KBD
+CLASS="command"
+>table_in</KBD
+> is the name of the table to be searched. These are the only required arguments. The next four arguments allow you to tweak the <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statement constructed by PLVfk, as described below:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+><CODE
+CLASS="literal"
+> id_col_in</CODE
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The name of the ID column in the table. If you do not supply a value, the default column suffix or prefix is applied to the table name. If you do supply a value and it starts or ends with an underscore, that string is used as a suffix or prefix. Otherwise, the string you supply is used as the column name itself.</P
+></DD
+><DT
+CLASS="term"
+><CODE
+CLASS="literal"
+> nm_col_in</CODE
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The name of the name or descriptor column in the table. If you do not supply a value, the default column suffix or prefix is applied to the table name. If you do supply a value and it starts or ends with an underscore, that string is used as a suffix or prefix. Otherwise, the string you supply is used as the column name itself.</P
+></DD
+><DT
+CLASS="term"
+><CODE
+CLASS="literal"
+> max_length_in</CODE
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The maximum length of the string value returned by the query. If no value is provided, the current value (initially 100 and set by the <KBD
+CLASS="command"
+>set_vclen</KBD
+> procedure) is used in the call to the DBMS_SQL.DEFINE_COLUMN builtin.</P
+></DD
+><DT
+CLASS="term"
+><CODE
+CLASS="literal"
+> where_clause_in</CODE
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Optional WHERE clause to attach to the SELECT statement. You can use this argument to add additional AND clauses, such as a restriction to look only at active records.</P
+></DD
+></DL
+><P
+CLASS="para"
+>The following series of examples demonstrate how to use the <KBD
+CLASS="command"
+>name</KBD
+> function.</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Assume that table contact has <KBD
+CLASS="command"
+>contact_id</KBD
+> and <KBD
+CLASS="command"
+>contact_nm</KBD
+> columns.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>v_name := PLVfk.name (v_contact_id, 'contact');</PRE
+></BLOCKQUOTE
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Assume that <KBD
+CLASS="command"
+>contact_type</KBD
+> table has <KBD
+CLASS="command"
+>contact_type_id</KBD
+> and <KBD
+CLASS="command"
+>contact_type_nm</KBD
+> columns.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>v__type_ds := PLVfk.name (v_type_id, 'contact_type');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Of course, in the real world, conventions do not hold up so consistently. In fact, I have found that database administrators and data analysts often treat an entity like contact, with its contact ID number and contact name, differently from the way they would a contact type, with its type code and description. The columns for the contact type table are more likely to be: <KBD
+CLASS="command"
+>contact_typ_cd</KBD
+> and <KBD
+CLASS="command"
+>contact_typ_ds</KBD
+>. Fortunately, <KBD
+CLASS="command"
+>PLVfk.name</KBD
+> still handles this situation as shown in number 3.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Use alternative suffixes for a code table.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>v_type_ds := PLVfk.name (v_type_id, 'contact_type', '_cd', '_ds');</PRE
+></BLOCKQUOTE
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Only retrieve the description of the call type if that record is still flagged as active. Notice that I must stick several single quotes together to get the right number of quotes in the evaluated argument passed to <KBD
+CLASS="command"
+>name</KBD
+>.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>v_contact_type_ds := 
+  PLVfk.name 
+    (v_contact_type_id, 
+     'contact_type', '_cd', '_ds', 25,
+     'AND row_active_flag = ''Y''');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In examples 3 and 4, I could avoid specifying the column suffixes by making a prior call to <KBD
+CLASS="command"
+>set_id_default</KBD
+> and <KBD
+CLASS="command"
+>set_nm_default</KBD
+>, as shown below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PLVfk.set_id_default ('_cd');
+PLVfk.set_nm_default ('_ds');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>and now my calls to PLVfk.name are made simpler:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>v_type_ds := PLVfk.name (v_type_id, 'contact_type');
+
+v_contact_type_ds := 
+  PLVfk.name 
+    (v_contact_type_id, 
+     'contact_type', 25, 'AND row_active_flag = ''Y''');</PRE
+></BLOCKQUOTE
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Retrieve the name of the store that is kept in the record for the current year. I use named notation to skip over all intermediate arguments for which I want to use the default values and specify my WHERE clause. Notice that I must use two contiguous single quotes inside my string so that it evaluates to a valid string for a <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statement.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Only the record for this year should be used */
+year_number := TO_CHAR (SYSDATE, 'YYYY');
+/* Pass check for year to WHERE clause. */
+v_description :=
+  name 
+    (v_store_id, 'store_history', 
+     where_clause_in =&gt;
+        'AND TO_CHAR (eff_date, ''YYYY'') = ''' ||
+        year_number || '''');</PRE
+></BLOCKQUOTE
+></LI
+></OL
+><P
+CLASS="para"
+>The following table shows how various arguments for the ID and name column strings are converted into the column names concatenated into the dynamic SQL <SPAN
+CLASS="acronym"
+>SELECT</SPAN
+> statement. </P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Formal Parameter</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Argument Supplied to PLVfk.name</P
+></TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Converted Value</P
+></TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>ID column</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><KBD
+CLASS="command"
+>c_no_change</KBD
+> or simply skipped</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><KBD
+CLASS="command"
+>contact_id</KBD
+></P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name column</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><KBD
+CLASS="command"
+>c_no_change</KBD
+> or simply skipped</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><KBD
+CLASS="command"
+>contact_nm</KBD
+></P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>ID column</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><KBD
+CLASS="command"
+>contact_number</KBD
+></P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><KBD
+CLASS="command"
+>contact_number</KBD
+></P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name column</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><KBD
+CLASS="command"
+>contact_name</KBD
+></P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><KBD
+CLASS="command"
+>contact_name</KBD
+></P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>ID column</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>_#</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>contact_#</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>Name column</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>_fullname</P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><KBD
+CLASS="command"
+>contact_fullname</KBD
+><A
+CLASS="indexterm"
+NAME="ch19-idx-999350-0"
+></A
+></P
+></TD
+></TR
+></TBODY
+></TABLE
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch19-SECT-6.4"
+>19.6.4 Looking up the ID</A
+></H3
+><P
+CLASS="para"
+>Sometimes you want to get the key or ID number from a name. In this case, you use the <KBD
+CLASS="command"
+>id</KBD
+><A
+CLASS="indexterm"
+NAME="ch19-idx-999351-0"
+></A
+> function, whose header is shown below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION id
+   (nm_in IN VARCHAR2,
+    table_in IN VARCHAR2, 
+    id_col_in IN VARCHAR2 := c_no_change, 
+    nm_col_in IN VARCHAR2 := c_no_change, 
+    max_length_in IN INTEGER := c_int_no_change, 
+    where_clause_in IN VARCHAR2 := NULL)
+RETURN INTEGER;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>where <KBD
+CLASS="command"
+>nm_in</KBD
+> is the specific name used in the lookup and <KBD
+CLASS="command"
+>table_in</KBD
+> is the name of the table to be searched. These are the only required arguments. The next four arguments allow you to tweak the <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statement constructed by PLVfk, as described below:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+><CODE
+CLASS="literal"
+> id_col_in</CODE
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The name of the ID column in the table. If you do not supply a value, the default column suffix or prefix is applied to the table name. If you do supply a value and it starts or ends with an underscore, that string is used as a suffix or prefix. Otherwise, the string you supply is used as the column name itself.</P
+></DD
+><DT
+CLASS="term"
+><CODE
+CLASS="literal"
+> nm_col_in</CODE
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The name of the name or descriptor column in the table. If you do not supply a value, the default column suffix or prefix is applied to the table name. If you do supply a value and it starts or ends with an underscore, that string is used as a suffix or prefix. Otherwise, the string you supply is used as the column name itself.</P
+></DD
+><DT
+CLASS="term"
+><CODE
+CLASS="literal"
+> max_length_in</CODE
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The maximum length of the string value returned by the query. If no value is provided, the current value (initially 100 and set by the <KBD
+CLASS="command"
+>set_vclen</KBD
+> procedure) is used in the call to the DBMS_SQL.DEFINE_COLUMN builtin.</P
+></DD
+><DT
+CLASS="term"
+><CODE
+CLASS="literal"
+> where_clause_in</CODE
+></DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Optional WHERE clause to attach to the SELECT statement. You can use this argument to add additional AND clauses, such as a restriction to only look at active records.</P
+></DD
+></DL
+><P
+CLASS="para"
+>As you can see, the <KBD
+CLASS="command"
+>id</KBD
+> function is very similar to the <KBD
+CLASS="command"
+>name</KBD
+> function; they are mirrors of each other. Rather than repeat another set of examples, see those supplied for the <KBD
+CLASS="command"
+>name</KBD
+> function to get a feeling for how to use the <KBD
+CLASS="command"
+>PLVfk.id </KBD
+>function.</P
+><DIV
+CLASS="sidebar"
+><H4
+CLASS="sidebar"
+><A
+CLASS="title"
+NAME="AUTOID-20748"
+>Special Notes on PLVfk </A
+></H4
+><P
+CLASS="para"
+>Here are some factors to consider when working with PLVfk:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>You cannot call either of the PLVfk functions from within a <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statement. Yes, it is a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> function and you can call <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> functions from within SELECTs, INSERTs, and so on. You cannot, on the other hand, call a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> function which, in turn, executes any programs from a builtin package. Since PLVfk relies heavily on DBMS_SQL, it is not callable from within <SPAN
+CLASS="acronym"
+>SQL</SPAN
+>. I received more messages (complaints?) about this problem (usually phrased more like "your code doesn't work!") from my first book than on any other topic.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>David Thompson, ace technical reviewer of this book and author of PLVddd, offered an interesting idea for enhancing PLVfk further. Why depend on all those complicated column name prefixes and suffixes to determine the primary key? Why not read the data dictionary for this information instead? You could even store all primary key information in a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table to avoid repetitive data dictionary access. An excellent idea to explore, although I would be concerned about adding more overhead to PLVfk processing.<A
+CLASS="indexterm"
+NAME="ch19-idx-999352-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch19-idx-999352-1"
+></A
+></P
+></LI
+></UL
+></DIV
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch19_05.htm"
+TITLE="19.5 DML Operations"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 19.5 DML Operations"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Advanced Oracle PL/SQL Programming with Packages"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Advanced Oracle PL/SQL Programming with Packages"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch20_01.htm"
+TITLE="20. PLVcmt and PLVrb: Commit and Rollback Processing "
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 20. PLVcmt and PLVrb: Commit and Rollback Processing "
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>19.5 DML Operations</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>20. PLVcmt and PLVrb: Commit and Rollback Processing </TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG
+SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly & Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

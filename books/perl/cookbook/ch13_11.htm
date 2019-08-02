@@ -1,0 +1,123 @@
+<html><head>
+<title>Recipe 13.10. Accessing Overridden Methods</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:42:26Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch13_01.htm" title="13. Classes, Objects, and Ties"><link rel="prev" href="ch13_10.htm" title="13.9. Writing an Inheritable Class"><link rel="next" href="ch13_12.htm" title="13.11. Generating Attribute Methods Using AUTOLOAD"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_10.htm" title="13.9. Writing an Inheritable Class"><img src="../gifs/txtpreva.gif" alt="Previous: 13.9. Writing an Inheritable Class" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch13_01.htm" title="13. Classes, Objects, and Ties">Chapter 13<br>Classes, Objects, and Ties</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_12.htm" title="13.11. Generating Attribute Methods Using AUTOLOAD"><img src="../gifs/txtnexta.gif" alt="Next: 13.11. Generating Attribute Methods Using AUTOLOAD" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch13-33387">13.10. Accessing Overridden Methods</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-1265">Problem<a class="indexterm" name="ch13-idx-1000004577-0"></A
+><a class="indexterm" name="ch13-idx-1000004577-1"></A
+><a class="indexterm" name="ch13-idx-1000004577-2"></A
+><a class="indexterm" name="ch13-idx-1000004577-3"></A
+><a class="indexterm" name="ch13-idx-1000004577-4"></A
+><a class="indexterm" name="ch13-idx-1000004577-5"></A
+></A
+></H3
+><p class="para">Your constructor method overrides the constructor of a parent class. You want your constructor to call the parent class's constructor.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-1271">Solution</A
+></H3
+><p class="para">Learn about the special class, <a class="indexterm" name="ch13-idx-1000004583-0"></A
+>SUPER.</P
+><pre class="programlisting">sub meth { 
+    my $self = shift;
+    $self-&gt;SUPER::<code class="literal">meth()</CODE
+>;
+}</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-1285">Discussion</A
+></H3
+><p class="para">In languages like C++ where constructors don't actually allocate memory but just initialize the object, all base class constructors are automatically called for you. In languages like Java and Perl, you have to call them yourself.</P
+><p class="para">To call a method in a particular class, the notation <code class="literal">$self-&gt;SUPER::meth()</CODE
+> is used. This is an extension of the regular notation to start looking in a particular base class. It is only valid from within an overridden method. Here's a comparison of styles:</P
+><pre class="programlisting">$self-&gt;<code class="literal">meth();</CODE
+>                # Call wherever first meth is found
+$self-&gt;Where::<code class="literal">meth();</CODE
+>         # Start looking in package &quot;Where&quot;
+$self-&gt;SUPER::<code class="literal">meth(); </CODE
+>        # Call overridden version</PRE
+><p class="para">Simple users of the class should probably limit themselves to the first one. The second is possible, but not suggested. The last must only be called from within the overridden method.</P
+><p class="para">An overriding constructor should call its SUPER's constructor to allocate and bless the object, limiting itself to instantiating any data fields needed. It makes sense here to separate the object allocation code from the object initialization code. We'll name it with a leading underscore, a convention indicating a nominally private method. Think of it as a "Do Not Disturb" sign.</P
+><pre class="programlisting">sub new {
+    my $classname  = shift;         # What class are we constructing?
+    my $self       = $classname-&gt;SUPER::new(@_);
+    $self-&gt;_init(@_);
+    return $self;                   # And give it back
+} 
+
+sub _init {
+    my $self = shift;
+    $self-&gt;{START}   = time();   # init data fields
+    $self-&gt;{AGE}     = 0;
+    $self-&gt;{EXTRA}   = { @_ };   # anything extra
+}</PRE
+><p class="para">Both <code class="literal">SUPER::new</CODE
+> and <code class="literal">_init</CODE
+> have been called with any remaining arguments. That way the user might pass other field initializers in, as in:</P
+><pre class="programlisting">$obj = Widget-&gt;new( haircolor =&gt; red, freckles =&gt; 121 );</PRE
+><p class="para">Whether you store these user parameters in their own extra hash or not is up to you.</P
+><p class="para">Note that SUPER only works on the first overridden method. If your <code class="literal">@ISA</CODE
+> array has several classes, it only gets the first one. A manual traversal of <code class="literal">@ISA</CODE
+> is possible, but probably not worth the hassle.</P
+><pre class="programlisting">my $self = bless {}, $class;
+for my $class (@ISA) {
+    my $meth = $class . &quot;::_init&quot;;
+    $self-&gt;$meth(@_) if $class-&gt;can(&quot;_init&quot;);
+} </PRE
+><p class="para">This fragile code assumes that all superclasses initialize their objects with <code class="literal">_init</CODE
+> instead of initializing in the constructor. It also assumes that a hash reference is used for the underlying object.<a class="indexterm" name="ch13-idx-1000004579-0"></A
+><a class="indexterm" name="ch13-idx-1000004579-1"></A
+><a class="indexterm" name="ch13-idx-1000004579-2"></A
+><a class="indexterm" name="ch13-idx-1000004579-3"></A
+><a class="indexterm" name="ch13-idx-1000004579-4"></A
+><a class="indexterm" name="ch13-idx-1000004579-5"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-1000006443">See Also</A
+></H3
+><p class="para">The discussion on the SUPER class in <i class="filename">perltoot </I
+>(1) and <i class="filename">perlobj </I
+>(1), and in the section on "Method Invocation" in <a class="olink" href="../prog/ch05_01.htm">Chapter 5</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_10.htm" title="13.9. Writing an Inheritable Class"><img src="../gifs/txtpreva.gif" alt="Previous: 13.9. Writing an Inheritable Class" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_12.htm" title="13.11. Generating Attribute Methods Using AUTOLOAD"><img src="../gifs/txtnexta.gif" alt="Next: 13.11. Generating Attribute Methods Using AUTOLOAD" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">13.9. Writing an Inheritable Class</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">13.11. Generating Attribute Methods Using AUTOLOAD</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

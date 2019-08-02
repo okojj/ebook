@@ -1,0 +1,146 @@
+<html><head>
+<title>[Chapter 12] 12.2 Socket API and IO::Socket</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:36:50Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch12_01.htm" title="12. Networking with Sockets"><link rel="prev" href="ch12_01.htm" title="12.1 Networking Primer"><link rel="next" href="ch12_03.htm" title="12.3 Handling Multiple Clients"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch12_01.htm" title="12.1 Networking Primer"><img src="../gifs/txtpreva.gif" alt="Previous: 12.1 Networking Primer" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch12_01.htm" title="12. Networking with Sockets">Chapter 12<br>Networking with Sockets</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch12_03.htm" title="12.3 Handling Multiple Clients"><img src="../gifs/txtnexta.gif" alt="Next: 12.3 Handling Multiple Clients" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch12-32265">12.2 Socket API and IO::Socket</A
+></H2
+><p class="para"><a class="indexterm" name="ch12-idx-978529-0"></A
+><a class="indexterm" name="ch12-idx-978529-1"></A
+><a class="indexterm" name="ch12-idx-978529-2"></A
+>Perl provides native support for sockets and a module called Socket to smooth some of the rough edges associated with the native <kbd class="command">socket</KBD
+> call. It turns out that there are still a large number of options to deal with, and since most applications use a fairly standard set of options, we instead use a truly convenient module called IO::Socket, which is built on Socket.</P
+><p class="para">This section uses this module to build a sending and receiving program. </P
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch12-pgfId-974527">12.2.1 Receiver</A
+></H3
+><p class="para"><a class="indexterm" name="ch12-idx-978535-0"></A
+><a class="indexterm" name="ch12-idx-978535-1"></A
+>Just as you would ask the phone company for a telephone number and a physical handset, both sender and receiver ask the module to create sockets. Sockets, like telephones, are bidirectional endpoints: once a connection is established, either side can send and receive data, as long as there is an understanding between the two programs about the direction of communication.</P
+><p class="para">Because only the receiving side needs to have a well-known address, we create a receiving socket as follows:</P
+><pre class="programlisting">use IO::Socket;
+$sock = new IO::Socket::INET (LocalHost =&gt; 'goldengate',
+                              LocalPort =&gt; 1200,
+                              Proto     =&gt; 'tcp',
+                              Listen    =&gt; 5,
+                              Reuse     =&gt; 1,
+                             );
+die &quot;Could not connect: $!&quot; unless $sock;</PRE
+><p class="para">The IO::Socket::<a class="indexterm" name="ch12-idx-978536-0"></A
+>INET module provides a nice wrapper for Internet domain sockets. The LocalHost and LocalPort parameters specify the host and port on which this socket is going to listen. The number 1200 is chosen arbitrarily, but you must make sure that it doesn't conflict with the port number used by some other application on that machine (otherwise, you get an error saying, "Address already in use"). We set the <kbd class="command">Reuse</KBD
+> option, because if this program ends without properly closing the socket and is subsequently restarted, it will complain about the socket being in use. The <kbd class="command">Listen</KBD
+> option specifies the maximum number of callers that can be put on hold while they are <em class="emphasis">dialing</EM
+> this number, figuratively speaking.</P
+><p class="para">Once created, the socket is all set to receive incoming calls. The <kbd class="command">accept()</KBD
+><a class="indexterm" name="ch12-idx-978537-0"></A
+> method listens on the given port until another program attempts to connect to it (we'll shortly see the calling side to see how this is done); at this point, <kbd class="command">accept</KBD
+> returns a new socket:</P
+><pre class="programlisting">$new_sock = $sock-&gt;accept();</PRE
+><p class="para">This is analogous to a switchboard operator indicating a different handset for you to converse on, while he goes back to waiting for the main number to ring. Messages sent by the client can now be obtained by reading from <kbd class="command">$new_sock</KBD
+>. You can use this socket as a filehandle and call any of the input operators, <kbd class="command">&lt;&gt; </KBD
+>, <kbd class="command">read</KBD
+>, or<kbd class="command"> sysread</KBD
+>, like this:</P
+><pre class="programlisting">$buf = &lt;$new_sock&gt;;
+# or, 
+$bytes_read = sysread ($new_sock, $buf, $num_bytes_to_read);</PRE
+><p class="para">Both return <kbd class="command">undef</KBD
+> on an end of file condition. </P
+><p class="para">The following code summarizes the above discussion. It binds a socket to an address and waits for an incoming connection request. When that happens, it reads the new socket created until the other end closes its end of the connection. At this point, the <kbd class="command">&lt;&gt;</KBD
+> operator returns <kbd class="command">undef</KBD
+> (<kbd class="command">sysread</KBD
+> returns 0, the number of bytes read).</P
+><pre class="programlisting">use IO::Socket;
+$sock = new IO::Socket::INET (LocalHost =&gt; 'goldengate',
+                              LocalPort =&gt; 1200,
+                              Proto     =&gt; 'tcp',
+                              Listen    =&gt; 5,
+                               Reuse     =&gt; 1                             
+                             );
+die &quot;Socket could not be created. Reason: $!&quot; unless $sock;
+while ($new_sock = $sock-&gt;accept()) {
+    while (defined ($buf = &lt;$new_sock&gt;)) {
+       print $buf;
+    }
+}
+close ($sock);</PRE
+><p class="para">You can also use <kbd class="command">$new_sock-&gt;get_line()</KBD
+><a class="indexterm" name="ch12-idx-978538-0"></A
+> instead of <kbd class="command">&lt;$new_sock&gt;</KBD
+>. <a class="indexterm" name="ch12-idx-978541-0"></A
+><a class="indexterm" name="ch12-idx-978541-1"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch12-pgfId-974555">12.2.2 Sender</A
+></H3
+><p class="para"><a class="indexterm" name="ch12-idx-978539-0"></A
+><a class="indexterm" name="ch12-idx-978539-1"></A
+>The calling side is even simpler. It creates a socket giving it the receiver's address and, if successful, starts sending data to it:</P
+><pre class="programlisting">use IO::Socket;
+$sock = new IO::Socket::INET (PeerAddr =&gt; 'goldengate',
+                              PeerPort =&gt; 1200,
+                              Proto    =&gt; 'tcp',
+                             );
+die &quot;Socket could not be created. Reason: $!\n&quot; unless $sock;
+foreach (1 .. 10) {
+    print $sock &quot;Msg $_: How are you?\n&quot;;
+}
+close ($sock);</PRE
+><p class="para">Notice how the parameters to the <kbd class="command">IO::Socket::INET::new</KBD
+> method define whether it is a server- or client-side socket. The <kbd class="command">Listen</KBD
+> and <kbd class="command">Reuse</KBD
+> parameters are ignored for sending ports.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch12-pgfId-974566">12.2.3 Bidirectional Communications</A
+></H3
+><p class="para"><a class="indexterm" name="ch12-idx-978543-0"></A
+><a class="indexterm" name="ch12-idx-978543-1"></A
+><a class="indexterm" name="ch12-idx-978543-2"></A
+>You can read and write from sockets, but as the preceding scripts show, two communicating processes must have a common understanding of who is doing the talking and who the listening. The programs can <em class="emphasis">deadlock</EM
+><a class="indexterm" name="ch12-idx-978544-0"></A
+> if both are too polite and start reading their respective sockets (<kbd class="command">sysread</KBD
+> and other input operators wait until they are able to read the requisite amount of data). They can also deadlock if both are too impolite and start speaking into the phone at the same time, figuratively speaking (<kbd class="command">syswrite</KBD
+><a class="indexterm" name="ch12-idx-978595-0"></A
+> blocks once the buffers fill up, and because the other end is not listening, deadlock is a likely possibility). In a typical client/server setup, this protocol is well established. The client program initiates the conversation, makes a request, and waits for an answer. The typical server never attempts to connect to a client program or initiate requests; it listens and responds. Deadlocks thus happen only in peer-peer conversations.<a class="indexterm" name="ch12-idx-978532-0"></A
+><a class="indexterm" name="ch12-idx-978532-1"></A
+><a class="indexterm" name="ch12-idx-978532-2"></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch12_01.htm" title="12.1 Networking Primer"><img src="../gifs/txtpreva.gif" alt="Previous: 12.1 Networking Primer" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch12_03.htm" title="12.3 Handling Multiple Clients"><img src="../gifs/txtnexta.gif" alt="Next: 12.3 Handling Multiple Clients" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">12.1 Networking Primer</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">12.3 Handling Multiple Clients</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

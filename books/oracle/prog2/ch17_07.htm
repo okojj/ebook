@@ -1,0 +1,428 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 17] 17.7 Realities: Calling PL/SQL Functions in SQL</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein &amp; Bill Pribyl"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T19:04:57Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates CD-ROM-1-56592-335-9E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-335-9E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle PL/SQL"><META
+NAME="DC.Title"
+CONTENT="Oracle PL/SQL Programming, 2nd Edition"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch17_01.htm"
+TITLE="17. Calling PL/SQL Functions in SQL"><LINK
+REL="prev"
+HREF="ch17_06.htm"
+TITLE="17.6 Column/Function Name Precedence"><LINK
+REL="next"
+HREF="ch17_08.htm"
+TITLE="17.8 Examples of Embedded PL/SQL"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd Edition"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch17_06.htm"
+TITLE="17.6 Column/Function Name Precedence"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 17.6 Column/Function Name Precedence"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch17_01.htm"
+TITLE="17. Calling PL/SQL Functions in SQL"
+>Chapter 17<BR>Calling PL/SQL Functions in SQL</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch17_08.htm"
+TITLE="17.8 Examples of Embedded PL/SQL"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 17.8 Examples of Embedded PL/SQL"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="SQL2-CH-17-SECT-7"
+>17.7 Realities: Calling PL/SQL Functions in SQL</A
+></H2
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998331-1"
+></A
+>The ability to call PL/SQL functions in SQL has been around since Release 2.1, but in many ways (at least until Oracle8) it can still be considered "bleeding edge" technology. Why? </P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>You must manually apply RESTRICT_REFERENCES pragmas to all of your code&nbsp;-- and you have to figure out where all those pragmas need to go. This process is described in a subsection below. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Functions execute outside of the read consistency model of the Oracle database (!). This issue is also explored below in a subsection below. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The overhead of calling a function from SQL remains high. The exact price you pay to call a function from within SQL (compared to, say, executing in-line SQL code) can be hard to pin down. It varies from computer to computer and even by instance or by the function being called; I have heard reports that range from an extra half-second to an astonishing additional 50 seconds (in that case, I suggested that they do some more analysis and debugging). Whatever the specific amount of time, the delay can be noticeable and you need to factor it into your design and test plans. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Tuning mechanisms such as EXPLAIN PLAN do not take into account the SQL that may be called inside functions called in your SQL statement. PL/SQL functions are ignored by the EXPLAIN PLAN facility. This makes it very difficult to come up with a comprehensive understanding of performance bottlenecks and tuning needs. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>So much Oracle technology, especially that found in built-in packages, is declared "off limits" to functions in SQL. Just consider DBMS_OUTPUT. You can't use it in functions called in SQL. But ideally you will want to use those same functions in SQL <EM
+CLASS="emphasis"
+>and</EM
+> PL/SQL. Another issue may be that your standard debugging technique is to insert calls to a trace program at the beginning of each of your functions and procedures. Chances are that the trace program relies on DBMS_OUTPUT (or UTL_FILE or DBMS_PIPE or take your pick, they're all&nbsp;-- at least until Oracle8&nbsp;-- off limits). Sorry! You will not be able to use that function in SQL. So you have to <EM
+CLASS="emphasis"
+>pull out</EM
+> some of the code from the function. As a result, you can end up with two versions of your code: one for PL/SQL and one for SQL. That is one nasty scenario for software developers. </P
+></LI
+></UL
+><P
+CLASS="para"
+>Let's examine two of these issues in more detail.</P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-17-SECT-7.1"
+>17.7.1 Manual Application of Pragmas</A
+></H3
+><P
+CLASS="para"
+>You must manually apply <A
+CLASS="indexterm"
+NAME="AUTOID-15252"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-15255"
+></A
+> RESTRICT_REFERENCES pragmas to all of your code&nbsp;-- and you have to figure out where all those pragmas need to go. This process is often similar to a Sherlock Holmes plot. You compile a package and get a pragma violation error. This can happen because your program breaks a rule (like trying to change data) or because it calls other programs which break a rule. You notice in this case that your function calls five or six other functions or procedures, so you must apply pragmas to each of these. By doing so, you assert purity levels where none had been asserted before, raising more errors and in some cases significant architectural issues. </P
+><P
+CLASS="para"
+>For example, suppose that you suddenly have to apply a pragma to a procedure in package X and that package has an initialization section; you must then also pragma-tize the initialization section. A common practice in this section is to set up a PL/SQL table for in-memory manipulation of data. If you use any PL/SQL table methods to do this initialization, your pragma will fail. </P
+><P
+CLASS="para"
+>This can be a very frustrating exercise, at times leading to abandoning the effort to enable your function for execution in SQL. In my experience, you will want to identify <EM
+CLASS="emphasis"
+>in advance</EM
+> (as much as possible) those areas of your application which you will want to call in SQL. You will then strive to keep this code very "clean" and focused, with limited entanglements with other packages, and with an absolutely minimal use of built-in packaged functionality. Neither an easy nor a particularly desirable task. </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-17-SECT-7.2"
+>17.7.2 Read Consistency Model Complications</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998334-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998334-2"
+></A
+>Yes, it is hard to believe, but quite true: unless you take special precautions, it is quite possible that your SQL query will violate the read consistency model of the Oracle RDBMS, which has been sacrosanct territory for years at Oracle. To understand this issue, consider the following query and the function it calls: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT name, total_sales (account_id)
+  FROM account
+ WHERE status = 'ACTIVE';
+
+FUNCTION total_sales (id_in IN account.account_id%TYPE)
+   RETURN NUMBER
+IS
+   CURSOR tot_cur
+   IS
+      SELECT SUM (sales) total
+        FROM orders
+       WHERE account_id = id_in
+         AND year = TO_NUMBER (TO_CHAR (SYSDATE, 'YYYY'));
+   tot_rec tot_cur%ROWTYPE;
+BEGIN
+   OPEN tot_cur;
+   FETCH tot_cur INTO tot_rec;
+   RETURN tot_rec.total;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The account table has five million active rows in it (a very successful enterprise!). The orders table has 20 million rows. I start the query at 11 a.m.; it takes about an hour to complete. At 10:45 a.m., somebody with the proper authority comes along, deletes all rows from the orders table and performs a commit. According to the read consistency model of Oracle, the session running the query should see all those deleted rows until the query completes. But the next time the total_sales function executes from within the query, it finds no order rows and returns NULL&nbsp;-- and will do so until the query completes. </P
+><P
+CLASS="para"
+>So if you are executing queries inside functions which are called inside SQL, you need to be acutely aware of read-consistency issues. If these functions are called in long-running queries or transactions, you will probably need to issue the following command to enforce read-consistency between SQL statements in the current transaction: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SET TRANSACTION READ ONLY</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>You will find more information about this command in <A
+CLASS="xref"
+HREF="ch06_01.htm"
+>Chapter 6, <CITE
+CLASS="chapter"
+>Database Interaction and Cursors</CITE
+></A
+>. </P
+><P
+CLASS="para"
+>Working with functions in SQL is more difficult and more complicated than you might first imagine. Big surprise. You can say that about almost every aspect of Oracle technology, especially the newer additions to the stable. I hope that over time Oracle will make our lives easier (there are definitely some improvements in Oracle 8.0). Ultimately we need a utility that allows a developer to "point" to a function and request, "make that function usable in SQL." And that utility will then apply all the pragmas or at least generate a report of the steps necessary to get the job done. </P
+><P
+CLASS="para"
+>We can dream, <A
+CLASS="indexterm"
+NAME="AUTOID-15278"
+></A
+> can't we?<A
+CLASS="indexterm"
+NAME="AUTOID-15279"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-15280"
+></A
+> </P
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch17_06.htm"
+TITLE="17.6 Column/Function Name Precedence"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 17.6 Column/Function Name Precedence"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming, 2nd Edition"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch17_08.htm"
+TITLE="17.8 Examples of Embedded PL/SQL"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 17.8 Examples of Embedded PL/SQL"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>17.6 Column/Function Name Precedence</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>17.8 Examples of Embedded PL/SQL</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

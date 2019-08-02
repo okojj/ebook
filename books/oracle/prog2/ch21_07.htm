@@ -1,0 +1,880 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 21] 21.7 Examples</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein &amp; Bill Pribyl"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T19:10:40Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates CD-ROM-1-56592-335-9E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-335-9E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle PL/SQL"><META
+NAME="DC.Title"
+CONTENT="Oracle PL/SQL Programming, 2nd Edition"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch21_01.htm"
+TITLE="21. External Procedures"><LINK
+REL="prev"
+HREF="ch21_06.htm"
+TITLE="21.6 External Procedure Housekeeping"><LINK
+REL="next"
+HREF="part06.htm"
+TITLE="VI. Making PL/SQL Programs Work"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd Edition"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch21_06.htm"
+TITLE="21.6 External Procedure Housekeeping"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 21.6 External Procedure Housekeeping"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch21_01.htm"
+TITLE="21. External Procedures"
+>Chapter 21<BR>External Procedures</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="part"
+HREF="part06.htm"
+TITLE="VI. Making PL/SQL Programs Work"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: VI. Making PL/SQL Programs Work"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="SQL2-CH-21-SECT-7"
+>21.7 Examples</A
+></H2
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch21-idx-7657-1"
+></A
+>This section contains several substantial examples of using external procedures. </P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-21-SECT-7.1"
+>21.7.1 Example: Retrieving the Time Zone</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch21-idx-7663-1"
+></A
+>While it's trivial in Oracle to read the time on the system clock (by selecting SYSDATE from DUAL), Oracle provides no clue about the time zone in which the clock resides. I've seen how Oracle's silence on this matter can be a problem in a replicated environment where the Oracle servers were separated by thousands of miles. Without knowing the time zone, how can I write a conflict resolution routine that compares transaction execution time from different servers? Yes, I could set all the servers to a common time zone, but personally, I find that a painful solution at best. </P
+><P
+CLASS="para"
+>External procedures to the rescue!</P
+><P
+CLASS="para"
+>A useful application would return at least the name of the time zone in which the server is currently executing, allowing us to perform the time transformations&nbsp;-- using, for example, Oracle's built-in NEW_TIME function. </P
+><P
+CLASS="para"
+>Let's look first at the PL/SQL side of this external procedure. We are going to call our library <EM
+CLASS="emphasis"
+>timezone_utl</EM
+>. It doesn't exist yet, but we can tell Oracle to create the library anyway (for illustrative purposes): </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* filename on companion disk: tz_utl.sql /*
+CREATE OR REPLACE LIBRARY timezone_utl_l
+AS
+   '/oracle/local/lib/libtz_utl.so';</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Now we are going to create a procedure we call timezone. Again, we implement the external procedure in a package, and use RESTRICT_REFERENCES to tell Oracle that it does not affect database or package states: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE
+PACKAGE timezone_utl
+IS
+    PROCEDURE timezone
+       (local_timezone OUT VARCHAR2);
+    PRAGMA RESTRICT_REFERENCES (timezone, WNDS, RNDS, WNPS, RNPS);
+END timezone_utl;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice that we have chosen to retrieve the time zone into an OUT VARCHAR2 parameter. We will therefore include an explicit PARAMETERS clause, and it will include INDICATOR and MAXLEN properties. The routine is going to return a NULL if there is any problem. </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE
+PACKAGE BODY timezone_utl
+IS
+    PROCEDURE timezone
+       (local_timezone OUT VARCHAR2)
+    IS EXTERNAL
+       LIBRARY timezone_utl_l
+       NAME &quot;get_timezone&quot;
+       LANGUAGE C
+       PARAMETERS
+          (local_timezone STRING,
+           local_timezone MAXLEN sb4,
+           local_timezone INDICATOR sb2);
+END timezone_utl;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In our C module we write a function, get_timezone, that retrieves the current time zone string from the operating system. From the perspective of the C programmer, this function fills a caller-provided output buffer with the current time zone. If meaningful, the function can also return the alternate "daylight savings" time zone, since it is provided automatically by the localtime function.[<A
+CLASS="footnote"
+HREF="#AUTOID-20339"
+>9</A
+>] </P
+><BLOCKQUOTE
+CLASS="footnote"
+><DIV
+CLASS="footnote"
+><P
+CLASS="para"
+><A
+CLASS="footnote"
+NAME="AUTOID-20339"
+>[9]</A
+>  The localtime and strftime functions are available in the C runtime libraries included with a number of standard implementations, such as SVID 3, POSIX, BSD 4.3, and ISO 9899.</P
+></DIV
+></BLOCKQUOTE
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: tz_utl.c */
+#include &lt;stdio.h&gt;
+#include &lt;time.h&gt;
+#include &lt;oci.h&gt;
+
+/* Tested with Solaris 2.5.1 and Oracle 8.0.3.  */
+
+void
+get_timezone (char *pTimezone,
+              sb4 *pMaxLenTimezone, /* not including NULL terminator */
+              sb2 *pIndTimezone)
+{
+    if ( *pMaxLenTimezone &gt; 0 )
+    {
+        time_t      tmpTime;
+        struct tm   *pTimeInfo;
+        char        timezoneBuff[BUFSIZ];
+        size_t      lenCopied;
+
+        /* Get the current time and extract the timezone string from it */
+        tmpTime = time (0);
+        pTimeInfo = localtime (&amp;tmpTime);
+        lenCopied = strftime (timezoneBuff,
+                              sizeof(timezoneBuff),
+                              &quot;%Z&quot;,
+                              pTimeInfo);
+
+        /* If the timezone string fits, copy it into the output parameter */
+        if ( (lenCopied &gt; 0) &amp;&amp; (lenCopied &lt;= (size_
+            t)*pMaxLenTimezone) )
+        {
+            /* Copy the string and return the length */
+            memcpy (pTimezone, timezoneBuff, lenCopied);
+
+            /* Null-terminate the returned string. Note that the
+            ** null-terminator byte is not included in MAXLEN */
+            pTimezone[lenCopied] = '\0';
+
+            *pIndTimezone = OCI_IND_NOTNULL;
+        }
+        else
+        {
+            /* it doesn't fit, so return a NULL */
+            *pIndTimezone = OCI_IND_NULL;
+        }
+    }
+    else
+    {
+        /* the output parameter is too small, return a NULL */
+        *pIndTimezone = OCI_IND_NULL;
+    }
+}</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>When this C function returns, the length parameter referenced by pLenTimezone will indicate the size of the returned string. If there is an error getting the timezone string, or if the maximum size of the buffer is too small for the timezone value, the indicator variable will be set to OCI_IND_NULL, indicating a NULL. </P
+><P
+CLASS="para"
+>Compiling and linking this function as a shared library requires some special options. Here is the (slightly edited) log from a UNIX make command that illustrates the necessary include libraries and compiler options (the backslashes are continuation characters added here only for clarity). As mentioned before, this example is from Solaris 2.5.1 and Oracle 8.0.3. </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>gcc  -I/oracle/product/8.0.3/rdbms/demo \
+     -I/oracle/product/8.0.3/network/public \
+     -I/oracle/product/8.0.3/plsql/public \
+     -fPIC -Wall -c tz_utl.c
+gcc  -shared -o libtz_utl.so tz_utl.o</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Briefly, these options have the following meanings:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+>-fPIC</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Produce "position-independent code"</P
+></DD
+><DT
+CLASS="term"
+>-Wall</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Issue all "-W" compiler warnings</P
+></DD
+><DT
+CLASS="term"
+>-c</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Compile the source file (to produce a .so file), but do not link it</P
+></DD
+><DT
+CLASS="term"
+>-shared</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Produce a shared object file from a static library</P
+></DD
+><DT
+CLASS="term"
+>-o libtz_utl.so</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Write the output file to libtz_utl.so</P
+></DD
+></DL
+><P
+CLASS="para"
+>A complete makefile for all of the examples appears on the companion diskette (<I
+CLASS="filename"
+>Makefile</I
+>). </P
+><P
+CLASS="para"
+>To test our routine, we can run the following PL/SQL block in SQL*Plus: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SET SERVEROUTPUT ON SIZE 1000000
+DECLARE
+   local_time   DATE;
+   local_tz     VARCHAR2(3);
+   target_time  DATE;
+   target_tz    VARCHAR2(3) := 'GMT';
+BEGIN
+   /* Call the external procedure to discover the local time zone */
+   timezone_utl.timezone (local_tz);
+
+   IF ( local_tz IS NOT NULL ) THEN
+     DBMS_OUTPUT.PUT_LINE ('timezone returned = &quot;'
+        || local_tz || '&quot;');
+
+      /* Convert the current time to the target time zone */
+      local_time  := SYSDATE;
+      target_time := NEW_TIME (local_time, local_tz, target_tz);
+
+      /* Display original and converted times with their time zones */
+      DBMS_OUTPUT.PUT_LINE (TO_CHAR (local_time,
+         'DD-MON-YYYY HH24:MI:SS') || ' ' || local_tz );
+      DBMS_OUTPUT.PUT_LINE ('=');
+      DBMS_OUTPUT.PUT_LINE (TO_CHAR (target_time,
+         'DD-MON-YYYY HH24:MI:SS') || ' ' || target_tz );
+   ELSE
+      DBMS_OUTPUT.PUT_LINE ('local_tz returned NULL');
+   END IF;
+
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This block produced the following (correct) result:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>timezone returned = &quot;PDT&quot;
+08-JUL-1997 17:07:15 PDT
+=
+09-JUL-1997 00:07:15 GMT<A
+CLASS="indexterm"
+NAME="AUTOID-20373"
+></A
+></PRE
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-21-SECT-7.2"
+>21.7.2 Example: Sending Email</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch21-idx-7667-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch21-idx-7667-2"
+></A
+>The last few versions of the Oracle server have included a built-in PL/SQL package which allows you to send email via Interoffice (née Oracle Mail). Unfortunately, this DBMS_MAIL package is of no use to the large number of Oracle shops that standardize on some other email server. </P
+><P
+CLASS="para"
+>Using an external procedure, however, you can easily write a PL/SQL package that will call an operating system command such as mailx under UNIX. While it may not be the most elegant approach, it has one demonstrable benefit: it works! </P
+><P
+CLASS="para"
+>Again, we'll look at the PL/SQL side first. In this case, we intend to create a separate shared object file for our library: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: mail_utl.sql */
+CREATE OR REPLACE LIBRARY mail_utl_l
+AS
+   '/oracle/local/lib/libmail_utl.so';</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The package specification contains a single function, send_mail, which accepts only four arguments: the sender, recipient(s), subject, and message body: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE
+PACKAGE mail_utl
+IS
+    FUNCTION send_mail
+       (return_address  IN VARCHAR2 DEFAULT NULL,
+        recipient_list  IN VARCHAR2,
+        subject_line    IN VARCHAR2 DEFAULT NULL,
+        message_text    IN VARCHAR2 DEFAULT NULL)
+    RETURN PLS_INTEGER;
+    PRAGMA RESTRICT_REFERENCES (send_mail, WNDS, RNDS, WNPS, RNPS);
+END mail_utl;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Before coding the body, let's dream up some interesting new requirements. First, if the return address, subject line, or message text is null, let's have the C function use some reasonable defaults. Second, if the recipient list is null, we want to raise a programmer-defined exception. </P
+><DIV
+CLASS="sidebar"
+><H4
+CLASS="sidebar"
+><A
+CLASS="title"
+NAME="AUTOID-20387"
+>Mail on Windows NT</A
+></H4
+><P
+CLASS="para"
+>If your Oracle server is running on Windows NT, a rough equivalent to mailx is a public domain program called Blat, by Mark Neal and Pedro Mendes. It is available from several Internet sites, including <A
+CLASS="systemitem.url"
+HREF="ftp://gepasi.dbs.aber.ac.uk/winnt/blat12.zip"
+>ftp://gepasi.dbs.aber.ac.uk/winnt/blat12.zip</A
+> and <A
+CLASS="systemitem.url"
+HREF="ftp://press.southern.edu/public/windowsnt/email/blat-nt-12.zip"
+>ftp://press.southern.edu/public/windowsnt/email/blat-nt-12.zip</A
+>. Like mailx, Blat assumes the presence of an SMTP mail server. (Unlike mailx, though, Blat doesn't assume that SMTP is running on the same machine on which you're running Oracle.) With Blat, you'll have to first save the text of the message to an operating system file. </P
+><P
+CLASS="para"
+>If you have a non-SMTP mail server, it probably has a well-documented API that would allow your external procedure to call it directly. </P
+></DIV
+><P
+CLASS="para"
+>To support the requirement of communicating nulls properly, the PARAMETERS clause shown below includes indicator variables for each of the parameters. To raise an exception, however, we must send "context" information to the function. We do so by including the WITH CONTEXT clause and including the CONTEXT keyword as the first argument in the PARAMETERS clause: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE
+PACKAGE BODY mail_utl
+IS
+    FUNCTION send_mail
+       (return_address  IN VARCHAR2,
+        recipient_list  IN VARCHAR2,
+        subject_line    IN VARCHAR2,
+        message_text    IN VARCHAR2)
+    RETURN PLS_INTEGER
+    IS EXTERNAL
+       LIBRARY mail_utl_l
+       NAME &quot;send_mail&quot;
+       LANGUAGE C
+       WITH CONTEXT   -- passes context so we can raise exception
+       PARAMETERS
+          (CONTEXT,   -- keyword giving location of CONTEXT parameter
+           return_address STRING,
+           return_address INDICATOR,
+           recipient_list STRING,
+           recipient_list INDICATOR,
+           subject_line   STRING  ,
+           subject_line   INDICATOR,
+           message_text   STRING,
+           message_text   INDICATOR,
+           RETURN SB4);
+END mail_utl;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The corresponding C function sends mail by opening a pipe to the UNIX <EM
+CLASS="emphasis"
+>/bin/mailx</EM
+> program. If there are any errors during the call to <EM
+CLASS="emphasis"
+>/bin/mailx</EM
+>, the function will return any error code returned by the operating system; otherwise it simply returns a value of zero, indicating normal, successful completion. </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: mail_utl.c */
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;errno.h&gt;
+#include &lt;oci.h&gt;
+
+/* Tested with Solaris 2.5.1 and Oracle 8.0.3. */
+
+sb4
+send_mail (OCIExtProcContext *pWithContext,
+           char  *pReturnAddress,
+           sb2   indReturnAddress,
+           char  *pRecipientList,
+           sb2   indRecipientList,
+           char  *pSubject,
+           sb2   indSubject,
+           char  *pMessage,
+           sb2   indMessage)
+{
+    char mailCmd[BUFSIZ];
+    char returnAddrOption[BUFSIZ];
+    sb4 errorStatus;
+    FILE *pMailPipe;
+
+    /* If there are NULL input parameters, try to &quot;fill in the blanks&quot;
+    || and mail the message anyway.
+    */
+    if (indRecipientList == OCI_IND_NULL)
+    {
+        /* Raise an unnamed programmer-defined exception since a
+        || recipients list is required to send a mail message.
+        */
+        if (OCIExtProcRaiseExcpWithMsg (pWithContext,
+                                        (int)20101,
+                                        &quot;a recipient list is required&quot;,
+                                        0) == OCIEXTPROC_SUCCESS)
+        {
+            /* Return immediately */
+            return -1;
+        }
+        else
+        {
+    /* Error raising exception, abort this 'extproc' process. */
+            abort();
+        }
+    }
+
+   /* Test for null arguments and supply defaults where appropriate. */
+    if (indMessage == OCI_IND_NULL)
+    {
+        pMessage = &quot;&lt;No Message&gt;&quot;;
+    }
+
+    if (indSubject == OCI_IND_NULL)
+    {
+        pSubject = &quot;&lt;No Subject Given&gt;&quot;;
+    }
+
+    if (indReturnAddress == OCI_IND_NULL)
+    {
+        /* No return address option requested */
+        returnAddrOption[0] = '\0';
+    }
+    else
+    {
+        sprintf(returnAddrOption,
+                &quot;-r '%s'&quot;,
+                pReturnAddress);
+    }
+
+    /* Now format the mail command line */
+    sprintf(mailCmd,
+            &quot;/bin/mailx %s -s '%s' %s&quot;,
+            returnAddrOption,
+            pSubject,
+            pRecipientList);
+
+    /* Reset the last system error value */
+    errno = 0;
+
+    /* Open a pipe to the mail program */
+    if ( (pMailPipe = popen (mailCmd, &quot;w&quot;)) != NULL )
+    {
+        if ( fwrite (pMessage, strlen (pMessage), 1, pMailPipe)
+             == strlen (pMessage) )
+        {
+            /* Now close the pipe and return the termination status */
+            errorStatus = pclose(pMailPipe);
+        }
+        else
+        {
+            /* We couldn't write the message buffer, return the error */
+            errorStatus = errno;
+            (void) pclose (pMailPipe);
+        }
+    }
+    else
+    {
+        /* We failed to open a pipe to the command, return the error */
+        errorStatus = errno;
+    }
+    return errorStatus;
+}</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Compiling and linking this function into a shared object file is similar to the time zone example. Here, the OCI shared library is also included, and a separate call to ld is required: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>gcc  -I/oracle/product/8.0.3/rdbms/demo \
+     -I/oracle/product/8.0.3/network/public \
+     -I/oracle/product/8.0.3/plsql/public \
+     -fPIC -Wall -c mail_utl.c
+ld -G -h libmail_utl.so -o libmail_utl.so mail_utl.o \
+   /oracle/product/8.0.3/lib/libextp.a</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Options have the following meaning:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+> ld</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The link command on Solaris</P
+></DD
+><DT
+CLASS="term"
+>-G</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Produce a shared object</P
+></DD
+><DT
+CLASS="term"
+>-h libmail_utl.so</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>Record <I
+CLASS="filename"
+>libmail_utl.so</I
+> as name used by runtime dynamic linker </P
+></DD
+></DL
+><P
+CLASS="para"
+>To test our routine, we can run the following PL/SQL block in SQL*Plus: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SET SERVEROUTPUT ON SIZE 1000000
+DECLARE
+   exit_status  PLS_INTEGER;
+BEGIN
+   /* This call will succeed and &quot;fill-in&quot; the other NULL parameters */
+   exit_status := mail_utl.send_mail (recipient_list =&gt; 'fred');
+   DBMS_OUTPUT.PUT_LINE ('send_mail exit_status = ' || exit_status);
+
+   /* This call will fail since the recipient list is NULL. Our unnamed
+   || programmer-defined exception will be raised as a result.
+   */
+   exit_status := mail_utl.send_mail (recipient_list =&gt; NULL,
+      subject_line   =&gt; 'Mail from PL/SQL!');
+   DBMS_OUTPUT.PUT_LINE ('send_mail exit_status = ' || exit_status);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>When we run this test block, the first call should succeed, and we should get a message about exit_status being zero: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>send_mail exit_status = 0</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The next call fails with a user-defined exception&nbsp;-- an exception generated by the external procedure: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DECLARE
+*
+ERROR at line 1:
+ORA-20101: a recipient list is required
+ORA-06512: at &quot;USER8.MAIL_UTL&quot;, line 0
+ORA-06512: at line 10</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>It's fortunate that Oracle gives us this ability to raise exceptions, so that our external procedures can participate fully in Oracle's SQL and PL/SQL error-handling model. Be sure to take<A
+CLASS="indexterm"
+NAME="AUTOID-20423"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-20424"
+></A
+> advantage of it!<A
+CLASS="indexterm"
+NAME="AUTOID-20425"
+></A
+> </P
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch21_06.htm"
+TITLE="21.6 External Procedure Housekeeping"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 21.6 External Procedure Housekeeping"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming, 2nd Edition"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="part"
+HREF="part06.htm"
+TITLE="VI. Making PL/SQL Programs Work"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: VI. Making PL/SQL Programs Work"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>21.6 External Procedure Housekeeping</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>VI. Making PL/SQL Programs Work</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

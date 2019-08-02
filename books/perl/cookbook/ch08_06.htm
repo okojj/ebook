@@ -1,0 +1,120 @@
+<html><head>
+<title>Recipe 8.5. Trailing a Growing File</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:38:41Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch08_01.htm" title="8. File Contents"><link rel="prev" href="ch08_05.htm" title="8.4. Reading a File Backwards by Line or Paragraph"><link rel="next" href="ch08_07.htm" title="8.6. Picking a Random Line from a File"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch08_05.htm" title="8.4. Reading a File Backwards by Line or Paragraph"><img src="../gifs/txtpreva.gif" alt="Previous: 8.4. Reading a File Backwards by Line or Paragraph" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch08_01.htm" title="8. File Contents">Chapter 8<br>File Contents</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch08_07.htm" title="8.6. Picking a Random Line from a File"><img src="../gifs/txtnexta.gif" alt="Next: 8.6. Picking a Random Line from a File" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch08-chap08_trailing_0">8.5. Trailing a Growing File</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch08-pgfId-500">Problem<a class="indexterm" name="ch08-idx-1000004647-0"></A
+><a class="indexterm" name="ch08-idx-1000004647-1"></A
+></A
+></H3
+><p class="para">You want to read from a continually growing file, but the read fails when you reach the (current) end of file.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch08-pgfId-506">Solution</A
+></H3
+><p class="para">Read until the end of file. Sleep, clear the EOF flag, and read some more. Repeat until interrupted. To clear the EOF flag, either use <code class="literal">seek</CODE
+>:</P
+><pre class="programlisting">for (;;) {
+    while (&lt;FH&gt;) { .... }
+    sleep $SOMETIME;
+    seek(FH, 0, 1);
+}</PRE
+><p class="para">or the IO::Handle module's <code class="literal">clearerr</CODE
+> method:</P
+><pre class="programlisting">use IO::Seekable;
+
+for (;;) {
+    while (&lt;FH&gt;) { .... }
+    sleep $SOMETIME;
+    FH-&gt;clearerr();
+}</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch08-pgfId-538">Discussion</A
+></H3
+><p class="para">When you read to the end of a file, an internal flag is set that prevents further reading. The most direct way to clear this flag is the <code class="literal">clearerr</CODE
+><a class="indexterm" name="ch08-idx-1000004653-0"></A
+> method, if supported: it's in the IO::Handle and FileHandle modules.</P
+><pre class="programlisting">$naptime = 1;
+
+use IO::Handle;
+open (LOGFILE, &quot;/tmp/logfile&quot;) or die &quot;can't open /tmp/logfile: $!&quot;;
+for (;;) {
+    while (&lt;LOGFILE&gt;) { print }     # or appropriate processing
+    sleep $naptime;
+    LOGFILE-&gt;clearerr();            # clear stdio error flag
+}</PRE
+><p class="para">If that simple approach doesn't work on your system, you may need to use <code class="literal">seek</CODE
+><a class="indexterm" name="ch08-idx-1000004654-0"></A
+>. The <code class="literal">seek</CODE
+> code given above tries to move zero bytes from the current position, which nearly always works. It doesn't change the current position, but it should clear the end-of-file condition on the handle so that the next <code class="literal">&lt;LOGFILE&gt;</CODE
+> picks up new data.</P
+><p class="para">If that still doesn't work (e.g., it relies on features of your C library's (so-called) standard I/O implementation), then you may need to use the following <code class="literal">seek</CODE
+> code, which remembers the old file position explicitly and returns there directly.</P
+><pre class="programlisting">for (;;) {
+    for ($curpos = tell(LOGFILE); &lt;LOGFILE&gt;; $curpos = tell(LOGFILE)) {
+        # process $_ here
+    }
+    sleep $naptime;
+    seek(LOGFILE, $curpos, 0);  # seek to where we had been
+}</PRE
+><p class="para">On some kinds of filesystems, the file could be removed while you are reading it. If so, there's probably little reason to continue checking whether it grows. To make the program exit in that case, <code class="literal">stat</CODE
+> the handle and make sure its link count (the third field in the return list) hasn't gone to 0:</P
+><pre class="programlisting">exit if (stat(LOGFILE))[3] == 0</PRE
+><p class="para">If you're using the <a class="indexterm" name="ch08-idx-1000004655-0"></A
+>File::stat module, you could write that more readably as:</P
+><pre class="programlisting">use File::stat;
+exit if stat(*LOGFILE)-&gt;nlink == 0;<a class="indexterm" name="ch08-idx-1000004649-0"></A
+><a class="indexterm" name="ch08-idx-1000004649-1"></A
+></PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch08-pgfId-590">See Also</A
+></H3
+><p class="para">The <code class="literal">seek</CODE
+> function in <i class="filename">perlfunc </I
+>(1) and in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; your system's <i class="filename">tail </I
+>(1) and <i class="filename">stdio</I
+> (3) manpages</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch08_05.htm" title="8.4. Reading a File Backwards by Line or Paragraph"><img src="../gifs/txtpreva.gif" alt="Previous: 8.4. Reading a File Backwards by Line or Paragraph" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch08_07.htm" title="8.6. Picking a Random Line from a File"><img src="../gifs/txtnexta.gif" alt="Next: 8.6. Picking a Random Line from a File" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">8.4. Reading a File Backwards by Line or Paragraph</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">8.6. Picking a Random Line from a File</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

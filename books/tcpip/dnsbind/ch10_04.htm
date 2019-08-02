@@ -1,0 +1,559 @@
+<html><head>
+<title>[Chapter 10] 10.4 System Tuning</TITLE>
+<meta name="DC.title" content="DNS &amp; BIND"><meta name="DC.creator" content="Cricket Liu &amp; Paul Albitz"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-01-06T18:35:58Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-512-2" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch10_01.htm" title="10. Advanced Features and Security"><link rel="prev" href="ch10_03.htm" title="10.3 DNS Dynamic Update"><link rel="next" href="ch10_05.htm" title="10.5 Name Server Address Sorting"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="DNS &amp; BIND" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="DNS &amp; BIND"><area shape="RECT" coords="467,0,514,18" href="../search/dsrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch10_03.htm" title="10.3 DNS Dynamic Update"><img src="../gifs/txtpreva.gif" alt="Previous: 10.3 DNS Dynamic Update" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 10<br>Advanced Features and Security</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch10_05.htm" title="10.5 Name Server Address Sorting"><img src="../gifs/txtnexta.gif" alt="Next: 10.5 Name Server Address Sorting" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="AUTOID-10622">10.4 System Tuning</A
+></H2
+><p class="para"><a class="indexterm" name="CH10.TUNING1"></A
+><a class="indexterm" name="CH10.TUNING2"></A
+><a class="indexterm" name="CH10.TUNING3"></A
+>While the default configuration values will work fine for most sites,
+yours may be one of the rare sites that needs some further
+tuning.</P
+><div class="sect2"><h3 class="sect2"><a class="title" name="AUTOID-10634">10.4.1 Zone Transfers</A
+></H3
+><p class="para"><a class="indexterm" name="CH10.TRANSFERTUNING"></A
+>Zone transfers can place a heavy load on a name server.  On
+<span class="acronym">BIND</SPAN
+> 4 name servers, outbound zone transfers
+(transfers of a zone the server is master for), in particular, require
+<i class="function">fork()</I
+>ing the <kbd class="command">named</KBD
+> process,
+thereby using a significant amount of extra memory.
+<span class="acronym">BIND</SPAN
+> 4.9 introduced mechanisms for limiting the
+zone transfer load that your name server places on its master servers.
+<span class="acronym">BIND</SPAN
+> 8 has these mechanisms and more.</P
+><div class="sect3"><h4 class="sect3"><a class="title" name="AUTOID-10645">10.4.1.1 Limiting transfers initiated per name server</A
+></H4
+><p class="para"><a class="indexterm" name="AUTOID-10648"></A
+><a class="indexterm" name="CH10.LIMITING"></A
+><a class="indexterm" name="AUTOID-10654"></A
+><a class="indexterm" name="AUTOID-10657"></A
+>With <span class="acronym">BIND</SPAN
+> 4.9 and later, you can limit how many
+zones your name server requests from a single remote name server. This
+will make the administrator of the remote name server host happy
+because their machine won't be pounded for zone transfers if all of
+the zones change&nbsp;- important if hundreds of zones are
+involved.</P
+><p class="para">In <span class="acronym">BIND</SPAN
+> 8, the conf file statement is:</P
+><blockquote class="screen"><pre class="screen">options {
+                transfers-per-ns 2;
+};</PRE
+></BLOCKQUOTE
+><p class="para">The equivalent <span class="acronym">BIND</SPAN
+> 4 boot file directive
+is:</P
+><blockquote class="screen"><pre class="screen">limit transfers-per-ns 2<a class="indexterm" name="AUTOID-10667"></A
+><a class="indexterm" name="AUTOID-10669"></A
+></PRE
+></BLOCKQUOTE
+><p class="para">With a forthcoming version of <span class="acronym">BIND</SPAN
+> 8 (we're
+not sure which), you'll also be able to set the limit on a
+server-by-server basis, instead of globally.  To do this, you'd use
+the <i class="function">transfers</I
+> substatement inside a <i class="function">server</I
+> statement, where the server
+is the server you'd like to specify the limit for:</P
+><blockquote class="screen"><pre class="screen">server 192.168.1.2 {
+                transfers 2;
+};</PRE
+></BLOCKQUOTE
+><p class="para">The default limit is two active zone transfers per name
+server. That limit may seem small, but it works. Here is what
+happens. Suppose your name server needs to load four zones from a
+remote name server. Your name server will start transferring the first
+two zones and wait on the third and fourth zone. After one of the
+first two zone transfers completes, the third zone will be requested.
+After another transfer completes, the fourth zone will be started.
+The net result is the same as before there were limits&nbsp;- all the
+zones are transferred&nbsp;- but the work is spread out.</P
+><p class="para">When might you want to increase this limit? You might want to
+increase this limit if you notice that it is taking too long to synch
+up with the remote name server, and you know that the reason is the
+serializing of transfers&nbsp;- not just that the network between the
+machines is slow. This probably only matters if you're maintaining
+hundreds or thousands of zones. And you need to make sure that the
+remote name server and the networks between can handle the additional
+workload of more simultaneous zone transfers.</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="AUTOID-10679">10.4.1.2 Limiting the total number of zone transfers initiated</A
+></H4
+><p class="para">The last limit dealt with a single remote name server. This one
+deals with more than one remote name server. <span class="acronym">BIND</SPAN
+>
+versions 4.9 and later let you limit the total number of zones your
+server will request at any one time. The default limit is ten. As we
+explained above, your server will only pull two zones from any given
+remote name server by default. If your server is transferring two
+zones from each of five name servers, your server will have hit the
+limit, and it will postpone any further transfers until one of the
+current transfers finishes.</P
+><p class="para">The <span class="acronym">BIND</SPAN
+> 8 <i class="filename">named.conf</I
+>
+file statement is:</P
+><blockquote class="screen"><pre class="screen">options {
+                transfers-in 10;
+};</PRE
+></BLOCKQUOTE
+><p class="para">The equivalent <span class="acronym">BIND</SPAN
+> 4 boot file directive
+is:</P
+><blockquote class="screen"><pre class="screen">limit transfers-in 10<a class="indexterm" name="AUTOID-10690"></A
+><a class="indexterm" name="AUTOID-10692"></A
+></PRE
+></BLOCKQUOTE
+><p class="para">If your host or network cannot handle ten active zone transfers,
+you should decrease this number. If you run a server supporting
+hundreds or thousands of zones, and your host and network can support
+the load, you might want to raise this limit. If you raise this limit,
+you may also need to also raise the limit for the number of transfers
+per name server. (For example, if your name server loads from only
+four remote name servers, and your name server will only start two
+transfers per remote name server, then your server will have at most
+eight active zone transfers. Increasing the limit for the total number
+of zone transfers will not have any effect unless the limit per server
+is also increased.)</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="AUTOID-10696">10.4.1.3 Limiting the duration of a zone transfer</A
+></H4
+><p class="para"><span class="acronym">BIND</SPAN
+> 8 will also let you limit the duration
+of an inbound zone transfer.  By default, zone transfers are limited
+to 120 minutes, or two hours.  The idea is that a zone transfer that's
+taking longer than 120 minutes is probably hung and won't complete,
+and the <kbd class="command">named-xfer</KBD
+> process is taking up resources
+unnecessarily.  If you'd like a smaller or larger limit, perhaps
+because you know that your server is a slave for a zone that normally
+takes more than 120 minutes to transfer, you can use this
+statement:</P
+><blockquote class="screen"><pre class="screen">options {
+                max-transfer-time-in 180;
+};</PRE
+></BLOCKQUOTE
+><p class="para">You can even place the limit on transfers of a particular zone
+by using the <em class="emphasis">max-transfer-time-in</EM
+> substatement
+inside a <i class="structfield">zone</I
+> statement.  For example, if
+you know that the <i class="systemitem.sitename">rinkydink.com</I
+> zone always takes a long
+time (say three hours) to transfer, either because of its size or
+because the links to the master server are so slow, but you'd still
+like a shorter time limit (maybe an hour) on other zone transfers, you
+could use:</P
+><blockquote class="screen"><pre class="screen">options {
+                max-transfer-time-in 60;
+};
+
+zone &quot;rinkydink.com&quot; {
+                type slave;
+                file &quot;db.rinkydink&quot;;
+                masters { 192.168.1.2; };
+                max-transfer-time-in 180;
+};</PRE
+></BLOCKQUOTE
+><a class="indexterm" name="AUTOID-10707"></A
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="AUTOID-10708">10.4.1.4 More efficient zone transfers</A
+></H4
+><p class="para"><a class="indexterm" name="AUTOID-10711"></A
+><a class="indexterm" name="AUTOID-10714"></A
+>A zone transfer, we said earlier, is composed of many
+<span class="acronym">DNS</SPAN
+> messages sent end-to-end over a
+<span class="acronym">TCP</SPAN
+> connection.  Traditional zone transfers only
+put a single resource record in each <span class="acronym">DNS</SPAN
+> message.
+That's a waste of space: you need a full header on each
+<span class="acronym">DNS</SPAN
+> message, even though you're only carrying a
+single record.  It's like being the only person in a Chevy Suburban.
+A <span class="acronym">DNS</SPAN
+> message could carry many more records.</P
+><p class="para"><span class="acronym">BIND</SPAN
+> 8 servers understand a new zone transfer
+format, called <i class="function">many-answers</I
+>.  The <i class="function">many-answers</I
+> format puts as many
+records as possible into a single <span class="acronym">DNS</SPAN
+> message.  The
+result is that a <i class="function">many-answers</I
+> zone transfer takes less bandwidth,
+because there's less overhead, and less <span class="acronym">CPU</SPAN
+> time,
+because less time is spent unmarshaling <span class="acronym">DNS</SPAN
+>
+messages.</P
+><p class="para"><a class="indexterm" name="AUTOID-10731"></A
+><a class="indexterm" name="AUTOID-10733"></A
+><a class="indexterm" name="AUTOID-10736"></A
+><a class="indexterm" name="AUTOID-10738"></A
+>The <span class="acronym">BIND</SPAN
+> 8 <i class="function">transfer-format</I
+> subcommand
+controls which zone transfer format the server uses for zones that it
+is a master for.  That is, it determines the format of the zones that
+your server transfers to its slaves.  <i class="function">transfer-format</I
+> is both an
+<i class="function">options</I
+> subcommand and a <i class="function">server</I
+> subcommand: as an <i class="function">options</I
+> subcommand,
+<i class="function">transfer-format</I
+> controls the server's global zone transfer behavior.
+The default is to use the old <i class="function">one-answer</I
+> zone transfer format, for
+interoperability with <span class="acronym">BIND</SPAN
+> 4 name servers.</P
+><blockquote class="screen"><pre class="screen">options {
+                transfer-format many-answers;
+};</PRE
+></BLOCKQUOTE
+><p class="para">changes the server's settings to use the <i class="function">many-answers</I
+> format for
+all servers, unless explicitly told not to in a <i class="function">server</I
+> statement,
+like this:</P
+><blockquote class="screen"><pre class="screen">server 192.168.1.2 {
+                transfer-format one-answer;
+};</PRE
+></BLOCKQUOTE
+><p class="para">The one downside to using the <i class="function">many-answers</I
+> format is that zone
+transfers can actually take longer using the new format.  They're more
+efficient from a bandwidth and <span class="acronym">CPU</SPAN
+> utilization
+point of view, but your zone transfers may take longer to
+complete.</P
+><p class="para">If you'd like to take advantage of the new, more efficient zone
+transfers, set your server's global zone transfer format setting to
+<i class="function">many-answers</I
+>, if most of your slaves run <span class="acronym">BIND</SPAN
+> 8 or
+Microsoft's <span class="acronym">DNS</SPAN
+> Server, which also understands the
+format, or <i class="function">one-answer</I
+>, if most of your slaves run
+<span class="acronym">BIND</SPAN
+> 4.  Then use the <i class="function">transfer-format</I
+> server
+substatement to adjust the global setting for exceptional
+servers.</P
+></DIV
+><a class="indexterm" name="AUTOID-10764"></A
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="AUTOID-10765">10.4.2 Resource Limits</A
+></H3
+><p class="para"><a class="indexterm" name="CH10.RESOURCE"></A
+><a class="indexterm" name="CH10.RESOURCE2"></A
+>Sometimes, you just want to tell the server to stop being so
+greedy: don't use more than this much memory, don't open more than
+this many files.  <span class="acronym">BIND</SPAN
+> 4.9 introduced these limits,
+and as with so many features, <span class="acronym">BIND</SPAN
+> 8 gives you
+several variations.</P
+><div class="sect3"><h4 class="sect3"><a class="title" name="AUTOID-10775">10.4.2.1 Changing the data segment size limit</A
+></H4
+><p class="para"><a class="indexterm" name="AUTOID-10778"></A
+><a class="indexterm" name="AUTOID-10781"></A
+><a class="indexterm" name="AUTOID-10784"></A
+>Some operating systems have a default limit to stop processes from
+using too much memory. If your <span class="acronym">OS</SPAN
+> is limiting the
+name server from growing to the size it wants to grow to, the name
+server may not operate efficiently, and it may even panic or
+exit. Unless your name server handles an extremely large amount of
+data, you won't run into this limit. But if you do,
+<span class="acronym">BIND</SPAN
+> 4.9 and 8 have configuration options to change
+the system's default limit on data segment size.  You might use these
+options to set a higher limit than the default system limit for the
+<kbd class="command">named</KBD
+> process.</P
+><p class="para">For <span class="acronym">BIND</SPAN
+> 8, the statement is:</P
+><blockquote class="screen"><pre class="screen">options {
+                datasize <code class="replaceable"><i>size</I
+></CODE
+>
+};</PRE
+></BLOCKQUOTE
+><p class="para">For <span class="acronym">BIND</SPAN
+> 4, the directive is:</P
+><blockquote class="screen"><pre class="screen">limit datasize <code class="replaceable"><i>size</I
+></CODE
+><a class="indexterm" name="AUTOID-10797"></A
+><a class="indexterm" name="AUTOID-10800"></A
+></PRE
+></BLOCKQUOTE
+><p class="para"><code class="replaceable"><i>size</I
+></CODE
+> is an integer value in bytes.
+You can specify a different unit than bytes by appending a character:
+k (kilobyte), m (megabyte), or g (gigabyte). For example,
+<code class="literal">64m</CODE
+> is 64 megabytes.</P
+><blockquote class="note"><p class="para"><strong>NOTE:</STRONG
+> Not all systems support increasing the data segment size. If
+your system is one that does not, the name server will issue a syslog
+message at level <span class="acronym">LOG_WARNING</SPAN
+> to tell you that this
+feature is not implemented.</P
+></BLOCKQUOTE
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="AUTOID-10808">10.4.2.2 Changing the stack size limit</A
+></H4
+><p class="para"><a class="indexterm" name="AUTOID-10811"></A
+>In addition to allowing you to change the limit on the size of
+the server's data segment, <span class="acronym">BIND</SPAN
+> 8 will let you
+adjust the limit the system places on the amount of memory the
+<kbd class="command">named</KBD
+> process' stack can use.  The syntax
+is:<a class="indexterm" name="AUTOID-10815"></A
+></P
+><blockquote class="screen"><pre class="screen">options {
+                stacksize <code class="replaceable"><i>size</I
+></CODE
+>;
+};</PRE
+></BLOCKQUOTE
+><p class="para">where <code class="replaceable"><i>size</I
+></CODE
+> is specified as in
+<em class="emphasis">datasize</EM
+>.  As with <em class="emphasis">datasize</EM
+>,
+this feature only works on systems that permit modification of the
+stack size limit.</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="AUTOID-10824">10.4.2.3 Changing the core size limit</A
+></H4
+><p class="para"><a class="indexterm" name="AUTOID-10827"></A
+>If you don't appreciate <kbd class="command">named</KBD
+>'s leaving huge
+<i class="filename">core</I
+> files around on your filesystem, you can at
+least make them smaller by using <em class="emphasis">coresize</EM
+>.
+Conversely, if <kbd class="command">named</KBD
+> hasn't been able to dump an
+entire core file because of a tight operating system limit, you may be
+able to raise that limit with <em class="emphasis">coresize</EM
+>.</P
+><p class="para"><a class="indexterm" name="AUTOID-10835"></A
+><em class="emphasis">coresize</EM
+>'s syntax is:</P
+><blockquote class="screen"><pre class="screen">options {
+                coresize <code class="replaceable"><i>size</I
+></CODE
+>;
+};</PRE
+></BLOCKQUOTE
+><p class="para">Again, as with <em class="emphasis">datasize</EM
+>, this feature only
+works on operating systems that support modifying the limit on core
+file size.</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="AUTOID-10843">10.4.2.4 Changing the open files limit</A
+></H4
+><p class="para"><a class="indexterm" name="AUTOID-10846"></A
+><a class="indexterm" name="AUTOID-10848"></A
+>On hosts with many <span class="acronym">IP</SPAN
+> addresses, or a low limit on the maximum number
+If your name server is authoritative for a lot of zones, the
+<kbd class="command">named</KBD
+> process will open lots of files when it
+starts up&nbsp;- one per authoritative zone, assuming you use backup
+files on the zones you're a slave for.  Likewise, if the host running
+your name server has lots of virtual network interfaces,[1] <kbd class="command">named</KBD
+> will require one file descriptor
+per interface.  Most <span class="acronym">UNIX</SPAN
+> operating systems place a
+limit on the number of files any process can open simultaneously.  If
+your name server tries to open more files than this limit permits,
+you'll see this message in your syslog output:</P
+><blockquote class="footnote"><p class="para">[1] <a class="xref" href="ch15_01.htm" title="Miscellaneous">Chapter 15, <cite class="chapter">Miscellaneous</CITE
+></A
+>, describes a better solution to the
+<span class="quote">"Too many open files"</SPAN
+> problem than bumping up the limit
+on files.</P
+></BLOCKQUOTE
+><blockquote class="screen"><pre class="screen">named[pid]: socket(SOCK_RAW): Too many open files</PRE
+></BLOCKQUOTE
+><p class="para">If your operating system also permits changing that limit on a
+per-process basis, you can increase it using <span class="acronym">BIND</SPAN
+>
+8's <em class="emphasis">files</EM
+> substatement:<a class="indexterm" name="AUTOID-10862"></A
+></P
+><blockquote class="screen"><pre class="screen">options {
+                files <code class="replaceable"><i>number</I
+></CODE
+>;
+};</PRE
+></BLOCKQUOTE
+><p class="para">The default is <em class="emphasis">unlimited</EM
+> (which is also a
+valid value), although this just means that the server doesn't place
+any limit on the number of simultaneously open files; the operating
+system, however, may.</P
+></DIV
+><a class="indexterm" name="AUTOID-10869"></A
+><a class="indexterm" name="AUTOID-10870"></A
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="AUTOID-10871">10.4.3 Maintenance Intervals</A
+></H3
+><p class="para"><a class="indexterm" name="CH10.MAINTENANCE"></A
+><a class="indexterm" name="CH10.MAINTENANCE2"></A
+><span class="acronym">BIND</SPAN
+> name servers have always done periodic
+housekeeping: refreshing zones the server is a slave for, for example.
+With <span class="acronym">BIND</SPAN
+> 8, you can now control how often these
+chores happen, or whether they happen at all.</P
+><div class="sect3"><h4 class="sect3"><a class="title" name="AUTOID-10883">10.4.3.1 Cleaning interval</A
+></H4
+><p class="para"><a class="indexterm" name="AUTOID-10886"></A
+><a class="indexterm" name="AUTOID-10888"></A
+>Name servers older than <span class="acronym">BIND</SPAN
+> 4.9 only
+passively remove stale entries from the cache.  Before such a name
+server returns a record to a querier, it checks to see whether the
+<span class="acronym">TTL</SPAN
+> on that record has expired.  If it has, the
+name server starts the resolution process to find more current data.
+This means that a <span class="acronym">BIND</SPAN
+> 4 server may cache a lot of
+records in a flurry of name resolution, and then just let those
+records spoil in the cache, taking up valuable memory, even though the
+records are stale.</P
+><p class="para"><span class="acronym">BIND</SPAN
+> 8 now actively walks through the cache
+and removes stale records once each cleaning interval.  This means
+that a <span class="acronym">BIND</SPAN
+> 8 name server will tend to use less
+memory for caching than a <span class="acronym">BIND</SPAN
+> 4 server in the same
+role.  On the other hand, the cleaning process takes
+<span class="acronym">CPU</SPAN
+> time, and on very slow or very busy name
+servers, you may not want it running every hour.</P
+><p class="para"><a class="indexterm" name="AUTOID-10900"></A
+>By default, the cleaning interval is 60 minutes.  You can tune
+the interval with the <em class="emphasis">cleaning-interval</EM
+>
+substatement to the <i class="structfield">options</I
+> statement.  For
+example:</P
+><blockquote class="screen"><pre class="screen">options {
+                cleaning-interval 120;
+};</PRE
+></BLOCKQUOTE
+><p class="para">sets the cleaning interval to 120 minutes.  To turn off cache
+cleaning entirely, use a cleaning interval of zero.</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="AUTOID-10907">10.4.3.2 Interface interval</A
+></H4
+><p class="para"><a class="indexterm" name="AUTOID-10910"></A
+><a class="indexterm" name="AUTOID-10912"></A
+><a class="indexterm" name="AUTOID-10914"></A
+>We've said already that <span class="acronym">BIND</SPAN
+>, by default,
+listens on all of a host's network interfaces.
+<span class="acronym">BIND</SPAN
+> 8 is actually smart enough to notice when a
+network interface on the host it's running on comes up or goes down.
+To do this, it periodically scans the host's network interfaces.  This
+happens once each interface interval, which is 60 minutes by default.
+If you know the host your name server runs on has no dynamic network
+interfaces, you can disable scanning for new interfaces by setting the
+interface interval to zero to avoid unnecessary hourly
+overhead:<a class="indexterm" name="AUTOID-10919"></A
+></P
+><blockquote class="screen"><pre class="screen">options {
+                interface-interval 0;
+};</PRE
+></BLOCKQUOTE
+><p class="para">On the other hand, if your host brings up or tears down network
+interfaces more often than every hour, you may want to reduce the
+interval.</P
+></DIV
+><div class="sect3"><h4 class="sect3"><a class="title" name="AUTOID-10924">10.4.3.3 Statistics interval</A
+></H4
+><p class="para"><a class="indexterm" name="AUTOID-10927"></A
+>Okay, adjusting the statistics interval&nbsp;- the frequency at
+which the <span class="acronym">BIND</SPAN
+> 8 server dumps statistics to the
+statistics file&nbsp;- won't have much effect on performance.  But it
+fits better here, with the other maintenance intervals, than anywhere
+else in the book.</P
+><p class="para">The syntax of the <em class="emphasis">statistics-interval</EM
+>
+substatement is exactly analogous to the other maintenance
+intervals:<a class="indexterm" name="AUTOID-10933"></A
+></P
+><blockquote class="screen"><pre class="screen">options {
+                statistics-interval 60;
+};</PRE
+></BLOCKQUOTE
+><p class="para">And, as with the other maintenance intervals, the default is 60
+minutes, and a setting of zero disables the periodic dumping of
+statistics.</P
+></DIV
+><a class="indexterm" name="AUTOID-10938"></A
+><a class="indexterm" name="AUTOID-10939"></A
+></DIV
+><a class="indexterm" name="AUTOID-10940"></A
+><a class="indexterm" name="AUTOID-10941"></A
+><a class="indexterm" name="AUTOID-10942"></A
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch10_03.htm" title="10.3 DNS Dynamic Update"><img src="../gifs/txtpreva.gif" alt="Previous: 10.3 DNS Dynamic Update" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="DNS &amp; BIND"><img src="../gifs/txthome.gif" alt="DNS &amp; BIND" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch10_05.htm" title="10.5 Name Server Address Sorting"><img src="../gifs/txtnexta.gif" alt="Next: 10.5 Name Server Address Sorting" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">10.3 DNS Dynamic Update</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">10.5 Name Server Address Sorting</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.htm" title="The Networking CD Bookshelf">Library Home</A
+> | <a href="index.htm" title="DNS &amp; BIND">DNS &amp; BIND</A
+> | <a href="../tcpip/index.htm" title="TCP/IP Network Administration">TCP/IP</A
+> | <a href="../sendmail/index.htm" title="sendmail">sendmail</A
+> | <a href="../smdref/index.htm" title="sendmail Desktop Reference">sendmail Reference</A
+> | <a href="../firewall/index.htm" title="Building Internet Firewalls">Firewalls</A
+> | <a href="../puis/index.htm" title="Practical UNIX &amp; Internet Security">Practical Security</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

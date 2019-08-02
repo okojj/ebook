@@ -1,0 +1,679 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 13] 13.4 DBMS_JOB Examples</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein, Charles Dye &amp; John Beresniewicz"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T17:59:50Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates-1-56592-375-8E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-375-8E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle Packages"><META
+NAME="DC.Title"
+CONTENT="Oracle Built-in Packages"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch13_01.htm"
+TITLE="13. Job Scheduling in the Database"><LINK
+REL="prev"
+HREF="ch13_03.htm"
+TITLE="13.3 Tips on Using DBMS_JOB"><LINK
+REL="next"
+HREF="part04.htm"
+TITLE="IV. Distributed Database Packages"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle Built-in Packages"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle Built-in Packages"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch13_03.htm"
+TITLE="13.3 Tips on Using DBMS_JOB"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 13.3 Tips on Using DBMS_JOB"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch13_01.htm"
+TITLE="13. Job Scheduling in the Database"
+>Chapter 13<BR>Job Scheduling in the Database</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="part"
+HREF="part04.htm"
+TITLE="IV. Distributed Database Packages"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: IV. Distributed Database Packages"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch13-26194"
+>13.4 DBMS_JOB Examples</A
+></H2
+><P
+CLASS="para"
+>The DBMS_JOB package has all kinds of useful applications waiting to be discovered. DBAs can schedule jobs that look for problem conditions in the database or track and record resource utilization. Developers can schedule large batch operations at off hours without requiring operator intervention. </P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch13-SECT-4.1"
+>13.4.1 Tracking Space in Tablespaces</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch13-idx-8628-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch13-idx-8628-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch13-idx-8628-2"
+></A
+>I decided to implement a very simple tracking system that can be used to track the growth of data in tablespaces. Such a system could be used for capacity planning or to trigger an alert of impending space problems.</P
+><P
+CLASS="para"
+>The system consists of a table called db_space, a view called tbs_space, and a procedure called space_logger. Here is the source code for the system:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: <A
+CLASS="indexterm"
+NAME="ch13-idx-8632-0"
+></A
+>job6.sql */*
+CREATE TABLE db_space
+   (tablespace_name   VARCHAR(30)  NOT NULL
+   ,calc_date      DATE    NOT NULL
+   ,total_bytes    NUMBER  NOT NULL
+   ,free_bytes     NUMBER  NOT NULL);
+
+CREATE OR REPLACE VIEW tbs_space
+   (tablespace_name
+   ,total_bytes
+   ,free_bytes)
+AS
+   SELECT  DF.tbsname         tablespace_name
+          ,DF.totbytes        total_bytes
+          ,FS.freebytes       free_bytes
+     FROM 
+          (SELECT  tablespace_name     tbsname
+                  ,SUM(bytes)          totbytes
+             FROM  dba_data_files
+            GROUP BY tablespace_name
+          ) DF
+         ,(SELECT  tablespace_name     tbsname
+                  ,SUM(bytes)          freebytes
+             FROM  dba_free_space
+            GROUP BY tablespace_name
+          ) FS
+    WHERE
+          DF.tbsname = FS.tbsname;
+
+
+CREATE OR REPLACE PROCEDURE <A
+CLASS="indexterm"
+NAME="ch13-idx-8634-0"
+></A
+>space_logger
+AS
+   /*
+   || records total size and free space for all
+   || tablespaces in table db_space
+   ||
+   || Author:  John Beresniewicz, Savant Corp
+   ||
+   || 01/26/98: created
+   ||
+   || Compilation requirements:
+   ||
+   || SELECT on TBS_SPACE view
+   || INSERT on DB_SPACE table
+   */
+   CURSOR tbs_space_cur
+   IS
+   SELECT tablespace_name, total_bytes, free_bytes
+     FROM tbs_space;
+     
+BEGIN
+   FOR tbs_space_rec IN tbs_space_cur
+   LOOP
+      INSERT INTO db_space VALUES
+         (tbs_space_rec.tablespace_name
+         ,SYSDATE
+         ,tbs_space_rec.total_bytes
+         ,tbs_space_rec.free_bytes);
+   END LOOP;
+   COMMIT;
+END space_logger;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>To set the system in motion, the space_logger procedure can be submitted to the job queue for regular execution as follows: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DECLARE
+   jobno   NUMBER;
+BEGIN
+   DBMS_JOB.SUBMIT
+      (job  =&gt; jobno
+      ,what =&gt; 'begin space_logger; end;'
+      ,next_date =&gt; SYSDATE
+      ,interval  =&gt; 'SYSDATE+1/24');
+   COMMIT;
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Each time space_logger executes, it records total space, free space, tablespace name, and a timestamp for each tablespace in the database. Adjusting the interval parameter for the job adjusts the frequency of data <A
+CLASS="indexterm"
+NAME="ch13-idx-8630-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch13-idx-8630-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch13-idx-8630-2"
+></A
+>collection. </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch13-SECT-4.2"
+>13.4.2 Fixing Broken Jobs Automatically</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch13-idx-8635-0"
+></A
+>Charles Dye recommended the next example, probably based on his experiences with replication. When jobs have relatively complex execution requirements in terms of the database objects on which they depend, they can easily become broken by incurring multiple execution failures. Perhaps the DBA has modified some database links or recreated tables or views, and the job's definition has been temporarily compromised. Well, it's a pain to manually reset the broken flag for these "not really broken" jobs, so why not have a job that regularly tries to unbreak jobs? Sounds good to me; here is a procedure called job_fixer to do just that:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk:<A
+CLASS="indexterm"
+NAME="ch13-idx-8636-0"
+></A
+> job5.sql */*
+CREATE OR REPLACE PROCEDURE<A
+CLASS="indexterm"
+NAME="ch13-idx-8637-0"
+></A
+> job_fixer
+AS
+   /*
+   || calls DBMS_JOB.BROKEN to try and set
+   || any broken jobs to unbroken
+   */
+   
+   /* cursor selects user's broken jobs */
+   CURSOR broken_jobs_cur
+   IS
+   SELECT job
+     FROM user_jobs
+    WHERE broken = 'Y';
+    
+BEGIN
+   FOR job_rec IN broken_jobs_cur
+   LOOP
+      DBMS_JOB.BROKEN(job_rec.job,FALSE);
+   END LOOP;
+END job_fixer;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The job_fixer procedure works only on a user's own jobs, so each user submitting jobs to the queue will need a separate job_fixer in the queue. </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch13-SECT-4.3"
+>13.4.3 Self-Modifying and Self-Aware Jobs</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch13-idx-8638-0"
+></A
+>The ability to reference the job, next_date, and broken parameters in the job definition allows the procedure executed to alter its own job characteristics. Thus, a job could remove itself from the job queue, or assign its own next execution date based on some criteria decided at runtime by the procedure itself. I've written a small skeleton procedure that demonstrates this capability. It is called <A
+CLASS="indexterm"
+NAME="ch13-idx-8642-0"
+></A
+>smart_job, and makes use of all three of the referenceable parameters when submitted as a job.</P
+><P
+CLASS="para"
+>When submitted to the job queue, smart_job uses the job definition parameters to modify itself in the following ways:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Reschedules itself to parm1_IN minutes after finishing if parm2_IN = "RESTART"</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Sets next_date NULL causing automatic removal from queue if parm2_IN != "RESTART"</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Flags itself as broken if any exceptions are encountered</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Uses the job number to raise an exception</P
+></LI
+></UL
+><P
+CLASS="para"
+>Pay close attention to how the smart_job procedure modifies itself. It uses the fact that the next_date and broken parameters support both IN and OUT modes when referenced by the job definition. Thus, when the broken_out parameter of smart_job has the broken parameter assigned to it in the call to DBMS_JOB.SUBMIT, the value set for broken_out by the procedure gets set for the job by the job queue when the job completes. In this way, smart_job changes its job characteristics without calling any DBMS_JOB procedures.</P
+><P
+CLASS="para"
+>Here is the source code for smart_job:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk:<A
+CLASS="indexterm"
+NAME="ch13-idx-8643-0"
+></A
+> job4.sql */*
+PROCEDURE smart_job
+   (parm1_IN IN INTEGER
+   ,parm2_IN IN VARCHAR2
+   ,next_date_OUT IN OUT DATE
+   ,broken_OUT IN OUT BOOLEAN
+   ,job_IN IN INTEGER := -1)
+IS
+   /* declare an exception for testing */
+   JOB_LESSTHAN_100  EXCEPTION;
+
+BEGIN
+   /* 
+   || Do the procedure main line functions
+   */
+   null;
+
+   /* 
+   || use job_IN to branch to exception handler
+   || for testing self-breaking
+   */
+   IF job_IN &lt; 100
+   THEN 
+      RAISE JOB_LESSTHAN_100;
+   END IF;
+
+   /*
+   || After main processing is finished, job decides
+   || if it should re-execute and determines its own
+   || next execution date by adding parm1_IN minutes to 
+   || the current time
+   */
+   IF parm2_IN = 'RESTART'
+   THEN
+      next_date_OUT := SYSDATE + parm1_IN/1440;
+   ELSE
+      /* 
+      || NULL next_date will cause automatic removal of
+      || job from queue
+      */
+      next_date_OUT := NULL;
+   END IF;
+
+EXCEPTION
+   /* 
+   || job &quot;breaks&quot; itself if unexpected error occurs
+   */
+   WHEN OTHERS
+   THEN
+      broken_OUT := TRUE;
+
+END smart_job;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The following test script exercises <A
+CLASS="indexterm"
+NAME="ch13-idx-8644-0"
+></A
+>smart_job:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk:<A
+CLASS="indexterm"
+NAME="ch13-idx-8645-0"
+></A
+> job4.sql */*
+var jobno NUMBER
+BEGIN
+   /*
+   || Test the ability to modify next_date.
+   */
+   DBMS_JOB.SUBMIT
+      (:jobno
+      ,'smart_job(180,''RESTART'',next_date,broken,job);'
+      ,SYSDATE + 1/1440
+      ,'SYSDATE + 1');
+
+   COMMIT WORK;
+END;
+/
+print jobno
+
+BEGIN
+   /*
+   || Test the ability to autoremove
+   */
+   DBMS_JOB.SUBMIT
+      (:jobno
+      ,'smart_job(180,''NO_RESTART'',next_date,broken,job);'
+      ,SYSDATE + 1/1440
+      ,'SYSDATE + 1');
+
+   COMMIT WORK;
+END;
+/
+print jobno
+
+BEGIN
+   /*
+   || Test the ability to break itself.
+   */
+   DBMS_JOB.ISUBMIT
+      (99
+      ,'smart_job(180,''RESTART'',next_date,broken,job);'
+      ,SYSDATE + 1/1440
+      ,'SYSDATE + 1');
+
+   COMMIT WORK;
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>After executing the test script in SQL*Plus, the following jobs are in the queue:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; SELECT job,last_date,next_date,broken FROM user_jobs;
+
+
+JOB       LAST_DATE           NEXT_DATE           B
+--------- ------------------- ------------------- -
+      307                     1997:11:25:11:50:39 N
+      308                     1997:11:25:11:50:39 N
+       99                     1997:11:25:11:50:40 N</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>A few minutes later, the job queue looks like this:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; SELECT job,last_date,next_date,broken FROM user_jobs;
+
+JOB       LAST_DATE           NEXT_DATE           B
+--------- ------------------- ------------------- -
+      307 1997:11:25:11:50:42 1997:11:25:14:50:42 N
+       99 1997:11:25:11:50:42 1997:11:26:11:50:42 Y</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The tests worked! Job 308 ran once and was removed from the queue for having a NULL next_date. Job 307 ran and rescheduled itself three hours later, which is different from the interval specified in the call to DBMS_JOB.SUBMIT. Finally, job 99 set itself to broken status because its job number was less <A
+CLASS="indexterm"
+NAME="ch13-idx-8640-0"
+></A
+>than <A
+CLASS="indexterm"
+NAME="ch13-idx-8394-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch13-idx-8394-1"
+></A
+>100.</P
+><P
+CLASS="para"
+></P
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch13_03.htm"
+TITLE="13.3 Tips on Using DBMS_JOB"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 13.3 Tips on Using DBMS_JOB"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle Built-in Packages"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle Built-in Packages"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="part"
+HREF="part04.htm"
+TITLE="IV. Distributed Database Packages"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: IV. Distributed Database Packages"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>13.3 Tips on Using DBMS_JOB</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>IV. Distributed Database Packages</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

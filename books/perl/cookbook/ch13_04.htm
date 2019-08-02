@@ -1,0 +1,185 @@
+<html><head>
+<title>Recipe 13.3. Managing Instance Data</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:42:17Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch13_01.htm" title="13. Classes, Objects, and Ties"><link rel="prev" href="ch13_03.htm" title="13.2. Destroying an Object"><link rel="next" href="ch13_05.htm" title="13.4. Managing Class Data"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_03.htm" title="13.2. Destroying an Object"><img src="../gifs/txtpreva.gif" alt="Previous: 13.2. Destroying an Object" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch13_01.htm" title="13. Classes, Objects, and Ties">Chapter 13<br>Classes, Objects, and Ties</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_05.htm" title="13.4. Managing Class Data"><img src="../gifs/txtnexta.gif" alt="Next: 13.4. Managing Class Data" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch13-14105">13.3. Managing Instance Data</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-465">Problem<a class="indexterm" name="ch13-idx-1000004495-0"></A
+><a class="indexterm" name="ch13-idx-1000004495-1"></A
+><a class="indexterm" name="ch13-idx-1000004495-2"></A
+><a class="indexterm" name="ch13-idx-1000004495-3"></A
+></A
+></H3
+><p class="para">Each data attribute of an object, sometimes called data members or properties, needs its own method for access. How do you write these functions to manipulate the object's instance data?</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-471">Solution</A
+></H3
+><p class="para">Either write pairs of get and set methods that affect the appropriate key in the object hash, like this:</P
+><pre class="programlisting">sub get_name {
+    my $self = shift;
+    return $self-&gt;{NAME};
+} 
+
+sub set_name {
+    my $self      = shift;
+    $self-&gt;{NAME} = shift;
+} </PRE
+><p class="para">Or, make single methods that do both jobs depending on whether they're passed an argument:</P
+><pre class="programlisting">sub name {
+    my $self = shift;
+    if (@_) { $self-&gt;{NAME} = shift } 
+    return $self-&gt;{NAME};
+} </PRE
+><p class="para">Sometimes, it's useful to return the previous value when setting a new value:</P
+><pre class="programlisting">sub age {
+    my $self = shift;
+    my $prev = $self-&gt;{AGE};
+    if (@_) { $self-&gt;{AGE} = shift } 
+    return $prev;
+} 
+# sample call of get and set: happy birthday!
+$obj-&gt;age( 1 + $obj-&gt;age );</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-521">Discussion</A
+></H3
+><p class="para"><a class="indexterm" name="ch13-idx-1000004509-0"></A
+>Methods are how you implement the public interface to the object. A proper class doesn't encourage anyone to poke around inside its innards. Each data attribute should have a method to update it, retrieve it, or both. If a user writes code like this:</P
+><pre class="programlisting">$him = Person-&gt;<code class="literal">new()</CODE
+>;
+$him-&gt;{NAME} = &quot;Sylvester&quot;;
+$him-&gt;{AGE}  = 23;</PRE
+><p class="para">then they have violated the interface, so deserve whatever they get.</P
+><p class="para">For nominally private data elements, you may omit methods that access them.</P
+><p class="para">By mandating a strictly functional interface, you are free to alter your internal representation later without fear of breaking code. The functional interface allows you to run arbitrary range checks and take care of any data reformatting or conversion.</P
+><p class="para">Here's a fancy version of the <code class="literal">name</CODE
+> method that demonstrates this:</P
+><pre class="programlisting">use Carp;
+sub name {
+    my $self = shift;
+    return $self-&gt;{NAME} unless @_;
+    local $_ = shift;
+    croak &quot;too many arguments&quot; if @_;
+    if ($^W) {
+        /[^\s\w'-]/         &amp;&amp; carp &quot;funny characters in name&quot;;
+        /\d/                &amp;&amp; carp &quot;numbers in name&quot;;
+        /\S+(\s+\S+)+/      || carp &quot;prefer multiword name&quot;;
+        /\S/                || carp &quot;name is blank&quot;;
+    } 
+    s/(\w+)/\u\L$1/g;       # enforce capitalization
+    $self-&gt;{NAME} = $_;
+} </PRE
+><p class="para">If users, even other classes through inheritance, had been accessing the <code class="literal">&quot;NAME&quot;</CODE
+> field directly, you couldn't add this kind of code later. By insisting on only indirect, functional access to all data attributes, you keep your options open.</P
+><p class="para">If you're used to C++ objects, then you're accustomed to being able to get at an object's data members as simple variables from within a method. The Alias module from CPAN provides for this, as well as a good bit more, such as the possibility of private methods that the object can call but folks outside the class cannot.</P
+><p class="para">Here's an example of creating a Person using the <a class="indexterm" name="ch13-idx-1000006816-0"></A
+>Alias module. When you update these magical instance variables, you automatically update value fields in the hash. Convenient, eh?<a class="indexterm" name="ch13-idx-1000004985-0"></A
+><a class="indexterm" name="ch13-idx-1000004985-1"></A
+><a class="indexterm" name="ch13-idx-1000004985-2"></A
+><a class="indexterm" name="ch13-idx-1000004985-3"></A
+></P
+><pre class="programlisting">package Person;
+
+# this is the same as before...
+sub new {
+     my $that  = shift;
+     my $class = ref($that) || $that;
+     my $self = {
+           NAME  =&gt; undef,
+           AGE   =&gt; undef,
+           PEERS =&gt; [],
+    };
+    bless($self, $class);
+    return $self;
+}
+
+use Alias qw(attr);
+use vars qw($NAME $AGE @PEERS);
+
+sub name {
+    my $self = attr shift;
+    if (@_) { $NAME = shift; }
+    return    $NAME;
+};
+
+sub age {
+    my $self = attr shift;
+    if (@_) { $AGE = shift; }
+    return    $AGE;
+}
+
+sub peers {
+    my $self = attr shift;
+    if (@_) { @PEERS = @_; }
+    return    @PEERS;
+}
+
+sub exclaim {
+    my $self = attr shift;
+    return sprintf &quot;Hi, I'm %s, age %d, working with %s&quot;,
+            $NAME, $AGE, join(&quot;, &quot;, @PEERS);
+}
+
+sub happy_birthday {
+    my $self = attr shift;
+    return ++$AGE;
+}</PRE
+><p class="para">You need <code class="literal">use</CODE
+> <code class="literal">vars</CODE
+> because Alias plays with package globals by the same names as the fields. To use globals while <code class="literal">use</CODE
+> <code class="literal">strict</CODE
+> is in effect, you have to predeclare them. These variables are localized to the block enclosing the <code class="literal">attr(  )</CODE
+> call, just as though <code class="literal">local</CODE
+> were used on them. That means that they're still considered global package variables with temporary values.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-pgfId-573">See Also</A
+></H3
+><p class="para"><i class="filename">perltoot </I
+>(1), <i class="filename">perlobj </I
+>(1), and <i class="filename">perlbot </I
+>(1); <a class="olink" href="../prog/ch05_01.htm">Chapter 5</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; the documentation for the Alias module from CPAN; <a class="xref" href="ch13_12.htm" title="Generating Attribute Methods Using AUTOLOAD">Recipe 13.11</A
+>; <a class="xref" href="ch13_13.htm" title="Solving the Data Inheritance Problem">Recipe 13.12</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_03.htm" title="13.2. Destroying an Object"><img src="../gifs/txtpreva.gif" alt="Previous: 13.2. Destroying an Object" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_05.htm" title="13.4. Managing Class Data"><img src="../gifs/txtnexta.gif" alt="Next: 13.4. Managing Class Data" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">13.2. Destroying an Object</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">13.4. Managing Class Data</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

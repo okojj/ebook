@@ -1,0 +1,180 @@
+<html><head>
+<title>Recipe 17.5. Setting Up a UDP Server</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:31Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch17_01.htm" title="17. Sockets"><link rel="prev" href="ch17_05.htm" title="17.4. Setting Up a UDP Client"><link rel="next" href="ch17_07.htm" title="17.6. Using UNIX Domain Sockets"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_05.htm" title="17.4. Setting Up a UDP Client"><img src="../gifs/txtpreva.gif" alt="Previous: 17.4. Setting Up a UDP Client" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch17_01.htm" title="17. Sockets">Chapter 17<br>Sockets</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_07.htm" title="17.6. Using UNIX Domain Sockets"><img src="../gifs/txtnexta.gif" alt="Next: 17.6. Using UNIX Domain Sockets" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch17-26647">17.5. Setting Up a UDP Server</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-678">Problem<a class="indexterm" name="ch17-idx-1000004738-0"></A
+><a class="indexterm" name="ch17-idx-1000004738-1"></A
+><a class="indexterm" name="ch17-idx-1000004738-2"></A
+></A
+></H3
+><p class="para">You want to write a UDP server.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-684">Solution</A
+></H3
+><p class="para">First <code class="literal">bind</CODE
+> to the port the server is to be contacted on. With IO::Socket, this is easily accomplished:</P
+><pre class="programlisting">use IO::Socket;
+$server = IO::Socket::INET-&gt;new(LocalPort =&gt; $server_port,
+                                Proto     =&gt; &quot;udp&quot;)
+    or die &quot;Couldn't be a udp server on port $server_port : $@\n&quot;;</PRE
+><p class="para">Then, go into a loop receiving messages:</P
+><pre class="programlisting">while ($him = $server-&gt;recv($datagram, $MAX_TO_READ, $flags)) {
+    # do something
+} </PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-706">Discussion</A
+></H3
+><p class="para">Life with UDP is much simpler than life with TCP. Instead of accepting client connections one at a time and committing yourself to a long-term relationship, take messages from clients as they come in. The <code class="literal">recv</CODE
+> function returns the address of the sender, which you must then decode.</P
+><p class="para"><a class="xref" href="#ch17-37044" title="udpqotd">Example 17.2</A
+> is a small UDP-based server that just sits around waiting for messages. Every time a message comes in, we find out who sent it and send them a message based on the previous message, and then save the new message.</P
+><div class="example"><h4 class="example"><a class="title" name="ch17-37044">Example 17.2: udpqotd</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch17-idx-1000004742-0"></A
+>udpqotd - UDP message server
+use strict;
+use IO::Socket;
+my($sock, $oldmsg, $newmsg, $hisaddr, $hishost, $MAXLEN, $PORTNO);
+$MAXLEN = 1024;
+$PORTNO = 5151;
+$sock = IO::Socket::INET-&gt;new(LocalPort =&gt; $PORTNO, Proto =&gt; 'udp')
+    or die &quot;socket: $@&quot;;
+print &quot;Awaiting UDP messages on port $PORTNO\n&quot;;
+$oldmsg = &quot;This is the starting message.&quot;;
+while ($sock-&gt;recv($newmsg, $MAXLEN)) {
+    my($port, $ipaddr) = sockaddr_in($sock-&gt;peername);
+    $hishost = gethostbyaddr($ipaddr, AF_INET);
+    print &quot;Client $hishost said ``$newmsg''\n&quot;;
+    $sock-&gt;send($oldmsg);
+    $oldmsg = &quot;[$hishost] $newmsg&quot;;
+} 
+die &quot;recv: $!&quot;;</PRE
+></DIV
+><p class="para">This program is easier using IO::Socket than the raw Socket module. We don't have to say where to send the message because the library keeps track of who sent the last message and stores that information away on the <code class="literal">$sock</CODE
+> object. The <code class="literal">peername</CODE
+> method retrieves it for decoding.</P
+><p class="para">You can't use the <em class="emphasis">telnet</EM
+> program to talk to this server. You have to use a dedicated client. One is shown in <a class="xref" href="#ch17-13236" title="udpmsg">Example 17.3</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch17-13236">Example 17.3: udpmsg</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch17-idx-1000004743-0"></A
+>udpmsg - send a message to the udpquotd server
+
+use IO::Socket;
+use strict;
+
+my($sock, $server_host, $msg, $port, $ipaddr, $hishost, 
+   $MAXLEN, $PORTNO, $TIMEOUT);
+
+$MAXLEN  = 1024;
+$PORTNO  = 5151;
+$TIMEOUT = 5;
+
+$server_host = shift;
+$msg         = &quot;@ARGV&quot;;
+$sock = IO::Socket::INET-&gt;new(Proto     =&gt; 'udp',
+                              PeerPort  =&gt; $PORTNO,
+                              PeerAddr  =&gt; $server_host)
+    or die &quot;Creating socket: $!\n&quot;;
+$sock-&gt;send($msg) or die &quot;send: $!&quot;;
+
+eval {
+    local $SIG{ALRM} = sub { die &quot;alarm time out&quot; };
+    alarm $TIMEOUT;
+    $sock-&gt;recv($msg, $MAXLEN)      or die &quot;recv: $!&quot;;
+    alarm 0;
+    1;  # return value from eval on normalcy
+} or die &quot;recv from $server_host timed out after $TIMEOUT seconds.\n&quot;;
+
+($port, $ipaddr) = sockaddr_in($sock-&gt;peername);
+$hishost = gethostbyaddr($ipaddr, AF_INET);
+print &quot;Server $hishost responded ``$msg''\n&quot;;</PRE
+></DIV
+><p class="para">This time when we create the socket, we supply a peer host and port at the start, allowing us to omit that information in the <code class="literal">send</CODE
+>.</P
+><p class="para">We've added an <code class="literal">alarm</CODE
+> timeout in case the server isn't responsive, or maybe not even alive. Because <code class="literal">recv</CODE
+> is a blocking system call that may not return, we wrap it in the standard <code class="literal">eval</CODE
+> block construct for timing out a blocking operation.<a class="indexterm" name="ch17-idx-1000004745-0"></A
+><a class="indexterm" name="ch17-idx-1000004745-1"></A
+><a class="indexterm" name="ch17-idx-1000004745-2"></A
+><a class="indexterm" name="ch17-idx-1000004745-3"></A
+><a class="indexterm" name="ch17-idx-1000004745-4"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-824">See Also</A
+></H3
+><p class="para">The 
+<a class="olink" href="../prog/ch03_139.htm">&#13;<code class="literal">send</CODE
+></A
+>,
+
+<a class="olink" href="../prog/ch03_119.htm">&#13;<code class="literal">recv</CODE
+></A
+>,
+
+
+and 
+<a class="olink" href="../prog/ch03_005.htm">&#13;<code class="literal">alarm</CODE
+></A
+>
+ functions in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlfunc </I
+>(1); the documentation for the standard Socket and IO::Socket modules; the section on 
+<a class="olink" href="../prog/ch06_02.htm#PERL2-CH-6-SECT-2.4.3">&#13;"UDP: message passing"</A
+> in <a class="olink" href="../prog/ch06_01.htm">Chapter 6</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlipc </I
+>(1); <cite class="citetitle">Unix Network Programming</CITE
+>; <a class="xref" href="ch16_22.htm" title="Timing Out an Operation">Recipe 16.21</A
+>; <a class="xref" href="ch17_05.htm" title="Setting Up a UDP Client">Recipe 17.4</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_05.htm" title="17.4. Setting Up a UDP Client"><img src="../gifs/txtpreva.gif" alt="Previous: 17.4. Setting Up a UDP Client" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_07.htm" title="17.6. Using UNIX Domain Sockets"><img src="../gifs/txtnexta.gif" alt="Next: 17.6. Using UNIX Domain Sockets" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">17.4. Setting Up a UDP Client</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">17.6. Using UNIX Domain Sockets</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

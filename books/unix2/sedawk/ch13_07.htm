@@ -1,0 +1,151 @@
+<html><head><title>[Chapter 13] 13.7 gent&nbsp;- Get a termcap Entry</TITLE
+><meta name="DC.title" content="sed &amp; awk"><meta name="DC.creator" content="Dale Dougherty &amp; Arnold Robbins"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1998-08-03T21:05:43Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-225-5" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch13_01.htm" webstripperlinkwas="ch13_01.htm" title="13. A Miscellany of Scripts"><link rel="prev" href="ch13_06.htm" webstripperlinkwas="ch13_06.htm" title="13.6 readsource&nbsp;- Format Program Source Files for troff"><link rel="next" href="ch13_08.htm" webstripperlinkwas="ch13_08.htm" title="13.8 plpr&nbsp;- lpr Preprocessor"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" alt="sed &amp; awk" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/sedawk/index.htm" alt="sed &amp; awk"><area shape="RECT" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="jobjects/fsearch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch13_06.htm" webstripperlinkwas="ch13_06.htm" title="13.6 readsource&nbsp;- Format Program Source Files for troff"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous: 13.6 readsource&nbsp;- Format Program Source Files for troff" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 13<br>A Miscellany of Scripts</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch13_08.htm" webstripperlinkwas="ch13_08.htm" title="13.8 plpr&nbsp;- lpr Preprocessor"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next: 13.8 plpr&nbsp;- lpr Preprocessor" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="AUTOID-11495">13.7 gent&nbsp;- Get a termcap Entry</A
+></H2
+><p class="para"><em class="emphasis">Contributed by Tom Christiansen</EM
+></P
+><p class="para"><a class="indexterm" name="CH13.D"></A
+>Here's a sed script I use to extract a <b class="emphasis.bold">termcap</B
+> entry.  It works 
+for any <b class="emphasis.bold">termcap</B
+>-like file, such as disktab.  For example: </P
+><blockquote class="screen"><pre class="screen">$ <code class="userinput"><b>gent vt100</B
+></CODE
+></PRE
+></BLOCKQUOTE
+><p class="para">extracts the vt100 entry from termcap, while:</P
+><blockquote class="screen"><pre class="screen">$ <code class="userinput"><b>gent eagle /etc/disktab</B
+></CODE
+></PRE
+></BLOCKQUOTE
+><p class="para">gets the eagle entry from disktab.  Now I know it could have
+been done in C or Perl, but I did it a long time ago.  It's also
+interesting because of the way it passes options into the sed
+script.  I know, I know:  it should have been written in <em class="emphasis">sh</EM
+> not <em class="emphasis">csh</EM
+>, too.</P
+><blockquote class="screen"><pre class="screen">#!/bin/csh -f
+
+set argc = $#argv
+
+set noglob
+set dollar = '$'
+set squeeze = 0
+set noback=&quot;&quot; nospace=&quot;&quot;
+
+rescan:
+    if ( $argc &gt; 0 &amp;&amp; $argc &lt; 3 ) then
+        if ( &quot;$1&quot; =~ -* ) then
+            if ( &quot;-squeeze&quot; =~ $1* ) then
+                set noback='s/\\//g' nospace='s/^[  ]*//'
+                set squeeze = 1
+                shift
+                @ argc --
+                goto rescan 
+            else 
+                echo &quot;Bad switch: $1&quot;
+                goto usage
+            endif
+        endif
+
+        set entry = &quot;$1&quot;
+        if ( $argc == 1 ) then
+            set file = /etc/termcap
+        else
+            set file = &quot;$2&quot;
+        endif
+    else
+        usage:
+            echo &quot;usage: `basename $0` [-squeeze] entry [termcapfile]&quot;
+            exit 1
+    endif
+
+
+sed -n -e \
+&quot;/^${entry}[|:]/ {\
+    :x\
+    /\\${dollar}/ {\
+    ${noback}\
+    ${nospace}\
+    p\
+    n\
+    bx\
+    }\
+    ${nospace}\
+    p\
+    n\
+    /^  / {\
+        bx\
+    }\
+    }\
+/^[^    ]*|${entry}[|:]/ {\
+    :y\
+    /\\${dollar}/ {\
+    ${noback}\
+    ${nospace}\
+    p\
+    n\
+    by\
+    }\
+    ${nospace}\
+    p\
+    n\
+    /^  / {\
+        by\
+    }\
+    }&quot; &lt; $file</PRE
+></BLOCKQUOTE
+><div class="sect2"><h3 class="sect2"><a class="title" name="SEDAWK-CH-13-SECT-0.0.0.7">13.7.1 Program Notes for gent</A
+></H3
+><p class="para">Once you get used to reading awk scripts, they seem so much easier
+to understand than all but the simplest sed script.  It can
+be a painstaking task to figure out what a small sed script
+like the one shown here is doing.</P
+><p class="para">This script does show how to pass shell variables into a sed
+script.  Variables are used to pass optional sed commands into
+the script, such as the substitution commands that replace
+backslashes and spaces.</P
+><p class="para">This script could be simplified in several ways.
+First of all, the two regular expressions don't seem
+necessary to match the entry.  The first matches the
+name of the entry at the beginning of a line; the second
+matches it elsewhere on the line.  
+The loops labeled <b class="emphasis.bold">x</B
+> and <b class="emphasis.bold">y</B
+>
+are identical and even if the two regular expressions were
+necessary, we could have them branch to the same loop. </P
+></DIV
+><a class="indexterm" name="AUTOID-11520"></A
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch13_06.htm" webstripperlinkwas="ch13_06.htm" title="13.6 readsource&nbsp;- Format Program Source Files for troff"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous: 13.6 readsource&nbsp;- Format Program Source Files for troff" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/sedawk/index.htm" title="sed &amp; awk"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="sed &amp; awk" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch13_08.htm" webstripperlinkwas="ch13_08.htm" title="13.8 plpr&nbsp;- lpr Preprocessor"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next: 13.8 plpr&nbsp;- lpr Preprocessor" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">13.6 readsource&nbsp;- Format Program Source Files for troff</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" webstripperlinkwas="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">13.8 plpr&nbsp;- lpr Preprocessor</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#map" border="0" alt="The UNIX CD Bookshelf Navigation"><map name="map"><area shape="RECT" coords="0,0,73,21" href="../index.html" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/index.html" alt="The UNIX CD Bookshelf"><area shape="RECT" coords="74,0,163,21" href="../upt/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/upt/index.htm" alt="UNIX Power Tools"><area shape="RECT" coords="164,0,257,21" href="../unixnut/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/unixnut/index.htm" alt="UNIX in a Nutshell"><area shape="RECT" coords="258,0,321,21" href="../vi/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/vi/index.htm" alt="Learning the vi Editor"><area shape="RECT" coords="322,0,378,21" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/sedawk/index.htm" alt="sed &amp; awk"><area shape="RECT" coords="379,0,438,21" href="../ksh/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/ksh/index.htm" alt="Learning the Korn Shell"><area shape="RECT" coords="439,0,514,21" href="../lrnunix/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/lrnunix/index.htm" alt="Learning the UNIX Operating System"></MAP
+></DIV
+></BODY
+></HTML
+>

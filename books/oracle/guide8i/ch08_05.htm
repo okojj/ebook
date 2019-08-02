@@ -1,0 +1,876 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 8] 8.5 A Complete FGAC Example</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T19:27:00Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates CDROM-1-56592-675-7E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-675-7E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle 8i Features"><META
+NAME="DC.Title"
+CONTENT="Oracle PL/SQL Programming Guide to Oracle 8i Features"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch08_01.htm"
+TITLE="8. Deploying Fine-Grained Access Control"><LINK
+REL="prev"
+HREF="ch08_04.htm"
+TITLE="8.4 SYS_CONTEXT and LIST_CONTEXT: Obtaining Context Information"><LINK
+REL="next"
+HREF="ch09_01.htm"
+TITLE="9. Calling Java from PL/SQL"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch08_04.htm"
+TITLE="8.4 SYS_CONTEXT and LIST_CONTEXT: Obtaining Context Information"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 8.4 SYS_CONTEXT and LIST_CONTEXT: Obtaining Context Information"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch08_01.htm"
+TITLE="8. Deploying Fine-Grained Access Control"
+>Chapter 8<BR>Deploying Fine-Grained Access Control</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch09_01.htm"
+TITLE="9. Calling Java from PL/SQL"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 9. Calling Java from PL/SQL"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch08-49125"
+>8.5 A Complete FGAC Example</A
+></H2
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch-08-ex"
+></A
+>To illustrate the steps you would follow to take advantage of fine-grained access control, I am going to share with you one of my dearest dreams. The year is 2010. A massive, popular uprising has forced the establishment of a national health care system. No more for-profit hospitals pulling billions of dollars out of the system; no more private insurance companies soaking up 30 cents on the dollar; all children are vaccinated; all pregnant women receive excellent prenatal care.</P
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-5512"
+></A
+>Of course, we need an excellent database to back up this system. Here are four of the many tables in that database (see <I
+CLASS="filename"
+>fgac.sql</I
+> on the companion disk for all the DDL statements and subsequent commands in this example section):</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: fgac.sql */
+CREATE TABLE patient  (   
+   patient_id NUMBER,   
+   schema_name VARCHAR2(30),   
+   last_name VARCHAR2(100),   
+   first_name VARCHAR2(100),   
+   dob DATE,
+   home_clinic_id INTEGER,
+   state CHAR(2)
+   ); 
+
+CREATE TABLE clinic (  
+   clinic_id INTEGER,  
+   name VARCHAR2(100),  
+   state CHAR(2)  
+  );  
+
+CREATE TABLE doctor (  
+   doctor_id NUMBER,  
+   schema_name VARCHAR2(30),  
+   last_name VARCHAR2(100), 
+   first_name VARCHAR2(100), 
+   home_clinic_id INTEGER 
+   );  
+
+CREATE TABLE regulator (
+   regulator_id NUMBER,
+   schema_name VARCHAR2(30),
+   last_name VARCHAR2(100),
+   first_name VARCHAR2(100),
+   state CHAR(2)
+   );   </PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>We also insist on privacy. So here are the following rules that I am going to enforce with FGAC:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Doctors can see only those patients who are assigned to their clinic.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Regulators can see only those patients who reside in the same state. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Patients can see only information about themselves.</P
+></LI
+></UL
+><P
+CLASS="para"
+>Sure, I can create views to build in some or all of these types of security rules. But I will instead use FGAC to accomplish the same objective at a more fundamental and comprehensive level. For example, with FGAC in place, any doctor can issue this query:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT * FROM patient;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>and only see her patients at the clinic. Regulators (whose job it is to make sure that patients receive top-notch care) can see all of (and only) <EM
+CLASS="emphasis"
+>their</EM
+> clients with the same query:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+> SELECT * FROM patient;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>And if a patient issues an unqualified query against the patient table, she will see only her row. "Same" query, different results, processed transparently with FGAC.</P
+><P
+CLASS="para"
+>Here are the steps I will take to get this job done:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Create all of the data structures and data in a central schema (SCOTT in the demonstration). </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Create separate schemas for each of the doctors, regulators, and patients.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Create an application context for SCOTT that associates the named context with a package. This package will contain all the logic rules I need to enforce patient privacy.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Create the package, which will be called nhc_pkg (National Health Care package). Make it publicly available (owned by SCOTT). The package allows me to define a predicate for the patient table, but also to set and verify the context information for any schema.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Define an FGAC policy through DBMS_RLS that associates the patient table with the predicate-generating function.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Create a database trigger on the system LOGON event so that every time a user connects to the database, her context will be set, guaranteeing privacy.</P
+></LI
+></OL
+><P
+CLASS="para"
+>Once all these pieces are in place, I can test my newly secured environment. All of these steps are contained in the <I
+CLASS="filename"
+>fgac.sql</I
+> script. In the following sections, I'll focus on the context-specific elements (as opposed to the CREATE TABLE statements and so on).<A
+CLASS="indexterm"
+NAME="AUTOID-5546"
+></A
+></P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch08-SECT-5.1"
+>8.5.1 Creating the Security Package</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-5550"
+></A
+>I decided to create one package that would contain all of the programs I need to set and manage my context attributes and generate the security predicates. Here is the National Health Care package specification:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: fgac.sql */
+CREATE OR REPLACE PACKAGE nhc_pkg 
+IS
+   c_context CONSTANT VARCHAR2(30) := 'patient_restriction';
+   c_person_type_attr CONSTANT VARCHAR2(30) := 'person_type';
+   c_person_id_attr CONSTANT VARCHAR2(30) := 'person_id';
+   c_patient CONSTANT CHAR(7) := 'PATIENT';
+   c_doctor CONSTANT CHAR(6) := 'DOCTOR';
+   c_regulator CONSTANT CHAR(9) := 'REGULATOR';
+   
+   PROCEDURE show_context;
+
+   PROCEDURE set_context;
+
+   FUNCTION person_predicate (
+      schema_in VARCHAR2, 
+      name_in VARCHAR2)
+   RETURN VARCHAR2; 
+END nhc_pkg;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The show_context procedure comes in handy when I want to verify the context information in a session. Here is the body of this program:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE show_context
+IS
+BEGIN
+   DBMS_OUTPUT.PUT_LINE ('Type: ' || 
+      SYS_CONTEXT (c_context, c_person_type_attr));
+   DBMS_OUTPUT.PUT_LINE ('  ID: ' || 
+      SYS_CONTEXT (c_context, c_person_id_attr));
+   DBMS_OUTPUT.PUT_LINE ('Predicate: ' ||
+      person_predicate (USER, 'PATIENT'));
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Here is the output from this procedure when run, for example, from the schema of Sandra Wallace, a doctor (see the <I
+CLASS="filename"
+>fgac.sql</I
+> INSERT statements to verify this data): </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>Type: DOCTOR
+  ID: 1060
+Predicate:
+home_clinic_id IN
+   (SELECT home_clinic_id FROM doctor
+     WHERE doctor_id = SYS_CONTEXT (
+       'patient_restriction', 'person_id'))</PRE
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch08-SECT-5.2"
+>8.5.2 Setting the Context for the Schema</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-5562"
+></A
+>The nhc_pkg.set_context procedure sets the context based on the type of person the current schema represents: patient, doctor, or regulator (you can only be one in my simplified system). I set up two explicit cursors:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE set_context
+IS
+   CURSOR doc_cur IS
+      SELECT doctor_id FROM doctor
+       WHERE schema_name = USER;
+
+   CURSOR reg_cur IS
+      SELECT regulator_id FROM regulator
+       WHERE schema_name = USER;
+       
+   l_person_type VARCHAR2(10) := c_patient;
+   l_person_id INTEGER;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>along with a local module to set the context of both of my attributes:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>   PROCEDURE set_both (
+      persType IN VARCHAR2, persID IN VARCHAR2)
+   IS BEGIN
+      DBMS_SESSION.SET_CONTEXT (
+         c_context, c_person_type_attr, persType);
+      DBMS_SESSION.SET_CONTEXT (
+         c_context, c_person_id_attr, persID);
+   END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The executable section then sets the attributes for a doctor, regulator, or patient, depending on the schema name:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>BEGIN
+   OPEN doc_cur; FETCH doc_cur INTO l_person_id;
+   IF doc_cur%FOUND
+   THEN
+      l_person_type := c_doctor;
+   ELSE
+      OPEN reg_cur; FETCH reg_cur INTO l_person_id;
+      IF reg_cur%FOUND
+      THEN
+         l_person_type := c_regulator;
+      END IF;
+      CLOSE reg_cur;
+   END IF;
+   set_both (l_person_type, l_person_id);
+   CLOSE doc_cur;
+END;</PRE
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch08-SECT-5.3"
+>8.5.3 Defining the Predicate</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch-08-defpred"
+></A
+>The main purpose of the National Health Care package is to generate the predicate that will be attached to any query against the patient table. This action is performed by the person_predicate function:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION person_predicate (
+   schema_in VARCHAR2, 
+   name_in VARCHAR2)
+   RETURN VARCHAR2 </PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>As you will see later in this function's implementation, the schema_in and name_in parameters are not used at all. I still <EM
+CLASS="emphasis"
+>must</EM
+> include these parameters in the parameter list if it is to be callable by the FGAC mechanism. Now, in the declaration section, I obtain the value for the person type attribute (doctor, regulator, or patient):</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>IS
+    l_context VARCHAR2(100) := 
+        SYS_CONTEXT (c_context, c_person_type_attr);
+    retval VARCHAR2(2000);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This value is set by a call to nhc_pkg.set_context that is made whenever a person connects to the database instance (explained in the next section). Once I have this value, I can create the appropriate predicate. For a doctor, I use the following:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>BEGIN
+   IF l_context = 'DOCTOR' 
+   THEN
+      retval := 
+         'home_clinic_id IN 
+            (SELECT home_clinic_id FROM doctor 
+              WHERE doctor_id = SYS_CONTEXT (''' ||
+                 c_context || ''', ''' || c_person_id_attr || '''))';</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In other words, the doctor can only see patients whose clinic ID matches that of the doctor. Notice I call SYS_CONTEXT directly within the predicate (at runtime, not during the execution of this function) to obtain the doctor's ID number. I construct a very similar predicate for a regulator:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>   ELSIF l_context = 'REGULATOR'
+   THEN
+      retval := 
+         'state IN 
+            (SELECT state FROM regulator 
+              WHERE regulator_id = SYS_CONTEXT (''' ||
+                 c_context || ''', ''' || c_person_id_attr || '''))';</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>If the user is a patient, then the predicate is much simpler: she can only see information about herself, so I force a match on the schema_name column:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>   ELSIF l_context = 'PATIENT'
+   THEN
+      retval := 'schema_name = ''' || USER || '''';</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Finally, if the person type attribute is not set to one of the values just discussed, I've identified someone outside of the health care system entirely, so I refuse access to <EM
+CLASS="emphasis"
+>any</EM
+> patient information:<A
+CLASS="indexterm"
+NAME="AUTOID-5588"
+></A
+></P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>   ELSE 
+      /* Refuse any access to information. */
+      retval := 'person_id IS NULL';
+   END IF;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>and then return the predicate:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>   RETURN retval;
+END person_predicate; </PRE
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch08-SECT-5.4"
+>8.5.4 Defining the Policy </A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-5595"
+></A
+>I still need to register the security policy (that is, the predicate to be attached to the patient table). To do this, I call DBMS_RLS.ADD_POLICY as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>BEGIN
+   DBMS_RLS.ADD_POLICY (
+      'SCOTT',
+      'patient',
+      'patient_privacy',
+      'SCOTT',
+      'nhc_pkg.person_predicate',
+      'SELECT,UPDATE,DELETE');
+END;
+/   </PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This program call specifies that whenever a SELECT, UPDATE, or DELETE on the SCOTT.patient table is executed, the SCOTT.nhc_pkg.person_predicate function is to be called to generate a predicate that will be added to the WHERE clause of the statement.</P
+><P
+CLASS="para"
+>I could define a different security policy for the different SQL statements, but in this case, the same predicate would be applied to each.</P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch08-SECT-5.5"
+>8.5.5 Setting Up the LOGON Trigger</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch-08-LTSU"
+></A
+>Now all the pieces are in place. To get things rolling, however, I need to create a trigger that will execute whenever anyone logs in to the database.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CONNECT sys/sys
+
+/* Create a LOGON trigger that automatically sets
+   the NHC privacy attributes. */
+CREATE OR REPLACE TRIGGER set_id_on_logon
+AFTER logon ON DATABASE
+BEGIN
+   nhc_pkg.set_context;
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>With this trigger, I guarantee that no one can have unrestricted access to the patient data. Let's give it a try. I connect as Suni Maximo, a regulator:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CONNECT smaximo/smaximo</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I'll show the context information before I try to get patient information:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec nhc_pkg.show_context
+Type: REGULATOR
+  ID: 542
+Predicate:
+state IN
+   (SELECT state FROM regulator
+     WHERE regulator_id = SYS_CONTEXT (
+        'patient_restriction', 'person_id'))</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Let's confirm the state in which Suni Maximo is supposed to regulate health care activity:<A
+CLASS="indexterm"
+NAME="AUTOID-5613"
+></A
+></P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; SELECT last_name, state FROM regulator;
+LAST_NAME            ST
+-------------------- --
+Halloway             IL
+Maximo               NY</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>When I run a query against the patient table in this schema, we see that the predicate has been appended properly:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; SELECT last_name, state FROM patient;
+LAST_NAME            ST
+-------------------- --
+Walsh                NY
+DeUrso               NY</PRE
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch08-SECT-5.6"
+>8.5.6 Debugging FGAC Code</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch-08-debbing"
+></A
+>Getting this code to work can be tricky; there are lots of interdependencies and, of course, the very nature of the feature is that it automatically appends predicates to your SELECT statement. How do you watch <EM
+CLASS="emphasis"
+>that</EM
+> to see if it is working correctly? </P
+><P
+CLASS="para"
+>Here are descriptions of some of the errors I encountered and what I did to fix the code:</P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>I created a trigger on the LOGON system event to automatically set various context attributes. In the early stages of testing, my package was failing&nbsp;-- and as a result, I could not connect to any of my test schemas! I would simply get this error:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; CONNECT csilva/csilva
+ERROR:
+ORA-04098: trigger 'SET_ID_ON_LOGON' is invalid 
+           and failed re-validation
+
+Warning: You are no longer connected to ORACLE.</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>What's a fella to do? What I have to do is drop the trigger so that I can recreate the package and solve my problem. So I did it this way:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CONNECT INTERNAL/oracle
+DROP TRIGGER set_id_on_logon;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>and then I could get on with my test.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>If there is any kind of error in your function, you will see this error when you try to execute a query that includes the predicate:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT * FROM patient
+              *
+ERROR at line 1:
+ORA-28113: policy predicate has error</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This is, obviously, a very generic error message. How do you figure out what went wrong and then fix it? The best thing to do at this point is execute the function <EM
+CLASS="emphasis"
+>outside</EM
+> the query to verify its contents. You will also want to display the various system context values. I created the nhc_pkg.show_context procedure for just this purpose.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Your predicate function must take two string arguments for schema and object names, even if you do not use them. Otherwise, you get this error:<A
+CLASS="indexterm"
+NAME="AUTOID-5639"
+></A
+></P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>ORA-28112: failed to execute policy function</PRE
+></BLOCKQUOTE
+></LI
+></UL
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch08_04.htm"
+TITLE="8.4 SYS_CONTEXT and LIST_CONTEXT: Obtaining Context Information"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 8.4 SYS_CONTEXT and LIST_CONTEXT: Obtaining Context Information"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch09_01.htm"
+TITLE="9. Calling Java from PL/SQL"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 9. Calling Java from PL/SQL"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>8.4 SYS_CONTEXT and LIST_CONTEXT: Obtaining Context Information</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>9. Calling Java from PL/SQL</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

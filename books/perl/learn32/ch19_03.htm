@@ -1,0 +1,242 @@
+<html><head>
+<title>[Chapter 19] 19.3 Using Automation Objects</TITLE>
+<meta name="DC.title" content="Learning Perl on Win32 Systems"><meta name="DC.creator" content="Randal L. Schwartz, Erik Olson &amp; Tom Christiansen"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:37:16Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-324-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch19_01.htm" title="19. OLE Automation"><link rel="prev" href="ch19_02.htm" title="19.2 Creating Automation Objects"><link rel="next" href="ch19_04.htm" title="19.4 Variants"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Learning Perl on Win32 Systems" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Learning Perl on Win32 Systems"><area shape="RECT" coords="467,0,514,18" href="../search/wsrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch19_02.htm" title="19.2 Creating Automation Objects"><img src="../gifs/txtpreva.gif" alt="Previous: 19.2 Creating Automation Objects" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch19_01.htm" title="19. OLE Automation">Chapter 19<br>OLE Automation</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch19_04.htm" title="19.4 Variants"><img src="../gifs/txtnexta.gif" alt="Next: 19.4 Variants" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch19-35373">19.3 Using Automation Objects</A
+></H2
+><p class="para">In this section, we're going to explore automation objects by building a simple progam that sends a message using Microsoft's <em class="emphasis">Active Messaging Library</EM
+><a class="indexterm" name="ch19-idx-87489-0"></A
+>. If you don't have Active Messaging (if you have <a class="indexterm" name="ch19-idx-87490-0"></A
+>MAPI, you probably have it) on your system, you can still follow the concepts, which are generally applicable to using automation. Remember, though, that the specific methods, properties, and objects that a server exposes are specific to that server. To learn more about Active Messaging, try the Microsoft MSDN[<a class="footnote" href="#ch19-pgfId-87508">2</A
+>] web site at <a class="systemitem.url" href="http://www.microsoft.com/msdn/sdk/">www.microsoft.com/msdn/sdk/</A
+> and look for the for Active Messaging Library documentation. The Active Message Library is a complex API that provides complete services for messaging, message stores, providers, transports, and more; but we're just going to touch on the basics of sending a message here.</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch19-pgfId-87508">[2]</A
+> Microsort Developer Network&nbsp;- you might also have it on CD, if you're a Win32 programmer and subscribe to MSDN.</P
+></DIV
+></BLOCKQUOTE
+><p class="para">The first thing we need to do is to create a Active Messaging session. This happens to be the top-level automation object for our purposes, so we'll start here with <code class="literal">CreateObject</CODE
+><a class="indexterm" name="ch19-idx-87492-0"></A
+>:</P
+><pre class="programlisting">use OLE;
+$ActiveSession = CreateObject OLE &quot;MAPI.Session&quot; || 
+        die &quot;CreateObject: $!&quot;;</PRE
+><p class="para">The <a class="indexterm" name="ch19-idx-87491-0"></A
+>ProgID for the Active Messaging Session object is MAPI.Session, so that's the argument that we give to <code class="literal">CreateObject</CODE
+>. After we have an Active Messaging session, we need to logon. Active Messaging provides a couple of options for doing this. If you don't supply a valid username/password combination, you'll get a logon dialog that lets you supply a user and password:</P
+><pre class="programlisting">$LogonName = &quot;Erik Olson&quot;;
+$LogonPasswd = undef; # use stored one, or prompt
+die &quot;Logon: $!&quot; if $ActiveSession-&gt;Logon($LogonName, 
+        $LogonPasswd); # Logon returns 0 on success</PRE
+><p class="para">Here, we're calling the <code class="literal">Logon</CODE
+> method of the Active Messaging Session object. Because <code class="literal">Logon</CODE
+> returns 0 on success, we are only dying if we get a return value (indicating an error code). If we successfully logon to the Active Messsaging session, we're ready to create a Message object. A message object is another automation object that (appropriately enough) encapsulates a message. For example:</P
+><pre class="programlisting">$Message = $ActiveSession-&gt;Outbox-&gt;Messages-&gt;Add();</PRE
+><p class="para">Now, things are starting to get interesting. We're using the $ActiveSession object to call a method named <code class="literal">Outbox</CODE
+> that returns an automation object (the Outbox object). We're then calling a method of the Outbox object called <code class="literal">Messages</CODE
+> that returns another automation object (the Message object). We're then calling a method of the Message object named <code class="literal">Add</CODE
+> that returns yet another automation object, which we're assiging to our <code class="literal">$Message</CODE
+> variable. Perl lets you merrily create as many nested automation objects as you need.</P
+><p class="para">Now that we have a Message object, we can start doing things with the message. First, we need to add a recipient. This involves another nested automation-object call:</P
+><pre class="programlisting">$Recipient = $Message-&gt;Recipients-&gt;Add();</PRE
+><p class="para">Here we're calling the Recipients method of the message object that returns a recipients object. We then call the Add method of the recipients object to get a Recipient object that we can use. Let's set some properties of the recipient object:</P
+><pre class="programlisting">$Recipient-&gt;{Name} = &quot;Erik Olson&quot;; # to address
+$Recipient-&gt;{Type} = 1; # ugly constant, means this is a To address</PRE
+><p class="para">We've set the <code class="literal">Name</CODE
+> property of the Recipient object by setting the property using the object's hash. As for that assignment to the <code class="literal">Type</CODE
+> property, we've set it to 1, which is the Active Messaging value for a TO recipient (as opposed to a CC or BCC recipient). <a class="xref" href="#ch19-14658" title="Recipient Type Values">Table 19.1</A
+> displays the values for the recipient types.</P
+><br><table class="table" border="1" cellpadding="3"><caption class="table"><a class="title" name="ch19-14658">Table 19.1: Recipient Type Values</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Recipient Type</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Value</P
+></TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para"><code class="literal">MAPI_ORIG</CODE
+> (recipient is message originator)</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">0</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para"><code class="literal">MAPI_TO</CODE
+> (recipient is a primary recipient)</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">1</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para"><code class="literal">MAPI_CC</CODE
+> (recipient is a copy recipient)</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">2</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para"><code class="literal">MAPI_BCC</CODE
+> (recipient is a blind copy recipient)</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">3</P
+></TD
+></TR
+></TBODY
+></TABLE
+><p class="para">After setting the recipient information, we need to resolve it to a name in the Active Messaging address book. We do this by calling the Resolve member of the Recipient object:</P
+><pre class="programlisting">$Recipient-&gt;Resolve();</PRE
+><p class="para">Now that we know where our message is going, let's add some data to it. We need at least a subject and a body, both of which are properties of the Message object.</P
+><pre class="programlisting">$Message-&gt;{Subject} = &quot;A Message From Perl&quot;;
+$Message-&gt;{text} = &quot;Perl does automation!&quot;;</PRE
+><p class="para">All that remains is to save the message, send it, and terminate our session:</P
+><pre class="programlisting">$Message-&gt;Update();
+$Message-&gt;Send(1, 0, 0);
+$Message-&gt;Logoff();</PRE
+><p class="para">We call the <code class="literal">Update</CODE
+> method of the message object to save it, then the <code class="literal">Send</CODE
+> method to actually send the message. The parameters to <code class="literal">Send</CODE
+> are shown in <a class="xref" href="#ch19-42139" title="Send Parameters">Table 19.2</A
+>.</P
+><br><table class="table" border="1" cellpadding="3"><caption class="table"><a class="title" name="ch19-42139">Table 19.2: Send Parameters</A
+></CAPTION
+><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Parameter</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Meaning</P
+></TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para"><code class="literal">saveCopy</CODE
+></P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Save a copy of the message in the Sent-Items folder (one or zero)</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para"><code class="literal">showDialog</CODE
+></P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Display a send-message dialog where the user can change the message contents or recipients (1 or 0)</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para"><code class="literal">parentWindow</CODE
+></P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">Parent-window handle for the dialog, if <code class="literal">showDialog</CODE
+> is true;  in Perl, you'll normally be passing this as 0</P
+></TD
+></TR
+></TBODY
+></TABLE
+><p class="para">Let's put everything together:</P
+><pre class="programlisting">use OLE;
+$LogonName = &quot;Erik Olson&quot;;         # send message to me
+$LogonPasswd = undef;              # use stored passwd
+$ActiveSession = CreateObject OLE &quot;MAPI.Session&quot; || 
+        die &quot;CreateObject: $!&quot;;    # create session
+die &quot;Logon: $!&quot; if $ActiveSession-&gt;Logon($LogonName, 
+        $LogonPasswd);             # logon (returns 0 on success)
+$Message = $ActiveSession-&gt;Outbox-&gt;Messages-&gt;Add();
+$Recipient = $Message-&gt;Recipients-&gt;Add();
+$Recipient-&gt;{Name} = &quot;Erik Olson&quot;; # to address
+                            # ugly constant, means this is a To address
+$Recipient-&gt;{Type} = 1; 
+$Recipient-&gt;Resolve();             # resolve name - hope it's there
+$Message-&gt;{Subject} = &quot;A Message From Perl&quot;;
+$Message-&gt;{text} = &quot;Perl does automation!&quot;;
+$Message-&gt;Update();                # save it
+$Message-&gt;Send(1, 0, 0);           # send it - don't show UI
+$ActiveSession-&gt;Logoff();          # end session</PRE
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch19-pgfId-87761">19.3.1 Data-Access Objects</A
+></H3
+><p class="para">If you are a Perl programmer looking for a database solution, you owe it to yourself to check out Microsoft's <em class="emphasis">ActiveX Data Objects</EM
+><a class="indexterm" name="ch19-idx-87763-0"></A
+> (ADO), which provide an automation interface to database access. ADO is a powerful data-access layer that you can use from Perl, PerlIS, or PerlScript. This layer is particularly interesting in conjunction with Active Server pages and PerlScript. See <a class="systemitem.url" href="http://www.microsoft.com/ADO/">www.microsoft.com/ADO/</A
+> for more information on ADO. The ActiveState site (<a class="systemitem.url" href="http://www.activestate.com">www.activestate.com</A
+>) has several samples using PerlScript and ADO for database access.</P
+><p class="para">Just to tempt you, here's a quick example that uses the sample database shipped with the <a class="indexterm" name="ch19-idx-87833-0"></A
+>OLEDB SDK (OLE Database Software Development Kit), with which ADO is included. For more information on the OLEDB SDK, see <a class="systemitem.url" href="http://www.microsoft.com/oledb">www.microsoft.com/oledb</A
+>. The sample database contains a table called <em class="emphasis">Employees</EM
+>, which includes the fields <em class="emphasis">LastName</EM
+>, <em class="emphasis">FirstName</EM
+>, and <em class="emphasis">EmployeeID</EM
+>. The following program just opens the data source (you have to have an ODBC driver installed for Microsoft Access database files) and lists all the rows in the <em class="emphasis">Employees</EM
+> table. Regardless of which data source you choose to use ADO with, you'll find the procedure to be similiar.</P
+><pre class="programlisting">use OLE;
+$conn = CreateObject OLE &quot;ADODB.Connection&quot; || 
+        die &quot;CreateObject: $!&quot;;    # create ADO auto object
+$conn-&gt;Open('OLE_DB_NWind_Jet');   # connect to data source
+$sql = &quot;SELECT * FROM Employees ORDER BY LastName, FirstName&quot;;
+$rs = $conn-&gt;Execute($sql);        # grab all records in table
+while(!$rs-&gt;EOF()) {
+    $lastname = $rs-&gt;Fields('LastName')-&gt;Value;
+    $firstname = $rs-&gt;Fields('FirstName')-&gt;Value;
+    $empid = $rs-&gt;Fields('EmployeeId')-&gt;Value;
+    write;                         # print them out
+    $rs-&gt;MoveNext();
+}
+
+$rs-&gt;Close();                      # shut down the recordset
+$conn-&gt;Close();                    # close the data source
+# some formats for a quick printout
+format STDOUT =
+@&lt;&lt;&lt;&lt;&lt;      @&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;   @&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;
+$empid,     $firstname,            $lastname
+.
+format STDOUT_TOP =
+Page @&lt;&lt;
+$%
+ID          First                  Last
+=====       ====================   =========================
+.</PRE
+><p class="para">Our first task is to create the automation object using the now familiar <code class="literal">CreateObject</CODE
+> function. We then use the ADO Connection object to execute a SQL statement. The Execute function returns a Recordset object, which we then use to iterate through all the rows, printing out the data.</P
+><p class="para">Here's another quick program that inserts an employee into the <em class="emphasis">Employees</EM
+> table:</P
+><pre class="programlisting">use OLE;
+$firstname = &quot;Homer&quot;;             # hardcode some values to insert
+$lastname = &quot;Simpson&quot;;
+$empid = &quot;3001&quot;;
+$conn = CreateObject OLE &quot;ADODB.Connection&quot; || 
+        die &quot;CreateObject: $!&quot;;   # create the ADO object
+$conn-&gt;Open('OLE_DB_NWind_Jet');  # connect to the data source
+# build a simple SQL INSERT
+$sql = &quot;INSERT into Employees (LastName, FirstName, EmployeeID)&quot;;
+$sql .= &quot;VALUES ('$lastname', '$firstname', '$empid')&quot;;
+$conn-&gt;Execute($sql);             # run it
+$conn-&gt;Close();</PRE
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch19_02.htm" title="19.2 Creating Automation Objects"><img src="../gifs/txtpreva.gif" alt="Previous: 19.2 Creating Automation Objects" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Learning Perl on Win32 Systems"><img src="../gifs/txthome.gif" alt="Learning Perl on Win32 Systems" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch19_04.htm" title="19.4 Variants"><img src="../gifs/txtnexta.gif" alt="Next: 19.4 Variants" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">19.2 Creating Automation Objects</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">19.4 Variants</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

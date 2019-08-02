@@ -1,0 +1,401 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 3] 3.4 Combining the Definer and Invoker Rights Models</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T19:25:12Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates CDROM-1-56592-675-7E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-675-7E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle 8i Features"><META
+NAME="DC.Title"
+CONTENT="Oracle PL/SQL Programming Guide to Oracle 8i Features"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch03_01.htm"
+TITLE="3. Invoker Rights: Your Schema or Mine? "><LINK
+REL="prev"
+HREF="ch03_03.htm"
+TITLE="3.3 One Program, Multiple Schemas"><LINK
+REL="next"
+HREF="ch04_01.htm"
+TITLE="4. Native Dynamic SQL in Oracle8i"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch03_03.htm"
+TITLE="3.3 One Program, Multiple Schemas"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 3.3 One Program, Multiple Schemas"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch03_01.htm"
+TITLE="3. Invoker Rights: Your Schema or Mine? "
+>Chapter 3<BR>Invoker Rights: Your Schema or Mine? </A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch04_01.htm"
+TITLE="4. Native Dynamic SQL in Oracle8i"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 4. Native Dynamic SQL in Oracle8i"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch03-66666"
+>3.4 Combining the Definer and Invoker Rights Models</A
+></H2
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch-03-cdrmodel"
+></A
+>Invoker rights programs allow central code to reflect back to the calling schema. Definer rights programs allow remote schemas to access local data (i.e., data in the same schema as the program). Many applications require a combination of these flavors.</P
+><P
+CLASS="para"
+>Suppose, for example, that the national Stolen Lives Project also maintains a table of "perpetrators," law enforcement officers who have killed one or more people in the United States. Due to the sensitivity of the information, the SLP has decided to maintain a single headquarters table that cannot be accessed directly by the city/town schemas. Yet both the location-specific stolen_life table and the systemwide perpetrators table need to be accessed by the check_city_statistics procedure.</P
+><P
+CLASS="para"
+>What's a code architect to do? One thought might be to create a public synonym for the perpetrators table and make sure that no city schema has its own perpetrators table. When the city schema runs the central code under invoker rights, the reference to perpetrators would, in fact, be to that central source of data.</P
+><P
+CLASS="para"
+>That works fine for the check_city_statistics procedure, but what about the rest of the application? With this approach, any city schema can directly access the perpetrators table, a violation of security. So the synonyms solution is no solution at all.</P
+><P
+CLASS="para"
+>With Oracle 8.1, however, you don't need to do anything more than introduce a layer of code around the shared data structure. You need to do at least that, however, so that you can <EM
+CLASS="emphasis"
+>change</EM
+> the model used for resolving external references.</P
+><P
+CLASS="para"
+>If the perpetrators table is accessed directly by the check_city_statistics procedure, the reference can only be resolved by the city schema's having direct access (via a synonym) to the table, which is a no-no. The check_city_statistics procedure cannot, therefore, query the perpetrators table directly. Instead, as shown in <A
+CLASS="xref"
+HREF="ch03_04.htm#ch03-55507"
+>Figure 3.5</A
+>, it will call another procedure, compiled under the definer rights model, which, in turn, works with the perpetrators table.</P
+><H4
+CLASS="figure"
+><A
+CLASS="title"
+NAME="ch03-55507"
+>Figure 3.5: Combination of definer and invoker rights model</A
+></H4
+><IMG
+CLASS="graphic"
+SRC="figs/o8if.0305.gif"
+ALT="Figure 3.5"><P
+CLASS="para"
+>The <EM
+CLASS="emphasis"
+>authid4.sql</EM
+> file provides an implementation that reflects this blended approach. It creates a separate procedure, show_perps, to access the perpetrators table:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: authid4.sql */
+CREATE OR REPLACE PROCEDURE show_perps (loc IN VARCHAR2)
+  AUTHID DEFINER
+AS
+BEGIN
+   FOR rec IN (SELECT * FROM perpetrator WHERE location = loc)
+   LOOP
+      pl (loc || ' perpetrator is ' || rec.rank || ' ' || rec.name);
+   END LOOP;
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>After granting PUBLIC access to this procedure (but not to the table), I modify show_descriptions to include this information:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE PROCEDURE show_descriptions
+  AUTHID CURRENT_USER
+AS
+BEGIN
+  HQ.show_perps (USER);
+  
+  pl ('');
+  
+  FOR lifestolen IN (SELECT * FROM stolen_life)
+  LOOP
+     show_victim (lifestolen);
+  END LOOP;
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The Chicago group can then access a full array of information:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec show_descriptions
+CHICAGO perpetrator is Sergeant Tim &quot;BigBoy&quot; Cop
+CHICAGO perpetrator is Commander John Burge
+
+Bernard Solomon
+
+After years of police harassment, Solomon was told by police that they 
+would kill him. A few days later he was arrested. He was found hung in 
+his cell at the 2259 S. Damen police station. Although police claim he 
+hung himself with his shirt, when his body was examined by family 
+members, he was found still wearing his shirt on one arm.</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>even though Chicago cannot directly access this table:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; connect chicago/chicago
+Connected.
+SQL&gt; select * from hq.perpetrators;
+select * from hq.perpetrators
+                 *
+ERROR at line 1:
+ORA-00942: table or view does not exist</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The <EM
+CLASS="emphasis"
+>authid5.sql</EM
+> file on the disk offers a somewhat simpler example of this same basic technique.</P
+><P
+CLASS="para"
+>By offering both the definer and invoker rights models in Oracle8<EM
+CLASS="emphasis"
+>i</EM
+>, Oracle demonstrates its continuing commitment to the PL/SQL language. As we move to the more distributed model of the Internet (and not just distributed data&nbsp;-- distributed <EM
+CLASS="emphasis"
+>everything</EM
+>), PL/SQL needs to become more flexible in the way that it lets us build and execute our code.</P
+><P
+CLASS="para"
+>The invoker rights model gives all of us another tool to use as we construct our applications. By coming up with a simple syntax for applying this model, Oracle makes it easier for us to learn and implement this new approach.<A
+CLASS="indexterm"
+NAME="AUTOID-1430"
+></A
+></P
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch03_03.htm"
+TITLE="3.3 One Program, Multiple Schemas"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 3.3 One Program, Multiple Schemas"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch04_01.htm"
+TITLE="4. Native Dynamic SQL in Oracle8i"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 4. Native Dynamic SQL in Oracle8i"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>3.3 One Program, Multiple Schemas</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>4. Native Dynamic SQL in Oracle8i</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

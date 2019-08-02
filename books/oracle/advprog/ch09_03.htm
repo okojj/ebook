@@ -1,0 +1,387 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 9] 9.3 Retrieving Message Text</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T18:26:58Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates-1-56592-238-7E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-238-7E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="PL/SQL SQL Oracle Packages"><META
+NAME="DC.Title"
+CONTENT="Advanced Oracle PL/SQL Programming with Packages"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch09_01.htm"
+TITLE="9. PLVmsg: Single-Sourcing PL/SQL Message Text"><LINK
+REL="prev"
+HREF="ch09_02.htm"
+TITLE="9.2 Storing Message Text"><LINK
+REL="next"
+HREF="ch09_04.htm"
+TITLE="9.4 The Restriction Toggle"></HEAD>
+<BODY><DIV CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Advanced Oracle PL/SQL Programming with Packages"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Advanced Oracle PL/SQL Programming with Packages"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch09_02.htm"
+TITLE="9.2 Storing Message Text"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 9.2 Storing Message Text"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch09_01.htm"
+TITLE="9. PLVmsg: Single-Sourcing PL/SQL Message Text"
+>Chapter 9<BR>PLVmsg: Single-Sourcing PL/SQL Message Text</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch09_04.htm"
+TITLE="9.4 The Restriction Toggle"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 9.4 The Restriction Toggle"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch09-20030"
+>9.3 Retrieving Message Text</A
+></H2
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>text</KBD
+> function<A
+CLASS="indexterm"
+NAME="ch09-idx-998222-0"
+></A
+> hides all the logical complexities involved in locating the correct message text and information about physical storage of text. You simply ask for the message and <KBD
+CLASS="command"
+>PLVmsg.text</KBD
+> returns the information. That message may have come from SQLERRM or from the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table. Your application doesn't have to address or be aware of these details. Here is the header for the <KBD
+CLASS="command"
+>text</KBD
+> function (the full algorithm is shown in <A
+CLASS="xref"
+HREF="ch09_03.htm#plsql-adv-ch-09-ex-01"
+>Example 9.1</A
+>):</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION text (num_in IN INTEGER := SQLCODE) RETURN VARCHAR2;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>You pass in a message number to retrieve the text for that message. If, on the other hand you do not provide a number, <KBD
+CLASS="command"
+>PLVmsg.text</KBD
+> uses SQLCODE. </P
+><P
+CLASS="para"
+>The following call to <KBD
+CLASS="command"
+>PLVmsg.text</KBD
+> is, thus, roughly equivalent to displaying SQLERRM:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>p.l (PLVmsg.text);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I say "roughly" because with PLVmsg you can also override the default Oracle message and provide your own text. This process is explained below.</P
+><DIV
+CLASS="example"
+><H4
+CLASS="example"
+><A
+CLASS="title"
+NAME="plsql-adv-ch-09-ex-01"
+>Example 9.1: Algorithm for Choosing Message Text </A
+></H4
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION text (num_in IN INTEGER := SQLCODE)
+      RETURN VARCHAR2
+IS
+   msg VARCHAR2(2000);
+BEGIN
+   IF (num_in 
+         BETWEEN c_min_user_code AND c_max_user_code) OR
+      (restricting AND NOT oracle_errnum (num_in)) OR
+      NOT restricting
+   THEN
+      BEGIN
+         msg := msgtxt_table (num_in);
+      EXCEPTION
+         WHEN OTHERS
+         THEN
+            IF oracle_errnum (num_in)
+            THEN
+               msg := SQLERRM (num_in);
+            ELSE
+               msg := 'No message for error code.';
+            END IF;
+      END;
+   ELSE
+      msg := SQLERRM (num_in);
+   END IF;
+  
+   RETURN msg;
+EXCEPTION
+   WHEN OTHERS
+   THEN
+      RETURN NULL; 
+END;</PRE
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch09-SECT-3.1"
+>9.3.1 Substituting Oracle Messages</A
+></H3
+><P
+CLASS="para"
+>The following call to <KBD
+CLASS="command"
+>add_text</KBD
+><A
+CLASS="indexterm"
+NAME="ch09-idx-998223-0"
+></A
+> is intended to override the default Oracle message for several rollback segment-related errors:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FOR err_ind IN -1550 .. -1559
+LOOP
+   PLVmsg.add_text 
+   (err_ind, 'Database failure; contact SysOp at x1212');
+END LOOP;</PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch09_02.htm"
+TITLE="9.2 Storing Message Text"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 9.2 Storing Message Text"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Advanced Oracle PL/SQL Programming with Packages"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Advanced Oracle PL/SQL Programming with Packages"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch09_04.htm"
+TITLE="9.4 The Restriction Toggle"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 9.4 The Restriction Toggle"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>9.2 Storing Message Text</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>9.4 The Restriction Toggle</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG
+SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly & Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

@@ -1,0 +1,210 @@
+<html><head>
+<title>Recipe 17.2. Writing a TCP Server</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:44:22Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch17_01.htm" title="17. Sockets"><link rel="prev" href="ch17_02.htm" title="17.1. Writing a TCP Client"><link rel="next" href="ch17_04.htm" title="17.3. Communicating over TCP"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_02.htm" title="17.1. Writing a TCP Client"><img src="../gifs/txtpreva.gif" alt="Previous: 17.1. Writing a TCP Client" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch17_01.htm" title="17. Sockets">Chapter 17<br>Sockets</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_04.htm" title="17.3. Communicating over TCP"><img src="../gifs/txtnexta.gif" alt="Next: 17.3. Communicating over TCP" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch17-23871">17.2. Writing a TCP Server</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-260">Problem<a class="indexterm" name="ch17-idx-1000004687-0"></A
+><a class="indexterm" name="ch17-idx-1000004687-1"></A
+><a class="indexterm" name="ch17-idx-1000004687-2"></A
+></A
+></H3
+><p class="para">You want to write a server that waits for clients to connect over the network to a particular port.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-266">Solution</A
+></H3
+><p class="para">This recipe assumes you're using the Internet to communicate. For TCP-like communication within a single Unix machine, see <a class="xref" href="ch17_07.htm" title="Using UNIX Domain Sockets">Recipe 17.6</A
+>.</P
+><p class="para">Use the standard (as of 5.004) IO::Socket::INET class:</P
+><pre class="programlisting">use IO::Socket;
+
+$server = IO::Socket::INET-&gt;new(LocalPort =&gt; $server_port,
+                                Type      =&gt; SOCK_STREAM,
+                                Reuse     =&gt; 1,
+                                Listen    =&gt; 10 )   # or SOMAXCONN
+    or die &quot;Couldn't be a tcp server on port $server_port : $@\n&quot;;
+
+while ($client = $server-&gt;accept()) {
+    # $client is the new connection
+}
+
+close($server);</PRE
+><p class="para">Or, craft it by hand for better control:</P
+><pre class="programlisting">use Socket;
+
+# make the socket
+socket(SERVER, PF_INET, SOCK_STREAM, getprotobyname('tcp'));
+
+# so we can restart our server quickly
+setsockopt(SERVER, SOL_SOCKET, SO_REUSEADDR, 1);
+
+# build up my socket address
+$my_addr = sockaddr_in($server_port, INADDR_ANY);
+bind(SERVER, $my_addr)
+    or die &quot;Couldn't bind to port $server_port : $!\n&quot;;
+
+# establish a queue for incoming connections
+listen(SERVER, SOMAXCONN)
+    or die &quot;Couldn't listen on port $server_port : $!\n&quot;;
+
+# accept and process connections
+while (accept(CLIENT, SERVER)) {
+    # do something with CLIENT
+}
+
+close(SERVER);</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-348">Discussion</A
+></H3
+><p class="para">Setting up a server is more complicated than being a client. The optional <code class="literal">listen</CODE
+> function tells the operating system how many pending, unanswered connections to queue up waiting for your server. The <code class="literal">setsockopt</CODE
+> function used in the Solution allows you to avoid waiting two minutes after killing your server before you restart it again (valuable in testing). The <code class="literal">bind</CODE
+> call registers your server with kernel so others may find you. Finally, <code class="literal">accept</CODE
+> takes the incoming connections one by one.</P
+><p class="para">The numeric argument to <code class="literal">listen</CODE
+> is the number of un<code class="literal">accept</CODE
+>ed connections that the operating system should queue before clients start getting "connection refused" errors. Historically, the maximum <code class="literal">listen</CODE
+> value was 5, and even today, many operating systems silently limit this queue size to around 20. With busy web servers becoming commonplace, many vendors have increased this value. Your documented system maximum can be found in the SOMAXCONN constant from the Socket module.</P
+><p class="para">The <code class="literal">accept</CODE
+><a class="indexterm" name="ch17-idx-1000004696-0"></A
+> function takes two arguments: the filehandle to connect to the remote client and the server filehandle. It returns the client's port and IP address, as packed by <code class="literal">inet_ntoa</CODE
+>:</P
+><pre class="programlisting">use Socket;
+
+while ($client_address = accept(CLIENT, SERVER)) {
+    ($port, $packed_ip) = sockaddr_in($client_address);
+    $dotted_quad = inet_ntoa($packed_ip);
+    # do as thou wilt
+}</PRE
+><p class="para">With the IO::Socket classes, <code class="literal">accept</CODE
+> is a method of the server filehandle:</P
+><pre class="programlisting">while ($client = $server-&gt;accept()) {
+    # ...
+}</PRE
+><p class="para">If you call the <code class="literal">accept</CODE
+> method in list context, it returns the client socket and its address:</P
+><pre class="programlisting">while (($client,$client_address) = $server-&gt;accept()) {
+    # ...
+}</PRE
+><p class="para">If no connection is waiting, your program blocks in the <code class="literal">accept</CODE
+> until a connection comes in. If you want to ensure that your <code class="literal">accept</CODE
+> won't block, use <a class="indexterm" name="ch17-idx-1000005983-0"></A
+>non-blocking sockets:</P
+><pre class="programlisting">use Fcntl qw(F_GETFL F_SETFL O_NONBLOCK);
+
+$flags = fcntl(SERVER, F_GETFL, 0)
+            or die &quot;Can't get flags for the socket: $!\n&quot;;
+
+$flags = fcntl(SERVER, F_SETFL, $flags | O_NONBLOCK)
+            or die &quot;Can't set flags for the socket: $!\n&quot;;</PRE
+><p class="para">Now, when you <code class="literal">accept</CODE
+> and nothing is waiting for you, <code class="literal">accept</CODE
+> will return <code class="literal">undef</CODE
+> and set <code class="literal">$!</CODE
+> to <code class="literal">EWOULDBLOCK</CODE
+>.</P
+><p class="para">You might fear that when the return flags from F_GETFL are 0, that this would trigger the <code class="literal">die</CODE
+> just as a failure from <code class="literal">undef</CODE
+> would. Not so&nbsp;- as with <code class="literal">ioctl</CODE
+>, a non-error return from <code class="literal">fcntl</CODE
+> is mapped by Perl to the special value <a class="indexterm" name="ch17-idx-1000005960-0"></A
+><a class="indexterm" name="ch17-idx-1000005961-0"></A
+><code class="literal">&quot;0</CODE
+> <code class="literal">but</CODE
+> <code class="literal">true&quot;</CODE
+>. This special string is even exempt from the <b class="emphasis.bold">-w</B
+> flag's pesky non-numeric warnings, so feel free to use it in your functions when you want to return a value that's numerically zero yet still true. It probably should have been <code class="literal">&quot;0</CODE
+> <code class="literal">and</CODE
+> <code class="literal">sneaky&quot;</CODE
+> instead.<a class="indexterm" name="ch17-idx-1000004692-0"></A
+><a class="indexterm" name="ch17-idx-1000004692-1"></A
+><a class="indexterm" name="ch17-idx-1000004692-2"></A
+><a class="indexterm" name="ch17-idx-1000004692-3"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch17-pgfId-408">See Also</A
+></H3
+><p class="para">The 
+<a class="olink" href="../prog/ch03_151.htm">&#13;<code class="literal">socket</CODE
+></A
+>,
+<a class="olink" href="../prog/ch03_007.htm">&#13;<code class="literal">bind</CODE
+></A
+>,
+<a class="olink" href="../prog/ch03_086.htm"><code class="literal">listen</CODE
+></A
+>, 
+
+<a class="olink" href="../prog/ch03_004.htm"><code class="literal">accept</CODE
+></A
+>, 
+<a class="olink" href="../prog/ch03_037.htm"><code class="literal">fcntl</CODE
+></A
+>, 
+
+<a class="olink" href="../prog/ch03_142.htm"><code class="literal">setsockopt</CODE
+></A
+>, 
+functions in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlfunc </I
+>(1); your system's <i class="filename">fcntl </I
+>(2), <i class="filename">socket </I
+>(2), <i class="filename">setsockopt </I
+>(2) manpages (if you have them); the documentation for the standard Socket, IO::Socket, and Net::hostent modules; the section on 
+<a class="olink" href="../prog/ch06_02.htm#PERL2-CH-6-SECT-2.4.1">"Internet TCP Clients and Servers"</A
+> in <a class="olink" href="../prog/ch06_01.htm">Chapter 6</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlipc </I
+>(1); <cite class="citetitle">Unix Network Programming</CITE
+>; <cite class="citetitle">Beej's Guide to Network Programming</CITE
+> at <a class="systemitem.url" href="http://www.ecst.csuchico.edu/~guide/net">http://www.ecst.csuchico.edu/~guide/net</A
+>; <a class="xref" href="ch07_14.htm" title="Reading from Many Filehandles Without Blocking">Recipe 7.13</A
+>; <a class="xref" href="ch07_15.htm" title="Doing Non-Blocking I/O">Recipe 7.14</A
+>; <a class="xref" href="ch17_02.htm" title="Writing a TCP Client">Recipe 17.1</A
+>; <a class="xref" href="ch17_04.htm" title="Communicating over TCP">Recipe 17.3</A
+>; <a class="xref" href="ch17_08.htm" title="Identifying the Other End of a Socket">Recipe 17.7</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch17_02.htm" title="17.1. Writing a TCP Client"><img src="../gifs/txtpreva.gif" alt="Previous: 17.1. Writing a TCP Client" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch17_04.htm" title="17.3. Communicating over TCP"><img src="../gifs/txtnexta.gif" alt="Next: 17.3. Communicating over TCP" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">17.1. Writing a TCP Client</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">17.3. Communicating over TCP</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

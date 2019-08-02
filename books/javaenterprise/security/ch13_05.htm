@@ -1,0 +1,1116 @@
+<html>
+<head>
+<title>Encrypting Data (Java Security)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Scott Oaks">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-403-7E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Encrypting Data">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm" alt="Java Security"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch13_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch13_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch13_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch13_01.htm">Chapter 13: Encryption</a></td><td align="right" valign="top" width="172"><a href="ch13_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch13_06.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">13.5. Encrypting Data</h2>
+
+<p>
+<a name="INDEX-1623"></a><a name="INDEX-1624"></a><a name="INDEX-1625"></a><a name="INDEX-1626"></a><a name="INDEX-1627"></a><a name="INDEX-1628"></a>In this section,
+we'll look at the engine that performs encryption within the
+JCE. This engine is called the <tt class="literal">Cipher</tt> class
+(<tt class="literal">javax.crypto.Cipher</tt>); it provides an interface
+to encrypt and decrypt data either in arrays within the program or as
+that data is read or written through Java's stream interfaces:
+</p>
+
+<dl>
+<dt>
+<b>public class Cipher implements Cloneable</b>
+</dt>
+<dd>
+<p>Perform encryption and decryption of arbitrary data, using
+(potentially) a wide array of encryption algorithms.
+</p>
+</dd>
+
+</dl>
+
+<p>Like all security engines, the cipher engine implements named
+algorithms. However, the naming convention for the cipher engine is
+different, in that cipher algorithms are compound names that can
+include the name of the algorithm along with the name of a padding
+scheme and the name of a mode. Padding schemes and modes are
+specified by names--just like algorithms. In theory, just as you
+may pick a new name for an algorithm, you may specify new names for a
+padding scheme or a mode, although the <tt class="literal">SunJCE</tt>
+security provider specifies several standard ones.
+</p>
+
+<p>Modes and <a name="INDEX-1629"></a><a name="INDEX-1630"></a>padding schemes are present in the
+<tt class="literal">Cipher</tt> class because that class implements what
+is known as a block cipher; that is, it expects to operate on data
+one block (e.g., 8 bytes) at a time. Padding schemes are required in
+order to ensure that the length of the data is an integral number of
+blocks.
+</p>
+
+<p>
+<a name="INDEX-1631"></a><a name="INDEX-1632"></a>Modes are provided to further alter the
+encrypted data in an attempt to make it harder to break the
+encryption. For example, if the data to be encrypted contains a
+number of similar patterns--repeated names, or header/footer
+information, for example--any patterns in the resulting data may
+aid in breaking the encryption. Different modes of encrypting data
+help prevent these sorts of attacks. Depending upon the mode used by
+a cipher, it may need to be initialized in a special manner when the
+cipher is used for decryption. Some modes require initialization via
+an initialization vector.
+</p>
+
+<p>Modes also enable a block cipher to behave as a stream cipher; that
+is, instead of requiring a large, 8-byte chunk of data to operate
+upon, a mode may allow data to be processed in smaller quantities. So
+modes are very important in stream-based operations, where data may
+need to be transmitted one or two characters at a time.
+</p>
+
+<p>
+<a name="INDEX-1633"></a><a name="INDEX-1634"></a><a name="INDEX-1635"></a>The modes specified by the
+<tt class="literal">SunJCE</tt> security provider are:
+</p>
+
+<dl>
+<dt>
+<b>ECB</b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1636"></a>This is
+the <a name="INDEX-1637"></a>electronic cookbook mode. ECB is the
+simplest of all modes; it takes a simple block of data (8 bytes in
+the <tt class="literal">SunJCE</tt> implementation, which is standard)
+and encrypts the entire block at once. No attempt is made to hide
+patterns in the data, and the blocks may be rearranged without
+affecting decryption (though the resulting plaintext will be out of
+order). Because of these limitations, ECB is recommended only for
+binary data; text or other data with patterns in it is not
+well-suited for this mode.
+</p>
+
+<p>ECB mode can only operate on full blocks of data, so it is generally
+used with a padding scheme.
+</p>
+
+<p>ECB mode does not require an initialization vector.</p>
+</dd>
+
+<dt>
+<b>CBC</b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1638"></a>This is
+the <a name="INDEX-1639"></a>cipher block chaining mode. In this mode,
+input from one block of data is used to modify the encryption of the
+next block of data; this helps to hide patterns (although data that
+contains identical initial text--such as mail
+messages--will still show an initial pattern). As a result, this
+mode is suitable for text data.
+</p>
+
+<p>CBC mode can only operate on full blocks of data (8-byte blocks in
+the <tt class="literal">SunJCE</tt> implementation), so it is generally
+used with a padding scheme.
+</p>
+
+<p>CBC mode requires an initialization vector for decryption.</p>
+</dd>
+
+<dt>
+<b>CFB</b>
+</dt>
+<dd>
+<p>
+<a name="INDEX-1640"></a>This is
+the<a name="INDEX-1641"></a>cipher-feedback mode. This mode
+is very similar to CBC, but its internal implementation is slightly
+different. CBC requires a full block (8 bytes) of data to begin its
+encryption, while CFB can begin encryption with a smaller amount of
+data. So this mode is suitable for encrypting text, especially when
+that text may need to be processed a character at a time. By default,
+CFB mode operates on 8-byte (64-bit) blocks, but you may append a
+number of bits after CFB (e.g., CFB8) to specify a different number
+of bits on which the mode should operate. This number must be a
+multiple of 8.
+</p>
+
+<p>CFB requires that the data be padded so that it fills a complete
+block. Since that size may vary, the padding scheme that is used with
+it must vary as well. For CFB8, no padding is required, since data is
+always fed in an integral number of bytes.
+</p>
+
+<p>CFB mode requires an initialization vector for decryption.</p>
+</dd>
+
+<dt>
+<b>OFB</b>
+</dt>
+<dd>
+<p>This is the <a name="INDEX-1642"></a><a name="INDEX-1643"></a>output-feedback mode. This mode is also
+suitable for text; it is used most often when there is a possibility
+that bits of the encrypted data may be altered in transit (e.g., over
+a noisy modem). While a 1-bit error would cause an entire block of
+data to be lost in the other modes, it only causes a loss of 1 bit in
+this mode. By default, OFB mode operates on 8-byte (64-bit) blocks,
+but you may append a number of bits after OFB (e.g., OFB8) to specify
+a different number of bits on which the mode should operate. This
+number must be a multiple of 8.
+</p>
+
+<p>OFB requires that the data be padded so that it fills a complete
+block. Since that size may vary, the padding scheme that is used with
+it must vary as well. For OFB8, no padding is required, since data is
+always fed in an integral number of bytes.
+</p>
+
+<p>OFB mode requires an initialization vector for decryption.</p>
+</dd>
+
+<dt>
+<b>PCBC</b>
+</dt>
+<dd>
+<p>This is the <a name="INDEX-1644"></a><a name="INDEX-1645"></a>propagating cipher block chaining mode.
+This mode is popular in a particular system known as Kerberos; if you
+need to speak to a Kerberos version 4 system, this is the mode to
+use. However, this mode has some known methods of attack, and
+Kerberos version 5 has switched to using CBC mode. Hence, PCBC mode
+is no longer recommended.
+</p>
+
+<p>PCBC mode requires that the input be padded to a multiple of 8 bytes.</p>
+
+<p>PCBC mode requires an initialization vector for
+<a name="INDEX-1646"></a><a name="INDEX-1647"></a><a name="INDEX-1648"></a> decryption.<a name="INDEX-1649"></a><a name="INDEX-1650"></a>
+</p>
+</dd>
+
+</dl>
+
+<p>
+<a name="INDEX-1651"></a><a name="INDEX-1652"></a>The
+<a name="INDEX-1653"></a><a name="INDEX-1654"></a><a name="INDEX-1655"></a>
+padding schemes specified by the <tt class="literal">SunJCE </tt>security
+provider are:
+</p>
+
+<dl>
+<dt>
+<b>
+<a name="INDEX-1656"></a>
+PKCS5Padding</b>
+</dt>
+<dd>
+<p>This padding scheme ensures that the input data is padded to a
+multiple of 8 bytes.
+</p>
+</dd>
+
+<dt>
+<b>
+<a name="INDEX-1657"></a>
+NoPadding</b>
+</dt>
+<dd>
+<p>When this scheme is specified, no padding of input is done. In this
+case, the number of input bytes presented to the encryption cipher
+must be a multiple of the block size of the cipher; otherwise, when
+the cipher attempts to encrypt or decrypt the data, it generates an
+error.
+</p>
+</dd>
+
+</dl>
+
+<p>Remember that these uses of mode and padding are specific to the
+<tt class="literal">SunJCE</tt> security provider. The modes and padding
+schemes are based upon accepted standards and are thus likely to be
+implemented in this manner by third-party security providers as well,
+but you should check your third-party provider documentation to be
+sure.
+</p>
+
+<p>The mode and padding scheme specified for decryption must match the
+mode and padding scheme specified for encryption, or the decryption
+will fail.
+</p>
+
+<a name="SEC-CH-13-SECT-5.1"></a>
+<h3 class="sect2">13.5.1. Using the Cipher Class</h3>
+
+<p>In order to obtain an instance of the <tt class="literal">Cipher</tt>
+class, we call one of these methods:
+</p>
+
+<dl>
+<dt>
+<b>public static Cipher getInstance(String algorithmName)<a name="INDEX-1658"></a>
+</b>
+</dt>
+<dt>
+<b>public static Cipher getInstance(String algorithmName, String provider)</b>
+</dt>
+<dd>
+<p>Obtain a cipher engine that can perform encryption and decryption by
+implementing the named algorithm. The engine is provided by the given
+security provider, or the list of installed security providers is
+searched for an appropriate engine.
+</p>
+
+<p>If an implementation of the given algorithm cannot be found, a
+<tt class="literal">NoSuchAlgorithmException</tt> is thrown. If the named
+provider cannot be found, a
+<tt class="literal">NoSuchProviderException</tt> is thrown.
+</p>
+
+<p>The algorithm name passed to the <tt class="literal">getInstance()</tt>
+method may either be a simple algorithm name (e.g., DES), or it may
+be an algorithm name that specifies a mode and padding in this
+format: algorithm/mode/padding (e.g., DES/ECB/PKCS5Padding). If the
+mode and padding are not specified, they default to an
+implementation-specific value; in the <tt class="literal">SunJCE</tt>
+security provider, the mode defaults to ECB and padding defaults to
+PKCS5.
+</p>
+</dd>
+
+</dl>
+
+<p>Once you've obtained a cipher object, you must initialize it.
+An object can be initialized for encryption or decryption, but in
+either case, you must provide a key. If the algorithm is a symmetric
+cipher, you should provide a secret key; otherwise, you should
+provide a public key to encrypt data and a private key to decrypt
+data (in fact, the key must match the algorithm type: a DES cipher
+must use a DES key, and so on). Initialization is achieved with one
+of these methods:
+</p>
+
+<dl>
+<dt>
+<b>public final void init(int op, Key k)<a name="INDEX-1659"></a>
+</b>
+</dt>
+<dt>
+<b>public final void init(int op, Key k, AlgorithmParameterSpec aps)</b>
+</dt>
+<dt>
+<b>public final void init(int op, Key k, AlgorithmParameterSpec aps, SecureRandom sr)</b>
+</dt>
+<dt>
+<b>public final void init(int op, Key k, SecureRandom sr)</b>
+</dt>
+<dt>
+<b>public final void init(int op, Key k, AlgorithmParameters ap)</b>
+</dt>
+<dt>
+<b>public final void init(int op, Key k, AlgorithmParameters ap, SecureRandom sr)</b>
+</dt>
+<dd>
+<p>Initialize the cipher to encrypt or decrypt data. If
+<tt class="literal">op</tt> is <tt class="literal">Cipher.ENCRYPT_MODE</tt>,
+the cipher is initialized to encrypt data; if <tt class="literal">op</tt>
+is <tt class="literal">Cipher.DECRYPT_MODE</tt>, the cipher is
+initialized to decrypt data. (In practice, other values will
+initialize the cipher for encryption rather than generating an
+exception; this is arguably a bug in the early-access implementation
+of the JCE.)
+</p>
+
+<p>These calls reset the engine to an initial state, discarding any
+previous data that may have been fed to the engine. Hence, a single
+cipher object can be used to encrypt data and then later to decrypt
+data.
+</p>
+
+<p>Many algorithm modes we discussed earlier require an initialization
+vector to be specified when the cipher is initialized for decrypting.
+In these cases, the initialization vector must be passed to the
+<tt class="literal">init()</tt> method within the algorithm parameter
+specification or algorithm parameters; the
+<tt class="literal">IvParameterSpec</tt> class is typically used to do
+this for DES encryption.
+</p>
+
+<p>In the <tt class="literal">SunJCE</tt> security provider, specifying an
+initialization vector for a mode that does not support it will
+eventually lead to a <tt class="literal">NullPointerException</tt>.
+Failure to specify an initialization vector for a mode that requires
+one will generate incorrect decrypted data.
+</p>
+</dd>
+
+</dl>
+
+<p>After an engine has been initialized, it must be fed data. There are
+two sets of methods to accomplish this. The first set can be used any
+number of times:
+</p>
+
+<dl>
+<dt>
+<b>public final byte[] update(byte[] input)<a name="INDEX-1660"></a>
+</b>
+</dt>
+<dt>
+<b>public final byte[] update(byte[] input, int offset, int length)</b>
+</dt>
+<dt>
+<b>public final int update(byte[] input, int offset, int length, byte[] output)</b>
+</dt>
+<dt>
+<b>public final int update(byte[] input, int offset, int length, byte[] output, int outOffset)</b>
+</dt>
+<dd>
+<p>Encrypt or decrypt the data in the input array (starting at the given
+offset for the given length, if applicable). The resulting data is
+either placed in the given output array (in which case the size of
+the output data is returned) or returned in a new array. If the
+cipher has not been initialized, an
+<tt class="literal">IllegalStateException</tt> is thrown.
+</p>
+
+<p>If the length of the data passed to this method is not an integral
+number of blocks, any extra data is buffered internally within the
+cipher engine; the next call to an <tt class="literal">update()</tt> or
+<tt class="literal">doFinal()</tt> method processes that buffered data as
+well as any new data that is just being provided.
+</p>
+
+<p>If the given output buffer is too small to hold the data, a
+<tt class="literal">ShortBufferException</tt> is thrown. The required
+size of the output buffer can be obtained from the
+<tt class="literal">getOutputSize()</tt> method. A
+<tt class="literal">ShortBufferException</tt> does not clear the state of
+the cipher: any buffered data is still held, and the call can be
+repeated (with a correctly sized buffer) with no ill effects.
+</p>
+</dd>
+
+</dl>
+
+<p>This second set of methods should only be called once:</p>
+
+<dl>
+<dt>
+<b>public final byte[] doFinal()<a name="INDEX-1661"></a>
+</b>
+</dt>
+<dt>
+<b>public final int doFinal(byte[] output, int offset)</b>
+</dt>
+<dt>
+<b>public final byte[] doFinal(byte[] input)</b>
+</dt>
+<dt>
+<b>public final byte[] doFinal(byte[] input, int offset, int length)</b>
+</dt>
+<dt>
+<b>public final int doFinal(byte[] input, int offset, int length, byte[] output)</b>
+</dt>
+<dt>
+<b>public final int doFinal(byte[] input, int offset, int length, byte[] output, int outOffset)</b>
+</dt>
+<dd>
+<p>Encrypt or decrypt the data in the input array as well as any data
+that has been previously buffered in the cipher engine. This method
+behaves exactly the same as the <tt class="literal">update()</tt> method,
+except that this method signals that all data has been fed to the
+engine. If the engine is performing padding, the padding scheme will
+be used to process the pad bytes (i.e., add padding bytes for
+encryption and remove padding bytes for decryption). If the cipher
+engine is not performing padding and the total of all processed data
+is not a multiple of the mode's block size, an
+<tt class="literal">IllegalBlockSizeException</tt> is thrown.
+</p>
+
+<p>These methods throw an <tt class="literal">IllegalStateException</tt> or
+a <tt class="literal">ShortBufferException</tt> in the same circumstances
+as the <tt class="literal">update()</tt> methods.<a name="INDEX-1662"></a>
+</p>
+</dd>
+
+</dl>
+
+<p>In order to initialize some ciphers for decryption, you need to
+specify an initialization vector; this initialization vector must be
+the same vector that was used when the cipher was initialized for
+encryption. For encryption, you may specify the initialization
+vector, or you may use a system-provided initialization vector. In
+order to retrieve this vector for later use (e.g., to send it to
+someone who will eventually need to decrypt the data), you may use
+this method:
+</p>
+
+<dl>
+<dt>
+<b>public final byte[] getIV()<a name="INDEX-1663"></a>
+</b>
+</dt>
+<dd>
+<p>Return the initialization vector that was used to initialize this
+cipher. If a system-provided initialization vector is used, that
+vector is not available until after the first call to an
+<tt class="literal">update()</tt> or <tt class="literal">doFinal()</tt>
+method.
+</p>
+</dd>
+
+</dl>
+
+<p>In order to preallocate an output buffer for use in the
+<tt class="literal">update()</tt> and <tt class="literal">doFinal()</tt>
+methods, you must know its size, which is returned from this method:
+</p>
+
+<dl>
+<dt>
+<b>public final int getOutputSize(int inputLength)<a name="INDEX-1664"></a>
+</b>
+</dt>
+<dd>
+<p>Return the output size for the next call to the
+<tt class="literal">update()</tt> or <tt class="literal">doFinal()</tt>
+methods, assuming that one of those methods is called with the
+specified amount of data. Note that the size returned from this call
+includes any possible padding that the <tt class="literal">doFinal()</tt>
+method might add. A call to the <tt class="literal">update()</tt> method
+may actually generate less data than this method would indicate,
+because it will not create any padding.
+</p>
+</dd>
+
+</dl>
+
+<p>Finally, there are two miscellaneous methods of this class:</p>
+
+<dl>
+<dt>
+<b>public final Provider getProvider()<a name="INDEX-1665"></a>
+</b>
+</dt>
+<dd>
+<p>Return the provider class that defined this engine.</p>
+</dd>
+
+<dt>
+<b>public final int getBlockSize()<a name="INDEX-1666"></a>
+</b>
+</dt>
+<dd>
+<p>Get the block size of the mode of the algorithm that this cipher
+implements.
+</p>
+</dd>
+
+</dl>
+
+<p>Let's put this all together into a simple example:</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class CipherTest {
+	public static void main(String args[]) {
+		try {
+			KeyGenerator kg = KeyGenerator.getInstance("DES");
+			Cipher c = Cipher.getInstance("DES/CBC/PKCS5Padding");
+			Key key = kg.generateKey();
+			
+			c.init(Cipher.ENCRYPT_MODE, key);
+			byte input[] = "Stand and unfold yourself".getBytes();
+			byte encrypted[] = c.doFinal(input);
+			byte iv[] = c.getIV();
+
+			IvParameterSpec dps = new IvParameterSpec(iv);
+			c.init(Cipher.DECRYPT_MODE, key, dps);
+			byte output[] = c.doFinal(encrypted);
+			System.out.println("The string was ");
+			System.out.println(new String(output));
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+}</pre>
+</blockquote>
+
+<p>We've reused the single engine object to perform both the
+encryption and the decryption. Since DES is a symmetric encryption
+algorithm, we generated a single key that is used for both
+operations. Within the <tt class="literal">try</tt> block, the second
+block of code performs the encryption:
+</p>
+
+<ol>
+<li>
+<p>We initialize the cipher engine for encrypting.</p>
+</li>
+<li>
+<p>We pass the bytes we want to encrypt to the
+<tt class="literal">doFinal()</tt> method. Of course, we might have had
+any number of calls to the <tt class="literal">update()</tt> method
+preceding this call, with data in any arbitrary amounts. Since
+we've specified a padding scheme, we don't have to worry
+about the size of the data we pass to the
+<tt class="literal">doFinal()</tt> method.
+</p>
+</li>
+<li>
+<p>Finally, we save the initialization vector the system provided to
+perform the encryption. Note that this step would not be needed for
+ECB mode.
+</p>
+</li>
+</ol>
+<p>Performing the decryption is similar:<a name="INDEX-1667"></a>
+</p>
+
+<p>Performing the decryption is similar:</p>
+
+<ol>
+<li>
+<p>First, we initialize the cipher engine for decrypting. In this case,
+however, we must provide an initialization vector to initialize the
+engine in order to get the correct results (again, this would be
+unnecessary for ECB mode).
+</p>
+</li>
+<li>
+<p>Next, we pass the encrypted data to the
+<tt class="literal">doFinal()</tt> method. Again, we might have had
+multiple calls to the <tt class="literal">update()</tt> method first.
+</p>
+</li>
+</ol>
+
+<p>In typical usage, of course, encryption is done in one program and
+decryption is done in another program. In the example above, this
+entails that the initialization vector and the encrypted data must be
+transmitted to a receiver; this may be done via a socket or a file or
+any other convenient means. There is no security risk in transmitting
+the initialization vector, as it has the same properties as the rest
+of the encrypted data.<a name="INDEX-1668"></a>
+</p>
+
+<p>In this example, we used the PKCS5 padding scheme to provide the
+necessary padding. This is by far the simplest way. If you want to do
+your own padding--if, for example, you're using a CFB32
+mode for some reason--you need to do something like this:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">Cipher c = Cipher.getInstance("DES/CFB32/NoPadding");
+c.init(Cipher.ENCRYPT_MODE, desKey);
+int blockSize = c.getBlockSize();
+byte b[] = "This string has an odd length".getBytes();
+byte padded[] = new byte[b.length + blockSize -(b.length % blockSize)];
+System.arraycopy(b, 0, padded, 0, b.length);
+for (int i = 0; i &lt; blockSize - (b.length % blockSize); i++)
+	padded[b.length + i] = 0;
+byte output[] = c.doFinal(padded);</pre>
+</blockquote>
+
+<p>The problem with this code is that when the data is decrypted, there
+is no indication of how many bytes should be discarded as padding.
+PKCS5 and other padding schemes solve this problem by encoding that
+information into the padding itself.
+</p>
+
+<div class="sidebar">
+<h4 class="objtitle">The NullCipher Class</h4>
+
+<p>The JCE includes one subclass of the <tt class="literal">Cipher</tt>
+class: the <tt class="literal">NullCipher</tt> class
+(<tt class="literal">javax.crypto.NullCipher</tt><a name="INDEX-1669"></a><a name="INDEX-1670"></a><a name="INDEX-1671"></a><a name="INDEX-1672"></a>). This class performs no encryption.
+Data passes through the null cipher unchanged, and no padding or
+blocking is performed (the <tt class="literal">getBlockSize()</tt> method
+will return 1). Unlike a traditional cipher engine, instances of the
+<tt class="literal">NullCipher</tt> class must be constructed directly:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">Cipher c = new NullCipher();</pre>
+</blockquote>
+
+<p>This class can be used to test the logic of your program without
+actually encrypting or decrypting the data.
+</p>
+</div>
+
+
+<a name="SEC-CH-13-SECT-5.2"></a>
+<h3 class="sect2">13.5.2. Cipher Algorithms</h3>
+
+<p>
+<a name="INDEX-1673"></a><a name="INDEX-1674"></a><a name="INDEX-1675"></a><a name="INDEX-1676"></a><a name="INDEX-1677"></a>The
+<tt class="literal">SunJCE</tt><a name="INDEX-1678"></a>security provider supports three
+cipher algorithms:
+</p>
+
+<ul>
+<li>
+<p>
+<em class="emphasis">DES, </em>the <a name="INDEX-1679"></a><a name="INDEX-1680"></a>Data
+Encryption Standard algorithm, a standard that has been adopted by
+various organizations, including the U.S. government. There are known
+ways to attack this encryption, though they require a lot of
+computing power to do so; despite widespread predictions about the
+demise of DES, it continues to be used in many applications and is
+generally considered secure. The examples in this chapter are mostly
+based on DES encryption.
+</p>
+</li>
+<li>
+<p>
+<em class="emphasis">DESede</em><a name="INDEX-1681"></a><a name="INDEX-1682"></a><a name="INDEX-1683"></a>, also known
+as triple-DES or multiple-DES. This algorithm uses multiple DES keys
+to perform three rounds of DES encryption or decryption; the added
+complexity greatly increases the amount of time required to break the
+encryption. It also greatly increases the amount of time required to
+encrypt and to decrypt the data.
+</p>
+
+<p>From a developer's perspective, DESede is equivalent to DES;
+only the algorithm name passed to the key generator and cipher
+engines is different. Although DESede requires multiple keys, these
+keys are encoded into a single secret key. Hence, the programming
+steps required to use DESede are identical to the steps required to
+use DES.
+</p>
+</li>
+<li>
+<p>
+<em class="emphasis">PBEWithMD5AndDES</em><a name="INDEX-1684"></a>, the password-based encryption
+defined in PKCS#5. This algorithm entails using a password, a byte
+array known as salt, and an iteration count along with an MD5 message
+digest to produce a DES secret key; this key is then used to perform
+DES encryption or decryption. PKCS#5 was developed by RSA Data
+Security, Inc., primarily to encrypt private keys, although it may be
+used to encrypt any arbitrary data.
+</p>
+
+<p>From a developer's perspective, this algorithm requires some
+special programming to obtain the key. A password-based cipher cannot
+be initialized without special data that is passed via the algorithm
+specification. This data is known as the salt and iteration count.
+Hence, a password-based cipher is initialized as follows:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">String password = "Come you spirits that tend on mortal thoughts";
+byte[] salt = { (byte) 0xc9, (byte) 0x36, (byte) 0x78, (byte) 0x99,
+				(byte) 0x52, (byte) 0x3e, (byte) 0xea, (byte) 0xf2 };
+PBEParameterSpec paramSpec = new PBEParameterSpec(salt, 20);
+PBEKeySpec keySpec = new PBEKeySpec(password);
+SecretKeyFactory kf = SecretKeyFactory.getInstance("PBEWithMD5AndDES");
+SecretKey key = kf.generateSecret(keySpec);
+Cipher c = Cipher.getInstance("PBEWithMD5AndDES");
+c.init(Cipher.ENCRYPT_MODE, key, paramSpec);</pre>
+</blockquote>
+
+<p>The rationale behind this system is that it allows the password to be
+shared verbally (or otherwise) between participants in the cipher;
+rather than coding the password as we've done above, the user
+would presumably enter the password. Since these types of passwords
+are often easy to guess (a string comparison of the above password
+against the collected works of Shakespeare would guess the password
+quite easily, despite its length), the iteration and salt provide a
+means to massage the password into something more secure. The salt
+itself should be random, and the higher the iteration count, the more
+expensive a brute-force attack against the key becomes (though it
+also takes longer to generate the key itself).
+</p>
+
+<p>Of course, despite the presence of the salt and iteration, the
+password chosen in the method should not be easy to guess in the
+first place: it should contain special characters, not be known
+quotes from literature, and follow all the other usual rules that
+apply to selecting a passwor<a name="INDEX-1685"></a> d.<a name="INDEX-1686"></a><a name="INDEX-1687"></a><a name="INDEX-1688"></a><a name="INDEX-1689"></a><a name="INDEX-1690"></a>
+</p>
+</li>
+</ul>
+
+<a name="SEC-CH-13-SECT-5.3"></a>
+<h3 class="sect2">13.5.3. Implementing the Cipher Class</h3>
+
+<p>
+<a name="INDEX-1691"></a><a name="INDEX-1692"></a><a name="INDEX-1693"></a>As in all 1.2-based engines, the SPI for
+the <tt class="literal">Cipher</tt> class is a separate class: the
+<tt class="literal">CipherSpi</tt> class
+(<tt class="literal">javax.crypto.CipherSpi</tt>):
+</p>
+
+<dl>
+<dt>
+<b>public abstract class CipherSpi</b>
+</dt>
+<dd>
+<p>The SPI for the <tt class="literal">Cipher</tt> class. This class is
+responsible for performing the encryption or decryption according to
+its internal algorithm. Support for various modes or padding schemes
+must be handled by this class as well.
+</p>
+</dd>
+
+</dl>
+
+<p>There is very little intelligence in the <tt class="literal">Cipher</tt>
+class itself; virtually all of its methods are simply passthough
+calls to corresponding methods in the SPI. The one exception to this
+is the <tt class="literal">getInstance()</tt> method, which is
+responsible for parsing the algorithm string and removing the mode
+and padding strings if present. If it finds a mode and padding
+specification, it calls these methods of the SPI:
+</p>
+
+<dl>
+<dt>
+<b>public abstract void engineSetMode(String s)<a name="INDEX-1694"></a>
+</b>
+</dt>
+<dd>
+<p>Set the mode of the cipher engine according to the specified string.
+If the given mode is not supported by this cipher, a
+<tt class="literal">NoSuchAlgorithmException</tt> should be thrown.
+</p>
+</dd>
+
+<dt>
+<b>public abstract void engineSetPadding(String s)<a name="INDEX-1695"></a>
+</b>
+</dt>
+<dd>
+<p>Set the padding scheme of the cipher engine according to the
+specified string. If the given padding scheme is not supported by
+this cipher, a <tt class="literal">NoSuchPaddingException</tt> should be
+thrown.
+</p>
+</dd>
+
+</dl>
+
+<p>Remember that the mode and padding strings we looked at earlier are
+specific to the implementation of the <tt class="literal">SunJCE</tt>
+security provider. Hence, while ECB is a common mode specification,
+it is completely at the discretion of your implementation whether
+that string should be recognized or not. If you choose to implement a
+common mode, it is recommended that you use the standard strings, but
+you may use any naming convention that you find attractive. The same
+is true of padding schemes.
+</p>
+
+<p>Complicating this matter is the fact that there are no classes in the
+JCE that assist you with implementing any mode or padding scheme. So
+if you need to support a mode or padding scheme, you must write the
+required code from scratch.
+</p>
+
+<p>The remaining methods of the SPI are all called directly from the
+corresponding methods of the <tt class="literal">Cipher</tt> class:
+</p>
+
+<dl>
+<dt>
+<b>public abstract int engineGetBlockSize()<a name="INDEX-1696"></a>
+</b>
+</dt>
+<dd>
+<p>Return the number of bytes that comprise a block for this engine.
+Unless the cipher is capable of performing padding, input data for
+this engine must total a multiple of this block size (though
+individual calls to the <tt class="literal">update()</tt> method do not
+necessarily have to provide data in block-sized chunks).
+</p>
+</dd>
+
+<dt>
+<b>public abstract byte[] engineGetIV()<a name="INDEX-1697"></a>
+</b>
+</dt>
+<dd>
+<p>Return the initialization vector that was used to initialize the
+cipher. If the cipher was in a mode where no initialization vector
+was required, this method should return <tt class="literal">null</tt>.
+</p>
+</dd>
+
+<dt>
+<b>public abstract int engineGetOutputSize(int inputSize)<a name="INDEX-1698"></a>
+</b>
+</dt>
+<dd>
+<p>Return the number of bytes that the cipher will produce if the given
+amount of data is fed to the cipher. This method should take into
+account any data that is presently being buffered by the cipher as
+well as any padding that may need to be added if the cipher is
+performing padding.
+</p>
+</dd>
+
+<dt>
+<b>public void engineInit(int op, Key key, SecureRandom sr)<a name="INDEX-1699"></a>
+</b>
+</dt>
+<dt>
+<b>public void engineInit(int op, Key key, AlgorithmParameterSpec aps, SecureRandom sr)</b>
+</dt>
+<dt>
+<b>public void engineInit(int op, Key key, AlgorithmParameters ap, SecureRandom sr)</b>
+</dt>
+<dd>
+<p>Initialize the cipher based on the <tt class="literal">op</tt>, which
+will be either <tt class="literal">Cipher.ENCRYPT_MODE</tt> or
+<tt class="literal">Cipher.DECRYPT_MODE</tt>. This method should ensure
+that the key is of the correct type and throw an
+<tt class="literal">InvalidKeyException</tt> if it is not (or if it is
+otherwise invalid), and use the given random number generator (and
+algorithm parameters, if applicable) to initialize its internal
+state. If algorithm parameters are provided but not supported or are
+otherwise invalid, this method should throw an
+<tt class="literal">InvalidAlgorithmParameterException</tt>.
+</p>
+</dd>
+
+<dt>
+<b>public abstract byte[] engineUpdate(int input[], int offset, int len)<a name="INDEX-1700"></a>
+</b>
+</dt>
+<dt>
+<b>public abstract int engineUpdate(int input[], int offset, int len, byte[] output, int outOff)</b>
+</dt>
+<dd>
+<p>Encrypt or decrypt the input data. The data that is passed to these
+methods will is not necessarily an integral number of blocks. It is
+the responsibility of these methods to process as much of the input
+data as possible and to buffer the remaining data internally. Upon
+the next call to an <tt class="literal">engineUpdate()</tt> or
+<tt class="literal">engineDoFinal()</tt> method, this buffered data must
+be processed first, followed by the input data of that method (and
+again leaving any leftover data in an internal buffer).
+</p>
+</dd>
+
+<dt>
+<b>public abstract byte[] engineDoFinal(int input[], int offset, int len)<a name="INDEX-1701"></a>
+</b>
+</dt>
+<dt>
+<b>public abstract int engineDoFinal(int input[], int offset, int len, byte[] output, int outOff)</b>
+</dt>
+<dd>
+<p>Encrypt or decrypt the input data. Like the
+<tt class="literal">update()</tt> method, this method must consume any
+buffered data before processing the input data. However, since this
+is the final set of data to be processed, this method must make sure
+that the total amount of data has been an integral number of blocks;
+it should not leave any data in its internal buffers.
+</p>
+
+<p>If the cipher supports padding (and padding was requested through the
+<tt class="literal">engineSetPadding()</tt> method), this method should
+perform the required padding; an error in padding should cause a
+<tt class="literal">BadPaddingException</tt> to be thrown. Otherwise, if
+padding is not being performed and the total amount of data has not
+been an integral number of blocks, this method should throw an
+<tt class="literal">IllegalBlockSizeException</tt>.
+</p>
+</dd>
+
+</dl>
+
+<p>Using our typical XOR strategy of encryption, here's a simple
+implementation of a cipher engine:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class XORCipher extends CipherSpi {
+	byte xorByte;
+
+	public void engineInit(int i, Key k, SecureRandom sr)
+						throws InvalidKeyException {
+		if (!(k instanceof XORKey))
+			throw new InvalidKeyException("XOR requires an XOR key");
+		xorByte = k.getEncoded()[0];
+	}
+
+	public void engineInit(int i, Key k, AlgorithmParameterSpec aps,
+					SecureRandom sr) throws InvalidKeyException,
+							InvalidAlgorithmParameterException {
+		throw new InvalidAlgorithmParameterException(
+			"Algorithm parameters not supported in this class");
+	}
+
+	public void engineInit(int i, Key k, AlgorithmParameters ap,
+			SecureRandom sr) throws InvalidKeyException,
+			InvalidAlgorithmParameterException {
+		throw new InvalidAlgorithmParameterException(
+			"Algorithm parameters not supported in this class");
+	}
+
+	public byte[] engineUpdate(byte in[], int off, int len) {
+		return engineDoFinal(in, off, len);
+	}
+
+	public int engineUpdate(byte in[], int inoff, int length,
+							byte out[], int outoff) {
+		for (int i = 0; i &lt; length; i++)
+			out[outoff + i] = (byte) (in[inoff + i] ^ xorByte);
+		return length;
+	}
+
+	public byte[] engineDoFinal(byte in[], int off, int len) {
+		byte out[] = new byte[len - off];
+		engineUpdate(in, off, len, out, 0);
+		return out;
+	}
+
+	public int engineDoFinal(byte in[], int inoff, int len,
+								byte out[], int outoff) {
+		return engineUpdate(in, inoff, len, out, outoff);
+	}
+
+	public int engineGetBlockSize() {
+		return 1;
+	}
+
+	public byte[] engineGetIV() {
+		return null;
+	}
+
+	public int engineGetOutputSize(int sz) {
+		return sz;
+	}
+
+	public void engineSetMode(String s)
+						throws NoSuchAlgorithmException {
+		throw new NoSuchAlgorithmException("Unsupported mode " + s);
+	}
+
+	public void engineSetPadding(String s)
+						throws NoSuchPaddingException {
+		throw new NoSuchPaddingException("Unsupported padding " + s);
+	}
+}</pre>
+</blockquote>
+
+
+<p>The bulk of the work of any cipher engine will be in the
+<tt class="literal">engineUpdate()</tt> method, which is responsible for
+actually providing the ciphertext or plaintext. In this case,
+we've simply XORed the key value with every byte, a process
+that works both for encryption as well as decryption. Because the
+work done by the <tt class="literal">engineUpdate()</tt> method is so
+symmetric, we don't need to keep track internally of whether
+we're encrypting or decrypting; for us, the work is always the
+same. For some algorithms, you may need to keep track of the state of
+the cipher by setting an internal variable when the
+<tt class="literal">engineInit()</tt> method is called.
+</p>
+
+<p>Similarly, because we can operate on individual bytes at a time, we
+didn't have to worry about padding and buffering internal data.
+Such an extension is easy, using the code we showed earlier that uses
+the modulus operator to group the input arrays into blocks.
+</p>
+
+<p>To use this class, we would need to add these two lines to the
+<tt class="literal">XYZProvider</tt> class we developed in <a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch08_01.htm">Chapter 8, "Security Providers"</a>:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">put("Cipher.XOR", "XORCipher");
+put("KeyGenerator.XOR", "XORKeyGenerator");</pre>
+</blockquote>
+
+<p>Then it is a simple matter of installing the XOR security provider
+and getting an instance of this cipher engine:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">Security.addProvider(new XYZProvider());
+KeyGenerator kg = KeyGenerator.getInstance("XOR");
+Cipher c = Cipher.getInstance("XOR");</pre>
+</blockquote>
+
+<p>Note that "XOR" is the only valid algorithm name for this
+implementation since we do not support any modes or padding
+<a name="INDEX-1702"></a><a name="INDEX-1703"></a><a name="INDEX-1704"></a> schemes.<a name="INDEX-1705"></a><a name="INDEX-1706"></a><a name="INDEX-1707"></a><a name="INDEX-1708"></a><a name="INDEX-1709"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch13_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch13_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch13_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch13_06.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">13.4. Secret Key Engines</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">13.6. Cipher Streams</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

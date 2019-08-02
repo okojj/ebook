@@ -1,0 +1,753 @@
+<html>
+<head>
+<title>Remote Object Activation (Java Enterprise in a Nutshell)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David Flanagan, Jim Farley, William Crawford and Kristopher Magnusson">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-483-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Remote Object Activation">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm" alt="Java Enterprise in a Nutshell"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_05.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_01.htm">Chapter 3: Remote Method Invocation</a></td><td align="right" valign="top" width="172"><a href="ch03_07.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_07.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY --><h2 class="sect1">3.6. Remote Object Activation</h2>
+<p>
+<a name="INDEX-712"></a><a name="INDEX-713"></a><a name="INDEX-714"></a><a name="INDEX-715"></a>
+Automatic activation of remote objects is a new feature in RMI as of Java 1.2. The activation subsystem in RMI provides you with two basic features: the ability to have remote objects instantiated (activated) on-demand by client requests, and the ability for remote object references to remain valid across server crashes, making the references persistent. These features can be quite useful in certain types of distributed applications. </p>
+<p>
+<a name="INDEX-716"></a>
+For example, think back to the <tt class="literal">AccountManager</tt> class we discussed when we talked about factory objects. We might not want to keep the <tt class="literal">AccountManager</tt> running on our server 24 hours a day; perhaps it consumes lots of server resources (memory, database connections, etc.), so we don't want it running unless it is being used. Using the RMI activation service, we can set up the <tt class="literal">AccountManager</tt> so that it doesn't start running until the first client requests an <tt class="literal">Account</tt>. In addition, after some period of inactivity, we can have the <tt class="literal">AccountManager</tt> shut down to conserve server resources and then reactivated the next time a client asks for an <tt class="literal">Account</tt>. </p>
+<p>
+<a name="INDEX-717"></a><a name="INDEX-718"></a>
+If a remote object is made activatable, it can be registered with the RMI registry without actually being instantiated. Normally, RMI remote objects (based on the <tt class="literal">UnicastRemoteObject</tt> interface) provide only nonpersistent references to themselves. Such a reference can be created for a client only if the referenced object already exists in a remote Java VM. In addition, the remote reference is valid only during the lifetime of the remote object. The remote object activation service adds support for persistent remote references that can be created even if the remote object is not running at the time of the request and that can persist beyond the lifetime of an individual server object. </p>
+<p>
+<a name="INDEX-719"></a>
+The key features provided by the RMI activation service include:</p>
+<ul>
+<li>
+<p>The ability to automatically create remote objects, triggered by requests for references to these objects.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-720"></a>
+
+Support for activation groups, in which groups of activatable remote objects are executed in the same Java VM, which is automatically started by the activation service if needed.</p>
+</li>
+<li>
+<p>The ability to restart remote objects if they exit or are destroyed due to a system failure of some kind. This can add a certain degree of fault tolerance to RMI applications.</p>
+</li>
+</ul>
+<p>
+<a name="INDEX-721"></a><a name="INDEX-722"></a>
+In the RMI activation system, activatable objects belong to activation groups, and each activation group runs within its own Java VM. If you don't group your activatable objects, simply assigning a new activation group to each activatable object you create, then each object runs inside a separate Java VM.</p>
+<p>
+<a name="INDEX-723"></a>
+
+
+You typically define an activatable remote object by:</p>
+<ul>
+<li>
+<p>
+<a name="INDEX-724"></a><a name="INDEX-725"></a>
+Subclassing your remote object implementation from the
+<tt class="literal">Activatable</tt> class provided in the
+<tt class="literal">java.rmi.activation</tt> package</p>
+</li>
+<li>
+<p>
+<a name="INDEX-726"></a>
+Providing activation constructors in the server implementation</p>
+</li>
+<li>
+<p>Registering the object and its activation method with the activation service</p>
+</li>
+</ul>
+<p>
+<a name="INDEX-727"></a>
+If you want remote clients to directly access your activatable object,
+  you also need to register the object with the RMI registry, so that
+  it can be found by name on the network. You can register an
+  activatable class with the registry without actually creating an
+  instance of the remote object, as we'll see shortly.</p>
+<p>You can also create an activatable object without subclassing the
+  <tt class="literal">Activatable</tt> class. This might be necessary if you
+  need to extend another class and the Java single-inheritance limit
+  keeps you from also extending <tt class="literal">Activatable</tt>. For
+  most of this section, we'll just discuss the case where
+  you're subclassing <tt class="literal">Activatable</tt>; I'll
+  only mention this other approach when needed.</p>
+<a name="ch03-pgfid-961163"></a>
+<h3 class="sect2">3.6.1. Persistent Remote References</h3>
+<p>
+<a name="INDEX-728"></a><a name="INDEX-729"></a><a name="INDEX-730"></a>
+The primary difference between an activatable remote object and a
+  nonactivatable one is that a remote reference to an activatable
+  object doesn't need to have a "live" object behind
+  it. If an activatable object is not running (e.g., it hasn't
+  been constructed yet, or it has been garbage-collected by its Java
+  VM, or its VM has exited), a remote reference to the object can
+  still be exported to a client. The client receives a stub, as usual,
+  and can make remote method invocations through the stub. When the
+  first method is invoked, the activation service running on the
+  server sees that the object is not active and goes about activating
+  the object for the client. If the object doesn't have a VM to run
+  in, the activation system starts one. The object is then activated
+  using information that has been registered with the activation
+  system. This information includes the object's class name, a
+  URL that can load the class bytecodes if they're not found in
+  the local <tt class="literal">CLASSPATH</tt>, and data to pass into the
+  object's activation constructor. Once the object has been
+  activated, the method invocation takes place, and the results are
+  marshaled and sent back to the client.</p>
+<p>As long as the object stays running, future method requests are
+handled as usual. If the object stops running for some reason (e.g, it
+is garbage-collected, or its VM dies), the next method request
+triggers the activation service again, and the object is
+reactivated. This is what is meant by persistent remote references:
+remote references to activatable objects can persist across multiple
+lifetimes of the actual server object.</p>
+<a name="ch03-pgfid-962193"></a>
+<h3 class="sect2">3.6.2. Defining an Activatable Remote Object</h3>
+<p>
+<a name="INDEX-731"></a><a name="INDEX-732"></a><a name="INDEX-733"></a>
+
+Naturally, before you can register and use an activatable object with
+  the RMI activation system, you need to define the remote interface
+  and the server implementation for the object. The
+  <tt class="literal">java.rmi.activation</tt> package provides the classes
+  you need to define an activatable remote object. You usually define
+  a remote object as activatable by subclassing it from
+  <tt class="literal">Activatable</tt> and defining a special constructor
+  that activates the object. You also have to register the object with
+  the activation service on the server host. </p>
+<p>
+<a name="INDEX-734"></a><a name="INDEX-735"></a><a name="INDEX-736"></a><a name="INDEX-737"></a><a name="INDEX-738"></a>
+Other than that, the implementation of an activatable remote object is
+similar to that of a nonactivatable one. You start with a remote
+interface that contains the methods you want to export from your
+object. The interface should extend <tt class="literal">Remote</tt>, and
+each method should throw a <tt class="literal">RemoteException</tt> (or, as
+of Java 1.2, any parent of <tt class="literal">RemoteException</tt>). The
+server implementation implements this interface and extends a concrete
+implementation of the <tt class="literal">java.rmi.server.RemoteServer</tt>
+class. Since you're defining an activatable remote object, you
+typically extend <tt class="literal">java.rmi.activation.Activatable</tt>
+directly and use its constructors to initialize, register, and
+activate your remote object. If you choose not to extend
+<tt class="literal">Activatable</tt> directly, you have to use the static
+<tt class="literal">exportObject()</tt> methods on the
+<tt class="literal">Activatable</tt> class to register your object with the
+activation runtime system.
+<a name="INDEX-739"></a><a name="INDEX-740"></a>
+</p>
+<a name="ch03-pgfid-965049"></a>
+<h3 class="sect3">3.6.2.1. The Activatable class</h3>
+<p>
+<a name="INDEX-741"></a><a name="INDEX-742"></a>
+The <tt class="literal">Activatable</tt> class has four constructors. Here are signatures for two of them:</p>
+<blockquote>
+<pre class="programlisting">
+protected Activatable(String src, MarshalledObject data, 
+   boolean restart, int port) throws RemoteException
+protected Activatable(String src, MarshalledObject data, 
+   boolean restart, int port, RMIClientSocketFactory csfactory,
+   RMIServerSocketFactory ssfactory) throws RemoteException</pre>
+</blockquote>
+<p>
+<a name="INDEX-743"></a><a name="INDEX-744"></a>
+
+These two constructors are <em class="emphasis">initialization</em>
+constructors. You use them when you decide to proactively create one
+of your remote objects and register it with the RMI activation
+service. In this case, the object already exists when a client first
+makes a method request on it, but if the object is destroyed, the next
+client request causes the object to be reactivated. These constructors
+register an object with the local activation service and export the
+object so that it can receive remote method requests. Both
+constructors have the following arguments in common:</p>
+<ul>
+<li>
+<p>
+<a name="INDEX-745"></a>
+
+The <tt class="literal">String </tt>parameter is a URL that indicates where
+class bytecodes required by this object can be located. This
+information is exported to a remote client so it can dynamically load
+classes required to unmarshal method return values, for example. </p>
+</li>
+<li>
+<p>The <tt class="literal">MarshalledObject</tt> parameter provides
+initialization data for the object; this parameter is necessary
+because data is typically sent from the activation daemon's VM
+to the VM designated to run the activatable object and the two might
+not be the same (more on this later). </p>
+</li>
+<li>
+<p>The <tt class="literal">boolean </tt>flag indicates whether the object
+should be automatically recreated when its home VM or its activation
+group is restarted (e.g., after a server restart). </p>
+</li>
+<li>
+<p>
+<a name="INDEX-746"></a>
+The <tt class="literal">int</tt> parameter specifies the port on which the
+  object is exported. A port of zero tells the RMI runtime system to
+  export the object on a random open port. </p>
+</li>
+</ul>
+<p>
+<a name="INDEX-747"></a><a name="INDEX-748"></a>
+The second initialization constructor takes custom client and server socket factories that create socket communications between the server and the clients of the object. Customized socket factories are a new feature in RMI as of the Java 2 SDK 1.2. I won't discuss them in this chapter, but you can consult the RMI API reference in <a href="part3.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/part3.htm">Part 3, "API Quick Reference"</a> for more details.</p>
+<p>The other two <tt class="literal">Activatable</tt> constructors have
+the following signatures:</p>
+<blockquote>
+<pre class="programlisting">
+protected Activatable(ActivationID id, int port) throws RemoteException
+protected Activatable(ActivationID id, int port,
+   RMIClientSocketFactory csfactory, RMIServerSocketFactory ssfactory)
+   throws RemoteException</pre>
+</blockquote>
+<p>
+<a name="INDEX-749"></a><a name="INDEX-750"></a><a name="INDEX-751"></a>
+These constructors are <em class="emphasis">(re)activation</em>
+constructors. The activation system uses them to activate a remote
+object that has received a remote method request, but isn't
+currently active. The <tt class="literal">ActivationID</tt> is a persistent
+ID issued by the activation system for the remote object, and the port
+number is the port that exports the remote object. The second
+constructor again takes custom server and client socket factories.</p>
+<p>
+<a name="INDEX-752"></a>
+
+The <tt class="literal">Activatable</tt> class also has a set of
+<tt class="literal">exportObject()</tt> methods that correspond to the
+constructors I've just described. You can use these methods when
+an activatable object doesn't directly extend the
+<tt class="literal">Activatable</tt> class. You call the appropriate
+<tt class="literal">exportObject()</tt> methods from within the constructors
+of the class, so they serve the same function as calling the
+<tt class="literal">Activatable</tt> constructors during initialization of
+an <tt class="literal">Activatable</tt> subclass.</p>
+<a name="ch03-pgfid-965114"></a>
+<h3 class="sect3">3.6.2.2. Implementing an activatable object</h3>
+<p>
+<a name="INDEX-753"></a><a name="INDEX-754"></a>
+As I already mentioned, you can implement an activatable remote
+object in two ways: derive the remote object from the
+<tt class="literal">Activatable</tt> class directly and make the required
+calls to the <tt class="literal">Activatable</tt> constructors in its
+constructors, or have the class implement a <tt class="literal">Remote</tt>
+interface and make the required calls to the static
+<tt class="literal">exportObject()</tt> methods in its constructors. </p>
+<p>
+<a name="INDEX-755"></a><a name="INDEX-756"></a>
+In either case, when the activation system activates a remote
+object, it looks for a constructor on the class that takes two
+arguments: an <tt class="literal">ActivationID</tt> and a
+<tt class="literal">MarshalledObject</tt>. The activation system calls this
+constructor, passing in an <tt class="literal">ActivationID</tt> it
+generates for the object and the <tt class="literal">MarshalledObject</tt>
+registered for the activatable object by the first constructor we just
+discussed. </p>
+<p>
+<a name="INDEX-757"></a><a name="INDEX-758"></a><a name="INDEX-759"></a>
+This means you have to provide a constructor with this signature
+in your implementation of an activatable object. In this constructor,
+you should call either one of the (re)activation constructors on
+the <tt class="literal">Activatable</tt> parent class (if your class extends
+<tt class="literal">Activatable</tt>), or the corresponding
+<tt class="literal">Activatable.exportObject()</tt> method (if you
+didn't extend <tt class="literal">Activatable</tt>). In this call, you
+pass on the <tt class="literal">ActivationID</tt> issued by the activation
+system and you specify the port for the exported remote object (a port
+number of <tt class="literal">0</tt> causes the object to be exported on a
+random open port). </p>
+<p>
+<a name="INDEX-760"></a>
+In addition to this required constructor, you can define other constructors for your remote object implementation as needed. If you want your object to be reactivatable, any additional constructors should call one of the initialization constructors on <tt class="literal">Activatable</tt> (using <tt class="literal">super()</tt>) or the corresponding <tt class="literal">exportObject()</tt> method, passing in a valid source URL and a <tt class="literal">MarshalledObject</tt> to be used as an argument if the object is reactivated. If the object is destroyed at some point, and a subsequent remote method request is received for it, the activation system reactivates the object by calling the required (re)activation constructor on the object's class, passing in this <tt class="literal">MarshalledObject</tt> argument. </p>
+<p>
+<a href="#ch03-36924">Example 3-5</a> shows an activatable implementation of the <tt class="literal">ThisOrThatServer</tt> interface from <a href="ch03_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_02.htm">Example 3-3</a>. The primary differences between this implementation and the nonactivatable one in <a href="ch03_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_02.htm">Example 3-4</a> are that this new implementation extends the <tt class="literal">java.rmi.activation.Activatable</tt> class instead of <tt class="literal">UnicastRemoteObject</tt>, and its constructors support the activation system. This implementation also includes a name that identifies the server.</p>
+<a name="ch03-36924"></a>
+<div class="example">
+<h4 class="objtitle">Example 3-5. An Activatable Version of the ThisOrThatServer </h4>
+<blockquote>
+<pre class="programlisting">
+import java.rmi.activation.*;
+import java.rmi.MarshalledObject;
+import java.rmi.RemoteException;
+import java.io.IOException;
+
+public class ActivatableThisOrThatServerImpl
+  extends Activatable implements ThisOrThatServer {
+  
+  // Name for server
+  private String myName = "";
+
+  // "Regular" constructor used to create a "pre-activated" server
+  public ActivatableThisOrThatServerImpl(String name, String src, int port)
+      throws RemoteException, ActivationException, IOException {
+    // Register and export object (on random open port)
+    super(src, new MarshalledObject(name), false, port);
+    // Save name
+    myName = name;
+    System.out.println("Initialization constructor called.");
+  }
+
+  // Constructor called by the activation runtime to (re)activate
+  // and export the server
+  protected ActivatableThisOrThatServerImpl(ActivationID id,
+      MarshalledObject arg) throws RemoteException {
+    // Export this object with the given activation id, on random port
+    super(id, 0);
+    System.out.println("Activating a server");
+    // Check incoming data passed in with activation request
+    try {
+      Object oarg = arg.get();
+      if (oarg instanceof String) {
+        myName = (String)oarg;
+      }
+      else {
+        System.out.println("Unknown argument received on activation: " + 
+                           oarg);
+      }
+    }
+    catch(Exception e) {
+      System.out.println("Error retrieving argument to activation");
+    }
+    System.out.println("(Re)activation constructor called.");
+  }
+
+  // Remotely-accessible methods
+  public String doThis(String todo) throws RemoteException {
+    String result = doSomething("this", todo);
+    return result;
+  }
+
+  public String doThat(String todo) throws RemoteException {
+    String result = doSomething("that", todo);
+    return result;
+  }
+
+  // Non-remote methods
+  private String doSomething(String what, String todo) {
+    String result = myName + ": " + what + " " + todo + " is done.";
+    return result;
+  }
+}</pre>
+</blockquote>
+</div>
+<p>The first constructor for <tt class="literal">ActivatableThisOrThatServerImpl</tt><a name="INDEX-761"></a><a name="INDEX-762"></a>
+ is a public one, used to construct a server with a given name. The constructor registers the new object with the activation system, passing in a URL that acts as a codebase for finding the classes required for this class. It also passes in the name given to the server, wrapped in a <tt class="literal">MarshalledObject</tt>. This ensures that the server is given the same name if it needs to be reactivated later.</p>
+<p>The second constructor is the required one used by the activation system. If an object of this type needs to be activated (or reactivated after a crash of some sort), this constructor is called to create the remote object. The constructor takes an <tt class="literal">ActivationID</tt>, issued by the activation system, and the <tt class="literal">MarshalledObject</tt> registered for the object with the activation system. The constructor exports the object by calling the second constructor on the <tt class="literal">Activatable</tt> class, then initializes itself with the data from the <tt class="literal">MarshalledObject</tt>. </p>
+<a name="INDEX-763"></a>
+<a name="INDEX-764"></a>
+<a name="ch03-19253"></a>
+<h3 class="sect2">3.6.3. Registering Activatable Objects</h3>
+<p>
+<a name="INDEX-765"></a><a name="INDEX-766"></a><a name="INDEX-767"></a>
+There are several ways to register an activatable object with its
+local activation system. In each case, the activation system needs to
+be told how to create (or recreate) the object. The information the
+activation system needs to activate an object is encapsulated in the
+<tt class="literal">ActivationDesc</tt> class. An
+<tt class="literal">ActivationDesc</tt> object contains the name of the
+class for the remote object, a <tt class="literal">URL</tt> with the network
+location of the bytecodes for the class, a
+<tt class="literal">MarshalledObject</tt> to be used as the initialization
+data for the object, and the group assignment for the object. </p>
+<p>The simplest way to register an <tt class="literal">Activatable</tt> object
+is to create an instance of the object. In our example, we've
+derived our server implementation from the
+<tt class="literal">Activatable</tt> class, so the public constructor on the
+<tt class="literal">ActivatableThisOrThatServerImpl</tt> class registers the
+object by calling the necessary constructor on
+<tt class="literal">Activatable</tt>. Thus, we can create and register one
+of these as follows:</p>
+<blockquote>
+<pre class="programlisting">
+// Make an activation group for the object
+ActivationGroupDesc gdesc = new ActivationGroupDesc(null, null);
+ActivationGroupID gid = ActivationGroup.getSystem().registerGroup(gdesc);
+ActivationGroup.createGroup(gid, gdesc, 0);
+
+// Make a server object, which registers it with activation system
+ThisOrThatServer server =
+    new ActivatableThisOrThatServerImpl(serverName, codebaseURL, 0);
+
+// Register with naming service
+LocateRegistry.getRegistry().rebind(serverName, server);</pre>
+</blockquote>
+<p>
+<a name="INDEX-768"></a>
+The first four lines are required to create an activation group for our activatable object. We'll talk more about activation groups shortly. For now, all you need to know is that this code creates the default activation group for the current VM. Any remote object that isn't
+ specifically assigned to a group is placed in this default group. </p>
+<p>The activatable object itself is created by simply calling the public <tt class="literal">ActivatableThisOrThatServerImpl</tt> constructor. This constructor registers the object with the activation system by calling the appropriate <tt class="literal">Activatable</tt> constructor, as we've already discussed. Since we haven't specified an activation group for the object, it is placed in the default group we just created. If we hadn't created that default group, the activation system would throw an exception here, when the object is registered.</p>
+<p>Aside from the creation of the activation group, this example looks a lot like our other examples of registering RMI objects. The difference here is that if the registering process dies off at some point, the activation system can reactivate the activatable object in a new Java VM using the information provided in the <tt class="literal">ActivationDesc</tt> for the object. In this case, we're relying on the <tt class="literal">Activatable</tt> constructor (which is called by our <tt class="literal">ActivatableThisOrThatServerImpl</tt> constructor) to create and register an <tt class="literal">ActivationDesc</tt> for our object.</p>
+<p>
+<a name="INDEX-769"></a><a name="INDEX-770"></a>
+When an object needs to be activated, the activation system first
+looks up the <tt class="literal">ActivationDesc</tt> for the object and then
+looks for the class referenced in the
+<tt class="literal">ActivationDesc</tt>, using the URL to load the class
+bytecodes. Once the class has been loaded, the activation system
+creates an instance of the class by calling the activation
+constructor, which takes an <tt class="literal">ActivationID</tt> and a
+<tt class="literal">MarshalledObject</tt> as arguments. The
+<tt class="literal">ActivationID</tt> is issued by the activation system,
+and the <tt class="literal">MarshalledObject</tt> contains the data
+previously registered with the <tt class="literal">ActivationDesc</tt>. In
+our activatable <tt class="literal">ThisOrThatServer</tt> in <a href="#ch03-36924">Example 3-5</a>, the activation system calls the second
+constructor on our <tt class="literal">ActivatableThisOrThatServerImpl</tt>
+class. The new object passes the <tt class="literal">ActivationID</tt> up to
+the <tt class="literal">Activatable</tt> constructor so that it can be
+recorded, and the name of the server is pulled from the
+<tt class="literal">MarshalledObject</tt>. The
+<tt class="literal">Activatable</tt> constructor takes care of creating and
+registering an <tt class="literal">ActivationDesc</tt> for the object and
+exporting the object with the activation system.</p>
+<a name="ch03-pgfid-962379"></a>
+<h3 class="sect3">3.6.3.1. Registering an activatable object without instantiating</h3>
+<p>
+<a name="INDEX-771"></a>
+A more complicated, but often more useful way to register a remote
+object is to create an <tt class="literal">ActivationDesc</tt> for it and
+then register the information directly with the activation system,
+<em class="emphasis">without</em> creating an instance of the object. The
+static <tt class="literal">Activatable.register()</tt> method accepts an
+<tt class="literal">ActivationDesc</tt> object and registers it with the
+activation system directly. Here's how we can do that:
+<a name="INDEX-772"></a>
+</p>
+<blockquote>
+<pre class="programlisting">
+// Make a codebase and activation argument for the object
+String src = "http://objhost.org/classes";
+MarshalledObject actArg = new MarshalledObject("MyServer");
+
+// Create the ActivationDesc and get a stub for the object
+ActivationDesc desc = 
+  new ActivationDesc("ActivatableThisOrThatServerImpl", src, actArg);
+ThisOrThatServer serverStub =
+  (ThisOrThatServer)Activatable.register(desc);</pre>
+</blockquote>
+<p>
+<a name="INDEX-773"></a><a name="INDEX-774"></a>
+When we create the <tt class="literal">ActivationDesc</tt> for the object,
+we specify the name of the class to use for creating the object, a
+codebase for finding the class, and a
+<tt class="literal">MarshalledObject</tt> that is passed to the object when
+it's activated. The <tt class="literal">ActivationDesc</tt> is used in
+the call to the <tt class="literal">Activatable.register()</tt> method,
+which returns a <tt class="literal">RemoteStub</tt> for the activatable
+object. Since we know this stub is for an object that implements the
+<tt class="literal">ThisOrThatServer</tt> interface, we can safely cast it
+to a <tt class="literal">ThisOrThatServer</tt>. We can also use this
+reference to register the remote object with the local RMI naming
+registry:</p>
+<blockquote>
+<pre class="programlisting">LocateRegistry.getRegistry().bind("ThisOrThatServer", serverStub);</pre>
+</blockquote>
+<p>Although I haven't shown it here, note that you also have to create an activation group for the object, just like we did in our earlier example, before you can register it with the activation service.</p>
+<p>So, to recap, we've registered a remote object with the
+activation system and the RMI naming registry without actually
+<a name="INDEX-775"></a>
+creating the object itself. When a client tries to look up the object,
+it gets back a remote stub, with no active object behind it on the
+server. When the client calls a method on the stub, however, the
+activation system on the server creates the object, using the
+information in the <tt class="literal">ActivationDesc</tt> we provided.</p>
+<a name="ch03-pgfid-968791"></a>
+<h3 class="sect3">3.6.3.2. Passing data with the MarshalledObject</h3>
+<p>
+<a name="INDEX-776"></a><a name="INDEX-777"></a>
+The way you can pass arguments to activatable objects before
+they are activated is through the <tt class="literal">MarshalledObject</tt>
+contained within the <tt class="literal">ActivationDesc</tt> for the
+object. However, once the <tt class="literal">ActivationDesc</tt> is
+registered with the activation system, you can't dynamically
+update the contents of the <tt class="literal">MarshalledObject</tt>. One
+way to have the arguments to an activatable object be dynamic is to
+bundle a filename or URL into the
+<a name="INDEX-778"></a><tt class="literal">MarshalledObject</tt>. 
+
+
+At the point that the object is
+activated, it can read data from the file or URL and use that data
+during activation.</p>
+<a name="ch03-pgfid-965297"></a>
+<h3 class="sect2">3.6.4. Activation Groups</h3>
+<p>
+<a name="INDEX-779"></a><a name="INDEX-780"></a>
+Every activatable RMI object belongs to an activation
+group. Each group of activatable objects runs within the same Java VM
+on the server host. In essence, activation groups are a way of
+defining collections of activatable remote objects that should share
+the same physical address space. We've already seen how to set
+up an activation group, since we had to do this before registering our
+activatable object with the activation system. In this section,
+we'll take a look at creating activation groups in a bit more
+detail and discuss what the activation group is actually doing for
+you.</p>
+<p>Activation groups in RMI are more than just a way of organizing
+remote objects. Each activation group is responsible for monitoring,
+activating, and reactivating the objects it contains. The objects
+involved in maintaining an activation group are shown in <a href="#ch03-55060">Figure 3-4</a>. Note that you don't normally
+need to interact with the underlying objects themselves. You simply
+<a name="INDEX-781"></a>
+set up your <tt class="literal">ActivationGroup</tt> objects and assign
+activatable objects to them; the activation system does the rest for
+you.</p>
+<a name="ch03-55060"></a>
+<div class="figure">
+<img alt="figure" src="figs/Jent.0304.gif" webstripperlinkwas="figs/Jent.0304.gif"></div>
+<h4 class="objtitle">Figure 3-4. The components of the activation system</h4>
+<p>
+<a name="INDEX-782"></a>
+An <tt class="literal">ActivationGroup</tt> is created when the first
+object in the group needs to be activated. The
+<tt class="literal">Activator</tt> is responsible for creating a VM for the
+<tt class="literal">ActivationGroup</tt> to run in, and for starting the
+<tt class="literal">ActivationGroup</tt> using the information in the
+registered object's <tt class="literal">ActivationGroupDesc</tt>, if
+it has one. If the remote object doesn't have a specified group,
+a default one is created. The new <tt class="literal">ActivationGroup</tt>
+object is then told to activate the requested remote object, by
+calling its <tt class="literal">newInstance()</tt> method. The arguments the
+<tt class="literal">Activator</tt> passes into this method are the
+<tt class="literal">ActivationID</tt> for the new object and the
+<tt class="literal">ActivationDesc</tt> that the
+<tt class="literal">Activator</tt> has registered for the object. </p>
+
+<p>
+<a name="INDEX-783"></a><a name="INDEX-784"></a><a name="INDEX-785"></a>
+The <tt class="literal">ActivationDesc</tt> gives an
+<tt class="literal">ActivationGroup</tt> everything it needs to activate the
+remote object. The <tt class="literal">ActivationGroup</tt> takes the class
+name for the object and looks for the class bytecodes. First it checks
+the local <tt class="literal">CLASSPATH</tt>, and if that pulls up nothing, it uses the <tt class="literal">URL</tt> in the <tt class="literal">ActivationDesc</tt> to
+load the class from the given URL. Once the class is loaded, an
+instance of the class is created by calling the activation constructor
+on the class (e.g., the constructor that has an
+<tt class="literal">ActivationID</tt> argument and a
+<tt class="literal">MarshalledObject</tt> argument). The
+<tt class="literal">ActivationID</tt> and
+<tt class="literal">MarshalledObject</tt> come from the call to the
+<tt class="literal">newInstance()</tt> method. The new, active remote object
+is returned to the <tt class="literal">Activator</tt> as a serialized
+<a name="INDEX-786"></a><a name="INDEX-787"></a><tt class="literal">MarshalledObject</tt>. This is done for two
+reasons. First, the <tt class="literal">Activator</tt> runs in a separate
+Java VM, so the active object reference needs to be transferred from
+one VM to another, and the easiest way to do this is to serialize it
+and transmit it in that form. Second, since the object has been
+bundled into a <tt class="literal">MarshalledObject</tt>, the
+<tt class="literal">Activator</tt> doesn't need to load the
+object's bytecodes unless absolutely necessary. In most cases,
+the <tt class="literal">Activator</tt> doesn't need to interact
+directly with the object itself, so it doesn't need to waste
+time loading unnecessary bytecodes.</p>
+<p>
+<a name="INDEX-788"></a><a name="INDEX-789"></a><a name="INDEX-790"></a>
+Each <tt class="literal">ActivationGroup</tt> has an <tt class="literal">ActivationMonitor</tt> associated with it. The <tt class="literal">ActivationGroup</tt> has to tell the <tt class="literal">ActivationMonitor</tt> whenever an object becomes active or inactive. An activatable object is responsible for informing its <tt class="literal">ActivationGroup</tt> when it becomes active and inactive, by calling the group's <tt class="literal">activeObject()</tt> and <tt class="literal">inactiveObject()</tt> methods, respectively. The <tt class="literal">ActivationGroup</tt>, in turn, passes the information on to the <tt class="literal">ActivationMonitor</tt> by calling identical methods on the monitor object. When the object becomes inactive, the <tt class="literal">ActivationMonitor</tt> makes note of it and arranges for the object to be reactivated the next time a
+<a name="INDEX-791"></a><a name="INDEX-792"></a>
+ method request comes in for it. If an entire <tt class="literal">ActivationGroup</tt> becomes inactive, the <tt class="literal">ActivationMonitor</tt> is informed through its <tt class="literal">inactiveGroup()</tt> method. The next request for an object in that 
+<a name="INDEX-793"></a>
+group causes the <tt class="literal">Activator</tt> to recreate the group.</p>
+<a name="ch03-pgfid-962684"></a>
+<h3 class="sect3">3.6.4.1. Registering activation groups</h3>
+<p>
+<a name="INDEX-794"></a><a name="INDEX-795"></a><a name="INDEX-796"></a><a name="INDEX-797"></a>
+An <tt class="literal">ActivationGroup</tt> is registered with the activation system in roughly the same way as an activatable object. You have to create an <tt class="literal">ActivationGroupDesc</tt> object that contains the name of the class for the group, the <tt class="literal">URL</tt> where the class bytecodes can be loaded, and a <tt class="literal">MarshalledObject</tt> that is given to the <tt class="literal">ActivationGroup</tt> as initialization data. Unlike activatable objects, though, the class of a group has to be a concrete subclass of <tt class="literal">ActivationGroup</tt>. You register
+<a name="INDEX-798"></a><a name="INDEX-799"></a>
+the <tt class="literal">ActivationGroupDesc</tt> by calling the static <tt class="literal">ActivationSystem.registerGroup()</tt> method, passing in the <tt class="literal">ActivationGroupDesc</tt>. The <tt class="literal">ActivationSystem</tt> returns an <tt class="literal">ActivationGroupID</tt> that can assign specific objects to the group. </p>
+<a name="ch03-pgfid-962685"></a>
+<h3 class="sect3">3.6.4.2. Assigning activatable objects to groups</h3>
+<p>
+<a name="INDEX-800"></a><a name="INDEX-801"></a><a name="INDEX-802"></a><a name="INDEX-803"></a>
+You assign an activatable object to a group by specifying the group ID in the <tt class="literal">ActivationDesc</tt> registered with the activation system. The <tt class="literal">ActivationGroupID</tt> returned by the <tt class="literal">ActivationSystem.registerGroup()</tt> method can be passed into the <tt class="literal">ActivationDesc</tt> constructor.</p>
+<p>Before you can register a remote object with the activation
+  system, you need to create a group for it. For our activatable
+  <tt class="literal">ThisOrThatServer</tt> example, we can run Java code
+  along the following
+
+
+ lines on the object server (note I've left out the exception handling):</p>
+<blockquote>
+<pre class="programlisting">
+// Make an activation group for the object
+ActivationGroupDesc gdesc = new ActivationGroupDesc(null, null);
+ActivationGroupID gid =
+  ActivationGroup.getSystem().registerGroup(gdesc);
+ActivationGroup.createGroup(gid, gdesc, 0);
+
+// Set up ActivationDesc for object
+String codebaseURL = "http://objhost.org/classes";
+String serverName = "Fred";
+MarshalledObject activationArg = new MarshalledObject(serverName);
+ActivationDesc desc =
+  new ActivationDesc(gid, "ActivatableThisOrThatServerImpl",
+                     codebaseURL, activationArg);
+ThisOrThatServer serverRef =
+  (ThisOrThatServer)Activatable.register(desc);
+LocateRegistry.getRegistry().rebind(serverName, serverRef);</pre>
+</blockquote>
+<p>Here we're using the
+<tt class="literal">ActivatableThisOrThatServerImpl</tt> class and
+registering a remote object with the activation system without
+actually instantiating it. Before we register our remote object, we
+create an <tt class="literal">ActivationGroupDesc</tt>, then use it to
+register and create a new activation group with the activation
+system. After we create the activation group (using the
+<tt class="literal">ActivationGroup.createGroup()</tt> method), we use the
+<tt class="literal">ActivationGroupID</tt> for our new group to make an
+<tt class="literal">ActivationDesc</tt> for our remote object, and we use
+that to register the object with the activation system. The activation
+system generates a remote stub for our object, and we register that
+with the RMI naming registry. </p>
+<p>Since each <tt class="literal">ActivationGroup</tt> is started within
+its own VM if it's initially activated by the activation system,
+grouping objects is a convenient way to partition your remote objects
+into shared address spaces on your server. For more details on the
+activation group interfaces in RMI, consult the
+<tt class="literal">java.rmi.activation</tt> reference material in Chapter
+14, <em class="emphasis">The java.rmi.activation Package</em>.</p>
+<a name="ch03-pgfid-961241"></a>
+<h3 class="sect2">3.6.5. The Activation Daemon</h3>
+<p>
+<a name="INDEX-804"></a>
+The heart of the RMI activation system is the activation daemon, which
+  runs on the host for an activatable object. The activation daemon is
+  responsible for intercepting remote method requests on activatable
+  objects and orchestrating the activation of the object, if needed.</p>
+<p>
+<a name="INDEX-805"></a><a name="INDEX-806"></a><a name="INDEX-807"></a>
+The activation daemon provided with the Java SDK,
+  <em class="emphasis">rmid</em>, runs a Java VM that includes a
+  <tt class="literal">java.rmi.activation.Activator</tt> object. The
+  <tt class="literal">Activator</tt> is responsible for keeping a registry
+  of activatable objects, along with the information needed to
+  activate them. This information is in two parts: an
+  <tt class="literal">ActivationDesc</tt> object and an optional
+  <tt class="literal">ActivationGroupDesc</tt>. The
+  <tt class="literal">ActivationGroupDesc</tt> identifies the group of
+  activatable objects to which the object should be added and
+  describes how to start the group if it doesn't exist. The
+  <tt class="literal">ActivationDesc</tt> includes all information needed to
+  activate the object itself. An activatable object has to be
+  registered nwith the activation system in one of the ways described
+  earlier to be started automatically by the
+  <tt class="literal">Activator</tt>.</p>
+<p>If a remote method request is received by the RMI runtime system
+  on a host, and the target object hasn't been created yet, the
+  <tt class="literal">Activator</tt> is asked to activate it. The
+  <tt class="literal">Activator</tt> looks up the
+  <tt class="literal">ActivationDesc</tt> (and
+  <tt class="literal">ActivationGroupDesc</tt>, if present) for the
+  object. If the object has an <tt class="literal">ActivationGroup</tt>
+  assigned to it, and the <tt class="literal">ActivationGroup</tt>
+  doesn't exist yet, a Java VM is started for the group, and the
+  <tt class="literal">ActivationGroupDesc</tt> data is used to start an
+  <tt class="literal">ActivationGroup</tt> object within the new VM. If the
+  object has no <tt class="literal">ActivationGroup</tt> associated with it,
+  it's given its own <tt class="literal">ActivationGroup</tt> running
+  in its own VM. The group is then asked to start the requested
+  object, using the <tt class="literal">ActivationDesc</tt> object
+  registered for the object. Once the
+  <tt class="literal">ActivationGroup</tt> activates the object within its
+  VM, the <tt class="literal">Activator</tt> is notified, and the now-active
+  remote reference is returned to the RMI runtime system. The RMI
+  runtime system forwards the remote method request through the
+  reference to the object, and the return value is exported back to
+  the client as usual. </p>
+<a name="ch03-pgfid-961973"></a>
+<h3 class="sect3">3.6.5.1. The daemon's dual personality</h3>
+<p>
+<a name="INDEX-808"></a><a name="INDEX-809"></a>
+When you start the <em class="emphasis">rmid</em> daemon, it creates an
+<tt class="literal">Activator</tt> and then listens on the default port of
+1098 for activation requests. There is also a <tt class="literal">-port</tt>
+command-line option that lets you specify a different port for the VM
+to use. In addition to running the <tt class="literal">Activator</tt>, the
+<em class="emphasis">rmid</em> daemon also runs its own RMI
+<tt class="literal">Registry</tt>. If needed, you can register local objects
+with the daemon's internal <tt class="literal">Registry</tt> by
+specifying the daemon's port when you call the
+<tt class="literal">bind()</tt> or <tt class="literal">rebind()</tt> method of the
+<tt class="literal">Registry</tt>. For example, if <em class="emphasis">rmid</em>
+is running on its default port of 1098:</p>
+<blockquote>
+<pre class="programlisting">
+RemoteObject server = ...
+Registry local = LocateRegistry.getRegistry(1098);
+local.bind(server, "Server");</pre>
+</blockquote>
+<p>This way, you can consolidate your activation system and your naming service into one VM on your server.</p>
+<a name="INDEX-810"></a>
+<a name="INDEX-811"></a>
+<a name="INDEX-812"></a>
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_05.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch03_07.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/ch03_07.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">3.5. Dynamically Loaded Classes</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">3.7. RMI and Native Method Calls</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

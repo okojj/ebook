@@ -1,0 +1,287 @@
+<html>
+<head>
+<title>Writing Your Own Pod Tools (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Writing Your Own Pod Tools">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch26_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch26_01.htm">Chapter 26: Plain Old Documentation</a></td><td align="right" valign="top" width="172"><a href="ch26_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">26.3. Writing Your Own Pod Tools</h2>
+
+<p>Pod was designed first and foremost to be easy to write.  As an added
+benefit, pod's simplicity also lends itself to writing simple tools for
+processing pod.  If you're looking for pod directives, just set your
+input record separator to paragraph mode (perhaps with the <tt class="userinput"><b>-00</b></tt> switch), and only pay attention to paragraphs that look poddish.</p>
+
+<p>For example, here's a simple <em class="emphasis">olpod</em> program to
+produce a pod outline:</p>
+
+<blockquote>
+<pre class="programlisting">#!/usr/bin/perl -l00n
+# olpod - outline pod
+next unless /^=head/;
+s/^=head(\d)\s+/ ' ' x ($1 * 4 - 4)/e;
+print $_, "\n";</pre>
+</blockquote>
+
+<p>If you run that on the current chapter of this book, you'll get
+something like this:</p>
+
+<blockquote>
+<pre class="programlisting">Plain Old Documentation
+    Pod in a Nutshell
+        Verbatim Paragraphs
+        Pod Directives
+        Pod Sequences
+    Pod Translators and Modules
+    Writing Your Own Pod Tools
+    Pod Pitfalls
+    Documenting Your Perl Programs</pre>
+</blockquote>
+
+<p>That pod outliner didn't really pay attention to whether it was in a
+valid pod block or not.  Since pod and nonpod can intermingle in the
+same file, running general-purpose tools to search or analyze the
+whole file doesn't always make sense.  But that's no problem, given
+how easy it is to write tools for pod.  Here's a tool that
+<em class="emphasis">is</em> aware of the difference between pod and
+nonpod, and produces only the pod:</p>
+
+<blockquote>
+<pre class="programlisting">#!/usr/bin/perl -00
+# catpod - cat out just the pods
+while (&lt;&gt;) {
+    if (! $inpod) { $inpod = /^=/;            }
+    if ($inpod)   { $inpod = !/^=cut/; print; }
+} continue {
+    if (eof)      {  close ARGV; $inpod = ''; }
+}</pre>
+</blockquote>
+
+<p>You could use that program on another Perl program or module, then
+pipe the output along to another tool.  For example, if you have the
+<em class="emphasis">wc</em>(1) program<a href="#FOOTNOTE-2">[2]</a> to count
+lines, words, and characters, you could feed it
+<em class="emphasis">catpod</em> output to consider only pod in its
+counting:</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-2"></a>
+<p>[2]And if you
+don't, get the Perl Power Tools version from the CPAN
+<em class="emphasis">scripts</em> directory.</p>
+
+</blockquote>
+
+<blockquote>
+<pre class="programlisting">% <tt class="userinput"><b>catpod MyModule.pm | wc</b></tt>
+</pre>
+</blockquote>
+
+<p>There are plenty of places where pod allows you to write primitive
+tools trivially using plain, straightforward Perl.  Now that you have
+<em class="emphasis">catpod</em> to use as a component, here's another tool
+to show just the indented code:</p>
+
+<blockquote>
+<pre class="programlisting">#!/usr/bin/perl -n00
+# podlit - print the indented literal blocks from pod input
+print if /^\s/;</pre>
+</blockquote>
+
+<p>What would you do with that?  Well, you might want to do
+<em class="emphasis">perl -wc</em> checks on the code in the document, for
+one thing.  Or maybe you want a flavor of
+<em class="emphasis">grep</em>(1)<a href="#FOOTNOTE-3">[3]</a> that only looks at the code examples:</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-3"></a>
+<p>[3]And if you don't
+have <em class="emphasis">grep</em>, see previous
+footnote.</p>
+
+</blockquote>
+
+<blockquote>
+<pre class="programlisting">% <tt class="userinput"><b>catpod MyModule.pm | podlit | grep funcname</b></tt>
+</pre>
+</blockquote>
+
+<p>This tool-and-filter philosophy of interchangeable (and separately
+testable) parts is a sublimely simple and powerful approach to
+designing reusable software components.  It's a form of laziness
+to just put together a minimal solution that gets the job done
+today--for certain kinds of jobs, at least.</p>
+
+<p>For other tasks, though, this can even be counterproductive.
+Sometimes it's more work to write a tool from scratch, sometimes
+less.  For those we showed you earlier, Perl's native text-processing
+prowess makes it expedient to use brute force.  But not
+everything works that way.  As you play with pod, you might notice
+that although its directives are simple to parse, its sequences can
+get a little dicey.  Although some, um, subcorrect translators don't
+accommodate this, sequences can nest within other sequences and can
+have variable-length delimiters.</p>
+
+<p>Instead of coding up all that parsing code on your own, laziness
+looks for another solution.  The standard <tt class="literal">Pod::Parser</tt> module
+fits that bill.  It's especially useful for complicated tasks, like
+those that require real parsing of the internal bits of the paragraphs,
+conversion into alternative output formats, and so on.  It's easier
+to use the module for complicated cases, because the amount of code
+you end up writing is smaller.  It's also better because the tricky parsing
+is already worked out for you.  It's really the same principle as using
+<em class="emphasis">catpod</em> in a pipeline.</p>
+
+<p>The <tt class="literal">Pod::Parser</tt> module takes an interesting approach to its job.
+It's an object-oriented module of a different flavor than most
+you've seen in this book.  Its primary goal isn't so much to provide
+objects for direct manipulation as it is to provide a base class
+upon which other classes can be built.</p>
+
+<p>You create your own class and inherit from <tt class="literal">Pod::Parser</tt>.  Then
+you declare subroutines to serve as callback methods for your parent
+class's parser to invoke.  It's a very different way of programming
+than the procedural programs given earlier.  In a sense, it's more
+of a declarative programming style, because to get the job done,
+you simply register functions and let other entities invoke them for you.
+The program's tiresome logic is handled elsewhere. You just give some 
+plug-and-play pieces.</p>
+
+<p>Here's a rewrite of the original <em class="emphasis">catpod</em> program given earlier, but
+this time it uses the <tt class="literal">Pod::Parser</tt> module to create our own subclass:
+<blockquote>
+<pre class="programlisting">#!/usr/bin/perl
+# catpod2, class and program
+
+package catpod_parser;
+use Pod::Parser;
+@ISA = qw(Pod::Parser);
+sub command {
+    my ($parser, $command, $paragraph, $line_num) = @_;
+    my $out_fh = $parser-&gt;output_handle();
+    $paragraph .= "\n" unless substr($paragraph, -1) eq "\n";
+    $paragraph .= "\n" unless substr($paragraph, -2) eq "\n\n";
+    print $out_fh "=$command $paragraph";
+}
+
+sub verbatim {
+    my ($parser, $paragraph, $line_num) = @_;
+    my $out_fh = $parser-&gt;output_handle();
+    print $out_fh $paragraph;
+}
+
+sub textblock {
+    my ($parser, $paragraph, $line_num) = @_;
+    my $out_fh = $parser-&gt;output_handle();
+    print $out_fh $paragraph;
+}
+sub interior_sequence {
+    my ($parser, $seq_command, $seq_argument) = @_;
+    return "$seq_command&lt;$seq_argument&gt;";
+}
+
+if (!caller) {
+    package main;
+    my $parser = catpod_parser::-&gt;new();
+    unshift @ARGV, '-' unless @ARGV;
+    for (@ARGV) { $parser-&gt;parse_from_file($_); }
+}
+1;
+__END__
+
+=head1 NAME
+docs describing the new catpod program here</pre>
+</blockquote>
+
+As you see, it's a good bit longer and more complicated.  It's also
+more extensible because all you have to do is plug in your own
+methods when you want your subclass to act differently than its
+base class.</p>
+
+<p>The last bit at the end there, where it says <tt class="literal">!caller</tt>, checks
+whether the file is being used as a module or as a program.  If
+it's being used as a program, then there is no <tt class="literal">caller</tt>.  So it
+fires up its own parser (using the <tt class="literal">new</tt> method it inherited) and
+runs that parser on the command-line arguments.  If no filenames
+were supplied, it assumes standard input, just as the previous
+version did.</p>
+
+<p>Following the module code is an <tt class="literal">__END__</tt> marker, a blank line
+without whitespace on it, and then the program/module's own pod
+documentation.  This is an example of one file that's a program
+<em class="emphasis">and</em> a module <em class="emphasis">and</em> its own documentation.  It's probably several
+other things as well.</p>
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch26_02.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch26_04.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">26.2. Pod Translators and Modules</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">26.4. Pod Pitfalls</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

@@ -1,0 +1,734 @@
+<html>
+<head>
+<title>Noticing Suspicious Activities  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Noticing Suspicious Activities">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch10_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch10_01.htm">Chapter 10: Security and Network Monitoring</a></td><td align="right" valign="top" width="172"><a href="ch10_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">10.2. Noticing Suspicious Activities</h2>
+
+
+
+
+
+<p>A good night watchman needs more than just the ability to monitor for
+change. She or he also needs to be able to spot suspicious activities
+and circumstances. A hole in the perimeter fence or unexplained bumps
+in the night need to be brought to someone's attention. We can
+write programs to play this role.</p>
+
+
+
+
+
+<a name="ch10-4-fm2xml"></a>
+<h3 class="sect2">10.2.1. Local Signs of Peril</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-1014"></a>It's unfortunate,
+but learning to be good at spotting signs of suspicious activity
+often comes as a result of pain and the desire to avoid it in the
+future. After the first few security breaches, you'll start to
+notice that intruders often follow certain patterns and leave behind
+telltale clues. Spotting these signs, once you know what they are, is
+often easy in Perl.</p>
+
+
+
+
+
+<a name="ch10-5-fm2xml"></a>
+<blockquote class="note">
+<h4 class="objtitle">TIP</h4>
+<p>
+<a name="INDEX-1015"></a>After each security breach, it is
+vitally important that you take a few moments to perform a postmortem
+of the incident. Document (to the best of your knowledge) where the
+intruders came in, what tools or holes they used, what they did, who
+else they attacked, what you did in response, and so on.</p>
+
+
+
+
+
+<p>It is tempting to return to normal daily life and forget the
+break-in. If you can resist this temptation, you'll find later
+that you've gained something from the incident, rather than
+just losing time and effort. The Nietzchean principle of "that
+which does not kill you makes you stronger" is often applicable
+in the system administration realm as well.</p>
+
+
+
+
+</blockquote>
+
+<p>
+<a name="INDEX-1016"></a><a name="INDEX-1017"></a><a name="INDEX-1018"></a>For instance, intruders, especially the
+less-sophisticated kind, often try to hide their activities by
+creating "hidden" directories to store their data. On
+Unix and Linux systems they will put exploit code and sniffer output
+in directories with names like "..." (dot dot dot),
+". " (dot space), or " Mail" (space Mail).
+These names are likely to be passed over in a cursory inspection of
+<tt class="command">ls</tt> output.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-1019"></a><a name="INDEX-1020"></a>We can easily write a program to search
+for these names using the tools we learned about in <a href="ch02_01.htm">Chapter 2, "Filesystems"</a>. Here's a program based on the
+<tt class="literal">File::Find</tt> module (as called by <em class="filename">find.pl
+</em>) which looks for anomalous directory names.</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">require "find.pl";
+
+# Traverse desired filesystems
+
+&amp;find('.');
+
+sub wanted {
+    
+   (-d $_) and                           # is a directory
+     $_ ne "." and $_ ne ".." and        # is not . or ..
+
+      (/[^-.a-zA-Z0-9+,:;_~$#(  )]/ or     # contains a "bad" character
+       /^\.{3,}/ or                      # or starts with at least 3 dots
+       /^-/) and                         # or begins with a dash
+
+       print "'".&amp;nice($name)."'\n";
+}
+
+# print a "nice" version of the directory name, i.e., with control chars 
+# explicated. This subroutine barely modified from &amp;unctrl(  ) in Perl's
+# stock dumpvar.pl
+sub nice {
+    my($name) = $_[0];
+    $name =~ s/([\001-\037\177])/'^'.pack('c',ord($1)^64)/eg;
+
+    $name;
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Remember <a href="ch09_05.htm#ch09-11-fm2xml">the sidebar "Regular Expressions"</a> in <a href="ch09_01.htm">Chapter 9, "Log Files"</a>? Filesystem sifting programs like these are
+another example where this holds true. The effectiveness of these
+programs often hinges on the quality and quantity of their regular
+expressions. Too few regexps and you miss things you might want to
+catch. Too many regexps or regexps that are inefficient gives your
+program an exorbitant runtime and resource usage. If you use regexps
+that are too loose, the program will generate many false positives.
+It is a delicate balance.<a name="INDEX-1021"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch10-6-fm2xml"></a>
+<h3 class="sect2">10.2.2. Finding Problematic Patterns</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-1022"></a>Let's use some of the things we
+learned in <a href="ch09_01.htm">Chapter 9, "Log Files"</a> to move us along in our
+discussion. We've just talked about looking for suspicious
+objects; now let's move on to looking for
+<em class="emphasis">patterns</em> that may indicate suspicious activity.
+We can demonstrate this with a program that does some primitive
+logfile analysis to determine potential break-ins.</p>
+
+
+
+
+
+<p>This example is based on the following premise: most users logging in
+remotely do so consistently from the same place or a small list of
+places. They usually log in remotely from a single machine, or from
+the same ISP modem bank each time. If you find an account that has
+logged in from more than a handful of domains, it's a good
+indicator that this account has been compromised and the password has
+been widely distributed. Obviously this premise does not hold for
+populations of highly mobile users, but if you find an account that
+has been logged into from Brazil and Finland in the same two-hour
+period, that's a pretty good indicator that something is fishy.</p>
+
+
+
+
+
+<p>Let's walk through some code that looks for this indicator.
+This code is Unix-centric, but the techniques demonstrated in it are
+platform independent. First, here's our built-in documentation.
+It's not a bad idea to put something like this near the top of
+your program for the sake of other people who will read your code.
+Before we move on, be sure to take a quick look at the arguments the
+rest of the program will support:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub usage {
+    print &lt;&lt;"EOU"
+lastcheck - check the output of the last command on a machine
+            to determine if any user has logged in from &gt; N domains
+            (inspired by an idea from Daniel Rinehart)
+
+   USAGE:  lastcheck [args], where args can be any of:
+    -i:           for IP #'s, treat class C subnets as the same "domain"
+    -h:           this help message
+    -f &lt;domain&gt;   count only foreign domains, specify home domain
+    -l &lt;command&gt;: use &lt;command&gt; instead of default /usr/ucb/last
+                  note: no output format checking is done!
+    -m &lt;#&gt;:       max number of unique domains allowed, default 3
+    -u &lt;user&gt;:    perform check for only this username
+EOU
+    exit;
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>First we parse the user's command-line arguments. The
+<tt class="literal">getopts</tt> line below will look at the arguments to
+the program and set <tt class="literal">$opt_</tt><em class="replaceable">&lt;flag
+letter&gt;</em> appropriately. The colon after the letter
+means that option takes an argument:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Getopt::Std;       # standard option processor
+getopts('ihf:l:m:u:'); # parse user input
+
+&amp;usage if (defined $opt_h);
+
+# number of unique domains before we complain
+$maxdomains = (defined $opt_m) ? $opt_m : 3;</pre>
+</blockquote>
+
+
+
+
+
+<p>The following lines reflect the portability versus efficiency
+decision we discussed in the <a href="ch09_01.htm">Chapter 9, "Log Files"</a>. Here
+we're opting to call an external program. If you wanted to make
+the program less portable and a little more efficient, you could use
+<tt class="literal">unpack( )</tt> as discussed in that chapter:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$lastex = (defined $opt_l) ? $opt_l : "/usr/ucb/last";
+
+open(LAST,"$lastex|") || die "Can't run the program $lastex:$!\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>Before we get any further into the program, let's take a quick
+look at the hash of lists data structure this program uses as it
+processes the data from <tt class="command">last</tt>. This hash will have
+a username as its key and a reference to a list of the unique domains
+that user has logged in from as its value.</p>
+
+
+
+
+
+<p>For instance, a sample entry might be:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$userinfo { laf } = [ 'ccs.neu.edu', 'xerox.com', 'foobar.edu' ]</pre>
+</blockquote>
+
+
+
+
+
+<p>This entry shows the account <em class="emphasis">laf</em> has logged in
+from the <em class="emphasis">ccs.neu.edu</em>,
+<em class="emphasis">xerox.com</em>, and <em class="emphasis">foobar.edu</em> domains.</p>
+
+
+
+
+
+<p>We begin by iterating over the input we get from
+<tt class="command">last</tt> ; the output on our system looks like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">cindy    pts/10   sinai.ccs.neu.ed  Fri Mar 27 13:51   still logged in
+michael  pts/3    regulus.ccs.neu.  Fri Mar 27 13:51   still logged in 
+david    pts/5    fruity-pebbles.c  Fri Mar 27 13:48   still logged in
+deborah  pts/5    grape-nuts.ccs.n  Fri Mar 27 11:43 - 11:53  (00:09)
+barbara  pts/3    152.148.23.66     Fri Mar 27 10:48 - 13:20  (02:31)
+jerry    pts/3    nat16.aspentec.c  Fri Mar 27 09:24 - 09:26  (00:01)</pre>
+</blockquote>
+
+
+
+
+
+<p>You'll notice that the hostnames (column 3) in our
+<tt class="command">last</tt> output have truncated names. We've seen
+this hostname length restriction before in <a href="ch09_01.htm">Chapter 9, "Log Files"</a>, but up until now we've sidestepped the
+challenge it represents. We'll stare danger right in the face
+in a moment when we start populating our data structure.</p>
+
+
+
+
+
+<p>Early on in the <tt class="literal">while</tt> loop, we try to skip lines
+that contain cases we don't care about. In general it is a good
+idea to check for special cases like this at the beginning of your
+loops before any actual processing of the data (e.g., a
+<tt class="literal">split( )</tt>) takes place. This lets the program
+quickly identify when it can skip a particular line and continue
+reading input:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">while (&lt;LAST&gt;){
+
+    # ignore special users
+    next if /^reboot\s|^shutdown\s|^ftp\s/; 
+
+    # if we've used -u to specify a specific user, skip all entries
+    # that don't pertain to this user (whose name is stored in $opt_u 
+    # by getopts for us).           
+    next if (defined $opt_u &amp;&amp; !/^$opt_u\s/); 
+
+    # ignore X console logins
+    next if /:0\s+:0/;
+    
+    # find the user's name, tty, and remote hostname
+    ($user, $tty,$host) = split;
+    
+    # ignore if the log had a bad username after parsing
+    next if (length($user) &lt; 2);
+
+    # ignore if no domain name info in name
+    next if $host !~ /\./; 
+
+    # find the domain name of this host (see explanation below)
+    $dn = &amp;domain($host);
+
+    # ignore if you get a bogus domain name
+    next if (length ($dn) &lt; 2); 
+
+    # ignore this input line if it is in the home domain as specified 
+    # by the -f switch
+    next if (defined $opt_f &amp;&amp; ($dn =~ /^$opt_f/));
+     
+    # if we've never seen this user before, simply create a list with 
+    # the user's domain and store this in the hash of lists.
+    unless (exists $userinfo{$user}){ 
+	   $userinfo{$user} = [$dn];
+    }
+    # otherwise, this can be a bit hairy; see the explanation below
+    else {
+	  &amp;AddToInfo($user,$dn); 
+   }
+}
+close(LAST);</pre>
+</blockquote>
+
+
+
+
+
+<p>Now let's take a look at the individual subroutines that handle
+the tricky parts of this program. Our first subroutine,
+<tt class="literal">&amp;domain( )</tt>, takes a Fully Qualified Domain
+Name (FQDN), i.e., a hostname with the full domain name attached, and
+returns its best guess at the domain name of that host. It has to be
+a little smart for two reasons:</p>
+
+
+
+
+
+<ol>
+<li>
+<p>Not all hostnames in the logs will be actual names. They may be
+simple IP addresses. In this case, if the user has set the
+<tt class="command">-i</tt> switch, we assume any IP address we get is a
+class C network subnetted on the standard byte boundary. In practical
+terms this means that we treat the first three octets as the
+"domain name" of the host. This allows us to treat logins
+from 192.168.1.10 as coming from the same logical source as logins
+from 192.168.1.12. This may not be the best of assumptions, but it is
+the best we can do without consulting another source of information
+(and it works most of the time). If the user does not use the
+<em class="emphasis">-i</em> switch, we treat the entire IP address as the
+domain of record.</p>
+</li>
+<li>
+<p>As mentioned before, the hostnames may be truncated. This leaves us
+to deal with partial entries like <tt class="literal">grape-nuts.ccs.n</tt>
+and <tt class="literal">nat16.aspentec.c</tt>. This is not as bad as it
+might sound, since each host will have its FQDN truncated at the same
+point every time it is stored in the log. We attempt to work around
+this restriction as best we can in the <tt class="literal">&amp;AddToInfo(
+)</tt> subroutine we'll discuss in a moment.</p>
+</li>
+</ol>
+<p>Back to the code:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># take a FQDN and attempt to return FQD
+sub domain{
+    # look for IP addresses
+    if ($_[0] =~ /^\d+\.\d+\.\d+\.\d+$/) {
+	
+	    # if the user did not use -i, simply return the IP address as is
+	    unless (defined $opt_i){ 
+	        return $_[0]; 
+	    }
+	
+	    # otherwise, return everything but the last octet
+	    else {
+	        $_[0] =~ /(.*)\.\d+$/;
+	        return $1;
+	    }
+    }
+
+    # if we are not dealing with an IP address
+    else {
+	    # downcase the info to make later processing simpler and quicker
+ 	    $_[0] = lc($_[0]);
+
+	    # then return everything after first dot
+	    $_[0] =~ /^[^.]+\.(.*)/; 
+	    return $1;
+    }
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>This next subroutine, short as it is, encapsulates the hardest part
+of this program. Our <tt class="literal">&amp;AddToInfo( )</tt>
+subroutine has to deal with truncated hostnames and the storing of
+information into our hash table. We're going to use a substring
+matching technique that you may find useful in other contexts.</p>
+
+
+
+
+
+<p>In this case, we'd really like all of the following domain
+names to be treated and stored as the same domain name in our array
+of unique domains for a user:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">ccs.neu.edu
+    ccs.neu.ed  
+    ccs.n</pre>
+</blockquote>
+
+
+
+
+
+<p>When the uniqueness of a domain name is in question, we check three
+things:</p>
+
+
+
+
+
+<ol>
+<li>
+<p>Is this domain name an <em class="emphasis">exact match</em> of anything
+we have stored for this user?</p>
+</li>
+<li>
+<p>Is this domain name a <em class="emphasis">substring</em> of already
+stored data?</p>
+</li>
+<li>
+<p>Is the <em class="emphasis">stored</em> domain data a substring of the
+domain name we are checking?</p>
+</li>
+</ol>
+<p>If any of these are the case, we don't need to add a new entry
+to our data structure because we already have a substring equivalent
+stored in the user's domain list. If case #3 is true,
+we'll want to replace the stored data entry with our current
+entry, assuring we've stored the largest string possible.
+Astute readers will also note that cases #1 and #2 can be checked
+simultaneously since an exact match is equivalent to a substring
+match where all the characters match.</p>
+
+
+
+
+
+<p>If all of these cases are false, we do need to store the new entry.
+Let's take a look at the code first and then talk about how it
+works:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">sub AddToInfo{
+    my($user, $dn) = @_;
+
+    for (@{$userinfo{$user}}){
+
+      # case #1 &amp; #2 from above: is this either exact or substring match?
+      return if (index($_,$dn) &gt; -1); 
+
+      # check case #3 from above, i.e. is the stored domain data
+      # a substring of the domain name we are checking?
+      if (index($dn,$_) &gt; -1){
+        $_ = $dn; # swap current &amp; stored values
+        return;
+      } 
+    }
+    
+    # otherwise, this is a new domain, add it to the list
+    push @{$userinfo{$user}}, $dn;
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">@{$userinfo{$user}}</tt> returns the list of domains
+we've stored for the specified user. We iterate over each item
+in this list to see if <tt class="literal">$dn</tt> can be found in any
+item. If it can, we have a substring equivalent already stored, so we
+exit the subroutine.</p>
+
+
+
+
+
+<p>If we pass this test, we look for case #3 above. Each entry in the
+list is checked to see if it can be found in our current domain. If
+it is a match, we overwrite the list entry with the current domain
+data, thus storing the larger of the two strings. This happens even
+when there is an exact match, since it does no harm. We overwrite the
+entry using a special property of the <tt class="literal">for</tt>
+and<tt class="literal"> foreach</tt> Perl operators. Assigning to
+<tt class="literal">$_</tt> in the middle of a <tt class="literal">for</tt>
+loop like this actually assigns to the current element of the list at
+that point in the loop. The loop variable becomes an alias for the
+list variable. If we've made this swap, we can leave the
+subroutine. If we pass all three tests, then the final line adds the
+domain name in question to the user's domain list.</p>
+
+
+
+
+
+<p>That's it for the gory details of iterating over the file and
+building our data structure. To wrap this program up, let's run
+through all of the users we found and check how many unique domains
+each has logged into (i.e., the size of the list we've stored
+for each). For those entries that have more domains than our comfort
+level, we print the contents of their entry:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">for (sort keys %userinfo){
+    if ($#{$userinfo{$_}} &gt; $maxdomains){
+	     print "\n\n$_ has logged in from:\n";
+	     print join("\n",sort @{$userinfo{$_}});
+    }
+}
+print "\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>Now that you've seen the code, you might wonder if this
+approach really works. Here's some real sample output of our
+program for a user who had her password sniffed at another site:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">username has logged in from:
+38.254.131
+bu.edu
+ccs.neu.ed
+dac.neu.ed
+hials.no
+ipt.a
+tnt1.bos1
+tnt1.bost
+tnt1.dia
+tnt2.bos
+tnt3.bos
+tnt4.bo
+toronto4.di</pre>
+</blockquote>
+
+
+
+
+
+<p>Some of these entries look normal for a user in the Boston area.
+However, the <em class="emphasis">toronto4.di</em> entry is a bit suspect and the <em class="emphasis">hials.no</em> site is in Norway. Busted!</p>
+
+
+
+
+
+<p>This program could be further refined to include the element of time
+or correlations with another log file like that from
+<tt class="command">tcpwrappers</tt>. But as you can see, pattern detection
+is often very useful by itself.<a name="INDEX-1023"></a><a name="INDEX-1024"></a><a name="INDEX-1025"></a>
+</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch10_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch10_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">10.1. Noticing Unexpected or Unauthorized Changes</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">10.3. SNMP</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

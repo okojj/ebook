@@ -1,0 +1,302 @@
+<html><head>
+<title>[Chapter 13] 13.2 Remote Procedure Calls (RPC)</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:37:32Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch13_01.htm" title="13. Networking: Implementing RPC"><link rel="prev" href="ch13_01.htm" title="13.1 Msg: Messaging Toolkit"><link rel="next" href="ch13_03.htm" title="13.3 Resources"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_01.htm" title="13.1 Msg: Messaging Toolkit"><img src="../gifs/txtpreva.gif" alt="Previous: 13.1 Msg: Messaging Toolkit" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch13_01.htm" title="13. Networking: Implementing RPC">Chapter 13<br>Networking: Implementing RPC</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_03.htm" title="13.3 Resources"><img src="../gifs/txtnexta.gif" alt="Next: 13.3 Resources" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch13-29054">13.2 Remote Procedure Calls (RPC)</A
+></H2
+><p class="para"><a class="indexterm" name="ch13-idx-981103-0"></A
+><a class="indexterm" name="ch13-idx-981103-1"></A
+><a class="indexterm" name="ch13-idx-981103-2"></A
+>In this section, we use the Msg library to implement a Remote Procedure Call module, <em class="emphasis">RPC.pm</EM
+>. The idea of RPC is to transparently invoke a subroutine in another process space and have it behave exactly as if it had been invoked in its own process. The following are the features we take for granted while calling ordinary subroutines, which the <kbd class="command">RPC</KBD
+> module takes into account:</P
+><dl class="variablelist"><dt class="term">Synchronicity</DT
+><dd class="listitem"><p class="para"><a class="indexterm" name="ch13-idx-981104-0"></A
+>The caller waits until the called procedure finishes. The RPC module invokes <kbd class="command">Msg::send_now</KBD
+> and <kbd class="command">Msg::rcv_now</KBD
+> to get this blocking behavior.</P
+></DD
+><dt class="term">Parameters</DT
+><dd class="listitem"><p class="para">A Perl subroutine can take any number of parameters of any type (including references to objects, complex data structures, and subroutines). The RPC module uses the FreezeThaw module described in <a class="xref" href="ch10_01.htm" title="Persistence">Chapter 10, <cite class="chapter">Persistence</CITE
+></A
+>, for <em class="emphasis">marshalling</EM
+><a class="indexterm" name="ch13-idx-981105-0"></A
+> parameters: all parameters are flattened and encoded into a single string (<em class="emphasis">frozen</EM
+>) and recovered on the other side (<em class="emphasis">thawed</EM
+>). This means that all data structures sent by reference are copied in their entirety so that the receiving subroutine on the other side can get a reference to an object (as it would if it were in the same process). FreezeThaw&nbsp;- and hence RPC&nbsp;- does not account for code references, because there is no way (in Perl) to decode a code reference and get the subroutine text (because it could be compiled into machine code). We could create a dummy subroutine on the remote side and have it make a nested RPC invocation back to the real code reference, but the current implementation does not have this feature (though it doesn't preclude it).</P
+></DD
+><dt class="term">Context </DT
+><dd class="listitem"><p class="para">A subroutine can use <kbd class="command">wantarray</KBD
+> to find out whether the caller is specifying a list or scalar context. The fact that the subroutine is being called from a remote process should not be an issue. The RPC module arranges the necessary transparency. Another example of context (not to be confused with the Perl meaning of the word) is the caller's package. When you say <kbd class="command">foo()</KBD
+>, you mean <kbd class="command">foo()</KBD
+> in the current package.</P
+></DD
+><dt class="term">Exceptions</DT
+><dd class="listitem"><p class="para">A subroutine can invoke <kbd class="command">die</KBD
+>, and expect its caller to trap it. The receiving side of <kbd class="command">RPC</KBD
+> invokes the target subroutine inside an <kbd class="command">eval</KBD
+>, and if it dies, it sends a message back to the calling process, which in turn invokes a <code class="literal">die</CODE
+> in its own space with the error received.</P
+></DD
+><dt class="term">Mutual recursion</DT
+><dd class="listitem"><p class="para">Subroutine A can call subroutine B, which in turn can call A&nbsp;- they are said to be mutually recursive. RPC allows this because of its ability to process incoming messages while it is blocked on a send.</P
+></DD
+><dt class="term">No deadlocks</DT
+><dd class="listitem"><p class="para">Traditional RPC systems are subject to <a class="indexterm" name="ch13-idx-981106-0"></A
+>deadlocks if two peer processes decide to call each other at the same time, because as we saw in <a class="xref" href="ch12_01.htm" title="Networking with Sockets">Chapter 12</A
+>, they are too impolite to listen to what the other is saying. Not so with RPC. In fact, it can dispatch incoming messages on all file descriptors while, from the caller's perspective, it is still blocked.</P
+></DD
+><dt class="term">No code generation</DT
+><dd class="listitem"><p class="para">Typical RPC systems generate client and server stub code, but RPC does not need to&nbsp;- a tribute to the dynamic aspects of Perl.</P
+></DD
+></DL
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-37172">13.2.1 Using RPC</A
+></H3
+><p class="para">Let us take a look at a sample use of the RPC module. The client is shown first:</P
+><pre class="programlisting"># Client stuff
+use RPC; 
+my $conn = RPC-&gt;connect($host, $port);
+my $answer = $conn-&gt;rpc('ask_sheep', 
+                        &quot;Ba ba black sheep, have you any wool ?&quot;);
+print &quot;$answer\n&quot;;</PRE
+><p class="para">The client sets up an RPC connection, given a host and port. A subroutine that is normally invoked as</P
+><pre class="programlisting">$answer = ask_sheep ($question);</PRE
+><p class="para">is invoked by using RPC as follows:</P
+><pre class="programlisting">$answer = $conn-&gt;rpc (&quot;ask_sheep&quot;, $question);</PRE
+><p class="para">The client code <em class="emphasis">knows</EM
+> it is making an RPC call. Making this transparent (as typical RPC systems do) is quite simple, really. Using <kbd class="command">eval</KBD
+>, we can dynamically create a dummy client stub called <kbd class="command">ask_sheep</KBD
+> on the caller's side and have it make the call to <kbd class="command">rpc()</KBD
+>.</P
+><p class="para">The called subroutine, however, does not know whether it has been invoked locally or from a remote process (unless of course, it uses <kbd class="command">caller()</KBD
+> to find out).</P
+><p class="para">The remote process (call it the RPC server) provides the required subroutines and invokes <kbd class="command">new_server</KBD
+> and <kbd class="command">event_loop</KBD
+> to accept incoming RPC calls; <kbd class="command">ask_sheep</KBD
+> will get called at the right time. Simple!</P
+><pre class="programlisting"># Server stuff
+RPC-&gt;new_rpc_server($host, $port);
+RPC-&gt;event_loop();
+
+sub ask_sheep {  # Sample subroutine to be invoked from client
+    print &quot;Question: @_\n&quot;;
+    return &quot;No&quot;;
+}</PRE
+><p class="para">Now, let us look at an example of using RPC between <em class="emphasis">peer processes</EM
+>. Process 1 (identified by <kbd class="command">$host1</KBD
+>, <kbd class="command">$port1</KBD
+>) calls subroutine <code class="literal">two</CODE
+> on Process 2 (<kbd class="command">$host2</KBD
+>, <kbd class="command">$port2</KBD
+>), which in turn calls subroutine one back on Process 1.</P
+><p class="para">Process 1 looks like this:</P
+><pre class="programlisting">sub one {
+    print &quot;One called\n&quot;;
+}
+$conn2 = RPC-&gt;new_rpc_server($host2, $port2);
+$conn2-&gt;rpc (&quot;two&quot;);</PRE
+><p class="para">Process 2 looks like this:</P
+><pre class="programlisting">sub two {
+    print &quot;Two called\n&quot;;
+}
+$conn1 = RPC-&gt;new_rpc_server($host1, $port1);
+$conn1-&gt;rpc (&quot;one&quot;);</PRE
+><p class="para">Each process calls <kbd class="command">new_rpc_server</KBD
+> to establish a listening port. Since the <kbd class="command">rpc</KBD
+> call listens to incoming messages while it is still sending stuff out, neither process needs to call <kbd class="command">event_loop</KBD
+> explicitly. A process that intends to hang around for a while should, of course, do so. </P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch13-35212">13.2.2 RPC: Implementation</A
+></H3
+><p class="para">The RPC implementation is surprisingly small, thanks to the Msg and FreezeThaw modules. It inherits from Msg to provide the same connection and event loop abstractions. </P
+><p class="para">Let us examine the calling side first:</P
+><pre class="programlisting">package RPC;
+use Msg;
+use strict;
+use Carp;
+@RPC::ISA = qw(Msg);
+use FreezeThaw qw(freeze thaw);
+
+sub <b class="emphasis.bold">connect</B
+> {
+   my ($pkg, $host, $port) = @_;
+   my $conn = $pkg-&gt;SUPER::connect($host,$port, \&amp;_incoming_msg);
+   return $conn;
+}</PRE
+><p class="para"><kbd class="command">connect</KBD
+> simply calls Msg's <kbd class="command">connect</KBD
+>, with <kbd class="command">_incoming_msg</KBD
+> as the subroutine to notify on all incoming messages (including responses to subroutine calls and end-of-file indications). It leaves it to Msg's <kbd class="command">connect</KBD
+> to create a connection object and bless it under RPC's auspices. Both Msg and RPC have been written so that they can be inherited by another module; the package name is not hardcoded.</P
+><pre class="programlisting">my $g_msg_id = 0;
+my $send_err = 0;
+sub <b class="emphasis.bold">handle_send_err</B
+> {
+   $send_err = $!;
+}</PRE
+><p class="para"><kbd class="command">handle_send_err</KBD
+> overrides <kbd class="command">Msg::handle_send_err</KBD
+> and stores any errors encountered while sending a message. This error code is checked in <kbd class="command">rpc</KBD
+>, as shown next. The error handling in both RPC and Msg is definitely not up to snuff and needs a considerable amount of work before it can be reliably used in a production application.</P
+><pre class="programlisting">sub <b class="emphasis.bold">rpc</B
+> {
+    my $conn = shift;
+    my $subname = shift;
+    
+    $subname = (caller() . '::' . $subname) unless $subname =~ /:/;
+    my $gimme = wantarray ?  'a' : 's';  # Array or scalar
+    my $msg_id = ++$g_msg_id;
+    my $serialized_msg = freeze ('&gt;', $msg_id, $gimme, @_);
+    # Send and Receive
+    $conn-&gt;send_later ($serialized_msg);
+    do {
+        Msg-&gt;event_loop(1); # Dispatch other messages until we 
+                            # get a response
+    } until (exists $conn-&gt;{rcvd}-&gt;{$msg_id} || $send_err);
+    if ($send_err) {
+       die &quot;RPC Error: $send_err&quot;;
+    }
+
+    # Dequeue message.
+    my $rl_retargs = delete $conn-&gt;{rcvd}-&gt;{$msg_id}; # ref to list
+    if (ref($rl_retargs-&gt;[0]) eq 'RPC::Error') {
+        die ${$rl_retargs-&gt;[0]};
+    }
+    wantarray ? @$rl_retargs : $rl_retargs-&gt;[0];
+}</PRE
+><p class="para"><kbd class="command">rpc</KBD
+> uses the FreezeThaw module's <kbd class="command">freeze</KBD
+><a class="indexterm" name="ch13-idx-981107-0"></A
+> method to bundle the following pieces of information into one big string: </P
+><ul class="itemizedlist"><li class="listitem"><p class="para"><a class="listitem" name="ch13-pgfId-977416"></A
+>Name of the remote subroutine. The caller's module is prepended to the subroutine name if it is not fully qualified, which is the behavior expected of a normal subroutine.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch13-pgfId-977417"></A
+>Parameters to the subroutine.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch13-pgfId-977426"></A
+><kbd class="command">wantarray</KBD
+> indicator (<kbd class="command">$gimme</KBD
+>): "<kbd class="command">s</KBD
+>" for scalar, "<kbd class="command">a</KBD
+>" for array.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch13-pgfId-977429"></A
+>Request or response indicator. "&gt;" indicates request, and "&lt;" indicates response. When the receiver gets a message, it should know whether it is a response to an outgoing message or an incoming request that it is expected to evaluate.</P
+></LI
+><li class="listitem"><p class="para"><a class="listitem" name="ch13-pgfId-977434"></A
+>A message identifier. This is to identify the response corresponding to this request.</P
+></LI
+></UL
+><p class="para">The <kbd class="command">freeze</KBD
+> method accounts for cyclic data structures and objects and returns one ASCII string, which means that we don't have to worry about the size of native integers or doubles or their memory layout (byte order). <kbd class="command">Msg-&gt;send_later()</KBD
+> is used because it triggers nonblocking I/O where available. The message is really sent only when <kbd class="command">event_loop</KBD
+> is called, because it determines when the socket is writable. At the same time, <kbd class="command">event_loop</KBD
+> tracks other incoming messages and dispatches them. The count of 1 forces the event loop to return right after dispatching one round of messages, so we can retain control. When the response comes from the remote host, <kbd class="command">event_loop</KBD
+> calls <kbd class="command">_incoming_msgs</KBD
+>, which decodes it and hangs the return arguments on the connection object. Read on. </P
+><p class="para">Let us now take a look at the receiving side:</P
+><pre class="programlisting">sub <b class="emphasis.bold">new_server</B
+> {
+    my ($pkg, $my_host, $my_port) = @_;
+    $pkg-&gt;SUPER::new_server($my_host, $my_port, 
+                            sub {$pkg-&gt;_login(@_)});
+}
+sub <b class="emphasis.bold">_login</B
+> {
+    \&amp;_incoming_msg;
+}</PRE
+><p class="para"><kbd class="command">new_server</KBD
+>, like <kbd class="command">connect</KBD
+>, is a simple wrapper over its Msg counterpart. All incoming connections are unconditionally accepted by default, and messages are directed towards the subroutine <kbd class="command">_incoming_msg</KBD
+>, shown next. Calling the         <kbd class="command">_login</KBD
+> procedure indirectly via <kbd class="command">$pkg</KBD
+> gives you the opportunity to subclass RPC and supply your own <kbd class="command">_login</KBD
+> procedure and refuse the connection if needed. </P
+><pre class="programlisting">sub <b class="emphasis.bold">_incoming_msg</B
+> {
+    my ($conn, $msg, $err) = @_;
+    return if ($err);   # Need better error handling.
+    return unless defined($msg);
+    my ($dir, $id, @args) = thaw ($msg);
+    my ($result, @results);
+    if ($dir eq '&gt;') {
+        # New request message
+        my $gimme = shift @args;
+        my $sub_name = shift @args;
+        eval {
+            no strict 'refs';  # Because we call the subroutine using
+                               # a symbolic reference
+            if ($gimme eq 'a') {  # Want an array back
+                @results = &amp;{$sub_name} (@args); 
+            } else {
+                $result = &amp;{$sub_name} (@args);
+            }
+        };
+        if ($@) {
+            $msg = bless \$@, &quot;RPC::Error&quot;;
+            $msg = freeze('&lt;', $id, $msg);
+        } elsif ($gimme eq 'a') {
+            $msg = freeze('&lt;', $id, @results);
+        } else {
+            $msg = freeze('&lt;', $id, $result);
+        }
+        $conn-&gt;send_later($msg);
+    } else {
+        # Response to a message we had sent out earlier
+        $conn-&gt;{rcvd}-&gt;{$id} = \@args;
+    }
+}</PRE
+><p class="para"><kbd class="command">_incoming_msg</KBD
+> is the counterpart to the <kbd class="command">rpc</KBD
+> method. It unpacks the message sent by <kbd class="command">rpc</KBD
+> and checks the direction (whether it is a request or a response). If it is a request, it calls the required subroutine using a symbolic reference. Notice that depending on the <kbd class="command">wantarray</KBD
+> indication, it provides a scalar or vector result parameter. If <kbd class="command">eval</KBD
+> reports an error, the <kbd class="command">$@</KBD
+> variable is stamped with an RPC::Error module tag and shipped back to the calling process (which invokes <kbd class="command">die</KBD
+>)<kbd class="command">.</KBD
+><a class="indexterm" name="ch13-idx-981109-0"></A
+><a class="indexterm" name="ch13-idx-981109-1"></A
+><a class="indexterm" name="ch13-idx-981109-2"></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch13_01.htm" title="13.1 Msg: Messaging Toolkit"><img src="../gifs/txtpreva.gif" alt="Previous: 13.1 Msg: Messaging Toolkit" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch13_03.htm" title="13.3 Resources"><img src="../gifs/txtnexta.gif" alt="Next: 13.3 Resources" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">13.1 Msg: Messaging Toolkit</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">13.3 Resources</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

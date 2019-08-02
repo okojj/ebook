@@ -1,0 +1,448 @@
+<html>
+<head>
+<title>Embedding Perl (Using Perl from C) (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Embedding Perl (Using Perl from C)">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch21_03.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch21_01.htm">Chapter 21: Internals and Externals</a></td><td align="right" valign="top" width="172"><a href="ch21_05.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">21.4. Embedding Perl (Using Perl from C)</h2>
+
+<a name="INDEX-3743"></a><a name="INDEX-3744"></a><a name="INDEX-3745"></a><a name="INDEX-3746"></a><a name="INDEX-3747"></a><a name="INDEX-3748"></a>
+<p>You can access a Perl interpreter from C by <em class="emphasis">embedding</em> Perl inside
+your C program.  Since Perl is itself a C program, embedding consists
+of taking the important chunks of Perl and integrating them into yours.</p>
+
+<p>Note that embedding isn't necessary if your only goal is to use a
+standalone Perl program and you don't mind launching a separate process to
+do so.  You can use a function like C's <em class="emphasis">popen</em>(3) to exchange data
+between your C program and any external Perl program, just like you can use
+Perl's <tt class="literal">open(PIPE, "| program")</tt> or the <tt class="literal">IPC::Open2</tt> and
+<tt class="literal">IPC::Open3</tt> modules to exchange data between your Perl program and
+any other program.  But if you want to avoid the overhead of launching a separate process,
+you can embed an interpreter into your C program.
+<a name="INDEX-3749"></a>
+</p>
+
+<p>
+<a name="INDEX-3750"></a><a name="INDEX-3751"></a><a name="INDEX-3752"></a><a name="INDEX-3753"></a><a name="INDEX-3754"></a>
+When developing long-running applications (say, for embedding in a web
+server), it's a good idea to maintain a single persistent interpreter
+rather than creating and destroying interpreters over and over again.
+The major reason is speed, since Perl will only be loaded into memory
+once.  By using a persistent Perl interpreter, Apache's 
+<tt class="literal">mod_perl</tt> module avoids loading Perl into memory anew 
+every time someone hits an Apache web page.  The 
+<em class="emphasis">perlembed</em> manpage provides an example
+of a persistent interpreter, as well as an example of how a Perl
+program can manage multiple simultaneous interpreters (another big
+plus for web servers).</p>
+
+
+<h3 class="sect2">21.4.1. Compiling Embedded Programs</h3>
+
+<a name="INDEX-3755"></a><a name="INDEX-3756"></a><a name="INDEX-3757"></a><a name="INDEX-3758"></a><a name="INDEX-3759"></a>
+<p>When you embed Perl in C, your C program will usually allocate, "run",
+and deallocate a <tt class="literal">PerlInterpreter</tt> object, which is a C 
+<tt class="literal">struct</tt> defined
+in the <em class="emphasis">libperl</em> library that was built in the process of configuring
+Perl for your system.  The <em class="emphasis">libperl</em> library (along with <em class="emphasis">EXTERN.h</em>
+and <em class="emphasis">perl.h</em>, which you'll also need) resides in a directory that will
+vary from system to system.  You should be able to find out the name of
+that directory with:
+<blockquote>
+<pre class="programlisting">%<tt class="userinput"><b> perl -MConfig -e "print $Config{archlib}"</b></tt>
+</pre>
+</blockquote>
+
+You should compile your program in exactly the same way that your <em class="emphasis">perl</em>
+executable was compiled.  First, you'll need to know what C compiler
+was used to build Perl on your machine.  You can learn that from:
+<blockquote>
+<pre class="programlisting">%<tt class="userinput"><b> perl -MConfig -e "print $Config{cc}"</b></tt>
+</pre>
+</blockquote>
+<a name="INDEX-3760"></a>
+You can figure out what to put on the rest of the command line with
+the standard <tt class="literal">ExtUtils::Embed</tt> module.  If you had a
+C program named <em class="emphasis">interp.c</em> and your C compiler was
+<em class="emphasis">cc</em>, you could compile it for embedding as
+follows:
+<blockquote>
+<pre class="programlisting">% <tt class="userinput"><b>cc -o interp interp.c `perl -MExtUtils::Embed -e ccopts -e ldopts`</b></tt>
+</pre>
+</blockquote>
+</p>
+
+
+
+
+
+
+<h3 class="sect2">21.4.2. Adding a Perl Interpreter to Your C Program</h3>
+
+<p>
+<a name="INDEX-3761"></a><a name="INDEX-3762"></a><a name="INDEX-3763"></a><a name="INDEX-3764"></a>
+As it turns out, <em class="emphasis">perl</em> (the C program) is a good
+example of embedding Perl (the language), so a simple demonstration of
+embedding can be found in the file
+<em class="emphasis">miniperlmain.c</em>, included with the Perl source
+
+code.  Here's a nonportable version of
+<em class="emphasis">miniperlmain.c</em> containing the essentials of
+embedding:
+<blockquote>
+<pre class="programlisting">#include &lt;EXTERN.h&gt;               /* from the Perl distribution     */
+#include &lt;perl.h&gt;                 /* from the Perl distribution     */
+
+static PerlInterpreter *my_perl;  /***    The Perl interpreter    ***/
+
+int main(int argc, char **argv, char **env)
+{
+    my_perl = perl_alloc();
+    perl_construct(my_perl);
+    perl_parse(my_perl, NULL, argc, argv, (char **)NULL);
+    perl_run(my_perl);
+    perl_destruct(my_perl);
+    perl_free(my_perl);
+}</pre>
+</blockquote>
+When this is compiled with the command line above, you'll be able to
+use <em class="emphasis">interp</em> just like a regular Perl interpreter:
+<blockquote>
+<pre class="programlisting">% <tt class="userinput"><b>interp -e "printf('%x', 3735928559)"</b></tt>
+deadbeef</pre>
+</blockquote>
+You can also execute Perl statements stored in a file by placing the
+filename in <tt class="literal">argv[1]</tt> before calling
+<tt class="literal">perl_run</tt>.</p>
+
+
+
+
+
+
+<h3 class="sect2">21.4.3. Calling a Perl Subroutine from C</h3>
+
+<p>
+<a name="INDEX-3765"></a><a name="INDEX-3766"></a><a name="INDEX-3767"></a>
+If a Perl program contains a subroutine that you want to call from
+a C program, you can create a Perl interpreter and then use one of the
+functions beginning with <tt class="literal">call_</tt> documented in the <em class="emphasis">perlcall</em> manpage to invoke
+the subroutine.  Let's assume this is our Perl program, called
+<em class="emphasis">showtime.pl</em>:
+<blockquote>
+<pre class="programlisting">print "I shan't be printed.";
+
+sub showtime {
+    print time;
+}</pre>
+</blockquote>
+In this example, we'll use <tt class="literal">call_argv</tt> to invoke the
+<tt class="literal">showtime</tt> subroutine from this C program, called
+<em class="emphasis">showtime.c</em>:
+<blockquote>
+<pre class="programlisting">#include &lt;EXTERN.h&gt;
+#include &lt;perl.h&gt;
+
+static PerlInterpreter *my_perl;
+
+int main(int argc, char **argv, char **env)
+{
+    char *args[] = { NULL };
+    my_perl = perl_alloc();
+    perl_construct(my_perl);
+
+    perl_parse(my_perl, NULL, argc, argv, NULL);
+
+    /*** skipping perl_run() ***/
+
+    call_argv("showtime", G_DISCARD | G_NOARGS, args);
+
+    perl_destruct(my_perl);
+    perl_free(my_perl);
+}</pre>
+</blockquote>
+
+Here, we assume <tt class="literal">showtime</tt> is a Perl subroutine that takes no
+arguments (that's the <tt class="literal">G_NOARGS</tt>) and for which we can ignore the
+return value (that's the <tt class="literal">G_DISCARD</tt>).  Those flags, and others, are
+discussed in <em class="emphasis">perlcall</em>. We compile and run <em class="emphasis">showtime</em> as follows:
+<blockquote>
+<pre class="programlisting">% <tt class="userinput"><b>cc -o showtime showtime.c `perl -MExtUtils::Embed -e ccopts -e ldopts`</b></tt>
+% <tt class="userinput"><b>showtime showtime.pl</b></tt>
+963852741</pre>
+</blockquote>
+
+In this particular case, we don't call <tt class="literal">perl_run</tt>, but in general it's
+considered good form so that <tt class="literal">DESTROY</tt> methods and <tt class="literal">END</tt> blocks are
+executed at the right time.</p>
+
+<p>If you want to pass arguments to the Perl subroutine, you can add
+strings to the <tt class="literal">NULL</tt>-terminated <tt class="literal">args</tt> list passed to <tt class="literal">call_argv</tt>.
+For other data types, or to examine return values, you'll need to
+manipulate the Perl stack.  That's touched on lightly later; for the
+down and dirty, read the <em class="emphasis">perlcall</em> manpage bundled with
+Perl.</p>
+
+
+
+
+
+
+<h3 class="sect2">21.4.4. Evaluating a Perl Statement from C</h3>
+
+<p>
+<a name="INDEX-3768"></a><a name="INDEX-3769"></a><a name="INDEX-3770"></a><a name="INDEX-3771"></a><a name="INDEX-3772"></a><a name="INDEX-3773"></a>
+Perl provides two functions for evaluating snippets of Perl code:
+<tt class="literal">eval_sv</tt> and <tt class="literal">eval_pv</tt>, described in the <em class="emphasis">perlapi</em>
+manpage.  Arguably, these are the only routines you'll ever need
+to execute Perl code from within your C program.  The code executed
+can be as long as you wish, contain multiple statements, and employ
+<tt class="literal">use</tt>, <tt class="literal">require</tt>, or <tt class="literal">do</tt> to include other Perl files.</p>
+
+<p>
+<tt class="literal">eval_pv</tt> lets you evaluate individual Perl strings and then
+extract variables for coercion into C types.  The following program,
+<em class="emphasis">string.c</em>, executes three Perl strings, extracting an <tt class="literal">int</tt> from
+the first, a <tt class="literal">float</tt> from the second, and a <tt class="literal">char *</tt> from the third:
+<blockquote>
+<pre class="programlisting">#include &lt;EXTERN.h&gt;
+#include &lt;perl.h&gt;
+
+static PerlInterpreter *my_perl;
+
+main (int argc, char **argv, char **env)
+{
+   STRLEN n_a;
+   char *embedding[] = { "", "-e", "0" };
+
+   my_perl = perl_alloc();
+   perl_construct( my_perl );
+
+   perl_parse(my_perl, NULL, 3, embedding, NULL);
+   perl_run(my_perl);
+
+   /** Treat $a as an integer **/
+   eval_pv("$a = 3; $a **= 2", TRUE);
+   printf("a = %d\n", SvIV(get_sv("a", FALSE)));
+
+   /** Treat $a as a float **/
+   eval_pv("$a = 3.14; $a **= 2", TRUE);
+   printf("a = %f\n", SvNV(get_sv("a", FALSE)));
+
+   /** Treat $a as a string **/
+   eval_pv("$a = 'relreP kcaH rehtonA tsuJ'; $a = reverse($a);", TRUE);
+   printf("a = %s\n", SvPV(get_sv("a", FALSE), n_a));
+
+   perl_destruct(my_perl);
+   perl_free(my_perl);
+}</pre>
+</blockquote>
+</p>
+
+<p>
+<a name="INDEX-3774"></a>
+All of the functions with <tt class="literal">Sv</tt> in their names convert Perl scalars to
+C types.  They're described in the <em class="emphasis">perlguts</em> and <em class="emphasis">perlapi</em> manpages.  If
+you compile and run this program, you'll see the results of using
+<tt class="literal">SvIV</tt> to create an <tt class="literal">int</tt>, <tt class="literal">SvNV</tt> to create a <tt class="literal">float</tt>, and
+<tt class="literal">SvPV</tt> to create a C string:
+<blockquote>
+<pre class="programlisting">a = 9
+a = 9.859600
+a = Just Another Hack Perler</pre>
+</blockquote>
+
+In the previous example, we've created a global variable to temporarily
+store the computed value of our evaluated expression.  It is also
+possible (and in most cases better form) to use the return value
+of <tt class="literal">eval_pv</tt> instead of throwing it away:
+<blockquote>
+<pre class="programlisting">SV *val = eval_pv("reverse 'relreP kcaH rehtonA tsuJ'", TRUE);
+printf("%s\n", SvPV(val,n_a));</pre>
+</blockquote>
+<a name="INDEX-3775"></a>
+The <em class="emphasis">perlembed</em> manpage bundled with Perl includes
+a demonstration of <tt class="literal">eval_sv</tt> that lets you make use of
+Perl's regular expression capabilities from your C 
+
+program.
+</p>
+
+
+
+
+
+
+<h3 class="sect2">21.4.5. Fiddling with the Perl Stack from C</h3>
+
+<p>
+<a name="INDEX-3776"></a><a name="INDEX-3777"></a><a name="INDEX-3778"></a><a name="INDEX-3779"></a>
+When trying to explain stacks, most computer science
+textbooks<a href="#FOOTNOTE-2">[2]</a> mumble
+something about spring-loaded columns of cafeteria plates: the last
+thing you pushed on the stack is the first thing you pop off.  That'll
+do for our purposes: your C program will push some arguments onto "the
+
+Perl stack", shut its eyes while some magic happens, and then pop the
+results--the return value of your Perl subroutine--off the stack.</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-2"></a>
+<p>[2] Plus the occasional Perl book.</p>
+
+</blockquote>
+
+<p>
+<a name="INDEX-3780"></a><a name="INDEX-3781"></a><a name="INDEX-3782"></a>
+We'll present an example here without much explanation.  To really
+understand what's going on, you'll need to know how to convert between
+C types and Perl types, with <tt class="literal">newSViv</tt> and <tt class="literal">sv_setnv</tt> and <tt class="literal">newAV</tt>
+and all their friends described in the <em class="emphasis">perlguts</em> and <em class="emphasis">perlapi</em>
+manpages.  Then you'll need to read <em class="emphasis">perlcall</em> to learn how to
+manipulate the Perl stack.</p>
+
+<p>
+<a name="INDEX-3783"></a><a name="INDEX-3784"></a>
+Because C has no built-in function for integer exponentiation, let's
+make Perl's <tt class="literal">**</tt> operator available to it.  (This is less useful than
+it sounds, since Perl implements <tt class="literal">**</tt> with C's <em class="emphasis">pow</em>(3) function.)
+First we'll create an exponentiation function in a library file called
+<em class="emphasis">power.pl</em>:
+<blockquote>
+<pre class="programlisting">sub expo {
+    my ($a, $b) = @_;
+    return $a ** $b;
+}</pre>
+</blockquote>
+
+Now we'll create a C program, <em class="emphasis">power.c</em>, with a function called
+<tt class="literal">PerlPower</tt> that pushes the two arguments onto the stack, invokes
+<tt class="literal">expo</tt>, and pops the return value out:
+<blockquote>
+<pre class="programlisting">#include &lt;EXTERN.h&gt;
+#include &lt;perl.h&gt;
+
+static PerlInterpreter *my_perl;
+
+/* "Real programmers can write assembly code in any language." */
+
+static void
+PerlPower(int a, int b)
+{
+  dSP;                            /* initialize stack pointer         */
+  ENTER;                          /* everything created after here    */
+  SAVETMPS;                       /* ...is a temporary variable.      */
+  PUSHMARK(SP);                   /* remember the stack pointer       */
+  XPUSHs(sv_2mortal(newSViv(a))); /* push the base onto the stack     */
+  XPUSHs(sv_2mortal(newSViv(b))); /* push the exponent onto stack     */
+  PUTBACK;                        /* make local stack pointer global  */
+  call_pv("expo", G_SCALAR);      /* call the function                */
+  SPAGAIN;                        /* refresh stack pointer            */
+                                  /* pop the return value from stack  */
+  printf ("%d to the %dth power is %d.\n", a, b, POPi);
+  PUTBACK;
+  FREETMPS;                       /* free that return value           */
+  LEAVE;                          /* ...and the XPUSHed "mortal" args */
+}
+
+int main (int argc, char **argv, char **env)
+{
+  char *my_argv[] = { "", "power.pl" };
+
+  my_perl = perl_alloc();
+  perl_construct( my_perl );
+
+  perl_parse(my_perl, NULL, 2, my_argv, (char **)NULL);
+  perl_run(my_perl);
+
+  PerlPower(3, 4);                      /*** Compute 3 ** 4 ***/
+
+  perl_destruct(my_perl);
+  perl_free(my_perl);
+}</pre>
+</blockquote>
+
+You can compile <em class="emphasis">power.c</em> into <em class="emphasis">power</em> like so:
+<blockquote>
+<pre class="programlisting">% <tt class="userinput"><b>cc -o power power.c `perl -MExtUtils::Embed -e ccopts -e ldopts`</b></tt>
+% <tt class="userinput"><b>power</b></tt>
+3 to the 4th power is 81.</pre>
+</blockquote>
+
+Now your <em class="emphasis">power</em> program can sit around being different too.</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch21_03.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch21_05.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">21.3. Extending Perl (Using C from Perl)</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">21.5. The Moral of the Story</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

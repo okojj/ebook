@@ -1,0 +1,219 @@
+<html>
+<head>
+<title>Background Processing (Java Servlet Programming)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jason Hunter and William Crawford">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-391-XE" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Background Processing">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm" alt="Java Servlet Programming"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch03_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch03_01.htm">Chapter 3: The Servlet Life Cycle</a></td><td align="right" valign="top" width="172"><a href="ch03_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch03_06.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">3.5. Background Processing</h2>
+
+<p>
+<a name="INDEX-591"></a>Servlets can do more than simply
+persist between accesses. They can also <em class="emphasis">execute</em>
+between accesses. Any thread started by a servlet can continue
+executing even after the response has been sent. This ability proves
+most useful for long-running tasks whose incremental results should
+be made available to multiple clients. A background thread started in
+<tt class="literal">init()</tt> performs continuous work while
+request-handling threads display the current status with
+<tt class="literal">doGet()</tt>. It's a similar technique to that
+used in animation applets, where one thread changes the picture and
+another paints the display.
+</p>
+
+<p>
+<a href="#ch03-26512">Example 3-6</a> shows a servlet that searches for prime
+numbers above one quadrillion. It starts with such a large number to
+make the calculation slow enough to adequately demonstrate caching
+effects--something we need for the next section. The algorithm
+it uses couldn't be simpler: it selects odd-numbered candidates
+and attempts to divide them by every odd integer between 3 and their
+square root. If none of the integers evenly divides the candidate, it
+is declared prime.
+</p>
+
+<a name="ch03-26512"></a>
+<div class="example">
+<h4 class="objtitle">Example 3-6. On the hunt for primes </h4>
+<blockquote>
+<pre class="programlisting">import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class PrimeSearcher extends HttpServlet implements Runnable {
+
+  long lastprime = 0;                    // last prime found
+  Date lastprimeModified = new Date();   // when it was found
+  Thread searcher;                       // background search thread
+
+  public void init(ServletConfig config) throws ServletException {
+    super.init(config);                  // always!
+    searcher = new Thread(this);
+    searcher.setPriority(Thread.MIN_PRIORITY);  // be a good citizen
+    searcher.start();
+  }
+
+  public void run() {
+    //               QTTTBBBMMMTTTOOO
+    long candidate = 1000000000000001L;  // one quadrillion and one
+
+    // Begin loop searching for primes
+    while (true) {                       // search forever
+      if (isPrime(candidate)) {
+        lastprime = candidate;           // new prime
+        lastprimeModified = new Date();  // new "prime time"
+      }
+      candidate += 2;                    // evens aren't prime
+
+      // Between candidates take a 0.2 second break.
+      // Another way to be a good citizen with system resources.
+      try {
+        searcher.sleep(200);
+      } 
+      catch (InterruptedException ignored) { }
+    }
+  }
+
+  private static boolean isPrime(long candidate) {
+    // Try dividing the number by all odd numbers between 3 and its sqrt
+    double sqrt = Math.sqrt(candidate);
+    for (long i = 3; i &lt;= sqrt; i += 2) {
+      if (candidate % i == 0) return false;  // found a factor
+    }
+
+    // Wasn't evenly divisible, so it's prime
+    return true;
+  }
+
+  public void doGet(HttpServletRequest req, HttpServletResponse res) 
+                               throws ServletException, IOException {
+    res.setContentType("text/plain");
+    PrintWriter out = res.getWriter();
+    if (lastprime == 0) {
+      out.println("Still searching for first prime...");
+    }
+    else {
+      out.println("The last prime discovered was " + lastprime);
+      out.println(" at " + lastprimeModified);
+    }
+  }
+
+  public void destroy() {
+    searcher.stop();
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>The searcher thread begins its search in the
+<tt class="literal">init()</tt> method. Its latest find is saved in
+<tt class="literal">lastprime</tt>, along with the time it was found in in
+<tt class="literal">lastprimeModified</tt>. Each time a client accesses the
+servlet, the <tt class="literal">doGet()</tt> method reports the largest
+prime found so far and the time it was found. The searcher runs
+independently of client accesses; even if no one accesses the servlet
+it continues to find primes silently. If several clients access the
+servlet at the same time, they all see the same current status.
+</p>
+
+<p>Notice that the <tt class="literal">destroy()</tt> method stops the
+searcher thread.<a href="#FOOTNOTE-6">[6]</a> This is very
+important! If a servlet does not stop its background threads, they
+continue to run until the virtual machine exits. Even when a servlet
+is reloaded (either explicitly or because its class file changed),
+its threads won't be stopped. Instead, it's likely that
+the new servlet will create extra copies of the background threads.
+And, at least with the Java Web Server, even explicitly restarting
+the web server service doesn't stop background threads because
+the Java Web Server virtual machine continues its
+execution.<a name="INDEX-598"></a>
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-6"></a>
+<p>[6] Stopping
+<a name="INDEX-592"></a><a name="INDEX-593"></a>threads
+using the <tt class="literal">stop()</tt><a name="INDEX-594"></a><a name="INDEX-595"></a>
+method as shown here is deprecated in JDK 1.2 in favor of a safer
+flag-based system, where a thread must periodically examine a
+"flag" variable to determine when it should stop, at
+which point it can clean up and return from its
+<tt class="literal">run()</tt> method. See the JDK documentation for
+details. Example source code can be found in an article titled
+"Scott's Solutions: Programming with threads in Java
+1.2", written by Scott Oaks for Java Report Online, found at
+<a href="http://www.sigs.com/jro/features/9711/oaks.html">http://www.sigs.com/jro/features/9711/oaks.html</a><a name="INDEX-596"></a><a name="INDEX-597"></a>.</p> </blockquote>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch03_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch03_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch03_06.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">3.4. Single-Thread Model</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">3.6. Last Modified Times</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

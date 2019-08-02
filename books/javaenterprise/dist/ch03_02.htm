@@ -1,0 +1,388 @@
+<html>
+<head>
+<title>What's So Tough About Distributing Objects? (Java Distributed Computing)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jim Farley">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-206-9E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="What's So Tough About Distributing Objects?">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm" alt="Java Distributed Computing"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch03_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch03_01.htm">Chapter 3: Distributing Objects</a></td><td align="right" valign="top" width="172"><a href="ch03_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch03_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">3.2. What's So Tough About Distributing Objects?</h2>
+
+<p>OK, so we think distributing objects is a good idea, but why do
+distributed object systems like CORBA and, to a lesser degree, Java
+RMI, seem so big and complicated? In <a href="ch02_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch02_01.htm">Chapter 2, "Networking in Java"</a> we
+saw how the core Java API, especially the
+<tt class="literal">java.net</tt> and <tt class="literal">java.io</tt>
+packages, gives us easy access to the network and key network
+protocols. They also let us layer application-specific operations on
+top of the network pretty easily. It seems like all that we'd
+need to do is extend these packages to allow objects to invoke each
+other's methods over the network, and we'd have a basic
+distributed object system. To get a feeling for the complexity of
+distributed object systems, let's look at what it would take to
+put together one of our own using just the core Java API, without
+utilizing the RMI package or the object input/output streams in the
+<tt class="literal">java.io</tt> package.
+</p>
+
+<a name="JDP-CH-3-SECT-2.1"></a>
+<h3 class="sect2">3.2.1. Creating Remote Objects</h3>
+
+<p>
+<a name="INDEX-276"></a><a name="INDEX-277"></a>
+The essential requirements in a distributed object system are the
+ability to create or invoke objects on a remote host or process, and
+interact with them as if they were objects within our own process. It
+seems logical that we would need some kind of message protocol for
+sending requests to remote agents to create new objects, to invoke
+methods on these objects, and to delete the objects when we're
+done with them. As we saw in <a href="ch02_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch02_01.htm">Chapter 2, "Networking in Java"</a>, the
+networking support in the Java API makes it very easy to implement a
+message protocol. But what kinds of things does a message protocol
+have to do if it's supporting a distributed object system?
+</p>
+
+<p>To create a remote object, we need to reference a class, provide
+constructor arguments for the class, and receive a reference to the
+created object in return. This object reference will be used to
+invoke methods on the object, and eventually to ask the remote agent
+to destroy the object when we are done with it. So the data we will
+need to send over the network include <em class="emphasis">class
+references</em>, <em class="emphasis">object references</em>,
+<em class="emphasis">method references</em>, and <em class="emphasis">method
+arguments</em>.
+</p>
+
+<p>
+<a name="INDEX-278"></a>The first item is easy--we already
+saw in <a href="ch02_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch02_01.htm">Chapter 2, "Networking in Java"</a> how the
+<tt class="literal">ClassLoader</tt> can be used to send class
+definitions over the network. If we want to create a new remote
+object from a given class, we can send the class definition to the
+remote host, and tell it to build one using a default constructor.
+<a name="INDEX-279"></a><a name="INDEX-280"></a>Object references require some
+thought, though. These are not the same as local Java object
+references. We need to have an object reference that we can package
+up and send over the network, i.e., one that's
+<em class="emphasis">serializable</em>.
+<a name="INDEX-281"></a><a name="INDEX-282"></a>
+This object reference, once we receive it, will still need to refer
+back to the original object on the remote host, so that when we call
+methods on it the method invocations are deferred to the
+"source" object on the remote host. One simple way to
+implement remote object references is to build an object lookup table
+into the remote agent. When a client requests a new object, the
+remote agent builds the requested object, puts the object into the
+table, and sends the table index of the object to the client. If we
+use sockets and streams to send requests and object references back
+and forth between remote agents, a client might request a remote
+object with something like this:
+</p>
+
+<blockquote>
+<pre class="programlisting">Class myClass = Class.forName("Myclass");
+Socket objConn = new Socket("object.server.net", 1234);
+OutputStreamWriter out =
+    new ObjectStreamWriter(objConn.getOutputStream());
+DataInputStream in = new DataInputStream(objConn.getInputStream());
+
+out.write("new " + myClass.getName());
+int objRef = in.readInt();</pre>
+</blockquote>
+
+<p>The integer <tt class="literal">objRef</tt> returned by the remote server
+can be used to reference the new remote object. On the other end of
+the socket, the agent receiving the request for the remote object may
+handle the request like this:
+</p>
+
+<blockquote>
+<pre class="programlisting">Hashtable objTable = new Hashtable();
+ServerSocket server = ...;
+Socket conn;
+// Accept the connection from the client
+if ((conn = server.accept()) != null) {
+    DataOutputStream out =
+        new DataObjectStream(conn.getOutputStream());
+    BufferedReader in = new BufferedReader(
+        new InputStreamReader(conn.getInputStream()));
+    String cmd = in.readLine();
+    // Parse the command type from the command string
+    if (parseCmd(cmd).compareTo("new") == 0) {
+        // The client wants a new object created,
+        // so parse the class name from the command string
+        String classname = parseClass(cmd);
+        // Create the Class object and make an instance
+        Class reqClass = Class.forName(classname);
+        Object obj = reqClass.newInstance();
+        // Register the object and return the integer
+        // identifier/reference to the client
+        Integer objID = nextID();
+        objTable.put(objID, obj);
+        out.writeInt(objID.intValue());
+    }
+}</pre>
+</blockquote>
+
+<p>The object server reads the class name sent by the requestor, looks
+up the class using the static
+<tt class="literal">Class.forName()</tt><a name="INDEX-283"></a>
+method, and creates a new instance of the class by calling the
+<tt class="literal">newInstance()</tt><a name="INDEX-284"></a>
+method on the <tt class="literal">Class</tt> object. Once the object has
+been created, the server generates a unique identifier for the object
+and sends it back to the requestor. Note that we've already
+limited our remote object scheme, by forcing the use of default
+constructors, e.g., those with no arguments. The remote host creates
+the requested object by calling <tt class="literal">newInstance()</tt> on
+its class, which is equivalent to creating the object by calling the
+class constructor with no arguments. Since we don't (yet) have
+a way to specify methods on classes over the network, or a way to
+send arguments to these methods, we have to live with this limitation
+for now.<a name="INDEX-285"></a><a name="INDEX-286"></a><a name="INDEX-287"></a><a name="INDEX-288"></a>
+</p>
+
+
+<a name="JDP-CH-3-SECT-2.2"></a>
+<h3 class="sect2">3.2.2. Remote Method Calls</h3>
+
+<p>
+<a name="INDEX-289"></a><a name="INDEX-290"></a>Now that the requestor has a
+reference to an object on the remote host, it needs a way to invoke
+methods on the object. Since Java, as of JDK 1.1, allows us to query
+a class or object for its declared methods and data members, the
+local agent can get a direct reference to the method that it wants to
+invoke on the remote object, in the form of a
+<tt class="literal">Method</tt><a name="INDEX-291"></a> object:
+</p>
+
+<blockquote>
+<pre class="programlisting">Class reqClass = Class.forName("Myclass");
+Method reqMethod = reqClass.getDeclaredMethod("getName", null);</pre>
+</blockquote>
+
+<p>In this example, the local agent has retrieved a reference to a
+<tt class="literal">getName()</tt><a name="INDEX-292"></a>
+method, with no arguments, on the class <tt class="literal">Myclass</tt>.
+It could now use this method reference to call the method on a local
+<tt class="literal">Myclass</tt> instance:
+</p>
+
+<blockquote>
+<pre class="programlisting">Myclass obj = new Myclass();
+reqMethod.invoke(obj, null);</pre>
+</blockquote>
+
+<p>This may seem like a roundabout way to accomplish the same thing as
+calling <tt class="literal">obj.getName()</tt> on the
+<tt class="literal">Myclass</tt> object, and it is. But in order to call
+a method on our remote object, we need to send a reference to the
+method over the network to the remote host. One way to do this is to
+assign identifiers to all of the methods on the class, just like we
+did for remote objects. Since both the object requestor and the
+object server can get a list of the class's methods by calling
+the <tt class="literal">getDeclaredMethods()</tt> method on the class, we
+could simply use the index of the method in the returned list as its
+identifier. Then the object requestor can call a method on a remote
+object by simply sending the remote host the object's
+identifier, and the identifier for the method to call. Assuming that
+our local agent has the same object reference from the earlier
+example, the remote method call would look something like this:
+</p>
+
+<blockquote>
+<pre class="programlisting">Method reqMethod = reqClass.getDeclaredMethod("getName", null);
+Method[] methodList = reqClass.getDeclaredMethods();
+int methodIdx = 0;
+for (int i = 0; i &lt; methodList.length; i++) {
+    if (reqMethod == methodList[i]) {
+        methodIdx = i;
+        break;
+    }
+}
+String cmd = "call " + methodIdx + " on " + objRef;
+out.writeUTF(cmd);</pre>
+</blockquote>
+
+<p>This approach to handling remote method invocation is a general one;
+it will work for any class that we want to distribute. So far so
+good. But what about the arguments to the remote methods? And what
+about the return value from the remote method? Our example used a
+<tt class="literal">getName()</tt> method with no arguments, but if the
+method does take arguments, we'll need to send these to the
+remote host as well. We can also assume that a method called
+"getName" will probably return some kind of
+<tt class="literal">String</tt> value, which we'll need to get back
+from the remote host. This same problem exists in the creation of the
+remote object. With our method reference scheme we can now specify
+which constructor to use when the remote host creates our object, but
+we still need a way to send the constructor arguments to the remote
+host.
+</p>
+
+<p>By now this exercise is beginning to look a lot more serious than we
+might have expected. In distributed object systems, the task of
+packaging up method arguments for delivery to the remote object, and
+the task of gathering up method return values for the client, are
+referred to as <em class="emphasis">data
+marshaling</em><a name="INDEX-293"></a><a name="INDEX-294"></a>. One
+approach we can take to data marshaling is to turn every object
+argument in a remote method call into a remote object just like we
+did previously, by generating an object reference and sending that to
+the remote agent as the method argument. If the method returns an
+object value, then the remote host can generate a new object
+reference and send that back to the local host. So now the remote
+host and the local host are acting as both object servers and object
+requestors. We started out with the remote host creating objects for
+the local host to invoke methods on, but now the local host is
+"serving" objects for method arguments, and the remote
+host is serving a bunch of new objects for method return values. And
+if the remote host needs to call any methods on objects that are
+arguments to other methods, or if the local host needs to call
+methods on object return values, then we'll need to send method
+references back and forth for these remote method calls as well.
+</p>
+
+<p>To further complicate matters, we also have to worry about situations
+where you don't want a remote object reference sent as the
+method argument. In some cases, you may want to send objects by copy
+rather than by reference. In other words, you may just need to send
+the value of the object from one host to another, and not want
+changes to an object propagated back to the original source object.
+How do we serialize and transmit an object's value to a remote
+agent? One way is to tell the other agent to create a new object of
+the right type, as we did to create our original remote object, and
+then indicate the new object as the method argument or return
+value.<a name="INDEX-295"></a><a name="INDEX-296"></a>
+</p>
+
+
+<a name="JDP-CH-3-SECT-2.3"></a>
+<h3 class="sect2">3.2.3. Other Issues</h3>
+
+<p>Our hypothetical remote object scheme, using object tables, integer
+object references based on table location, and integer method
+references based on the method's index/position in the class
+definition, is a bit ad-hoc and not very elegant. It will work, but
+probably not very well. For one thing, it is not very scalable in
+terms of development complexity and runtime complexity. Each agent on
+the network is maintaining its own object table and its own set of
+object identifiers. Each remote method call could potentially
+generate more entries in the object tables on both ends of the call,
+for method arguments and for method return values. And since
+there's no guarantee that two agents won't use the same
+identifier for two different objects, each agent using remote objects
+will need to keep its own table of remote object identifiers and the
+agent they came from. So now each agent has to maintain two object
+reference tables: one for objects that it is serving to other agents,
+and another for objects that it is using remotely. A more elegant way
+to handle this would be to create a
+<a name="INDEX-297"></a><a name="INDEX-298"></a> naming service for objects, where an
+agent serving an object could register its objects with the naming
+service and generate a unique name/address for the object. The naming
+service would be responsible for mapping named objects to where they
+actually live. Users of the object could then find the object with
+one name, rather than a combination of an object ID and the
+object's host.
+</p>
+
+<p>
+<a name="INDEX-299"></a><a name="INDEX-300"></a><a name="INDEX-301"></a>Another issue with this remote
+object scheme is the distribution of workload across the distributed
+system. In returning an object by value as the result of a method
+call, for example, the object server instructs the client to create
+the returned object value. The creation of this object could be a
+significant effort, depending on the type of object. Under normal,
+non-distributed conditions the creation of the return value is
+considered a part of the overhead of calling the method. You would
+hope that when you invoke this method remotely, all of the overhead,
+including the creation of the return value, would be off-loaded to
+the remote host. Instead, we're pushing some of the work to the
+remote host and keeping some locally. The same issue comes up when an
+agent invokes a remote method and passes method arguments by value
+instead of by reference. The calling agent tells the serving agent to
+create the method argument values on its side, which increases the
+net overhead on the server side for the remote method call.
+</p>
+
+<p>Hopefully this extended thought experiment has highlighted some of
+the serious issues that arise when trying to distribute objects over
+the network. In the next section, we'll look at the features
+that a distributed object system needs to have in order to address
+these issues.<a name="INDEX-302"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch03_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch03_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch03_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">3.1. Why Distribute Objects?</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">3.3. Features of Distributed Object Systems</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

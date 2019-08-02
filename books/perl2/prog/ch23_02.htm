@@ -1,0 +1,576 @@
+<html>
+<head>
+<title>Handling Timing Glitches (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Handling Timing Glitches">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch23_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch23_01.htm">Chapter 23: Security</a></td><td align="right" valign="top" width="172"><a href="ch23_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">23.2. Handling Timing Glitches</h2>
+
+<p>
+<a name="INDEX-4016"></a><a name="INDEX-4017"></a><a name="INDEX-4018"></a><a name="INDEX-4019"></a>
+Sometimes your program's behavior is exquisitely sensitive to the
+timing of external events beyond your control.  This is always a
+concern when other programs, particularly inimical ones, might be vying
+with your program for the same resources (such as files or devices).  In
+a multitasking environment, you cannot predict the order in which
+processes waiting to run will be granted access to the processor.
+Instruction streams among all eligible processes are interleaved, so
+first one process gets some CPU, and then another process, and so on.
+Whose turn it is to run, and how long they're allowed to run, appears
+to be random.  With just one program that's not a problem, but with
+several programs sharing common resources, it can be.</p>
+
+<p>
+<a name="INDEX-4020"></a>
+Thread programmers are especially sensitive to these issues.  They
+quickly learn not to say:
+<blockquote>
+<pre class="programlisting">$var++ if $var == 0;</pre>
+</blockquote>
+
+when they should say:
+<blockquote>
+<pre class="programlisting">{
+    lock($var);
+    $var++ if $var == 0;
+}</pre>
+</blockquote>
+
+The former produces unpredictable results when multiple execution
+threads attempt to run this code at the same time.
+(See <a href="ch17_01.htm">Chapter 17, "Threads"</a>.)
+If you think of files as shared objects, and processes as
+threads contending for access to those shared objects, you can see how
+the same issues arise.  A process, after all, is really just a thread
+with an attitude.  Or vice versa.</p>
+
+<p>Timing unpredictabilities affect both privileged and nonprivileged
+situations.  We'll first describe how to cope with a long-standing
+bug in old Unix kernels that affects any set-id program.  Then we'll
+move on to discuss race conditions in general, how they can turn
+into security holes, and steps you can take to avoid falling into
+these holes.</p>
+
+
+<h3 class="sect2">23.2.1. Unix Kernel Security Bugs</h3>
+
+<a name="INDEX-4021"></a><a name="INDEX-4022"></a><a name="INDEX-4023"></a><a name="INDEX-4024"></a><a name="INDEX-4025"></a><a name="INDEX-4026"></a><a name="INDEX-4027"></a>
+<p>Beyond the obvious problems that stem from giving special privileges
+to interpreters as flexible and inscrutable as shells, older versions
+of Unix have a kernel bug that makes any set-id script insecure before
+it ever gets to the interpreter.  The problem is not the script
+itself, but a race condition in what the kernel does when it finds a
+set-id executable script.  (The bug doesn't exist on machines that
+don't recognize <tt class="literal">#!</tt> in the kernel.) When a kernel
+opens such a file to see which interpreter to run, there's a delay
+before the (now set-id) interpreter starts up and reopens the file.
+That delay gives malicious entities a chance to change the file,
+especially if your system supports symbolic links.
+<a name="INDEX-4028"></a>
+</p>
+
+<p>Fortunately, sometimes this kernel "feature" can be disabled.
+Unfortunately, there are a couple of different ways to disable it.
+The system can outlaw scripts with the set-id bits set, which doesn't
+help much.  Alternatively, it can ignore the set-id bits on scripts.
+In the latter case, Perl can emulate the setuid and setgid mechanism
+when it notices the (otherwise useless) set-id bits on Perl scripts.
+It does this via a special executable called
+<em class="emphasis">suidperl</em>, which is automatically invoked for you
+if it's needed.<a href="#FOOTNOTE-7">[7]</a>
+</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-7"></a>
+<p>[7]Needed <em class="emphasis">and</em>
+permitted--if Perl detects that the filesystem on which the script
+resides was mounted with the <tt class="literal">nosuid</tt> option, that
+option will still be honored.  You can't use Perl to sneak around your
+sysadmin's security policy this way.</p>
+
+</blockquote>
+
+<p>However, if the kernel set-id script feature
+<em class="emphasis">isn't</em> disabled, Perl will complain loudly that
+your setuid script is insecure.  You'll either need to disable the
+kernel set-id script "feature", or else put a C wrapper around the
+script.  A C wrapper is just a compiled program that does nothing
+except call your Perl program.  Compiled programs are not subject to
+the kernel bug that plagues set-id scripts.</p>
+
+<p>
+<a name="INDEX-4029"></a><a name="INDEX-4030"></a>
+Here's a simple wrapper, written in C:
+<blockquote>
+<pre class="programlisting">#define REAL_FILE "/path/to/script"
+main(ac, av)
+    char **av;
+{
+    execv(REAL_FILE, av);
+}</pre>
+</blockquote>
+
+Compile this wrapper into an executable image and then make
+<em class="emphasis">it</em> rather than your script set-id.  Be sure to
+use an absolute filename, since C isn't smart enough to do taint
+checking on your <tt class="literal">PATH</tt>.</p>
+
+<p>(Another possible approach is to use the experimental C code generator
+for the Perl compiler.  A compiled image of your script will not have
+the race condition.  See <a href="ch18_01.htm">Chapter 18, "Compiling"</a>.)</p>
+
+<p>Vendors in recent years have finally started to provide systems free
+of the set-id bug.  On such systems, when the kernel gives the name of
+the set-id script to the interpreter, it no longer uses a filename
+subject to meddling, but instead passes a special file representing
+the file descriptor, like <em class="emphasis">/dev/fd/3</em>.  This
+special file is already opened on the script so that there can be no
+race condition for evil scripts to
+
+exploit.<a href="#FOOTNOTE-8">[8]</a> Most modern versions of Unix use this
+approach to avoid the race condition inherent in opening the same
+filename twice.</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-8"></a>
+<p>[8]On these
+systems, Perl should be compiled with
+<tt class="userinput"><b>-DSETUID_SCRIPTS_ARE_SECURE_NOW</b></tt>.  The
+<em class="emphasis">Configure</em> program that builds Perl tries to
+figure this out for itself, so you should never have to specify this
+explicitly.</p>
+
+</blockquote>
+
+
+
+
+
+<a name="ch23-sect-hrc"></a>
+<h3 class="sect2">23.2.2. Handling Race Conditions</h3>
+
+<p>
+<a name="INDEX-4031"></a><a name="INDEX-4032"></a><a name="INDEX-4033"></a>
+Which runs us right into the topic of race conditions.  What are they
+really?  Race conditions turn up frequently in security discussions.
+(Although less often than they turn up in insecure programs.
+Unfortunately.)  That's because they're a fertile source of subtle
+programming errors, and such errors can often be turned into security
+<em class="emphasis">exploits</em> (the polite term for screwing up
+someone's security).  A race condition exists when the result of
+several interrelated events depends on the ordering of those events,
+but that order cannot be guaranteed due to nondeterministic timing
+effects.  Each event races to be the first one done, and the final
+state of the system is anybody's guess.</p>
+
+<p>Imagine you have one process overwriting an existing file, and
+another process reading that same file.  You can't predict whether
+you read in old data, new data, or a haphazard mixture of the two.
+You can't even know whether you've read all the data.  The reader
+could have won the race to the end of the file and quit.  Meanwhile,
+if the writer kept going after the reader hit end-of-file, the file would
+grow past where the reader stopped reading, and the reader would
+never know it.</p>
+
+<p>Here the solution is simple: just have both parties
+<tt class="literal">flock</tt> the file.  The reader typically requests a
+shared lock, and the writer typically requests an exclusive one.  So
+long as all parties request and respect these advisory locks, reads
+and writes cannot be interleaved, and there's no chance of mutilated
+data.  See the section <a href="ch16_02.htm#ch16-sect-fl">Section 23.2.1, "File Locking"</a> in <a href="ch16_01.htm">Chapter 16, "Interprocess Communication"</a>.</p>
+
+<p>
+<a name="INDEX-4034"></a>
+You risk a far less obvious form of race condition every time you
+let operations on a filename govern subsequent operations
+on that file.  When used on filenames rather than filehandles,
+the file test operators represent something of a garden path leading
+straight into a race condition.  Consider this code:
+<blockquote>
+<pre class="programlisting">if (-e $file) {
+    open(FH, "&lt; $file")
+        or die "can't open $file for reading: $!";
+}
+else {
+    open(FH, "&gt; $file")
+        or die "can't open $file for writing: $!";
+}</pre>
+</blockquote>
+<a name="INDEX-4035"></a>
+The code looks just about as straightforward as it gets, but it's
+still subject to races.  There's no guarantee that the answer returned
+by the <tt class="userinput"><b>-e</b></tt> test will still be valid by the time
+either <tt class="literal">open</tt> is called.  In the
+<tt class="literal">if</tt> block, another process could have removed the
+file before it could be opened, and you wouldn't find the file you
+thought was going to be there.  In the <tt class="literal">else</tt> block,
+another process could have created the file before the second
+<tt class="literal">open</tt> could get its turn to create the file, so the
+file that you thought would not be there, would be.  The simple
+<tt class="literal">open</tt> function creates new files but overwrites
+existing ones.  You may think you want to overwrite any existing file,
+but consider that the existing file might be a newly created alias or
+symbolic link to a file elsewhere on the system that you very much
+don't want to overwrite.  You may think you know what a filename means
+at any particular instant, but you can never really be sure, as long
+as any other processes with access to the file's directory are running
+on the same system.</p>
+
+<p>
+<a name="INDEX-4036"></a>
+To fix this problem of overwriting, you'll need to use
+<tt class="literal">sysopen</tt>, which provides individual controls over
+whether to create a new file or to clobber an existing one.  And we'll
+ditch that <tt class="userinput"><b>-e</b></tt> file existence test since it
+serves no useful purpose here and only increases our exposure to race
+conditions.
+<blockquote>
+<pre class="programlisting">use Fcntl qw/O_WRONLY O_CREAT O_EXCL/;
+open(FH, "&lt;", $file)
+    or sysopen(FH, $file, O_WRONLY | O_CREAT | O_EXCL)
+    or die "can't create new file $file: $!";</pre>
+</blockquote>
+
+Now even if the file somehow springs into existence between when
+<tt class="literal">open</tt> fails and when <tt class="literal">sysopen</tt> tries to open a new file for
+writing, no harm is done, because with the flags provided, <tt class="literal">sysopen</tt>
+will refuse to open a file that already exists.</p>
+
+<p>
+<a name="INDEX-4037"></a>
+If someone is trying to trick your program into misbehaving, there's a
+good chance they'll go about it by having files appear and disappear
+when you're not expecting.  One way to reduce the risk of deception is
+by promising yourself you'll never operate on a filename more than
+once.  As soon as you have the file opened, forget about the filename
+(except maybe for error messages), and operate only on the handle
+representing the file.  This is much safer because, even though someone
+could play with your filenames, they can't play with your filehandles.
+(Or if they can, it's because you let them--see "Passing Filehandles" in
+<a href="ch16_01.htm">Chapter 16, "Interprocess Communication"</a>.)</p>
+
+<p>
+<a name="INDEX-4038"></a>
+Earlier in this chapter, we showed a
+<tt class="literal">handle_looks_safe</tt> function which called Perl's
+<tt class="literal">stat</tt> function on a filehandle (not a filename) to
+check its ownership and permissions.  Using the filehandle is critical
+to correctness--if we had used the name of the file, there would have
+been no guarantee that the file whose attributes we were inspecting
+was the same one we just opened (or were about to open).  Some pesky
+evil doer could have deleted our file and quickly replaced it with a
+file of nefarious design, sometime between the <tt class="literal">stat</tt>
+and the <tt class="literal">open</tt>.  It wouldn't matter which was called
+first; there'd still be the opportunity for foul play between the two.
+You may think that the risk is very small because the window is very
+short, but there are many cracking scripts out in the world that will
+be perfectly happy to run your program thousands of times to catch it
+the one time it wasn't careful enough.  A smart cracking script can
+even lower the priority of your program so it gets interrupted more
+often than usual, just to speed things up a little.  People work hard
+on these things--that's why they're called
+<em class="emphasis">exploits</em>.</p>
+
+<p>By calling <tt class="literal">stat</tt> on a filehandle that's already
+open, we only access the filename once and so avoid the race
+condition.  A good strategy for avoiding races between two events is
+to somehow combine both into one, making the operation
+atomic.<a href="#FOOTNOTE-9">[9]</a> Since we access the file by name only
+once, there can't be any race condition between multiple accesses, so
+it doesn't matter whether the name changes.  Even if our cracker
+deletes the file we opened (yes, that can happen) and puts a different
+one there to trick us with, we still have a handle to the real,
+original file.</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-9"></a>
+<p>[9] Yes, you may still perform atomic operations
+in a nuclear-free zone.  When Democritus gave the word "atom" to the
+indivisible bits of matter, he meant literally something that could
+not be cut: <em class="emphasis">a-</em> (not) + <em class="emphasis">tomos</em>
+(cuttable).  An atomic operation is an action that can't be
+interrupted.  (Just you try interrupting an atomic bomb
+sometime.)</p>
+
+</blockquote>
+
+<a name="INDEX-4039"></a><a name="INDEX-4040"></a><a name="INDEX-4041"></a>
+
+
+
+
+
+
+<h3 class="sect2">23.2.3. Temporary Files</h3>
+
+<p>
+<a name="INDEX-4042"></a><a name="INDEX-4043"></a><a name="INDEX-4044"></a>
+Apart from allowing buffer overruns (which Perl scripts are virtually immune
+to) and trusting untrustworthy input data (which taint mode guards against), creating temporary
+files improperly is one of the most frequently exploited security holes.  Fortunately,
+temp file attacks usually require crackers to have a valid user
+account on the system they're trying to crack, which drastically reduces
+the number of potential bad guys.</p>
+
+<p>Careless or casual programs use temporary files in all kinds of
+unsafe ways, like placing them in world-writable directories, using
+predictable filenames, and not making sure the file doesn't already
+exist.  Whenever you find a program with code like this:
+<blockquote>
+<pre class="programlisting">open(TMP, "&gt;/tmp/foo.$$")
+    or die "can't open /tmp/foo.$$: $!";</pre>
+</blockquote>
+
+you've just found all three of those errors at once.  That program
+is an accident waiting to happen.</p>
+
+<p>
+<a name="INDEX-4045"></a>
+The way the exploit plays out is that the cracker first plants a
+file with the same name as the one you'll use.  Appending the PID
+isn't enough for uniqueness; surprising though it may sound, guessing
+
+PIDs really isn't difficult.<a href="#FOOTNOTE-10">[10]</a>
+Now along comes the program with the careless <tt class="literal">open</tt> call, and
+instead of creating a new temporary file for its own purposes, it
+overwrites the cracker's file instead.</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-10"></a>
+<p>[10]Unless you're on a system
+like OpenBSD, which randomizes new PID assignments.</p>
+
+</blockquote>
+
+<p>So what harm can that do?  A lot.  The cracker's file isn't really a
+plain file, you see.  It's a symbolic link (or sometimes a hard link),
+probably pointing to some critical file that crackers couldn't
+normally write to on their own, such as
+<em class="emphasis">/etc/passwd</em>.  The program thought it opened a
+brand new file in <em class="emphasis">/tmp</em>, but it clobbered an
+existing file somewhere else instead.</p>
+
+<p>
+<a name="INDEX-4046"></a><a name="INDEX-4047"></a>
+Perl provides two functions that address this issue, if properly
+used.  The first is <tt class="literal">POSIX::tmpnam</tt>, which just returns a filename
+that you're expected to open for yourself:
+<blockquote>
+<pre class="programlisting"># Keep trying names until we get one that's brand new.
+use POSIX;
+do {
+    $name = tmpnam();
+} until sysopen(TMP, $name, O_RDWR | O_CREAT | O_EXCL, 0600);
+# Now do I/O using TMP handle.</pre>
+</blockquote>
+
+The second is <tt class="literal">IO::File::new_tmpfile</tt>, which gives you back
+an already opened handle:
+<blockquote>
+<pre class="programlisting"># Or else let the module do that for us.
+use IO::File;
+my $fh = IO::File::new_tmpfile();  # this is POSIX's tmpfile(3)
+# Now do I/O using $fh handle.</pre>
+</blockquote>
+
+Neither approach is perfect, but of the two, the first is the better
+approach.  The major problem with the second one is that Perl is
+subject to the foibles of whatever implementation of
+<em class="emphasis">tmpfile</em>(3) happens to be in your system's
+C library, and you have no guarantee that this function doesn't do
+something just as dangerous as the <tt class="literal">open</tt> we're
+trying to fix.  (And some, sadly enough, do.)  A minor problem is that
+it doesn't give you the name of the file at all.  Although it's better
+if you can handle a temp file without a name--because that way you'll
+never provoke a race condition by trying to open it again--often you
+can't.</p>
+
+<p>The major problem with the first approach is that you have no control
+over the location of the pathname, as you do with the C library's
+<em class="emphasis">mkstemp</em>(3) function.  For one thing, you
+never want to put the file on an NFS-mounted filesystem.  The
+<tt class="literal">O_EXCL</tt> flag is not guaranteed to work correctly
+under NFS, so multiple processes that request an exclusive create at
+nearly the same time might all succeed. For another, because the path
+returned is probably in a directory others can write to, someone could
+plant a symbolic link pointing to a nonexistent file, forcing you to
+create your file in a location they prefer.<a href="#FOOTNOTE-11">[11]</a> If you have any say in it, don't
+put temp files in a directory that anyone else can write to.  If you
+must, make sure to use the <tt class="literal">O_EXCL</tt> flag to
+<tt class="literal">sysopen</tt>, and try to use directories with the
+owner-delete-only flag (the sticky bit) set on them.</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-11"></a>
+<p>[11]A solution
+to this, which works only under some operating systems, is to call
+<tt class="literal">sysopen</tt> and OR in the <tt class="literal">O_NOFOLLOW</tt>
+flag.  This makes the function fail if the final component of the path
+is a symbolic link.</p>
+
+</blockquote>
+
+<p>
+<a name="INDEX-4048"></a>
+As of version 5.6.1 of Perl, there is a third way.  The standard
+<tt class="literal">File::Temp</tt> module takes into account all the
+difficulties we've mentioned.  You might use the default options like
+this:
+<blockquote>
+<pre class="programlisting">use File::Temp "tempfile";
+$handle = tempfile();</pre>
+</blockquote>
+</p>
+
+<p>Or you might specify some of the options like this:
+<blockquote>
+<pre class="programlisting">use File::Temp "tempfile";
+($handle, $filename) = tempfile("plughXXXXXX",
+                                DIR =&gt; "/var/spool/adventure",
+                                SUFFIX = '.dat');</pre>
+</blockquote>
+</p>
+
+<p>The <tt class="literal">File::Temp</tt> module also provides
+security-conscious emulations of the other functions we've mentioned
+(though the native interface is better because it gives you an opened
+filehandle, not just a filename, which is subject to race conditions).
+See <a href="ch32_01.htm">Chapter 32, "Standard Modules"</a>, for a longer
+description of the options and semantics of this module.</p>
+
+<p>Once you have your filehandle, you can do whatever you want with it.
+It's open for both reading and writing, so you can write to the
+handle, <tt class="literal">seek</tt> back to the beginning, and then if you
+want, overwrite what you'd just put there or read it back again.  The
+thing you really, <em class="emphasis">really</em> want to avoid doing is
+ever opening that filename again, because you can't know for sure that
+it's really the same file you opened the first time
+around.<a href="#FOOTNOTE-12">[12]</a>
+</p>
+<blockquote class="footnote">
+
+<a name="FOOTNOTE-12"></a>
+<p>[12] Except afterwards by doing a
+<tt class="literal">stat</tt> on both filehandles and comparing the first
+two return values of each (the device/inode pair).  But it's too late
+by then because the damage is already done.  All you can do is detect
+the damage and abort (and maybe sneakily send email to the system
+administrator).</p>
+
+</blockquote>
+
+<p>
+<a name="INDEX-4049"></a>
+When you launch another program from within your script, Perl normally
+closes all filehandles for you to avoid another vulnerability.  If you
+use <tt class="literal">fcntl</tt> to clear your close-on-exec flag (as
+demonstrated at the end of the entry on <tt class="literal">open</tt> in
+<a href="ch29_01.htm">Chapter 29, "Functions"</a>), other programs you call will
+inherit this new, open file descriptor.  On systems that support the
+<em class="emphasis">/dev/fd/</em> directory, you could provide another
+program with a filename that really means the file descriptor by
+constructing it this way:
+<blockquote>
+<pre class="programlisting">$virtname = "/dev/fd/" . fileno(TMP);</pre>
+</blockquote>
+If you only needed to call a Perl subroutine or program that's
+expecting a filename as an argument, and you knew that subroutine or
+program used regular <tt class="literal">open</tt> for it, you could pass
+the handle using Perl's notation for indicating a filehandle:
+<blockquote>
+<pre class="programlisting">$virtname = "=&amp;" . fileno(TMP);</pre>
+</blockquote>
+
+When that file "name" is passed with a regular Perl
+<tt class="literal">open</tt> of one or two arguments (not three, which
+would dispel this useful magic), you gain access to the duplicated
+descriptor.  In some ways, this is more portable than passing a file
+from <em class="emphasis">/dev/fd/</em>, because it works everywhere that
+Perl works; not all systems have a <em class="emphasis">/dev/fd/</em>
+directory.  On the other hand, the special Perl
+<tt class="literal">open</tt> syntax for accessing file descriptors by
+number works only with Perl programs, not with programs written in
+other languages.
+<a name="INDEX-4050"></a><a name="INDEX-4051"></a><a name="INDEX-4052"></a>
+</p>
+
+
+
+
+
+<a name="INDEX-4053"></a><a name="INDEX-4054"></a>
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch23_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch23_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">23.1. Handling Insecure Data</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">23.3. Handling Insecure Code</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

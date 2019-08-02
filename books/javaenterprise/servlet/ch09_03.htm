@@ -1,0 +1,222 @@
+<html>
+<head>
+<title>Reusing Database Objects (Java Servlet Programming)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jason Hunter and William Crawford">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-391-XE" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Reusing Database Objects">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm" alt="Java Servlet Programming"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch09_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch09_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch09_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch09_01.htm">Chapter 9: Database Connectivity</a></td><td align="right" valign="top" width="172"><a href="ch09_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch09_04.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">9.3. Reusing Database Objects</h2>
+
+<p>In the introduction, we mentioned that the servlet life cycle allows
+for extremely fast database access. After you've used JDBC for
+a short time, it will become evident that the major performance
+bottleneck often comes right at the beginning, when you are opening a
+database connection. This is rarely a problem for most applications
+and applets because they can afford a few seconds to create a
+<tt class="literal">Connection </tt>that is used for the life of the
+program<tt class="literal">. </tt>With servlets this bottleneck is more
+serious because we are creating and tearing down a new
+<tt class="literal">Connection</tt> for every page request. Luckily, the
+servlet life cycle allows us to reuse the same connection for
+multiple requests, even concurrent requests, as
+<tt class="literal">Connection</tt> objects are required to be thread safe.
+</p>
+
+<a name="ch09-11-fm2xml"></a>
+<h3 class="sect2">9.3.1. Reusing Database Connections</h3>
+
+<p>A servlet can create one or more
+<tt class="literal">Connection</tt><a name="INDEX-1674"></a>objects in its
+<tt class="literal">init()</tt> method and reuse them in its
+<tt class="literal">service()</tt>, <tt class="literal">doGet()</tt>, and
+<tt class="literal">doPost()</tt> methods. To demonstrate, <a href="#ch09-27994">Example 9-4</a> shows the phone lookup servlet rewritten to
+create its <tt class="literal">Connection</tt> object in advance. It also
+uses the <tt class="literal">HtmlSQLResult</tt> class from <a href="ch09_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch09_02.htm">Example 9-3</a> to display the results. Note that this servlet
+uses the Sybase JDBC driver.
+</p>
+
+<a name="ch09-27994"></a>
+<div class="example">
+<h4 class="objtitle">Example 9-4. An improved directory servlet </h4>
+<blockquote>
+<pre class="programlisting">import java.io.*;
+import java.sql.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+
+public class DBPhoneLookupReuse extends HttpServlet {
+
+  private Connection con = null;
+
+  public void init(ServletConfig config) throws ServletException {
+    super.init(config);
+    try {
+      // Load (and therefore register) the Sybase driver
+      Class.forName("com.sybase.jdbc.SybDriver");
+      con = DriverManager.getConnection(
+        "jdbc:sybase:Tds:dbhost:7678", "user", "passwd");
+    }
+    catch (ClassNotFoundException e) { 
+      throw new UnavailableException(this, "Couldn't load database driver");
+    }    
+    catch (SQLException e) { 
+      throw new UnavailableException(this, "Couldn't get db connection");
+    }    
+  }
+
+  public void doGet(HttpServletRequest req, HttpServletResponse res)
+                               throws ServletException, IOException {
+    res.setContentType("text/html");
+    PrintWriter out = res.getWriter(); 
+
+    out.println("&lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Phonebook&lt;/TITLE&gt;&lt;/HEAD&gt;");
+    out.println("&lt;BODY&gt;");
+
+    HtmlSQLResult result = 
+      new HtmlSQLResult("SELECT NAME, PHONE FROM EMPLOYEES", con);
+     
+    // Display the resulting output
+    out.println("&lt;H2&gt;Employees:&lt;/H2&gt;");
+    out.println(result);
+    out.println("&lt;/BODY&gt;&lt;/HTML&gt;");
+  }
+
+  public void destroy() {
+    // Clean up.
+    try {
+      if (con != null) con.close();
+    }
+    catch (SQLException ignored) { }
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="INDEX-1675"></a>
+<a name="ch09-12-fm2xml"></a>
+<h3 class="sect2">9.3.2. Reusing Prepared Statements</h3>
+
+<p>With a little care, you can speed servlet performance even more by
+creating other database-related objects ahead of time. The
+<tt class="literal">PreparedStatement</tt><a name="INDEX-1676"></a><a name="INDEX-1677"></a>object is an ideal candidate because it
+can precompile a SQL statement. This usually saves only a few
+milliseconds, but if your site gets a few hundred thousand hits a
+day, that can add up pretty quickly.
+</p>
+
+<p>Note, however, that sharing objects other than connections poses a
+problem. Servlets must be thread safe, and accessing a
+<tt class="literal">PreparedStatement</tt> might require three or four
+method calls. If one thread calls the
+<tt class="literal">clearParameters()</tt> method of
+<tt class="literal">PreparedStatement</tt> right before another thread
+calls <tt class="literal">execute()</tt>, the results of
+<tt class="literal">execute()</tt> will be disastrous. Also, there's
+the limitation that a <tt class="literal">Statement</tt> can support only
+one query (and any associated result sets) at a time. The solution is
+to synchronize the sections of your code that use shared objects, as
+discussed in <a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch03_01.htm">Chapter 3, "The Servlet Life Cycle"</a> and shown here:
+</p>
+
+<blockquote>
+<pre class="programlisting">synchronized (pstmt) {
+  pstmt.clearParameters();
+  pstmt.setInt(1, 2);
+  pstmt.setInt(2, 4);
+  pstmt.setDouble(3, 53.43);
+  pstmt.executeUpdate();
+}</pre>
+</blockquote>
+
+<p>Unfortunately, this solution is not without drawbacks. Entering a
+synchronization block on some platforms takes extra time, and
+synchronized objects can be used by only one thread at a time.
+However, some servlets already require a synchronization block, and
+in these cases the drawback is less of an issue. A good rule of
+thumb, then, is to create your connections ahead of time, along with
+any frequently used objects (such as
+<tt class="literal">PreparedStatement</tt> objects) that can be quickly
+used inside preexisting synchronization blocks.
+</p>
+
+<p>For servlets written using the <tt class="literal">SingleThreadModel
+</tt> interface, these issues do not apply. On the other hand,
+you will have a number of copies of your servlet loaded at once,
+which could be just as detrimental to performance.<a name="INDEX-1678"></a><a name="INDEX-1679"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch09_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch09_02.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch09_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/ch09_04.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">9.2. The JDBC API</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">9.4. Transactions</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

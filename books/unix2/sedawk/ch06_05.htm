@@ -1,0 +1,203 @@
+<html><head><title>[Chapter 6] 6.5 To Join a Phrase</TITLE
+><meta name="DC.title" content="sed &amp; awk"><meta name="DC.creator" content="Dale Dougherty &amp; Arnold Robbins"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1998-08-03T20:55:34Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-225-5" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch06_01.htm" webstripperlinkwas="ch06_01.htm" title="6. Advanced sed Commands"><link rel="prev" href="ch06_04.htm" webstripperlinkwas="ch06_04.htm" title="6.4 Advanced Flow Control Commands"><link rel="next" href="ch07_01.htm" webstripperlinkwas="ch07_01.htm" title="7. Writing Scripts for awk"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" alt="sed &amp; awk" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/sedawk/index.htm" alt="sed &amp; awk"><area shape="RECT" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="jobjects/fsearch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch06_04.htm" webstripperlinkwas="ch06_04.htm" title="6.4 Advanced Flow Control Commands"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous: 6.4 Advanced Flow Control Commands" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 6<br>Advanced sed Commands</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="CHAPTER" href="ch07_01.htm" webstripperlinkwas="ch07_01.htm" title="7. Writing Scripts for awk"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next: 7. Writing Scripts for awk" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="SEDAWK-CH-6-SECT-5">6.5 To Join a Phrase</A
+></H2
+><p class="para"><a class="indexterm" name="CH06.PHRASE1"></A
+><a class="indexterm" name="CH06.PHRASE2"></A
+>We have covered all the advanced constructs of sed and are now ready
+to look at a shell script named <kbd class="command">phrase</KBD
+> that uses
+nearly all of them.  This script is a general-purpose,
+<kbd class="command">grep</KBD
+>-like program that allows you to look for a
+series of multiple words that might appear across two lines.</P
+><p class="para">An essential element of this program is that, like
+<kbd class="command">grep</KBD
+>, it prints out only the lines that match the
+pattern.  You might think we'd use the <i class="option">-n</I
+> option to
+suppress the default output of lines.  However, what is unusual about
+this sed script is that it creates an input/output loop, controlling
+when a line is output or not.</P
+><p class="para">The logic of this script is to first look for the pattern on one line
+and print the line if it matches.  If no match is found, we read
+another line into the pattern space (as in previous multiline
+scripts).  Then we copy the two-line pattern space to the hold space
+for safekeeping.  Now the new line that was read into the pattern
+space previously could match the search pattern on its own, so the
+next match we attempt is on the second line only.  Once we've
+determined that the pattern is not found on either the first or second
+lines, we remove the newline between the two lines and look for it
+spanning those lines.</P
+><p class="para">The script is designed to accept arguments from the command line.  The
+first argument is the search pattern.  All other command-line
+arguments will be interpreted as filenames.  Let's look at the entire
+script before analyzing it:</P
+><blockquote class="screen"><pre class="screen">#! /bin/sh
+# phrase -- search for words across lines
+# $1 = search string; remaining args = filenames
+search=$1
+shift
+for file 
+do
+sed '
+/'&quot;$search&quot;'/b
+N
+h
+s/.*\n//
+/'&quot;$search&quot;'/b
+g
+s/ *\n/ /
+/'&quot;$search&quot;'/{
+g
+b
+}
+g
+D' $file 
+done</PRE
+></BLOCKQUOTE
+><p class="para">A shell variable named <kbd class="command">search</KBD
+> is assigned the first
+argument on the command line, which should be the search pattern.
+This script shows another method of passing a shell variable into a
+script.  Here we surround the variable reference with a pair of
+double quotes and then single quotes.  Notice the script itself is
+enclosed in single quotes, which protect characters that are normally
+special to the shell from being interpreted.  The sequence of a
+double-quote pair inside a single-quote pair[2]
+makes sure the enclosed argument is evaluated first by the shell
+before the sed script is evaluated by sed.[3]</P
+><blockquote class="footnote"><p class="para">[2] Actually, this is the concatenation of single-quoted text with
+double-quoted text with more single-quoted text (and so on, whew!) to
+produce one large quoted string. Being a shell wizard helps here.</P
+><p class="para">[3] You can also use shell variables to pass a series of commands
+into a sed script.  This somewhat simulates a procedure call but it
+makes the script more difficult to read.  </P
+></BLOCKQUOTE
+><p class="para">The sed script tries to match the search string at three different
+points, each marked by the address that looks for the search pattern.
+The first line of the script looks for the search pattern on a line by
+itself:</P
+><blockquote class="screen"><pre class="screen">/'&quot;$search&quot;'/b</PRE
+></BLOCKQUOTE
+><p class="para">If the search pattern matches the line, the branch command, without a
+label, transfers control to the bottom of the script where the line is
+printed.  This makes use of sed's normal control-flow so that the next
+input line is read into the pattern space and control then returns to
+the top of the script.  The branch command is used in the same way
+each time we try to match the pattern.</P
+><p class="para">If a single input line does not match the pattern, we begin our next
+procedure to create a multiline pattern space.  It is possible that
+the new line, by itself, will match the search string.  It may not be
+apparent why this step is necessary&nbsp;- why not just immediately
+look for the pattern anywhere across two lines?  The reason is that if
+the pattern is actually matched on the second line, we'd still output
+the pair of lines.  In other words, the user would see the line
+preceding the matched line and might be confused by it.  This way we
+output the second line by itself if that is what matches the pattern.</P
+><blockquote class="screen"><pre class="screen">N
+h
+s/.*\n//
+/'&quot;$search&quot;'/b</PRE
+></BLOCKQUOTE
+><p class="para">The Next command appends the next input line to the pattern space.
+The hold command places a copy of the two-line pattern space into the
+hold space.  The next action will change the pattern space and we want
+to preserve the original intact.  Before looking for the pattern, we
+use the substitute command to remove the previous line, up to and
+including the embedded newline.  There are several reasons for doing
+it this way and not another way, so let's consider some of the
+alternatives.  You could write a pattern that matches the search
+pattern only if it occurs after the embedded newline:</P
+><blockquote class="screen"><pre class="screen">/\n.*'&quot;$search&quot;'/b</PRE
+></BLOCKQUOTE
+><p class="para">However, if a match is found, we don't want to print the entire
+pattern space, just the second portion of it.  Using the above
+construct would print both lines when only the second line matches.</P
+><p class="para">You might want to use the Delete command to remove the first line in
+the pattern space before trying to match the pattern.  A side effect
+of the Delete command is a change in flow control that would resume
+execution at the top of the script.  (The Delete command could
+conceivably be used but not without changing the logic of this
+script.)</P
+><p class="para">So, we try to match the pattern on the second line, and if that is
+unsuccessful, then we try to match it across two lines:</P
+><blockquote class="screen"><pre class="screen">g
+s/ *\n/ /
+/'&quot;$search&quot;'/{
+g
+b
+}</PRE
+></BLOCKQUOTE
+><p class="para">The get command retrieves a copy of the original two-line pair from the hold
+space, overwriting the line we had worked with in the pattern space.
+The substitute command replaces the embedded newline and any spaces
+preceding it with a single space.  Then we attempt to match the
+pattern.  If the match is made, we don't want to print the contents of
+the pattern space, but rather get the duplicate from the hold space
+(which preserves the newline) and print it.  Thus, before branching to
+the end of the script, the get command retrieves the copy from the
+hold space.</P
+><p class="para">The last part of the script is executed only if the pattern has not
+been matched.</P
+><blockquote class="screen"><pre class="screen">g
+D</PRE
+></BLOCKQUOTE
+><p class="para">The get command retrieves the duplicate, that preserves the newline,
+from the hold space.  The Delete command removes the first line in the
+pattern space and passes control back to the top of the script.  We
+delete only the first part of the pattern space, instead of clearing
+it, because after reading another input line, it is possible to match
+the pattern spanning across both lines.</P
+><p class="para">Here's the result when the program is run on a sample file:</P
+><blockquote class="screen"><pre class="screen">$ <code class="userinput"><b>phrase &quot;the procedure is followed&quot; sect3</B
+></CODE
+>
+If a pattern is followed by a \f(CW!\fP, then the procedure
+is followed for all lines that do <em class="emphasis">not</EM
+> match the pattern.
+so that the procedure is followed only if there is no match.</PRE
+></BLOCKQUOTE
+><a class="indexterm" name="AUTOID-4701"></A
+><a class="indexterm" name="AUTOID-4702"></A
+><p class="para">As we mentioned at the outset, writing sed scripts is a good primer for
+programming.  In the chapters that follow, we will be looking at the
+awk programming language.  You will see many similarities to sed to
+make you comfortable but you will see a broader range of constructs
+for writing useful programs.  As you begin trying to do more
+complicated tasks with sed, the scripts get so convoluted as to make
+them difficult to understand.  One of the advantages of awk is that it
+handles complexity better, and once you learn the basics, awk scripts
+are easier to write and understand.</P
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch06_04.htm" webstripperlinkwas="ch06_04.htm" title="6.4 Advanced Flow Control Commands"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous: 6.4 Advanced Flow Control Commands" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/sedawk/index.htm" title="sed &amp; awk"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="sed &amp; awk" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="CHAPTER" href="ch07_01.htm" webstripperlinkwas="ch07_01.htm" title="7. Writing Scripts for awk"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next: 7. Writing Scripts for awk" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">6.4 Advanced Flow Control Commands</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" webstripperlinkwas="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">7. Writing Scripts for awk</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#map" border="0" alt="The UNIX CD Bookshelf Navigation"><map name="map"><area shape="RECT" coords="0,0,73,21" href="../index.html" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/index.html" alt="The UNIX CD Bookshelf"><area shape="RECT" coords="74,0,163,21" href="../upt/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/upt/index.htm" alt="UNIX Power Tools"><area shape="RECT" coords="164,0,257,21" href="../unixnut/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/unixnut/index.htm" alt="UNIX in a Nutshell"><area shape="RECT" coords="258,0,321,21" href="../vi/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/vi/index.htm" alt="Learning the vi Editor"><area shape="RECT" coords="322,0,378,21" href="index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/sedawk/index.htm" alt="sed &amp; awk"><area shape="RECT" coords="379,0,438,21" href="../ksh/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/ksh/index.htm" alt="Learning the Korn Shell"><area shape="RECT" coords="439,0,514,21" href="../lrnunix/index.htm" webstripperlinkwas="http://www.ms.itb.ac.id/buku/unix-bookshelf/lrnunix/index.htm" alt="Learning the UNIX Operating System"></MAP
+></DIV
+></BODY
+></HTML
+>

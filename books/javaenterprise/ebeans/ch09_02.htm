@@ -1,0 +1,574 @@
+<html>
+<head>
+<title>Passing Objects by Value (Enterprise JavaBeans)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Richard Monson-Haefel">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-869-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Passing Objects by Value">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm" alt="Enterprise JavaBeans"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch09_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch09_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch09_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch09_01.htm">Chapter 9: Design Strategies</a></td><td align="right" valign="top" width="172"><a href="ch09_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch09_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">9.2. Passing Objects by Value</h2>
+
+<p>
+<a name="INDEX-1819"></a><a name="INDEX-1820"></a><a name="INDEX-1821"></a>Passing objects by
+value<a name="INDEX-1822"></a>is tricky with Enterprise JavaBeans. Two
+simple rules will keep you out of most problem areas: objects that
+are passed by value should be fine-grained dependent objects or
+wrappers used in bulk accessors, and dependent objects should be
+immutable.
+</p>
+
+<a name="JBEANS-CH-9-SECT-2.1"></a>
+<h3 class="sect2">9.2.1. Dependent Objects</h3>
+
+<p>Dependent objects are objects that only have meaning within the
+context of another business object. They typically represent fairly
+fine-grained business concepts, like an address, phone number, or
+order item. For example, an address has little meaning when it is not
+associated with a business object like <tt class="literal">Person</tt> or
+<tt class="literal">Organization</tt>. It depends on the context of the
+business object to give it meaning. Such an object can be thought of
+as a wrapper for related data. The fields that make up an address
+(street, city, state, and Zip) should be packaged together in a
+single object called <tt class="literal">Address</tt>. In turn, the
+<tt class="literal">Address</tt> object is usually an attribute or property
+of another business object; in EJB, we would typically see an
+<tt class="literal">Address</tt> or some other dependent object as a
+property of an entity bean.
+</p>
+
+<p>Here's a typical implementation of an
+<tt class="literal">Address</tt>:
+</p>
+
+<blockquote>
+<pre class="programlisting">public class Address implements java.io.Serializable {
+
+    private String street;
+    private String city;
+    private String state;
+    private String zip;
+
+    public Address(String str, String cty, String st, String zp) {
+        street = str;
+        city = cty;
+        state = st;
+        zip = zp;
+    }
+    public String getStreet() {return street;}
+    public String getCity() {return city;}
+    public String getState() {return state;}
+    public String getZip() {return zip;}
+}</pre>
+</blockquote>
+
+<p>We want to make sure that clients don't change an
+<tt class="literal">Address</tt> 's fields. The reason is quite
+simple: the <tt class="literal">Address</tt> object is a copy, not a remote
+reference. Changes to <tt class="literal">Address</tt> objects are not
+reflected in the entity from which it originated. If the client were
+to change the <tt class="literal">Address</tt> object, those changes would
+not be reflected in the database. Making the
+<tt class="literal">Address</tt> immutable helps to ensure that clients do
+not mistake this fine-grained object for a remote reference, thinking
+that a change to an address property is reflected on the server.
+</p>
+
+<a name="JBEANS-CH-9-ADMON-1"></a>
+<blockquote class="note">
+<h4 class="objtitle">NOTE</h4>
+<p>
+Some EJB 1.0 servers that use early versions of CORBA IIOP do not support passing objects by value. With these vendors, dependent objects must declare their fields as public. Of course, since the fields are public, the client can modify them directly. In these cases you need to trust your client programmers to exercise some discipline in the way they use the <tt class="literal">Address</tt> object.</p>
+</blockquote>
+<p>To change an address, the client is required to remove the
+<tt class="literal">Address</tt> object and add a new one with the changes.
+This enforces the idea that the dependent object is not a remote
+object and that changes to its state are not reflected on the server.
+Here is the remote interface to a hypothetical Employee bean that
+aggregates address information:
+</p>
+
+<blockquote>
+<pre class="programlisting">public interface Employee extends javax.ejb.EJBObject {
+    public Address [] <tt class="userinput"><b>getAddresses</b></tt>() throws RemoteException;
+    public void <tt class="userinput"><b>removeAddress</b></tt>(Address adrs) throws RemoteException;
+    public void <tt class="userinput"><b>addAddress</b></tt>(Address adrs) throws RemoteException;
+    // ... Other business methods follow.
+}</pre>
+</blockquote>
+
+<p>In this interface, the <tt class="literal">Employee</tt> can have many
+addresses, which are obtained as a collection of pass-by-value
+<tt class="literal">Address</tt> objects. To remove an address, the target
+<tt class="literal">Address</tt> is passed back to the bean in the
+<tt class="literal">removeAddress()</tt> method. The bean class then
+removes the matching <tt class="literal">Address</tt> object from its
+persistent fields. To add an address, an <tt class="literal">Address</tt>
+object is passed to the bean by value.
+</p>
+
+<p>Dependent objects may be persistent fields, or they may be properties
+that are created as needed. The following code demonstrates both
+strategies using the <tt class="literal">Address</tt> object. In the first
+listing, the <tt class="literal">Address</tt> object is a persistent field,
+while in the second the <tt class="literal">Address</tt> object is a
+property that doesn't correspond to any single field; we create
+the <tt class="literal">Address</tt> object as needed but don't save
+it as part of the bean. Instead, the <tt class="literal">Address</tt>
+object corresponds to four persistent fields:
+<tt class="literal">street</tt>, <tt class="literal">city</tt>,
+<tt class="literal">state</tt>, and <tt class="literal">zip</tt>.
+</p>
+
+<blockquote>
+<pre class="programlisting">// Address as a persistent field
+public class Person extends javax.ejb.EntityBean {
+   public Address address;
+   public Address getAddress(){
+       return address;
+   }
+   public void setAddress(Address addr){
+       address = addr;
+   }
+  ....
+}
+
+// Address as a property
+public class Person extends javax.ejb.EntityBean {
+
+   public String street;
+   public String city;
+   public String state;
+   public String zip;
+
+   public Address getAddress(){
+       return new Address(street, city, state, zip);
+   }
+   public void setAddress(Address addr){
+       street = addr.street;
+       city = addr.city;
+       state = addr.state;
+       zip = addr.zip;
+   }
+  ....
+}</pre>
+</blockquote>
+
+<p>When a dependent object is used as a property, it can be synchronized
+with the persistent fields in the accessor methods themselves or in
+the <tt class="literal">ejbLoad()</tt> and <tt class="literal">ejbStore()</tt>
+methods. Both strategies are acceptable.
+</p>
+
+<p>
+<a name="INDEX-1823"></a><a name="INDEX-1824"></a>This discussion of dependent objects has
+been full of generalizations, and thus may not be applicable to all
+situations. That said, it is recommended that only very fine-grained,
+dependent, immutable objects should be passed by value. All other
+business concepts should be represented as beans--entity or
+session. A very fine-grained object is one that has very little
+behavior, consisting mostly of get and set methods. A dependent
+object is one that has little meaning outside the context of its
+aggregator. An immutable object is one that provides only get methods
+and thus cannot be modified once created.
+</p>
+
+
+<a name="JBEANS-CH-9-SECT-2.2"></a>
+<h3 class="sect2">9.2.2. Validation Rules in Dependent Objects</h3>
+
+<p>
+<a name="INDEX-1825"></a><a name="INDEX-1826"></a>Dependent objects make excellent homes
+for format validation rules. Format validation ensures that a simple
+data construct adheres to a predetermined structure or form. As an
+example, a Zip Code always has a certain format. It must be composed
+of digits; it must be five or nine digits in length; and if it has
+nine digits, it must use a hyphen as a separator between the fifth
+and sixth digits. Checking to see that a Zip Code follows these rules
+is format validation.
+</p>
+
+<p>One problem that all developers face is deciding where to put
+validation code. Should data be validated at the user interface (UI),
+or should it be done by the bean that uses the data? Validating the
+data at the UI has the advantage of conserving network resources and
+improving performance. Validating data in the bean, on the middle
+tier, ensures that the logic is reusable across user interfaces.
+Dependent objects provide a logical compromise that allows data to be
+validated on the client, but remain independent of the UI. By placing
+the validation logic in the constructor of a dependent object, the
+object automatically validates data when it is created. When data is
+entered at the UI (GUI, Servlet, JSP, or whatever) it can be
+validated by the UI using its corresponding dependent object. If the
+data is valid, the dependent object is created; if the data is
+invalid, the constructor throws an exception.
+</p>
+
+<p>The following code shows a dependent object that represents a Zip
+Code. It adheres to the rules for a dependent object as I have
+defined them, and also includes format validation rules in the
+constructor.
+</p>
+
+<blockquote>
+<pre class="programlisting">public class ZipCode implements java.io.Serializable {
+
+   private String code;  
+   private String boxNumber;  
+
+   public ZipCode(String zipcode) throws ValidationException {  
+      if (zipcode == null)  
+          throw new ValidationException("Zip code cannot be null");  
+      else if (zipcode.length()==5 &amp;&amp; ! isDigits(zipcode))  
+          throw new ValidationException("Zip code must be all digits");
+      else if (zipcode.length()==10 )  
+          if (zipcode.charAt(5) == '-' ) {  
+            code = zipcode.substring(0,5);  
+            if (isDigits( code )){  
+              boxNumber = zipcode.substring(6);
+                if (isDigits( boxNumber ))  
+                    return;  
+             }  
+          }  
+          throw new ValidationException("Zip code must be of form #####-####");  
+   }  
+   private boolean isDigits(String str) {  
+      for (int i = 0; i &lt; str.length(); i++){  
+          char chr = str.charAt(i);  
+          if ( ! Character.isDigit(chr)) {  
+              return false;  
+          }  
+      }
+      return true;  
+   }  
+   public String getCode() { return code; }  
+
+   public String getBoxNumber() { return boxNumber; }  
+
+   public String toString() {  
+      return code+'-'+boxNumber;  
+   }  
+}  </pre>
+</blockquote>
+
+<p>This simple example illustrates that format validation can be
+performed by dependent objects when the object is constructed at the
+user interface or client. Any format validation errors are reported
+immediately, without requiring any interaction with the middle tier
+of the application. In addition, any business object that uses
+<tt class="literal">ZipCode</tt> automatically gains the benefit of the
+validation code, making the validation rules reusable (and
+consistent) across beans. Placing format validation in the dependent
+object is also a good coding practice because it makes the dependent
+object responsible for its own validation; responsibility is a key
+concept in object-oriented programming. Of course, dependent objects
+are only useful for validation if the Enterprise JavaBeans
+implementation supports pass-by-value. Some of the EJB 1.0
+CORBA-based systems only support a crude form of pass-by-value that
+uses CORBA structures, which prevents you from using dependent
+objects that incorporate validation rules.
+</p>
+
+<p>As an alternative to using dependent objects, format validation can
+be performed by the accessors of enterprise beans. If, for example, a
+customer bean has accessors for setting and obtaining the Zip Code,
+the accessors could incorporate the validation code. While this is
+more efficient from a network perspective--passing a
+<tt class="literal">String</tt> value is more efficient than passing a
+dependent object by value--it is less reusable than housing
+format validation rules in dependent <a name="INDEX-1827"></a><a name="INDEX-1828"></a> objects.
+</p>
+
+
+<a name="JBEANS-CH-9-SECT-2.3"></a>
+<h3 class="sect2">9.2.3. Bulk Accessors</h3>
+
+<p>Most <a name="INDEX-1829"></a><a name="INDEX-1830"></a><a name="INDEX-1831"></a><a name="INDEX-1832"></a>entity beans have <a name="INDEX-1833"></a>several persistent fields that are
+manipulated through accessor methods. Unfortunately, the one-to-one
+nature of the accessor idiom can result in many invocations when
+editing an entity, which translates into a lot of network traffic
+even for simple edits. Every field you want to modify requires a
+method invocation, which in turn requires you to go out to the
+network. One way to reduce network traffic when editing entities is
+to use bulk accessors. This strategy packages access to several
+persistent fields into one bulk accessor. Bulk accessors provide get
+and set methods that work with structures or simple pass-by-value
+objects. The following code shows how a bulk accessor could be
+implemented for the Cabin bean:
+</p>
+
+<blockquote>
+<pre class="programlisting">// CabinData DataObject
+public class CabinData {
+    public String name;
+    public int deckLevel;
+    public int bedCount;
+    public CabinData() {
+    }
+    public CabinData(String name, int deckLevel, int bedCount) { 
+        this.name = name; 
+        this.deckLevel = deckLevel; 
+        this.bedCount = bedCount; 
+    } 
+} 
+
+// CabinBean using bulk accessors
+public class CabinBean implements javax.ejb.EntityBean { 
+     public int id; 
+     public String name; 
+     public int deckLevel; 
+     public int ship; 
+     public int bedCount; 
+     // bulk accessors 
+     public CabinData getData() { 
+         return new CabinData(name,deckLevel,bedCount); 
+     } 
+     public void setData(CabinData data) { 
+         name = data.name; 
+         deckLevel = data.deckLevel; 
+         bedCount = data.bedCount; 
+     } 
+     // simple accessors and entity methods 
+     public String getName() { 
+         return name; 
+     } 
+     public void setName(String str) { 
+         name = str; 
+     } 
+     // more methods follow 
+ }</pre>
+</blockquote>
+
+<p>The <tt class="literal">getData()</tt> and <tt class="literal">setData()</tt>
+methods allow several fields to be packaged into a simple object and
+passed between the client and bean in one method call. This is much
+more efficient than requiring three separate calls to set the name,
+deck level, and bed count.
+</p>
+
+<a name="JBEANS-CH-9-SECT-2.3.1"></a>
+<h3 class="sect3">9.2.3.1. Rules-of-thumb for bulk accessors</h3>
+
+<dl>
+<dt>
+<b>Data objects are not dependent objects</b>
+</dt>
+<dd>
+<p>Data objects and dependent objects serve clearly different purposes,
+but they may appear at first to be the same. Where dependent objects
+represent business concepts, data objects do not; they are simply an
+efficient way of packaging an entity's fields for access by
+clients. Data objects may package dependent objects along with more
+primitive attributes, but they are not dependent objects themselves.
+</p>
+</dd>
+
+<dt>
+<b>Data objects are simple structures </b>
+</dt>
+<dd>
+<p>Keep the data objects as simple as possible; ideally, they should be
+similar to a simple <tt class="literal">struct</tt> in C. In other words,
+the data object should not have any business logic at all; it should
+only have fields. All the business logic should remain in the entity
+bean, where it is centralized and easily maintained. In addition,
+some EJB systems based on CORBA 2.0 may not be capable of passing
+complex objects by value.
+</p>
+
+<p>In order to keep the semantics of a C <tt class="literal">struct</tt>, data
+objects should not have accessor (get and set) methods for reading
+and writing their fields. The <tt class="literal">CabinData</tt> class
+doesn't have accessor methods; it only has fields and a couple
+of constructors. The lack of accessors reinforces the idea that the
+data object exists only to bundle fields together, not to
+"behave" in a particular manner. As a design concept, we
+want the data object to be a simple structure devoid of behavior;
+it's a matter of form following function. The exception is the
+multi-argument constructor, which is left as a convenience for the
+developer.
+</p>
+</dd>
+
+<dt>
+<b>Bulk accessors bundle related fields </b>
+</dt>
+<dd>
+<p>The bulk accessors can pass a subset of the entity's data. Some
+fields may have different security or transaction needs, which
+require that they be accessed separately. In the
+<tt class="literal">CabinBean</tt>, only a subset of the fields
+(<tt class="literal">name</tt>, <tt class="literal">deckLevel</tt>,
+<tt class="literal">bedCount</tt>) are passed in the data object. The
+<tt class="literal">id</tt> field is not included for several reasons: it
+doesn't describe the business concept, it's already found
+in the primary key, and the client should not edit it. The
+<tt class="literal">ship</tt> field is not passed because it should only be
+updated by certain individuals; the identities authorized to change
+this field are different from the identities allowed to change the
+other fields. Similarly, access to the <tt class="literal">ship</tt> may
+fall under a different transaction isolation level than the other
+fields (e.g., <em class="emphasis">Serializable</em> versus <em class="emphasis">Read
+Committed</em>).
+</p>
+
+<p>In addition, it's more efficient to design bulk accessors that
+pass logically related fields. In entity beans with many fields, it
+is possible to group certain fields that are normally edited
+together. An employee bean, for example, might have several fields
+that are demographic in nature (address, phone, email) that can be
+logically separated from fields that are specific to benefits
+(compensation, 401K, health, vacation). Logically related fields can
+have their own bulk accessor; you might even want several bulk
+accessors in the same bean:
+</p>
+</dd>
+
+</dl>
+
+<blockquote>
+<pre class="programlisting">public interface Employee extends javax.ejb.EJBObject { 
+
+   public EmployeeBenefitsData getBenefitsData() 
+      throws RemoteException; 
+
+   public void setBenefitsData(EmployeeBenefitsData data) 
+      throws RemoteException; 
+
+   public EmployeeDemographicData getDemographicData() 
+      throws RemoteException; 
+
+   public void setDemographicData(EmployeeDemographicData data) 
+      throws RemoteException; 
+
+   // more simple accessors and other business methods follow 
+
+}</pre>
+</blockquote>
+
+<dl>
+<dt>
+<b>Retain simple accessors</b>
+</dt>
+<dd>
+<p>Simple accessors (get and set methods for single fields) should not
+be abandoned when using bulk accessors. It is still important to
+allow editing of single fields. It's just as wasteful to use a
+bulk accessor to change one field as it is to change several fields
+<a name="INDEX-1834"></a>
+using simple <a name="INDEX-1835"></a><a name="INDEX-1836"></a><a name="INDEX-1837"></a><a name="INDEX-1838"></a> accessors.
+</p>
+</dd>
+
+</dl>
+
+
+
+<a name="JBEANS-CH-9-SECT-2.4"></a>
+<h3 class="sect2">9.2.4. Entity Objects</h3>
+
+<p>The pass-by-value section earlier gave you some
+<a name="INDEX-1839"></a><a name="INDEX-1840"></a><a name="INDEX-1841"></a>good ground rules for when and how to use
+pass-by-value in EJB. Business concepts that do not meet the
+dependent object criteria should be modeled as either session or
+entity beans. It's easy to mistakenly adopt a strategy of
+passing business objects that would normally qualify as entity beans
+(Customer, Ship, and City) by value to the clients. Overzealous use
+of bulk accessors that pass data objects loaded with business
+behavior is bad design. The belief is that passing the entity objects
+to the client avoids unnecessary network traffic by keeping the set
+and get methods local. The problem with this approach is object
+equivalence. Entities are supposed to represent the actual data on
+the database, which means that they are shared and always reflect the
+current state of the data. Once an object is resident on the client,
+it is no longer representative of the data. It is easy for a client
+to end up with many dirty copies of the same entity, resulting in
+inconsistent processing and representation of data.
+</p>
+
+<p>While it's true that the set and get methods of entity objects
+can introduce a lot of network traffic, implementing pass-by-value
+objects instead of using entity beans is not the answer. The network
+problem can be avoided if you stick to the design strategy elaborated
+throughout this book: remote clients interact primarily with session
+beans, not entity beans. You can also reduce network traffic
+significantly by using bulk accessors, provided that these accessors
+only transfer structures with no business logic. Finally, try to keep
+the entity beans on the server encapsulated in workflow defined by
+session beans. This eliminates the network traffic associated with
+entities, while ensuring that they always represent the <a name="INDEX-1842"></a><a name="INDEX-1843"></a><a name="INDEX-1844"></a> correct data.
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch09_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch09_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch09_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch09_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">9.1. Hash Codes in Compound Primary Keys</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">9.3. Improved Performance with Session Beans</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

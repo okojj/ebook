@@ -1,0 +1,1864 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 17] 17.5 Implementing PLVhlp</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T18:30:04Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates-1-56592-238-7E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-238-7E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="PL/SQL SQL Oracle Packages"><META
+NAME="DC.Title"
+CONTENT="Advanced Oracle PL/SQL Programming with Packages"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch17_01.htm"
+TITLE="17. PLVhlp: Online Help for PL/SQL Programs"><LINK
+REL="prev"
+HREF="ch17_04.htm"
+TITLE="17.4 Using PLVhlp"><LINK
+REL="next"
+HREF="ch18_01.htm"
+TITLE="18. PLVcase and PLVcat: Converting and Analyzing PL/SQL Code"></HEAD>
+<BODY><DIV CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Advanced Oracle PL/SQL Programming with Packages"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Advanced Oracle PL/SQL Programming with Packages"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch17_04.htm"
+TITLE="17.4 Using PLVhlp"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 17.4 Using PLVhlp"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch17_01.htm"
+TITLE="17. PLVhlp: Online Help for PL/SQL Programs"
+>Chapter 17<BR>PLVhlp: Online Help for PL/SQL Programs</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch18_01.htm"
+TITLE="18. PLVcase and PLVcat: Converting and Analyzing PL/SQL Code"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 18. PLVcase and PLVcat: Converting and Analyzing PL/SQL Code"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch17-23841"
+>17.5 Implementing PLVhlp</A
+></H2
+><P
+CLASS="para"
+>I hope that you put PLVhlp to use in your environment; the earlier sections in this chapter should provide a clear guide to doing so. My objective with this book, however, is to also help you develop a philosophy and perspective on your <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> development so that you can build your own utilities like PLVhlp. The rest of this chapter explores the issues, technical challenges, and solutions I encountered in my implementation of PLVhlp.</P
+><P
+CLASS="para"
+>To show the iterative, spiraling nature of software development, I will step through the implementation of PLVhlp in two stages. In stage one, I build a relatively simple, but effective working model of a script to deliver online help. This version is based on SQL and works only in the SQL*Plus environment. In the second stage, I build a more comprehensive, flexible, and feature-rich online help architecture based on <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> packages (PLVhlp, of course).</P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch17-SECT-5.1"
+>17.5.1 Principles for Online Help</A
+></H3
+><P
+CLASS="para"
+>The great thing about <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> is that you can use it darn near anywhere: <SPAN
+CLASS="acronym"
+>UNIX</SPAN
+> servers in SQL*Plus, Oracle Forms, home pages on the Internet... you name it and <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> rears its pretty face. Furthermore, the scope of <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> will also almost certainly expand over the years as well, as it becomes one of the key enabling technologies for application partitioning in n-tier environments (now it's three-tier, but why not four- or five-tier? The more layers the better?). </P
+><P
+CLASS="para"
+>The ubiquitousness of <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> implies to me at this point in time that I want an online help approach to be, shall we say, "lowest common denominator." The "lowest" of LCD refers to (a) the execution environment, (b) the location of the help text in one's environment, and (c) the methodology for retrieving and displaying the help text.</P
+><P
+CLASS="para"
+>As of the publication of this book, the most common execution environment, and the most generic, is SQL*Plus. The lowest, or deepest, location in an Oracle environment is the database. The most widely available delivery mechanism for <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> online help is... <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+>!</P
+><P
+CLASS="para"
+>Given this analysis, here is my vision of how an online help system for <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> would work: provide a programmatic interface (via a package) to help text. This interface (a set of procedures and functions) could be called from within SQL*Plus with an execute statement. But, heck, since it's based on <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+>, you could also build a frontend in PowerBuilder or Oracle Forms to access this same information. You could also execute calls to the interface from within a tool like Procedure Builder. For me, however, the most important baseline is to construct that procedural interface and make it work in good, old SQL*Plus.</P
+><P
+CLASS="para"
+>Let's talk about the help text itself. This is actually the single greatest challenge in building an online help system; someone has to take the time and make the effort to enter text. I know that I have very little patience for this kind of polishing effort, so at a minimum I believe that it is critical that I be able to enter my help text only once and yet have it satisfy the following needs:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+><EM
+CLASS="emphasis"
+>Function as inline documentation.</EM
+> The text should be useful to developers who are enhancing and maintaining the source code itself. In this situation, developers do not access this text via a programmatic interface. Rather, they edit the code, and (if they are especially methodical) they simultaneously update any help text/documentation that is affected by their changes.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+><EM
+CLASS="emphasis"
+>Be available for online help.</EM
+> The same text should also be accessible and readable so that it can be displayed online to users of the code.</P
+></LI
+></OL
+><P
+CLASS="para"
+>The only way to satisfy both of these needs with one version of text is to place the documentation directly within the definition of the program. This text is then stored in the database along with the program. That text is then available to a developer and also to a user (through the programmatic interface).</P
+><P
+CLASS="para"
+>To summarize my principles of online help:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+><EM
+CLASS="emphasis"
+>Centralize help text; avoid redundant entry of text.</EM
+> Do this by storing help information with the program itself, in the data dictionary.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+><EM
+CLASS="emphasis"
+>Make the help text accessible from any environment in which</EM
+> <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> <EM
+CLASS="emphasis"
+>programs can be executed.</EM
+> In other words, implement the delivery mechanism for help through <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> programs.</P
+></LI
+></OL
+><P
+CLASS="para"
+>Working from these principles, I first examine how my help text is stored in the data dictionary and how I can best retrieve it. Then I build a working prototype of a module that delivers online help for <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> programs.</P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch17-SECT-5.2"
+>17.5.2 Locating Text in the Data Dictionary</A
+></H3
+><P
+CLASS="para"
+>When you <A
+CLASS="indexterm"
+NAME="ch17-idx-998384-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998384-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998384-2"
+></A
+>CREATE OR REPLACE a program (procedure, function, or package) into the Oracle database, the source code is saved to the SYS.SOURCE$ table. You can view the contents of this table for all of your stored programs by accessing <A
+CLASS="indexterm"
+NAME="ch17-idx-998385-0"
+></A
+>USER_SOURCE view. The structure of this view is as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; desc user_source
+ Column                  Column 
+ Name           Null?    Type
+ -------------- -------- -------------
+ NAME           NOT NULL VARCHAR2(30)
+ TYPE                    VARCHAR2(12)
+ LINE           NOT NULL NUMBER
+ TEXT                    VARCHAR2(2000)</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The NAME column contains the name of the object. The name is always stored in upper case unless you surround the name of your program in double quotation marks at creation time. I assume in my help implementation that you don't do this and that your program name is always upper-cased. The TYPE is a string describing the type of source code, either PROCEDURE, FUNCTION, PACKAGE, or PACKAGE BODY (<EM
+CLASS="emphasis"
+>always</EM
+> upper case). The LINE is the line number and the TEXT is the line of text. Notice that a line of text may be up to 2000 bytes in length.</P
+><DIV
+CLASS="sidebar"
+><H4
+CLASS="sidebar"
+><A
+CLASS="title"
+NAME="AUTOID-18378"
+>Quiz Time</A
+></H4
+><P
+CLASS="para"
+>Can the USER_SOURCE view contain blank lines? If you only use SQL*Plus to compile and store programs, you might not think this was possible. SQL*Plus automatically strips out blank lines before passing them on to the <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> layer. So all blank lines from your file-based code are compressed in USER_SOURCE. If you use another method for compiling and saving, such as Oracle Procedure Builder, this is not necessarily the case. </P
+></DIV
+><P
+CLASS="para"
+>Suppose that I issue the following command in SQL*Plus:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; create or replace PROCEDURE temp IS
+  2  BEGIN
+  3     DBMS_OUTPUT.PUT_LINE ('hello world');
+  4  END;
+  5  /</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>My program will be stored in the database. The following query then retrieves the source code for display:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; SELECT text FROM USER_SOURCE
+  2   WHERE name = 'TEMP' AND type = 'PROCEDURE'
+  3   ORDER BY line;
+TEXT
+---------------------------------------------------
+PROCEDURE temp IS
+BEGIN
+   DBMS_OUTPUT.PUT_LINE ('hello world');
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice that the CREATE OR REPLACE and / are not stored. These are part of the SQL*Plus command environment only. </P
+><P
+CLASS="para"
+>Now suppose that I also include a comment in the code:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; create or replace PROCEDURE temp IS
+  2  BEGIN
+  3     /* Send message to standard output. */
+  4     DBMS_OUTPUT.PUT_LINE ('hello world');
+  5  END;
+  6  /</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Then my query could just as easily extract only that line of text, as shown in each of the two <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statements below. The first query returns any text that starts with a comment. The second query retrieves only the third line.</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT text 
+  FROM USER_SOURCE
+ WHERE name = 'TEMP' AND type = 'PROCEDURE'
+   AND LTRIM (text) LIKE '/*'
+ ORDER BY line;
+
+SELECT text 
+  FROM USER_SOURCE
+ WHERE name = 'TEMP' AND type = 'PROCEDURE'
+   AND line = 3;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In both cases, I will have retrieved my comment. This capability forms the core of the technique for online help in <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> programs. Comments, which contain documentation about the program and, therefore, potential help text as well, can be stored and manipulated just as actual lines of code can be.</P
+><P
+CLASS="para"
+>From here on in, it's all in the details&nbsp;-- but wait until you see these details!</P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch17-SECT-5.3"
+>17.5.3 Implementing Online Help</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998386-0"
+></A
+>It's one thing to write a query to extract a line that starts with a comment marker. It's quite another challenge to generalize that query into a SELECT statement that selectively retrieves only those lines related to a specific topic. Suppose, for example, that my source code looks like this:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE sayhi IS
+/* 
+|| Overview: the sayhi procedure uses the
+||   DBMS_OUTPUT builtin to say hello
+||   to the world.
+*/
+BEGIN
+   DBMS_OUTPUT.PUT_LINE ('hello world');
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>My task is now to write a query that displays only the comment information. How is that range of information defined? In this simple case, I want to display all lines after the first instance of /* and up to the very next first occurrence of */ after that line. In pseudo-<SPAN
+CLASS="acronym"
+>SQL</SPAN
+>, I have something like this:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT text 
+  FROM USER_SOURCE
+ WHERE name = 'SAYHI' 
+   AND type = 'PROCEDURE'
+   AND line BETWEEN 
+       startcmnt ('sayhi', 'PROCEDURE') AND
+       endcmnt ('sayhi' 'PROCEDURE')
+ ORDER BY line;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Actually, this isn't even pseudo-<SPAN
+CLASS="acronym"
+>SQL</SPAN
+>. I am simply calling <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> functions (<KBD
+CLASS="command"
+>startcmnt</KBD
+> and <KBD
+CLASS="command"
+>endcmnt</KBD
+>) from within a <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statement, which you can and should do from Oracle Server 7.1 and onwards. This is a form of top-down design, because at this time I'm not really sure what these functions actually need to do in order to pass back their line numbers. The <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statement looks right, which means that I am ready to take it to the next level of detail.</P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch17-SECT-5.3.1"
+>17.5.3.1 Functions to scan USER_SOURCE</A
+></H4
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>startcmnt</KBD
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998387-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998387-1"
+></A
+> and <KBD
+CLASS="command"
+>endcmnt</KBD
+> functions both scan the USER_SOURCE view for specific lines.[<A
+CLASS="footnote"
+HREF="#ch17-pgfId-997148"
+>2</A
+>] Below is the header for the <KBD
+CLASS="command"
+>startcmnt</KBD
+> function. (By the way, it might seem that I worked all this out in advance. The reality is that I am developing this implementation as I write this chapter. My production, PL/Vision-based implementation of online help, uses a completely different approach.)</P
+><BLOCKQUOTE
+CLASS="footnote"
+><DIV
+CLASS="footnote"
+><P
+CLASS="para"
+><A
+CLASS="footnote"
+NAME="ch17-pgfId-997148"
+>[2]</A
+>  All of the code described in this section is contained in the <KBD
+CLASS="command"
+>showhelp.all</KBD
+> file in the text subdirectory.</P
+></DIV
+></BLOCKQUOTE
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION startcmnt
+   (name_in IN VARCHAR2,
+    type_in IN VARCHAR2,
+    nth_in IN INTEGER := 1)
+RETURN INTEGER;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice that I have three arguments listed, yet only two arguments were provided to the calls to <KBD
+CLASS="command"
+>startcmnt</KBD
+> inside the <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statement. As I started to build this function, I realized that it would probably be reasonable to ask for the third comment block in a program. I have added the parameter, but supplied it with a default value that makes the online <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> work properly.</P
+><P
+CLASS="para"
+>I make one important assumption to ease implementation in <KBD
+CLASS="command"
+>startcmnt</KBD
+>: the comment blocks for which I search always have the start-comment symbol (<KBD
+CLASS="command"
+>/*</KBD
+>) on a new line. I take advantage of this rule by performing an LTRIM on the text I search in the view. Here is the cursor I set up to find the start of a comment block:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CURSOR line_cur 
+IS
+   SELECT line 
+     FROM USER_SOURCE
+    WHERE name = UPPER (name_in) 
+      AND type = UPPER (type_in)
+      AND LTRIM (text) LIKE '/*%';</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Once I have the cursor in place, the implementation is fairly straightforward. I open a cursor into the USER_SOURCE view for all lines of text for the specified program that start with <KBD
+CLASS="command"
+>/*</KBD
+>. Then I fetch from that cursor until the %ROWCOUNT matches the <KBD
+CLASS="command"
+>nth_in</KBD
+> argument value (thereby reaching the n th comment block in the program) or until I run out of records. Here is the very concise loop: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>OPEN line_cur;
+LOOP
+   FETCH line_cur INTO line_rec;
+
+   IF line_cur%NOTFOUND
+   THEN
+      retval := 0;
+   ELSIF line_cur%ROWCOUNT = nth_in
+   THEN
+      retval := line_rec.line;
+   END IF;
+
+   EXIT WHEN retval IS NOT NULL;
+END LOOP;
+CLOSE line_cur;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Should I use a cursor FOR loop in <KBD
+CLASS="command"
+>startcmnt</KBD
+>? I could then avoid the explicit open, fetch, and close. That would not, however, be a good choice here, since I perform a conditional exit out of the loop. You should only use a cursor FOR loop if you truly are going to touch every record retrieved by the cursor.</P
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>endcmnt</KBD
+> function is virtually identical to <KBD
+CLASS="command"
+>startcmnt</KBD
+> (see the <KBD
+CLASS="command"
+>showhelp.all </KBD
+>file). The only differences show up in the <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statement of the explicit cursor. This is the <KBD
+CLASS="command"
+>endcmnt</KBD
+> cursor:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CURSOR line_cur
+IS
+   SELECT line 
+     FROM USER_SOURCE
+    WHERE name = UPPER (name_in) 
+      AND type = UPPER (type_in)
+      AND text LIKE '%*/' || CHR(10);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>There are two differences:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>I need to look for a match on <KBD
+CLASS="command"
+>%*/</KBD
+> instead of <KBD
+CLASS="command"
+>/*%</KBD
+> since I am looking for the termination of a comment, rather than its beginning.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>I append a CHR(10) or newline character in my match. Why do I do this? It turns out that there is a newline character at the end of very line of code stored in the database (at least when SQL*Plus is used!). There are a number of ways one can handle this detail. I simply append the CHR(10) to my search criteria. You could also RTRIM from text.<A
+CLASS="indexterm"
+NAME="ch17-idx-998391-0"
+></A
+></P
+></LI
+></OL
+><P
+CLASS="para"
+>This complication of the newline character is a good example of how a seemingly simple task can become more complicated as you deal with the reality of an implementation. <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> and Oracle software in general is full of these kinds of surprises. Everything you ever do is always going to be more complicated than you first imagined, and it is a good idea to plan for this in your work</P
+><P
+CLASS="para"
+>Challenge for the reader: do I really need two different functions, when they are so alike? I suggest that you practice your modularization skills by transforming <KBD
+CLASS="command"
+>startcmnt</KBD
+> and <KBD
+CLASS="command"
+>endcmnt</KBD
+> into a single function, thereby reducing your code volume and easing maintenance. <A
+CLASS="indexterm"
+NAME="ch17-idx-998389-0"
+></A
+></P
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch17-SECT-5.4"
+>17.5.4 Building a SQL*Plus Help Script</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998397-0"
+></A
+>Once I have both of the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> functions in place, I can return to my original <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statement and enhance it into a generic SQL*Plus script to deliver help. To achieve this change, I remove all references to specific program names and types to SQL*Plus parameters (numbers of strings prefixed by the <KBD
+CLASS="command"
+>&amp;</KBD
+> character). I also add some SET commands to limit output from the SELECT statement to just my help text.</P
+><P
+CLASS="para"
+>The following script is stored in <KBD
+CLASS="command"
+>showhelp.sql</KBD
+>:<A
+CLASS="indexterm"
+NAME="ch17-idx-998401-0"
+></A
+></P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SET FEEDBACK OFF
+SET VERIFY OFF
+SELECT text
+  FROM USER_SOURCE
+ WHERE name = UPPER ('&amp;1')
+   AND type = UPPER ('&amp;2')
+   AND line BETWEEN 
+       startcmnt ('&amp;1', '&amp;2') AND endcmnt ('&amp;1', '&amp;2')
+ ORDER BY line;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Notice that I automatically perform an uppercase conversion on the name and type. I am simply enforcing an assumption of my utility. By calling UPPER, I liberate the user from having to remember this kind of detail.</P
+><P
+CLASS="para"
+>Now if I run this script in SQL*Plus, I get my online help:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; @showhelp sayhi procedure
+/* 
+|| Overview: the sayhi procedure uses the
+||   DBMS_OUTPUT builtin to say hello
+||   to the world.
+*/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>With <KBD
+CLASS="command"
+>showhelp</KBD
+>, I have in place a rudimentary prototype of a help-deliverer for <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> programs. It acts as a proof of concept for my technique, but it isn't really a full featured help system. There are a number of weaknesses in this implementation that I want to address:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+><EM
+CLASS="emphasis"
+>It is an SQL script specific to SQL*Plus.</EM
+> It cannot be executed from within <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> at all and would have to be modified even to execute in any other development environment as <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> (i.e., a non-SQL*Plus frontend to <SPAN
+CLASS="acronym"
+>SQL</SPAN
+>).</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+><EM
+CLASS="emphasis"
+>The</EM
+> <KBD
+CLASS="command"
+>showhelp</KBD
+> <EM
+CLASS="emphasis"
+>procedure isn't very flexible.</EM
+> It assumes that any comment is help, which may not really be acceptable. You'd want a way to clearly identify comments for use as online help. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+><EM
+CLASS="emphasis"
+>The</EM
+> <KBD
+CLASS="command"
+>showhelp</KBD
+> <EM
+CLASS="emphasis"
+>procedure requires lots of typing by the user.</EM
+> The more you have to type, the less likely you are to use it. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+><EM
+CLASS="emphasis"
+>Since</EM
+> <KBD
+CLASS="command"
+>showhelp</KBD
+> <EM
+CLASS="emphasis"
+>is in an operating file script, users must have to access to that file.</EM
+> Chances are that this would lead to distribution of copies of the script, which would make upgrades difficult. A stored <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> solution would rely on the granting of execute privileges to make the utility available.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+><EM
+CLASS="emphasis"
+>The script can only read help text from the USER_SOURCE view.</EM
+> Now, wait just a minute, you might find yourself protesting. Isn't that supposed to be one of the script's features? It is, but it is also a limitation. What if you want to provide help text directly from operating system files containing the original source code. A <SPAN
+CLASS="acronym"
+>SQL</SPAN
+>-based solution would have a tough time indeed with this level of flexibility.</P
+></LI
+></OL
+><P
+CLASS="para"
+>Let's now look at what it takes to convert this SQL*Plus script into a comprehensive packaged solution that overcomes these weaknesses.</P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch17-SECT-5.5"
+>17.5.5 Constructing an Online Help Package</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998402-0"
+></A
+>I will start by exploring the implementation of the <KBD
+CLASS="command"
+>show</KBD
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998403-0"
+></A
+> procedure of PLVhlp. This procedure displays the first page of help text. A simplified version of the procedure is shown below:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE show 
+   (context_in IN VARCHAR2, part_in IN VARCHAR2 := c_main)
+IS
+BEGIN
+1  PLVobj.savecurr;
+2  PLVobj.setcurr (context_in);
+3  PLVio.usrc;
+4  PLVio.initsrc (help_start (part_in), help_end (part_in));
+5  PLVio.settrg (PLV.pstab);
+6  PLVio.src2trg;
+7  set_more (2, 0);
+8  more;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>As you can see, <KBD
+CLASS="command"
+>PLVhlp.show</KBD
+> makes extensive use of PL/Vision packages, most importantly <A
+CLASS="indexterm"
+NAME="ch17-idx-998404-0"
+></A
+>PLVio. This makes sense, since the help text is stored in USER_SOURCE. PLVio was designed to allow me to read <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> source code from database tables and other repositories. If I could not use PLVio in <KBD
+CLASS="command"
+>PLVhlp.show</KBD
+>, I might as well not write a book about PL/Vision.</P
+><P
+CLASS="para"
+>The following sections explain each of the lines of code in the <KBD
+CLASS="command"
+>show</KBD
+> procedure.</P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch17-SECT-5.5.1"
+>17.5.5.1 Setting the current object</A
+></H4
+><P
+CLASS="para"
+>Before I can use PLVio to read from the USER_SOURCE data dictionary view, I must define the current object with PLVobj. The first line of the show procedure's body saves the current settings for the PLVobj current object. I do this so that if PLVobj were being used, I could restore the current object when done showing help text.</P
+><P
+CLASS="para"
+>Then I call <KBD
+CLASS="command"
+>setcurr</KBD
+> to set the current object. I pass in to <KBD
+CLASS="command"
+>setcurr</KBD
+> the module that was provided in the call to show:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>  PLVobj.setcurr (context_in);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Now the PLVio program units can be called.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch17-SECT-5.5.2"
+>17.5.5.2 Setting up PLVio to read help text</A
+></H4
+><P
+CLASS="para"
+>First, I inform PLVio that I will be reading from the USER_SOURCE view:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PLVio.usrc;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Then I initialize the source so that I only read the rows in USER_SOURCE for the current object that correspond to the specified help topic or part:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PLVio.initsrc (help_start (part_in), help_end (part_in));</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The first argument to <KBD
+CLASS="command"
+>PLVio.initsrc</KBD
+> passes the string that should be the first line read. The second argument contains the string that signals the end of the help text. The two functions, <KBD
+CLASS="command"
+>help_start</KBD
+> and <KBD
+CLASS="command"
+>help_end</KBD
+>, are private to the PLVhlp body; they are not listed in the specification at all. These are used to format the start and end strings of the help text block, doing little more than attach the comment markers to the specified context string:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION help_start (topic_in IN VARCHAR2 := NULL)
+   RETURN VARCHAR2
+IS
+BEGIN
+   RETURN '/*' || topic_in;
+END;
+
+FUNCTION help_end (topic_in IN VARCHAR2 := NULL)
+   RETURN VARCHAR2
+IS
+BEGIN
+   RETURN topic_in || '*/';
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I create these little functions to hide my particular implementation of the start and end indicators of a comment block. I may well want to change my approach in subsequent implementations. By using these functions, I only have to make the changes there and not scattered throughout my package.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch17-SECT-5.5.3"
+>17.5.5.3 Moving the help text to a PL/SQL table</A
+></H4
+><P
+CLASS="para"
+>Now that the PLVio source repository has been set and initialized, I can set the target repository and then transfer all help text to that target. This call to <KBD
+CLASS="command"
+>settrg</KBD
+> tells PLVio that I want all calls to <KBD
+CLASS="command"
+>PLVio.put_line</KBD
+> to put text in the PLVio target <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PLVio.settrg (PLV.pstab);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Then I call the high-level <KBD
+CLASS="command"
+>src2trg</KBD
+> procedure that simply batch transfers all rows of help text from USER_SOURCE to the PLVio target:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PLVio.src2trg;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This procedure hides all the <KBD
+CLASS="command"
+>get_line</KBD
+> and <KBD
+CLASS="command"
+>put_line</KBD
+> logic of PLVio and lets me very easily move the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> source code to my choice of target for further manipulation.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch17-SECT-5.5.4"
+>17.5.5.4 Showing the first page</A
+></H4
+><P
+CLASS="para"
+>There are two steps involved in showing the first page of help text: set page management variables and then display the text. This first statement:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>set_more (2, 0);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>sets the values of variables to control the behavior of the PLVhlp more program. In this case, the call to <KBD
+CLASS="command"
+>set_more</KBD
+> is saying: start at line 2 (the first line is the designator, such as <KBD
+CLASS="command"
+>/*HELP</KBD
+>, and can be ignored) and display the first page of text.</P
+><P
+CLASS="para"
+>The program that actually generates the output is the <KBD
+CLASS="command"
+>more</KBD
+> procedure, which is called as the last line in the <KBD
+CLASS="command"
+>PLVhlp.show</KBD
+> procedure.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch17-SECT-5.5.5"
+>17.5.5.5 Leveraging and enhancing PL/Vision</A
+></H4
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>show</KBD
+> procedure offers an excellent example of how I am able to leverage the prebuilt packages of PL/Vision to very quickly assemble new and often richly featured programs. This shows that I have reached a "critical mass" of code in PL/Vision; my earlier investment in building reusable, low-level layers of code is paying off.</P
+><P
+CLASS="para"
+>Even at critical mass, however, I still find myself enhancing the base layers of code. For example, I call <KBD
+CLASS="command"
+>src2trg</KBD
+> in <KBD
+CLASS="command"
+>PLVhlp.show</KBD
+> to move en masse all the rows of help text to the PLVio <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table. When I was writing <KBD
+CLASS="command"
+>PlVhlp.show</KBD
+>, <KBD
+CLASS="command"
+>src2trg</KBD
+> hadn't yet been written. As I confronted the task at hand in <KBD
+CLASS="command"
+>PLVhlp.show</KBD
+>, I realized that I did not want to have to bother with all the internals of PLVio. I simply need to move all the rows out of USER_SOURCE and into the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table so I could display the text in a highly controlled fashion.</P
+><P
+CLASS="para"
+>So I stopped my development in PLVhlp and shifted gears into PLVio. I built <KBD
+CLASS="command"
+>src2trg</KBD
+>, tested it, and then used it in the <KBD
+CLASS="command"
+>PLVhlp.show</KBD
+> procedure. By doing so, I not only produced the functionality I needed in PLVhlp, but also expanded the capabilities of PLVio. </P
+><P
+CLASS="para"
+>As I've mentioned before, this process is typical of the way I have been developing my code over the last year. Rather than work on any one package at a time, I find myself simultaneously enhancing several different packages. As I encounter the need for a new program, I check to see if there is a package already in PL/Vision into which this program should logically fall. If so, I add to that package. If not, I create a new package. With this approach, I constantly increase the amount of reusable code in my library and achieve the broadest possible impact with each new development.</P
+><P
+CLASS="para"
+>Now that you have seen how I identify, read, and store my help text, let's move on to figuring out how best to display that help text.<A
+CLASS="indexterm"
+NAME="ch17-idx-998405-0"
+></A
+></P
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch17-SECT-5.6"
+>17.5.6 Page Pausing with PLVhlp.more</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998406-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998406-1"
+></A
+>One of the big issues I encountered in designing PLVhlp was to implement a "pause" feature. It is very difficult to fit in a single screen size all the information you want or need to present about any reasonably complex program. And yet it is also very hard for a user to watch thirty, sixty, ninety lines of text scroll rapidly by without feeling the onset of panic.</P
+><P
+CLASS="para"
+>SQL*Plus handles this situation very nicely with the <A
+CLASS="indexterm"
+NAME="ch17-idx-998407-0"
+></A
+>SET PAUSE ON and <A
+CLASS="indexterm"
+NAME="ch17-idx-998408-0"
+></A
+>SET PAGESIZE environment commands. You simply specify the number of lines in a page and turn pause "on." Then whenever you execute a query in SQL*Plus, it automatically halts output after <EM
+CLASS="emphasis"
+>n</EM
+> lines until you press Enter. If I was using the very first implementation of online help I shared with you in the last issue, I could (and did) rely on the SQL*Plus pause feature to implement page pausing for online <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> help.</P
+><P
+CLASS="para"
+>I discovered, however, that while the single-query solution to online help was simple and easy, it lacked a wide variety of features I needed to implement. The solution was to move to a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> program that queried rows from the database and then displayed each row of text with a call to the builtin DBMS_OUTPUT.PUT_LINE. Could I rely on SQL*Plus's pause facility to control this output? Not a chance. For one thing, this feature was designed to work only with SELECT statement output. For another, when you start or execute a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> program from within SQL*Plus, all control is turned over to the runtime engine of <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+>. And no output is generated until the program finishes. So if the <KBD
+CLASS="command"
+>hlp</KBD
+> procedure found 2000 rows of help text, it would all come spewing out uninterrupted (unless it first exceeded the size of the buffer in SQL*Plus!).</P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch17-SECT-5.6.1"
+>17.5.6.1 A futile first effort</A
+></H4
+><P
+CLASS="para"
+>What's an obsessed developer to do? One idea I had was this: Inside the cursor FOR loop of the <KBD
+CLASS="command"
+>hlp</KBD
+> procedure, which reads and displays a line of text, call the DBMS_LOCK.<A
+CLASS="indexterm"
+NAME="ch17-idx-998409-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998409-1"
+></A
+>SLEEP program to pause execution of the program for perhaps 10 seconds every 25 lines. This gives the developer time to read the help text. And you wouldn't even have to press Enter to continue. It would figure it out all by itself! A loop that paused every 10 rows would look like this:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FOR text_rec IN text_cur (v_name, v_type)
+LOOP
+   DBMS_OUTPUT.PUT_LINE 
+     (RTRIM (text_rec.text, CHR(10)));
+   IF MOD (text_cur%ROWCOUNT, 10) = 0
+   THEN
+      DBMS_LOCK.SLEEP (10);
+   END IF;
+END LOOP;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Is this a clever use of the SLEEP program or what? I strutted like a peacock in front of my computer as I set up this implementation. Then it was time to test. So I ran the modified <KBD
+CLASS="command"
+>hlp</KBD
+> program against a block of 100 lines of text. Normally it took about three seconds to display this text. How long do you think I had to wait before I saw the first ten lines of code? One second? Three seconds? Would you believe one minute and forty-three seconds? Yes, that's right: I waited 103 long, bewildering seconds&nbsp;-- and then all 100 lines of text blew by me without a single pause. What had happened?</P
+><P
+CLASS="para"
+>Everything worked just the way I'd asked it to&nbsp;-- I just hadn't fully understand what it was I had asked for. The <KBD
+CLASS="command"
+>hlp</KBD
+> program did write ten lines to the DBMS_OUTPUT buffer and then did go to sleep for ten seconds&nbsp;-- ten times straight. Remember: you don't ever see any output at all from DBMS_OUTPUT until the entire program terminates and returns control to the host environment, be it SQL*Plus or Procedure Builder.</P
+><P
+CLASS="para"
+>My conclusion from this fruitless effort? If I was going to interrupt successfully the output from a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> program, I would have to actually stop that program so that it could dump its buffer&nbsp;-- and then run it again to display more text. At this point, then, there was no doubt that I would need to move to a package-based implementation. Why? Because I was talking about executing more than one program that would share information about the help text (the text itself, the last row displayed, etc.). Only the package allows me to create persistent, memory-based data. </P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch17-SECT-5.6.2"
+>17.5.6.2 A successful pause architecture for PL/SQL</A
+></H4
+><P
+CLASS="para"
+>There were two basic architectures I could use to display <EM
+CLASS="emphasis"
+>n</EM
+> lines of help text before terminating execution of the <KBD
+CLASS="command"
+>PLVhlp.show</KBD
+> program:</P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Use a package-based cursor. If I define the cursor that accesses USER_SOURCE at the package level, it remains open in between calls to programs that fetch from the cursor and display the text. The <KBD
+CLASS="command"
+>PLVhlp.show</KBD
+> program would open the cursor, fetch the first n rows, display them, and terminate. When <KBD
+CLASS="command"
+>PLVhlp.more</KBD
+> is called, it just keeps fetching the next set of records from the cursor.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Transfer all lines of help text into a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table and then display the next n rows each time <KBD
+CLASS="command"
+>PLVhlp.more</KBD
+> is called.</P
+></LI
+></OL
+><P
+CLASS="para"
+>In both cases I take advantage of a central feature of <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+>-based data structures: they persist for the duration of an Oracle session. The cursor stays open, and the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table remains populated, in between program calls. The first, cursor-centered approach is simpler since it does not involve an intermediate <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table. It is probably the technique I would have used had I not already built PLVobj, PLVio, and PLVtab. Given these prebuilt components, however, it was a no-brainer for me to pursue the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table solution. </P
+><P
+CLASS="para"
+>Having gone with the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table, however, another significant advantage became obvious: help text deposited in this data structure could be managed in a very flexible and efficient way. The text could, for example, be passed on to another environment for display, such as Oracle Forms or a third-party <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> development environment. </P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch17-SECT-5.6.3"
+>17.5.6.3 Implementing more</A
+></H4
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>more</KBD
+> procedure of PLVhlp, shown below, contains the logic necessary to display a page of rows of the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table, as shown in <A
+CLASS="xref"
+HREF="ch17_05.htm#ch17-38877"
+>Example 17.1</A
+>:</P
+><DIV
+CLASS="example"
+><H4
+CLASS="example"
+><A
+CLASS="title"
+NAME="ch17-38877"
+>Example 17.1: The PLVhelp.more Procedure </A
+></H4
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+> 1  PROCEDURE more IS
+ 2  BEGIN      
+ 3     IF v_more
+ 4     THEN
+ 5        PLVio.disptrg 
+ 6           ('Help for ' || PLVobj.currname, 
+ 7            v_startrow, v_endrow);
+ 8
+ 9        IF v_endrow = PLVio.target_row-1
+10        THEN
+11           PLVobj.restore_object;
+12           v_more := FALSE;
+13        ELSE
+14           p.l ('...more...');
+15           set_more (v_endrow + 1, v_endrow);
+16        END IF;
+17     ELSE
+18        p.l ('No more help available...');
+19     END IF;
+20  END;</PRE
+></BLOCKQUOTE
+></DIV
+><P
+CLASS="para"
+>As with <KBD
+CLASS="command"
+>PLVhlp.show</KBD
+>, the more program is short and relies heavily on the PLVobj and PLVio packages. It also makes two calls to the <KBD
+CLASS="command"
+>p.l</KBD
+> procedure. As I've described in <A
+CLASS="xref"
+HREF="ch07_01.htm"
+>Chapter 7</A
+>, the <KBD
+CLASS="command"
+>p</KBD
+> package and its <KBD
+CLASS="command"
+>l</KBD
+> procedure provide a substitute for DBMS_OUTPUT.PUT_LINE that requires much less typing and offers additional functionality (such as displaying rather than ignoring NULL text and automatically substringing the text to a maximum length of 255 bytes to avoid VALUE_ERROR exceptions.)</P
+><P
+CLASS="para"
+>Now let's go examine the <KBD
+CLASS="command"
+>more</KBD
+> program, so that you can fully understand the implementation of a <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+>-based, page-pausing mechanism. There are three private package variables used to manage behavior in the <KBD
+CLASS="command"
+>PLVhlp.more</KBD
+> package, as listed below:</P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><CODE
+CLASS="literal"
+>v_more</CODE
+></P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>TRUE if there are more lines of help text to display.</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><CODE
+CLASS="literal"
+>v_startrow</CODE
+></P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>The first row in the PL/SQL table of the next page of text.</P
+></TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+><CODE
+CLASS="literal"
+>v_endrow</CODE
+></P
+></TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+><P
+CLASS="para"
+>The last row in the PL/SQL table of the next page of text.</P
+></TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+>At the very start of <KBD
+CLASS="command"
+>more</KBD
+>, I check the value of <KBD
+CLASS="command"
+>v_more</KBD
+>. If it is FALSE, I display an appropriate message. If <KBD
+CLASS="command"
+>v_more</KBD
+> evaluates to TRUE, then I display the next page of text using the PLVio package (lines 5 through 7 of <A
+CLASS="xref"
+HREF="ch17_05.htm#ch17-38877"
+>Example 17.1</A
+>):</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PLVio.disptrg ('Help for ' || PLVobj.currname, v_startrow, v_endrow);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>disptrg</KBD
+> or "display target" program displays the contents of the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table maintained as a target by the PLVio package (I never have to declare it or directly manipulate its contents; the PLVio package takes responsibility for this work). I provide a header and a range of rows to display. This is another good example of how the abstraction in my lower-level packages makes programming a breeze.</P
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="ch17-SECT-5.6.4"
+>17.5.6.4 Maintaining the current page variables</A
+></H4
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998410-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998410-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998410-2"
+></A
+>Now that I have displayed this latest page, I reset the triad of variables for the next call to <KBD
+CLASS="command"
+>more</KBD
+>. First, I check to see if there are any more rows. I know I am done when the end row matches the second-to-last row in the target table. I ignore the very last line, because it is simply the comment marker (<KBD
+CLASS="command"
+>HELP*/</KBD
+>, for example). I then restore the current object in PLVobj and set <KBD
+CLASS="command"
+>v_more</KBD
+> to FALSE:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>IF v_endrow = PLVio.target_row-1
+THEN
+   PLVobj.restore_object;
+   v_more := FALSE;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>If, on the other hand, I have not displayed all rows, then I display a message indicating that there is more to come (when and if the user executes <KBD
+CLASS="command"
+>PLVhlp.more</KBD
+> again) and then call the <KBD
+CLASS="command"
+>set_more</KBD
+> program to set up my variables:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>p.l ('...more...');
+set_more (v_endrow + 1, v_endrow);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The <KBD
+CLASS="command"
+>set_more</KBD
+> program is also not very complicated:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE set_more
+   (start_in IN INTEGER, end_in IN INTEGER)
+IS
+BEGIN
+   v_startrow := start_in; 
+   v_endrow :=  
+      LEAST (v_pagesize + end_in, PLVio.target_row-1); 
+   v_more := TRUE;
+END set_more;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Translation: the start row is set to the next row after the current end row. The end row is set to the smaller of these two values: (a) the current end row plus another page's worth of lines or (b) the last row to be displayed in the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table. Finally, <KBD
+CLASS="command"
+>v_more</KBD
+> is set to TRUE just to make sure.</P
+><P
+CLASS="para"
+>To help you understand how the page-management variables shift the rows being displayed, let's step through a scenario. Suppose that I have set the pagesize to 10 lines (<KBD
+CLASS="command"
+>v_pagesize</KBD
+>) and I have 24 lines of text in my help section for the PLVprs package (PLV<KBD
+CLASS="command"
+>io.target_row</KBD
+>). When I call <KBD
+CLASS="command"
+>PLVprs.help</KBD
+>, the initializing call to <KBD
+CLASS="command"
+>set_more</KBD
+> sets the page-management variables as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>set_more (2, 0);                  v_startrow := 2
+                                  v_endrow := LEAST (10+0, 24-1) = 10
+</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>As a result, lines 2 through 10 are displayed on the screen. Then <KBD
+CLASS="command"
+>set_more</KBD
+> is called again with the following arguments and results:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>set_more (v_startrow, v_endrow);  v_startrow := v_endrow + 1 = 10 + 1 = 11
+                                  v_endrow : = LEAST (10+10, 24-1) = 20
+</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>When I call <KBD
+CLASS="command"
+>PLVhlp.more</KBD
+> to see the next page of help, lines 11 through 20 are displayed and <KBD
+CLASS="command"
+>set_more</KBD
+> is then called with these results:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>set_more (v_startrow, v_endrow);  v_startrow := v_endrow + 1 = 20 + 1 = 21
+                                  v_endrow : = LEAST (10+20, 24-1) = 23
+</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>And since PLVhlp tells me so, I call <KBD
+CLASS="command"
+>PLVhlp.more</KBD
+> to see the next page of help, lines 21 through 23; <KBD
+CLASS="command"
+>set_more</KBD
+> is then called. This time around, <KBD
+CLASS="command"
+>v_endrow</KBD
+> does equal the last line of text to be displayed, so <KBD
+CLASS="command"
+>v_more</KBD
+> is set to FALSE, the PLVobj current module values are restored, and <KBD
+CLASS="command"
+>PLVhlp.more</KBD
+> is, effectively, disabled.</P
+><P
+CLASS="para"
+>This <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> table-based technique for page-pausing is not as easy to use as the one built into SQL*Plus. With SQL*Plus, you simply press the Enter key to see the next page. With PLVhlp, you have to type:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec PLVhlp.more</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>or, if you create a standalone procedure as I have, simply:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; exec more</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>or, if you create a SQL script that performs the above <KBD
+CLASS="command"
+>exec</KBD
+>, you could even simplify that to:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; @more</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Regardless, it's more work than what you do with SQL*Plus, but considering that it is an add-on layer of code and functionality, it's not too odious. Of course, if you do not use SQL*Plus, then we can skip the comparison and simply celebrate the ability to build such utilities in <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+>.<A
+CLASS="indexterm"
+NAME="ch17-idx-998411-0"
+></A
+></P
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch17-SECT-5.7"
+>17.5.7 The Component Approach to PL/SQL Utilities</A
+></H3
+><P
+CLASS="para"
+>In the earlier part of the chapter, I showed you how to construct with a minimum of coding and fuss a functional utility to provide online help for <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> programs. This utility consisted of a single <SPAN
+CLASS="acronym"
+>SQL</SPAN
+> statement and it got the job (narrowly defined) done. This script did, on the other hand, have its limitations. The solution I offered in the second implementation of online help went beyond simply providing a handy tool. Instead, it took what I call a "component" approach to providing a robust environment in which <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> developers can make their requests.</P
+><P
+CLASS="para"
+>I take advantage of the <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> package structure to allow a user of PLVhlp to modify the way help is delivered to that user. You don't simply ask to view the help text. You determine the size of a logical page of text and you control what you see when. </P
+><P
+CLASS="para"
+>This shift of control to the user, this anticipation of user needs, this robustness of implementation all distinguish the powerful plug-and-play component in <SPAN
+CLASS="acronym"
+>PL/SQL</SPAN
+> from its poor cousin, the utility. Building a component is certainly more challenging. You have to be more creative and more flexible. You have to write more code and make what you write more sophisticated. I cannot, however, understate the payoff. People (including yourself!) will use&nbsp;-- and reuse&nbsp;-- your code. They will be more productive and their programs will be noticeably less buggy and easier to maintain.<A
+CLASS="indexterm"
+NAME="ch17-idx-998363-0"
+></A
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998363-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch17-idx-998363-2"
+></A
+></P
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch17_04.htm"
+TITLE="17.4 Using PLVhlp"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 17.4 Using PLVhlp"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Advanced Oracle PL/SQL Programming with Packages"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Advanced Oracle PL/SQL Programming with Packages"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch18_01.htm"
+TITLE="18. PLVcase and PLVcat: Converting and Analyzing PL/SQL Code"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 18. PLVcase and PLVcat: Converting and Analyzing PL/SQL Code"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>17.4 Using PLVhlp</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>18. PLVcase and PLVcat: Converting and Analyzing PL/SQL Code</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG
+SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly & Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

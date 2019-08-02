@@ -1,0 +1,313 @@
+<html>
+<head>
+<title>EJB 1.0: Exceptions and Transactions (Enterprise JavaBeans)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Richard Monson-Haefel">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-869-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="EJB 1.0: Exceptions and Transactions">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm" alt="Enterprise JavaBeans"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch08_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_06.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_01.htm">Chapter 8: Transactions</a></td><td align="right" valign="top" width="172"><a href="ch08_08.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_08.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">8.7. EJB 1.0: Exceptions and Transactions</h2>
+<p>
+<a name="INDEX-1779"></a><a name="INDEX-1780"></a><a name="INDEX-1781"></a><a name="INDEX-1782"></a>In EJB 1.0, the impact of exceptions on
+transactions largely depends on who initiates the transaction. A
+transaction that is started automatically when a bean method is
+invoked is a container-initiated transaction. Specifying the
+<tt class="literal">TX_REQUIRES_NEW</tt> transaction attribute, for
+example, always results in a container-initiated transaction. A
+<tt class="literal">TX_REQUIRED</tt> method invoked by a non-transactional
+client also results in a container-initiated transaction. A
+transaction that is started explicitly using JTA (on the client or in
+a <tt class="literal">TX_BEAN_MANAGED</tt> bean) is not a
+container-initiated transaction.
+</p>
+
+<p>With container-initiated transactions, any exception thrown during a
+transaction can cause the transaction to roll back. The impact of an
+exception thrown during a transaction depends on the type of
+exception <a name="INDEX-1783"></a><a name="INDEX-1784"></a>
+(checked or unchecked) and the transaction attribute of the bean
+method throwing the exception. This section examines the different
+combinations of exceptions (checked or unchecked) and transaction
+attributes and their combined affect on transactional outcomes.
+</p>
+
+<a name="JBEANS-CH-8-SECT-7.1"></a>
+<h3 class="sect2">8.7.1. Container-Initiated Transactions</h3>
+
+<p>
+<a name="INDEX-1785"></a>Any exception (application
+exception, <a name="INDEX-1786"></a>unchecked exception, or
+<tt class="literal">RemoteException</tt>) <em class="emphasis">not</em> handled
+within the scope of the container-initiated transaction causes the
+container to roll back the entire transaction.
+</p>
+
+<a name="JBEANS-CH-8-ADMON-6"></a>
+<blockquote class="note">
+<h4 class="objtitle">NOTE</h4>
+<p>
+An exception that is not handled within the scope of container-initiated transaction is an exception that is propagated, through the call stack, beyond the bean method that started the container-initiated transaction.</p>
+</blockquote>
+<p>As an example, take another look at the
+<tt class="literal">bookPassage()</tt> method from the TravelAgent bean:
+</p>
+
+<blockquote>
+<pre class="programlisting">public Ticket bookPassage(CreditCard card, double price)
+    throws IncompleteConversationalState, RemoteException {
+
+    if (customer == null || cruise == null || cabin == null){
+        throw new IncompleteConversationalState();
+    }
+    try {
+        ReservationHome resHome = (ReservationHome)
+            getHome("ReservationHome",ReservationHome.class);
+        Reservation reservation =
+        resHome.create(customer, cruise, cabin, price);
+        ProcessPaymentHome ppHome = (ProcessPaymentHome)
+            getHome("ProcessPaymentHome",ProcessPaymentHome.class);
+        ProcessPayment process = ppHome.create();
+        process.byCredit(customer, card, price);
+
+        Ticket ticket = new Ticket(customer,cruise,cabin,price);
+        return ticket;
+    } catch(Exception e) {
+        throw new RemoteException("",e);
+    }
+}</pre>
+</blockquote>
+
+<p>The beans (Reservation and ProcessPayment) accessed by the
+<tt class="literal">bookPassage()</tt> method have a transaction attribute
+of <tt class="literal">TX_REQUIRED</tt>. This means that the transaction
+associated with the <tt class="literal">bookPassage()</tt> method will be
+propagated to the methods called on the ProcessPayment and
+Reservation beans. If <tt class="literal">bookPassage()</tt> has a
+transaction attribute of <tt class="literal">TX_REQUIRES_NEW</tt>, then we
+can assume that it will always be called in the scope of a
+container-initiated transaction; when
+<tt class="literal">bookPassage()</tt> is invoked, a new
+container-initiated transaction is created.
+</p>
+
+<p>In container-initiated transactions, any
+<a name="INDEX-1787"></a>application exception thrown
+within the scope of the container-initiated transaction does not
+cause a rollback. This provides the bean with an opportunity to
+recover and retry an operation. However, an application exception
+that is <em class="emphasis">not</em> handled within the scope of the
+container-initiated transaction does cause the transaction to be
+rolled back.
+</p>
+
+<p>This can be demonstrated by redefining the
+<tt class="literal">bookPassage()</tt> method:
+</p>
+
+<blockquote>
+<pre class="programlisting">public Ticket bookPassage(CreditCard card, double price)
+    throws IncompleteConversationalState {
+// EJB 1.0: also throws RemoteException
+                
+    if (customer == null || cruise == null || cabin == null) {
+        throw new IncompleteConversationalState();
+    }
+    try {
+        ReservationHome resHome = (ReservationHome)
+            getHome("ReservationHome",ReservationHome.class);
+        Reservation reservation =
+        resHome.create(customer, cruise, cabin, price);
+        ProcessPaymentHome ppHome = (ProcessPaymentHome)
+            getHome("ProcessPaymentHome",ProcessPaymentHome.class);
+        ProcessPayment process = ppHome.create();
+<b class="emphasis-bold">        try {</b>
+<b class="emphasis-bold">           process.byCredit(customer, card, price);</b>
+<b class="emphasis-bold">        } catch(PaymentException pe) {</b>
+<b class="emphasis-bold">           // Attempt to recover.</b>
+<b class="emphasis-bold">        }</b>
+
+        Ticket ticket = new Ticket(customer,cruise,cabin,price);
+        return ticket;
+    } catch(Exception e){
+        // EJB 1.0: throw new RemoteException("",e);
+        throw new EJBException(e);
+    }
+}</pre>
+</blockquote>
+
+<p>Here, the <tt class="literal">byCredit()</tt> method of the ProcessPayment
+bean has been wrapped in its own exception-handling logic; we can
+imagine some sophisticated code in the <tt class="literal">catch</tt> block
+that evaluates the problem and attempts to reinvoke the method. In
+this case, the <tt class="literal">PaymentException</tt> thrown by the
+<tt class="literal">byCredit()</tt> method does not cause the
+<tt class="literal">bookPassage()</tt> container-initiated transaction to
+be rolled back because the application exception is thrown from
+within the container-initiated scope. However, if an
+<tt class="literal">IncompleteConversationalState</tt> exception is thrown
+by the <tt class="literal">bookPassage()</tt> method itself, the
+transaction will be rolled back. Once an exception is thrown by the
+<tt class="literal">bookPassage()</tt> method, and therefore
+<em class="emphasis">not</em> handled within the scope of the
+container-initiated transaction, the transaction will be rolled back.
+</p>
+
+<p>These rules for application exceptions also apply to
+<tt class="literal">RemoteException</tt> types. If a
+<tt class="literal">RemoteException</tt> is thrown by a bean or by some
+other resource (JNDI, for example), that exception does not
+automatically cause a rollback. Rollback only occurs if the remote
+exception is <em class="emphasis">not</em> handled within of the scope of
+the container-initiated
+transaction.<a name="INDEX-1788"></a>
+</p>
+
+
+<a name="JBEANS-CH-8-SECT-7.2"></a>
+<h3 class="sect2">8.7.2. Client-Initiated Transactions</h3>
+
+<p>
+<a name="INDEX-1789"></a><a name="INDEX-1790"></a>When a transaction is propagated from a
+client to a bean, the client defines the scope of the transaction.
+This means that application exceptions and
+<tt class="literal">RemoteExceptions</tt> thrown by the beans do not
+automatically cause the transaction to be rolled back. Again,
+consider the possibility that the <tt class="literal">byCredit()</tt>
+method throws an application exception. If the client initiated the
+transaction, it's the client's responsibility to
+determine whether the operation can be retried and to roll back if
+appropriate. Similarly, if the <tt class="literal">bookPassage()</tt>
+method had a transaction attribute of <tt class="literal">TX_REQUIRED</tt>
+or <tt class="literal">TX_SUPPORTS</tt> and was invoked from a
+client-initiated transaction (perhaps the client uses JTA), then any
+application exception or <tt class="literal">RemoteException</tt> thrown
+from within the <tt class="literal">bookPassage()</tt> method will not
+automatically cause a rollback. The client must handle the exception
+and determine for itself if a rollback is appropriate.
+</p>
+
+
+<a name="JBEANS-CH-8-SECT-7.3"></a>
+<h3 class="sect2">8.7.3. Bean-Managed Transactions</h3>
+
+<p>
+<a name="INDEX-1791"></a><a name="INDEX-1792"></a>The effect of exceptions is
+different on <a name="INDEX-1793"></a>bean-managed transactions
+(<tt class="literal">TX_BEAN_MANAGED</tt>). With
+<tt class="literal">TX_BEAN_MANAGED</tt> entity beans and stateless session
+beans, any exception thrown by the bean method causes the transaction
+to be rolled back by the container. Remember that with
+<tt class="literal">TX_BEAN_MANAGED</tt>, transactions must begin and be
+completed within the same method. If an exception unexpectedly ends
+the method, the container rolls back the transaction.
+</p>
+
+<p>With <tt class="literal">TX_BEAN_MANAGED</tt> stateful session beans, only
+unchecked exceptions thrown by bean methods cause the container to
+roll back the transaction. Any other exception thrown by the bean
+method, whether it be an application exception or
+<tt class="literal">RemoteException</tt>, does not affect the transaction.
+This can cause major headaches if the exception is thrown before an
+intended commit was reached. For this reason, beans that manage their
+own transactions must be extremely careful about exception handling.
+The <tt class="literal">EJBContext</tt> rollback methods can be used in
+these situations.
+</p>
+
+
+<a name="JBEANS-CH-8-SECT-7.4"></a>
+<h3 class="sect2">8.7.4. Unchecked Exceptions</h3>
+
+<p>Regardless of the method's transaction attribute (unless
+it's <tt class="literal">TX_NOT_SUPPORTED</tt>), an
+<a name="INDEX-1794"></a><a name="INDEX-1795"></a>unchecked exception causes the
+transaction to be rolled back, regardless of whether the transaction
+is container-initiated, client-initiated, or bean-managed.
+<a name="INDEX-1796"></a>
+Unchecked exceptions thrown by a bean in the scope of a transaction
+always cause a rollback. In addition, the container intercepts the
+unchecked exception and rethrows it to the bean's client
+<a name="INDEX-1797"></a><a name="INDEX-1798"></a> as a
+<tt class="literal">javax.transaction.TransactionRolledbackException</tt>.<a href="#FOOTNOTE-7">[7]</a>
+</p>
+<blockquote class="footnote">
+<a name="FOOTNOTE-7"></a>
+<p>[7] Bean methods with the <tt class="literal">TX_SUPPORTS</tt> attribute
+that are invoked by non-transactional clients are not included in
+this policy. They simply throw the unchecked exception as a
+<tt class="literal">RemoteException</tt>.</p> </blockquote>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch08_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_06.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch08_08.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_08.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">8.6. EJB 1.1: Exceptions and Transactions</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">8.8. Transactional Stateful Session Beans</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

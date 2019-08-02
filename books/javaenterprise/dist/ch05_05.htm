@@ -1,0 +1,639 @@
+<html>
+<head>
+<title>Digital Signatures (Java Distributed Computing)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Jim Farley">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-206-9E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Digital Signatures">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm" alt="Java Distributed Computing"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch05_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch05_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch05_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch05_01.htm">Chapter 5: Security</a></td><td align="right" valign="top" width="172"><a href="ch05_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch05_06.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">5.5. Digital Signatures</h2>
+
+<p>
+<a name="INDEX-697"></a><a name="INDEX-698"></a><a name="INDEX-699"></a><a name="INDEX-700"></a>
+Certification and authentication are used to protect access to
+resources in general, by ensuring that only those authorized to have
+them can get them. An entity (e.g., person, host, software agent) is
+given some kind of <em class="emphasis">certification</em> of their
+identity or membership in a particular group (e.g., "Fred
+Smith," "employee of company X," "all
+computers in department Y"). The entity has to offer this
+certificate in order to be <em class="emphasis">authenticated</em> and
+given access to the resources being protected.
+</p>
+
+<p>A typical example of certification in practice is restricting FTP
+sites to a selected list of hosts on the network. A remote host has
+to provide its IP address when requesting an FTP connection to the
+site. The restricted FTP site looks up the IP address in its access
+table to see if the remote host is certified to access the files on
+this server. The IP address, then, is acting as an access certificate
+for this transaction, and the FTP server authenticates the remote
+host by checking the IP address against its access table. In
+encrypted data transfers, the encryption key is also acting as a sort
+of certificate for the receiving party, indicating that they have
+authority to read the information being sent.
+</p>
+
+<a name="JDP-CH-5-SECT-5.1"></a>
+<h3 class="sect2">5.5.1. A Motivating Example: A Credit Agent</h3>
+
+<p>If you look closely at our <tt class="literal">SimpleAgent</tt><a name="INDEX-701"></a> example in <a href="ch05_02.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch05_02.htm">Example 5-1</a>,
+you'll notice that the agent doesn't make any attempt to
+check who is at the other end of the socket that it opens. In some
+applications, this might not be a problem. But let's suppose
+that we're designing a database query agent for a credit-card
+holding company, servicing requests for credit information about
+account holders. We decide to implement this query agent with a
+subclass of <tt class="literal">SimpleAgent</tt> called
+<tt class="literal">CreditAgent</tt>, shown in <a href="#JDP-CH-5-EX-3">Example 5-2</a>. This subclass implements the
+<tt class="literal">processMsg()</tt> method from
+<tt class="literal">SimpleAgent</tt> by checking each message from the
+remote agent for information about the identity of the account being
+checked. Once the account name has been retrieved from the
+client's message, the <tt class="literal">CreditAgent</tt>
+retrieves the information from the database with a
+<tt class="literal">getCreditData()</tt><a name="INDEX-702"></a> method. (In this example, the
+<tt class="literal">getCreditData()</tt> method isn't fully
+implemented.) The <tt class="literal">processMsg()</tt> method puts the
+retrieved account information into a return message, and adds the
+message to the queue to be sent to the remote agent.
+</p>
+
+<a name="JDP-CH-5-EX-3"></a>
+<div class="example">
+<h4 class="objtitle">Example 5-2. A Networked Credit Agent</h4>
+<blockquote>
+<pre class="programlisting">package dcj.examples.security;
+
+import java.io.*;
+
+public class CreditAgent extends SimpleAgent {
+  public CreditAgent(String host, int port) {
+    super(host, port);
+  }
+  
+  protected void processMsg(String msg) {
+    String name = null;
+    String cmd = null;
+    String retMsg = new String();
+
+    // Parse the command and account name from the input stream.
+    StreamTokenizer stok = new StreamTokenizer(new StringReader(msg));
+    try {
+      stok.nextToken();
+      cmd = stok.sval;
+      name = stok.sval;
+    }
+    catch (IOException e) {}
+
+    if (cmd.compareTo("GET") == 0) {
+      String cData = getCreditData(name);
+      retMsg = name + " " + cData;
+    }
+    else {
+      retMsg = "UNKNOWN_CMD";
+    }
+
+    // Add return message with results to the message queue.
+    addMsg(retMsg);
+  }
+  
+  protected String getCreditData(String acctName) {
+    // Real method would use account name to
+    // initiate a database query...
+    return "No info available.";
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>Can you see where this is leading? This agent will obviously need to
+authenticate the identity of remote agents requesting this sensitive
+credit information, to ensure that they're authorized to
+receive it. In its current form, a client only needs to know the name
+of an account in order to retrieve credit information about that
+account. This information is readily available to just about anyone
+who cares to find it, so it certainly doesn't qualify as the
+basis for authenticating remote
+agents.<tt class="literal"></tt><a name="INDEX-703"></a>
+</p>
+
+
+<a name="JDP-CH-5-SECT-5.2"></a>
+<h3 class="sect2">5.5.2. Public Key Signatures for Authentication</h3>
+
+<p>The Java Security API provides the
+<tt class="literal">Signature</tt><a name="INDEX-704"></a><a name="INDEX-705"></a><a name="INDEX-706"></a><a name="INDEX-707"></a> class as a way to generate a digital
+signature, or to verify the identity of a remote agent that is
+sending you data. The <tt class="literal">Signature</tt> class uses
+public/private key pairs to generate and verify signatures. The party
+sending a signed message generates a signature by taking a piece of
+data and encoding it using their private key into a digital
+signature:
+</p>
+
+<blockquote>
+<pre class="programlisting">PrivateKey myKey = ... // Retrieve my private key
+byte[] data = ... // Get the data to be signed
+Signature mySig = Signature.getInstance("RSA");
+mySig.initSign(myKey);
+mySig.update(data);
+byte[] signedData = mySig.sign();</pre>
+</blockquote>
+
+<p>A <tt class="literal">Signature</tt> is created using the static
+<tt class="literal">Signature.getInstance()</tt><a name="INDEX-708"></a>
+method with the name of the algorithm for the signature. The
+signature is initialized for signing by passing a
+<tt class="literal">PrivateKey</tt> into its
+<tt class="literal">initSign()</tt><a name="INDEX-709"></a>
+method. The private key used to initialize the signature presumably
+comes from a key pair created earlier, where the private key was
+stored securely on the local host and the public key was communicated
+to other agents as needed. The signature is given data to be signed
+using its <tt class="literal">update()</tt><a name="INDEX-710"></a>
+method, and the digital signature for the data is gotten by calling
+the
+<tt class="literal">sign()</tt><a name="INDEX-711"></a>
+method. After this call is made, the <tt class="literal">Signature</tt>
+data is reset, and another piece of data can be signed by calling
+<tt class="literal">update()</tt> and <tt class="literal">sign()</tt> in
+sequence again. Note that the <tt class="literal">update()</tt> method
+can be called more than once before calling
+<tt class="literal">sign()</tt>, if the data to be signed is stored in
+separate data items in memory.
+</p>
+
+<p>Now the original data and the digital signature for the data can be
+sent to another agent to verify our identity. Assuming that the
+remote agent already has our public key, the data and the signature
+can be sent over a simple stream connection:
+</p>
+
+<blockquote>
+<pre class="programlisting">DataOutputStream dout = ... // Get an output stream to the agent
+dout.writeInt(data.length);
+dout.write(data);
+dout.writeInt(signedData.length);
+dout.write(signedData);</pre>
+</blockquote>
+
+<p>Before each set of bytes is sent, we send the size of each chunk of
+data, so that the remote host knows how many bytes to expect in each
+piece of data. On the remote host, the data and signature can be read
+from the stream connection:
+</p>
+
+<blockquote>
+<pre class="programlisting">DataInputStream din = ... // Get an input stream from the signer
+int dataLen = din.readInt();
+byte data[] = new byte[dataLen];
+din.read(data);
+int sigLen = din.readInt();
+byte sig = new byte[sigLen];
+din.read(sig);</pre>
+</blockquote>
+
+<p>
+<a name="INDEX-712"></a>To verify the signature, the agent
+creates a <tt class="literal">Signature</tt> object using the
+signer's public key, initializes it with the raw data from the
+signer, and then verifies the signature from the signer:
+</p>
+
+<blockquote>
+<pre class="programlisting">Signature theirSig = Signature.getInstance("RSA");
+PublicKey theirKey = ... // Get public key for remote agent
+theirSig.initVerify(theirKey);
+theirSig.update(data);
+if (theirSig.verify(sig)) {
+    System.out.println("Signature checks out.");
+}
+else {
+    System.out.println("Signature failed. Possible imposter found.");
+}</pre>
+</blockquote>
+
+<p>The agent receiving the signature also uses a
+<tt class="literal">Signature</tt> object to verify the signature. It
+creates a <tt class="literal">Signature</tt> and initializes it for
+verification by calling its
+<tt class="literal">initVerify()</tt><a name="INDEX-713"></a>
+method with the signing agent's <tt class="literal">PublicKey</tt>.
+The unsigned data from the remote agent is passed into the
+<tt class="literal">Signature</tt> through its
+<tt class="literal">update()</tt> method.<tt class="literal"></tt><a name="INDEX-714"></a> Again, the
+<tt class="literal">update()</tt> method can be called multiple times if
+the data to be verified is stored in multiple objects. Once all of
+the unsigned data has been passed into the
+<tt class="literal">Signature</tt>, the signed data can be verified
+against it by passing it into the
+<tt class="literal">verify()</tt><a name="INDEX-715"></a>
+method, which returns a boolean value.<tt class="literal"></tt><a name="INDEX-716"></a><a name="INDEX-717"></a><a name="INDEX-718"></a><a name="INDEX-719"></a>
+</p>
+
+
+<a name="JDP-CH-5-SECT-5.3"></a>
+<h3 class="sect2">5.5.3. An Authenticating Credit Agent</h3>
+
+<p>
+<a name="INDEX-720"></a>To make our credit agent
+more secure, we've created a subclass of our
+<tt class="literal">SimpleAgent</tt> class called
+<tt class="literal">AuthAgent</tt>, shown in <a href="#JDP-CH-5-EX-4">Example 5-3</a>. After the <tt class="literal">SimpleAgent</tt>
+constructor creates a socket connection to the remote agent, the
+<tt class="literal">AuthAgent</tt> constructor attempts to authenticate
+the remote agent by reading a message from the agent with a digital
+signature. First it reads an identifier for the agent from the input
+stream, so that it can look up the agent's public key. Then it
+reads a set of data and the corresponding signature for the data. The
+agent ID, original data, and data signature are passed to the
+<tt class="literal">authenticate()</tt><a name="INDEX-721"></a>
+method for verification. The <tt class="literal">authenticate()</tt>
+method first looks up the named agent's
+<tt class="literal">PublicKey</tt> from some kind of local storage, using
+a <tt class="literal">lookupKey()</tt> method whose implementation is not
+shown here. If the key is found, then a <tt class="literal">Signature</tt>
+is created using the algorithm specified by the
+<tt class="literal">PublicKey</tt>. The <tt class="literal">Signature</tt> is
+initialized for verification using the agent's
+<tt class="literal">PublicKey</tt>. Then the original data is passed into
+the <tt class="literal">Signature</tt>'s
+<tt class="literal">update()</tt> method, and the digital signature from
+the agent is verified by calling the <tt class="literal">verify()</tt>
+method. If the signature checks out, then we initialize an
+<tt class="literal">Identity</tt> data member with the remote
+agent's name and <tt class="literal">PublicKey</tt>.
+</p>
+
+<a name="JDP-CH-5-EX-4"></a>
+<div class="example">
+<h4 class="objtitle">Example 5-3. An Authenticating Agent</h4>
+<blockquote>
+<pre class="programlisting">package dcj.examples.security;
+
+import java.lang.*;
+import java.net.*;
+import java.io.*;
+import java.security.*;
+
+public class AuthAgent extends SimpleAgent {
+
+  Identity remoteAgent = null;
+
+  public AuthAgent(String host, int port)
+      throws IllegalArgumentException {
+
+    super(host, port);
+    DataInputStream din = new DataInputStream(inStream);
+
+    // Try to authenticate the remote agent
+    try {
+      String agentId = din.readUTF();
+      int dataLen = din.readInt();
+      byte[] data = new byte[dataLen];
+      din.read(data);
+      int sigLen = din.readInt();
+      byte[] sig = new byte[sigLen];
+      din.read(sig);
+
+      if (!authenticate(agentId, data, sig)) {
+        // Failed to authenticate: write error message, close socket and
+        // return
+        System.out.println("Failed to authenticate remote agent " + 
+        closeConnection();
+      }
+      else {
+        // Remote agent is authenticated, first message is a welcome
+        addMsg("HELLO " + agentId);
+      }
+    }
+    catch (Exception e) {
+      closeConnection();
+    }
+  }
+
+  protected boolean authenticate(String id, byte[] data, byte[] sig) {
+    boolean success = false;
+    PublicKey key = lookupKey(id);
+    try {
+      // Set up a signature with the agent's public key
+      Signature agentSig = Signature.getInstance(key.getAlgorithm());
+      agentSig.initVerify(key);
+      // Try to verify the signature message from the agent
+      agentSig.update(data);
+      success = agentSig.verify(sig);
+
+      if (success) {
+        // Agent checks out, so initialize an identity for it
+        remoteAgent = new Identity(id);
+        remoteAgent.setPublicKey(key);
+      }
+    }
+    catch (Exception e) {
+      System.err.println("Failed to verify agent signature.");
+      success = false;
+    }
+
+    return success;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<a name="INDEX-722"></a>
+
+<p>Using this subclass of <tt class="literal">SimpleAgent</tt>, we can make
+our <tt class="literal">CreditAgent</tt> authenticate the agents
+requesting credit data by checking their authenticated identities
+against an access list. The updated credit agent is called
+<tt class="literal">AuthCreditAgent</tt><a name="INDEX-723"></a>, and is shown in <a href="#JDP-CH-5-EX-5">Example 5-4</a>. The <tt class="literal">AuthCreditAgent</tt>
+extends the <tt class="literal">AuthAgent</tt> subclass, and adds an
+<tt class="literal">Acl</tt> for the credit data it's serving. The
+constructor, after calling its parent classes' constructors to
+initialize and authenticate the connection to the remote agent,
+initializes an <tt class="literal">Acl</tt> object with the access rights
+given to various agents over the credit data by calling its
+<tt class="literal">initACL()</tt> method. This data might be retrieved
+from a relational database, or from some kind of directory service.
+(The details of the implementation of <tt class="literal">initACL()</tt>
+are not shown.)
+</p>
+
+<a name="JDP-CH-5-EX-5"></a>
+<div class="example">
+<h4 class="objtitle">Example 5-4. An Authenticating Credit Agent</h4>
+<blockquote>
+<pre class="programlisting">package dcj.examples.security;
+
+import java.io.*;
+import java.security.*;
+import java.security.acl.*;
+
+public class AuthCreditAgent extends AuthAgent {
+
+  protected Acl creditACL;
+
+  public AuthCreditAgent(String host, int port) {
+    super(host, port);
+    // Initialize our access control lists
+    initACL();
+  }
+
+  protected void initACL() {
+    creditACL = new Acl();
+    // Read resources and access permissions
+    // from a database, initialize the ACL object
+    // ...
+  }
+
+  protected void processMsg(String msg) {
+    String name = null;
+    String cmd = null;
+    String retMsg = new String();
+
+    // Parse the command and account name from the input stream.
+    StreamTokenizer stok = new StreamTokenizer(new StringReader(msg));
+    try {
+      stok.nextToken();
+      cmd = stok.sval;
+      name = stok.sval;
+    }
+    catch (IOException e) {}
+
+    if (cmd.compareTo("GET") == 0) {
+      if (isAuthorized(remoteAgent, name, "READ")) {
+        String cData = getCreditData(name);
+        retMsg = name + " " + cData;
+      }
+      else {
+        retMsg = "UNAUTHORIZED";
+      }
+    }
+    else {
+      retMsg = "UNKNOWN_CMD";
+    }
+
+    // Add return message with results to the message queue.
+    addMsg(retMsg);
+  }
+
+  protected String getCreditData(String acctName) {
+    // Real method would use account name to
+    // initiate a database query...
+    return "No info available.";
+  }
+
+  protected boolean isAuthorized(Identity agent,
+                                 String acctName, String access) {
+    boolean auth;
+    Permission p = new PermissionImpl(access);
+    auth = creditACL.checkPermission(agent, p);
+    return auth;
+  }
+}</pre>
+</blockquote>
+</div>
+
+<p>With the remote agent authenticated and an access control list
+initialized, the <tt class="literal">AuthCreditAgent</tt> processes
+messages in its <tt class="literal">processMsg()</tt> method much as it
+did before. The difference is that, before looking up the credit data
+for an account and sending it back to the agent, the agent's
+access is checked by calling the
+<tt class="literal">isAuthorized()</tt><a name="INDEX-724"></a>
+method and passing the agent's <tt class="literal">Identity</tt>,
+the account name, and the type of access required ("READ"
+access, in this case). The <tt class="literal">isAuthorized()</tt> method
+simply calls the
+<tt class="literal">checkPermission()</tt><a name="INDEX-725"></a>
+method on the <tt class="literal">ACL</tt> object to verify that the
+authenticated agent has the required permissions on the account being
+accessed. In this example implementation, we're simply checking
+the global access rights of the user, rather than the user's
+access to the given account. In <tt class="literal">processMsg()</tt>, if
+the agent is authorized, then the data is retrieved and returned to
+the agent in a message. If not, then a curt
+"UNAUTHORIZED" message is returned to the
+<tt class="literal"></tt><a name="INDEX-726"></a> agent.
+</p>
+
+
+<a name="JDP-CH-5-SECT-5.4"></a>
+<h3 class="sect2">5.5.4. Certification: The Last Identity Link</h3>
+
+<p>
+<a name="INDEX-727"></a><a name="INDEX-728"></a><a name="INDEX-729"></a><a name="INDEX-730"></a>
+Our credit agent has come a long way from its initial, rather
+insecure incarnation. A remote agent now has to provide both an
+account name and a valid digital signature in order to even make a
+connection with the <tt class="literal">AuthCreditAgent</tt>. And once it
+has the connection, it has to be on the access control list for the
+account before the credit agent will release any information about
+it.
+</p>
+
+<p>What we haven't answered yet is the question of how the client
+gets added to the access list. Somehow the credit agent has to get
+the remote agent's public key, verify their identity, and
+authorize them with the right access privileges based on their
+identity.
+</p>
+
+
+<a name="JDP-CH-5-SECT-5.5"></a>
+<h3 class="sect2">5.5.5. Distributing Certified Public Keys</h3>
+
+<p>
+<a name="INDEX-731"></a><a name="INDEX-732"></a><a name="INDEX-733"></a><a name="INDEX-734"></a>A
+<tt class="literal">PublicKey</tt><a name="INDEX-735"></a> can
+be distributed to other agents on the network pretty easily. Since
+the <tt class="literal">Key</tt> interface extends
+<tt class="literal">Serializable</tt>, you can send a key over an
+<tt class="literal">ObjectOutputStream</tt> to a remote agent:
+</p>
+
+<blockquote>
+<pre class="programlisting">OutputStream out = socket.getOutputStream();
+ObjectOutputStream objOut = new ObjectOutputStream(out);
+PublicKey myKey = ... // Get my public key
+// Send my name
+objOut.writeObject(new String("Jim"));
+// Send my key
+objOut.writeObject(myKey);</pre>
+</blockquote>
+
+<p>The remote agent can read my key off of its input stream and store
+the key on a local "key-ring":
+</p>
+
+<blockquote>
+<pre class="programlisting">InputStream in = socket.getInputStream();
+ObjectInputStream objIn = new ObjectInputStream(in);
+String name = (String)objIn.readObject();
+PublicKey key = (PublicKey)objIn.readObject();
+storeKey(key, name);</pre>
+</blockquote>
+
+<p>But who's to say it was really me that sent the key along with
+my name? As we mentioned earlier, a sneaky attacker could pretend to
+be me, send an agent my name with her own public key, and proceed to
+access resources using my identity. As we mentioned earlier, this
+problem is solved by <em class="emphasis">certificates</em>. A certificate
+acts as corroborating evidence of an agent's <a name="INDEX-736"></a><a name="INDEX-737"></a><a name="INDEX-738"></a> identity. In most certification
+scenarios, a well-known <a name="INDEX-739"></a><a name="INDEX-740"></a> certification
+authority (CA) verifies the identity of an agent with whatever means
+it deems necessary, physical or otherwise. When the authority is
+certain of the agent's identity, a certificate is issued to the
+agent verifying its identity. The certificate is typically signed
+with the CA's own digital signature, which has been
+communicated to parties that will need to verify agents using
+certificates issued by the CA. This communication may use secure,
+offline channels, or even nonelectronic delivery by known
+individuals. In any event, a CA will typically be known by many other
+agents on the network, and its identity can be reverified if
+it's believed that their signature has been forged.
+</p>
+
+<p>Once an agent has a certificate attesting to its identity, it can
+broadcast its public key to other parties by sending the key over
+open channels, then sending a digital signature that includes its
+certificate. The certificate itself can be used as the data to be
+signed. The party receiving the signature can verify the
+agent's public key by verifying the signature against the data
+message, and then verifying the identity behind the public key by
+checking the certificate with the certification authority that it
+came from. If the certificate checks out, then we can be assured that
+the agent is the agent named in the certificate, and that the agent
+has a private key corresponding to the public key it sent us. In
+order to break through these security barriers, a hostile attacker
+would have to fool a certificate authority into thinking she is
+someone else, which any respectable CA will not allow to happen, or
+she would have to create a false certificate for her public key from
+a CA, which is not possible assuming that the certificate can be
+verified directly with the CA, and that the cryptographic algorithm
+used by the CA to generate their signature is not <a name="INDEX-741"></a><a name="INDEX-742"></a><a name="INDEX-743"></a>
+breakable.<a name="INDEX-744"></a><a name="INDEX-745"></a>
+</p>
+
+<p>Various standard certificate formats, such as X.509 and PKCS, have
+been defined and are in use in digital commerce, secure email, etc.
+At the time of this writing, the Java Security API does not include
+an API for generating or verifying these certificates. Support for
+standard certificate formats is promised in<a name="INDEX-746"></a><a name="INDEX-747"></a><a name="INDEX-748"></a><a name="INDEX-749"></a><a name="INDEX-750"></a> Java 1.2.<a name="INDEX-751"></a><a name="INDEX-752"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch05_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch05_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch05_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/ch05_06.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">5.4. Keys: Public, Private, and Secret</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">5.6. Data Encryption</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

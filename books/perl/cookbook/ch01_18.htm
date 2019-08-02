@@ -1,0 +1,218 @@
+<html><head>
+<title>Recipe 1.17. Program: fixstyle</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:29:23Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch01_01.htm" title="1. Strings"><link rel="prev" href="ch01_17.htm" title="1.16. Soundex Matching"><link rel="next" href="ch01_19.htm" title="1.18. Program: psgrep"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch01_17.htm" title="1.16. Soundex Matching"><img src="../gifs/txtpreva.gif" alt="Previous: 1.16. Soundex Matching" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch01_01.htm" title="1. Strings">Chapter 1<br>Strings</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch01_19.htm" title="1.18. Program: psgrep"><img src="../gifs/txtnexta.gif" alt="Next: 1.18. Program: psgrep" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch01-97488">1.17. Program: fixstyle</A
+></H2
+><p class="para"><a class="indexterm" name="ch01-idx-1000011382-0"></A
+><a class="indexterm" name="ch01-idx-1000011382-1"></A
+><a class="indexterm" name="ch01-idx-1000011382-2"></A
+>Imagine you have a table with both old and new strings, such as the following.</P
+><table class="informaltable" border="1" cellpadding="3"><thead class="thead"><tr class="row" valign="TOP"><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">Old Words</P
+></TH
+><th class="entry" align="LEFT" rowspan="1" colspan="1"><p class="para">New Words</P
+></TH
+></TR
+></THEAD
+><tbody class="tbody"><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">bonnet</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">hood</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">rubber</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">eraser</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">lorry</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">truck</P
+></TD
+></TR
+><tr class="row" valign="TOP"><td class="entry" rowspan="1" colspan="1"><p class="para">trousers</P
+></TD
+><td class="entry" rowspan="1" colspan="1"><p class="para">pants</P
+></TD
+></TR
+></TBODY
+></TABLE
+><p class="para">The program in <a class="xref" href="#ch01-38470" title="fixstyle">Example 1.4</A
+> is a filter that changes all occurrences of each element in the first set to the corresponding element in the second set.</P
+><p class="para">When called without filename arguments, the program is a simple filter. If filenames are supplied on the command line, an in-place edit writes the changes to the files, with the original versions safely saved in a file with a &quot;<code class="literal">.orig</CODE
+>&quot; extension. See <a class="xref" href="ch07_10.htm" title="Modifying a File in Place with -i Switch">Recipe 7.9</A
+> for a description. A <b class="emphasis.bold">-v</B
+> command-line option writes notification of each change to standard error.</P
+><p class="para">The table of original strings and their replacements is stored below <code class="literal">__END__</CODE
+> in the main program as described in <a class="xref" href="ch07_07.htm" title="Storing Files Inside Your Program Text">Recipe 7.6</A
+>. Each pair of strings is converted into carefully escaped substitutions and accumulated into the <code class="literal">$code</CODE
+> variable like the <em class="emphasis">popgrep2</EM
+> program in <a class="xref" href="ch06_11.htm" title="Speeding Up Interpolated Matches">Recipe 6.10</A
+>.</P
+><p class="para">A <code class="literal">-t</CODE
+> check to test for an interactive run check tells whether we're expecting to read from the keyboard if no arguments are supplied. That way if the user forgets to give an argument, they aren't wondering why the program appears to be hung.</P
+><div class="example"><h4 class="example"><a class="title" name="ch01-38470">Example 1.4: fixstyle</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# fixstyle - switch first set of &lt;DATA&gt; strings to second set
+#   usage: $0 [-v] [files ...]
+use strict;
+my $verbose = (@ARGV &amp;&amp; $ARGV[0] eq '-v' &amp;&amp; shift);
+
+if (@ARGV) {
+    $^I = &quot;.orig&quot;;          # preserve old files
+} else {
+    warn &quot;$0: Reading from stdin\n&quot; if -t STDIN;
+}
+
+my $code = &quot;while (&lt;&gt;) {\n&quot;;
+# read in config, build up code to eval
+while (&lt;DATA&gt;) {
+    chomp;
+    my ($in, $out) = split /\s*=&gt;\s*/;
+    next unless $in &amp;&amp; $out;
+    $code .= &quot;s{\\Q$in\\E}{$out}g&quot;;
+    $code .= &quot;&amp;&amp; printf STDERR qq($in =&gt; $out at \$ARGV line \$.\\n)&quot; 
+                                                        if $verbose;
+    $code .= &quot;;\n&quot;;
+}
+$code .= &quot;print;\n}\n&quot;;
+
+eval &quot;{ $code } 1&quot; || die;
+
+__END__
+analysed        =&gt; analyzed
+built-in        =&gt; builtin
+chastized       =&gt; chastised
+commandline     =&gt; command-line
+de-allocate     =&gt; deallocate
+dropin          =&gt; drop-in
+hardcode        =&gt; hard-code
+meta-data       =&gt; metadata
+multicharacter  =&gt; multi-character
+multiway        =&gt; multi-way
+non-empty       =&gt; nonempty
+non-profit      =&gt; nonprofit
+non-trappable   =&gt; nontrappable
+pre-define      =&gt; predefine
+preextend       =&gt; pre-extend
+re-compiling    =&gt; recompiling
+reenter         =&gt; re-enter
+turnkey         =&gt; turn-key</PRE
+></DIV
+><p class="para">One caution: This program is fast, but it doesn't scale if you need to make hundreds of changes. The larger the <code class="literal">DATA</CODE
+> section, the longer it takes. A few dozen changes won't slow it down, and in fact, the version given in the solution above is faster for that case. But if you run the program on hundreds of changes, it will bog down.</P
+><p class="para"><a class="xref" href="#ch01-36847" title="fixstyle2">Example 1.5</A
+> is a version that's slower for few changes but faster when there are many changes.</P
+><div class="example"><h4 class="example"><a class="title" name="ch01-36847">Example 1.5: fixstyle2</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# <a class="indexterm" name="ch01-idx-1000010675-0"></A
+>fixstyle2 - like fixstyle but faster for many many matches
+use strict;
+my $verbose = (@ARGV &amp;&amp; $ARGV[0] eq '-v' &amp;&amp; shift);
+my %change = ();
+while (&lt;DATA&gt;) { 
+    chomp;
+    my ($in, $out) = split /\s*=&gt;\s*/;
+    next unless $in &amp;&amp; $out;
+    $change{$in} = $out;
+}
+
+if (@ARGV) { 
+    $^I = &quot;.orig&quot;;
+} else { 
+    warn &quot;$0: Reading from stdin\n&quot; if -t STDIN;
+}
+
+while (&lt;&gt;) { 
+    my $i = 0;
+    s/^(\s+)// &amp;&amp; print $1;         # emit leading whitespace
+    for (split /(\s+)/, $_, -1) {   # preserve trailing whitespace
+        print( ($i++ &amp; 1) ? $_ : ($change{$_} || $_));
+    } 
+}
+
+__END__
+analysed        =&gt; analyzed
+built-in        =&gt; builtin
+chastized       =&gt; chastised
+commandline     =&gt; command-line
+de-allocate     =&gt; deallocate
+dropin          =&gt; drop-in
+hardcode        =&gt; hard-code
+meta-data       =&gt; metadata
+multicharacter  =&gt; multi-character
+multiway        =&gt; multi-way
+non-empty       =&gt; nonempty
+non-profit      =&gt; nonprofit
+non-trappable   =&gt; nontrappable
+pre-define      =&gt; predefine
+preextend       =&gt; pre-extend
+re-compiling    =&gt; recompiling
+reenter         =&gt; re-enter
+turnkey         =&gt; turn-key</PRE
+></DIV
+><p class="para">This version breaks each line into chunks of whitespace and words, which isn't a fast operation. It then uses those words to look up their replacements in a hash, which is much faster than a substitution. So the first part is slower, the second faster. The difference in speed depends on the number of matches.</P
+><p class="para">If we didn't care about keeping the amount of whitespace separating each word constant, the second version can run as fast as the first even for a few changes. If you know a lot about your input, you can collapse whitespace into single blanks by plugging in this loop:</P
+><pre class="programlisting"># very fast, but whitespace collapse
+while (&lt;&gt;) { 
+    for (split) { 
+        print $change{$_} || $_, &quot; &quot;;
+    } 
+    print &quot;\n&quot;;
+}</PRE
+><p class="para">That leaves an extra blank at the end of each line. If that's a problem, you could use the technique from <a class="xref" href="ch16_15.htm" title="Sending a Signal">Recipe 16.14</A
+> to install an output filter. Place the following code in front of the <code class="literal">while</CODE
+> loop that's collapsing whitespace:</P
+><pre class="programlisting">my $pid = open(STDOUT, &quot;|-&quot;);
+die &quot;cannot fork: $!&quot; unless defined $pid;
+unless ($pid) {             # child
+        while (&lt;STDIN&gt;) {
+        s/ $//;
+        print;
+    } 
+    exit;
+} <a class="indexterm" name="ch01-idx-1000010348-0"></A
+><a class="indexterm" name="ch01-idx-1000010348-1"></A
+><a class="indexterm" name="ch01-idx-1000010348-2"></A
+></PRE
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch01_17.htm" title="1.16. Soundex Matching"><img src="../gifs/txtpreva.gif" alt="Previous: 1.16. Soundex Matching" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch01_19.htm" title="1.18. Program: psgrep"><img src="../gifs/txtnexta.gif" alt="Next: 1.18. Program: psgrep" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">1.16. Soundex Matching</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">1.18. Program: psgrep</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

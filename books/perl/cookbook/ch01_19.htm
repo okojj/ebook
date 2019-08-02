@@ -1,0 +1,321 @@
+<html><head>
+<title>Recipe 1.18. Program: psgrep</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:29:27Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch01_01.htm" title="1. Strings"><link rel="prev" href="ch01_18.htm" title="1.17. Program: fixstyle"><link rel="next" href="ch02_01.htm" title="2. Numbers"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch01_18.htm" title="1.17. Program: fixstyle"><img src="../gifs/txtpreva.gif" alt="Previous: 1.17. Program: fixstyle" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch01_01.htm" title="1. Strings">Chapter 1<br>Strings</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="chapter" href="ch02_01.htm" title="2. Numbers"><img src="../gifs/txtnexta.gif" alt="Next: 2. Numbers" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch01-13481">1.18. Program: psgrep</A
+></H2
+><p class="para"><a class="indexterm" name="ch01-idx-1000010352-0"></A
+><a class="indexterm" name="ch01-idx-1000010352-1"></A
+>Many programs, including <em class="emphasis">ps</EM
+>, <em class="emphasis">netstat</EM
+>, <em class="emphasis">lsof</EM
+>, <em class="emphasis">ls -l</EM
+>, <em class="emphasis">find -ls</EM
+>, and <em class="emphasis">tcpdump</EM
+>, can produce more output than can be conveniently summarized. Logfiles also often grow too long to be easily viewed. You could send these through a filter like <em class="emphasis">grep</EM
+> to pick out only certain lines, but regular expressions and complex logic don't mix well; just look at the hoops we jump through in <a class="xref" href="ch06_18.htm" title="Expressing AND, OR, and NOT in a Single Pattern">Recipe 6.17</A
+>.</P
+><p class="para">What we'd really like is to make full queries on the program output or logfile. For example, to ask <em class="emphasis">ps</EM
+> something like, "Show me all the processes that exceed 10K in size but which aren't running as the superuser." Or, "Which commands are running on pseudo-ttys?"</P
+><p class="para">The <em class="emphasis">psgrep</EM
+> program does this&nbsp;- and infinitely more&nbsp;- because the specified selection criteria are not mere regular expressions; they're full Perl code. Each criterion is applied in turn to every line of output. Only lines matching all arguments are output. The following is a list of things to find and how to find them.</P
+><p class="para">Lines containing "sh" at the end of a word:</P
+><pre class="programlisting">% psgrep '/sh\b/'</PRE
+><p class="para">Processes whose command names end in "sh":</P
+><pre class="programlisting">% psgrep 'command =~ /sh$/'</PRE
+><p class="para">Processes running with a user ID below 10:</P
+><pre class="programlisting">% psgrep 'uid &lt; 10'</PRE
+><p class="para">Login shells with active ttys:</P
+><pre class="programlisting">% psgrep 'command =~ /^-/' 'tty ne &quot;?&quot;'</PRE
+><p class="para">Processes running on pseudo-ttys:</P
+><pre class="programlisting">% psgrep 'tty =~ /^[p-t]/'</PRE
+><p class="para">Non-superuser processes running detached:</P
+><pre class="programlisting">% psgrep 'uid &amp;&amp; tty eq &quot;?&quot;'</PRE
+><p class="para">Huge processes that aren't owned by the superuser:</P
+><pre class="programlisting">% psgrep 'size &gt; 10 * 2**10' 'uid != 0'</PRE
+><p class="para">The last call to <em class="emphasis">psgrep</EM
+> produced the following output when run on our system. As one might expect, only <em class="emphasis">netscape</EM
+> and its spawn qualified.</P
+><pre class="programlisting"><code class="userinput"><b><code class="replaceable"><i> FLAGS   UID   PID  PPID PRI  NI   SIZE   RSS WCHAN     STA TTY TIME COMMAND</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>     0   101  9751     1   0   0  14932  9652 do_select S   p1  0:25 netscape</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>100000   101  9752  9751   0   0  10636   812 do_select S   p1  0:00 (dns helper)</I
+></CODE
+></B
+></CODE
+></PRE
+><p class="para"><a class="xref" href="#ch01-28926" title="psgrep">Example 1.6</A
+> shows the <em class="emphasis">psgrep</EM
+> program.</P
+><div class="example"><h4 class="example"><a class="title" name="ch01-28926">Example 1.6: psgrep</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# psgrep - print selected lines of ps output by
+#          compiling user queries into code
+
+use strict;
+
+# each field from the PS header
+my @fieldnames = qw(FLAGS UID PID PPID PRI NICE SIZE
+                    RSS WCHAN STAT TTY TIME COMMAND);
+
+# determine the unpack format needed (hard-coded for Linux ps)
+my $fmt = cut2fmt(8, 14, 20, 26, 30, 34, 41, 47, 59, 63, 67, 72);
+
+my %fields;                         # where the data will store
+
+die &lt;&lt;Thanatos unless @ARGV;
+usage: $0 criterion ...
+    Each criterion is a Perl expression involving:
+     @fieldnames
+    All criteria must be met for a line to be printed.
+Thanatos
+
+# Create function aliases for uid, size, UID, SIZE, etc.
+# Empty parens on <a class="indexterm" name="ch01-idx-1000011517-0"></A
+><a class="indexterm" name="ch01-idx-1000011517-1"></A
+>closure args needed for void prototyping.
+for my $name (@fieldnames) {
+    no strict 'refs';
+    *$name = *{lc $name} = sub () { $fields{$name} };
+}
+
+my $code = &quot;sub is_desirable { &quot; . join(&quot; and &quot;, @ARGV) . &quot; } &quot;;
+unless (eval $code.1) {
+    die &quot;Error in code: $@\n\t$code\n&quot;;
+}
+
+open(PS, &quot;ps wwaxl |&quot;)              || die &quot;cannot fork: $!&quot;;
+print scalar &lt;PS&gt;;                  # emit header line
+while (&lt;PS&gt;) {
+    @fields{@fieldnames} = trim(unpack($fmt, $_));
+    print if is_desirable();        # line matches their criteria
+}
+close(PS)                           || die &quot;ps failed!&quot;;
+
+# convert cut positions to unpack format
+sub cut2fmt {
+    my(@positions) = @_;
+    my $template  = '';
+    my $lastpos   = 1;
+    for my $place (@positions) {
+        $template .= &quot;A&quot; . ($place - $lastpos) . &quot; &quot;;
+        $lastpos   = $place;
+    }
+    $template .= &quot;A*&quot;;
+    return $template;
+}
+
+sub trim {
+    my @strings = @_;
+    for (@strings) {
+        s/^\s+//;
+        s/\s+$//;
+    }
+    return wantarray ? @strings : $strings[0];
+}
+
+# the following was used to determine column cut points.
+# sample input data follows
+#123456789012345678901234567890123456789012345678901234567890123456789012345
+#         1         2         3         4         5         6         7
+# Positioning:
+#       8     14    20    26  30  34     41    47          59  63  67   72
+#       |     |     |     |   |   |      |     |           |   |   |    |
+__END__
+<code class="userinput"><b><code class="replaceable"><i> FLAGS   UID   PID  PPID PRI  NI   SIZE   RSS WCHAN       STA TTY TIME COMMAND</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>   100     0     1     0   0   0    760   432 do_select   S   ?   0:02 init</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>   140     0   187     1   0   0    784   452 do_select   S   ?   0:02 syslogd</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>100100   101   428     1   0   0   1436   944 do_exit     S    1  0:00 /bin/login</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>100140    99 30217   402   0   0   1552  1008 posix_lock_ S   ?   0:00 httpd</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>     0   101   593   428   0   0   1780  1260 copy_thread S    1  0:00 -tcsh</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>100000   101 30639  9562  17   0    924   496             R   p1  0:00 ps axl</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>     0   101 25145  9563   0   0   2964  2360 idetape_rea S   p2  0:06 trn</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>100100     0 10116  9564   0   0   1412   928 setup_frame T   p3  0:00 ssh -C www</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>100100     0 26560 26554   0   0   1076   572 setup_frame T   p2  0:00 less</I
+></CODE
+></B
+></CODE
+>
+<code class="userinput"><b><code class="replaceable"><i>100000   101 19058  9562   0   0   1396   900 setup_frame T   p1  0:02 nvi /tmp/a</I
+></CODE
+></B
+></CODE
+></PRE
+></DIV
+><p class="para">The <em class="emphasis">psgrep</EM
+> program integrates many techniques presented throughout this book. Stripping strings of leading and trailing whitespace is found in <a class="xref" href="ch01_15.htm" title="Trimming Blanks from the Ends of a String">Recipe 1.14</A
+>. Converting cut marks into an <code class="literal">unpack</CODE
+> format to extract fixed fields is in <a class="xref" href="ch01_02.htm" title="Accessing Substrings">Recipe 1.1</A
+>. Matching strings with regular expressions is the entire topic of <a class="xref" href="ch06_01.htm" title="Pattern Matching">Chapter 6</A
+>.</P
+><p class="para">The multiline string in the here document passed to <code class="literal">die</CODE
+> is discussed in Recipes <a class="xref" href="ch01_11.htm" title="Interpolating Functions and Expressions Within Strings">Recipe 1.10</A
+> and <a class="xref" href="ch01_12.htm" title="Indenting Here Documents">Recipe 1.11</A
+>. The assignment to <code class="literal">@fields{@fieldnames}</CODE
+> sets many values at once in the hash named <code class="literal">%fields</CODE
+>. Hash slices are discussed in Recipes <a class="xref" href="ch04_08.htm" title="Finding Elements in One Array but Not Another">Recipe 4.7</A
+> and <a class="xref" href="ch05_11.htm" title="Merging Hashes">Recipe 5.10</A
+>.</P
+><p class="para">The sample program input contained beneath <code class="literal">__END__</CODE
+> is described in <a class="xref" href="ch07_07.htm" title="Storing Files Inside Your Program Text">Recipe 7.6</A
+>. During development, we used canned input from the <code class="literal">DATA</CODE
+> filehandle for testing purposes. Once the program worked properly, we changed it to read from a piped-in <em class="emphasis">ps</EM
+> command but left a remnant of the original filter input to aid in future porting and maintenance. Launching other programs over a pipe is covered in <a class="xref" href="ch16_01.htm" title="Process Management and Communication">Chapter 16, <cite class="chapter">Process Management and Communication</CITE
+></A
+>, including Recipes <a class="xref" href="ch16_11.htm" title="Communicating Between Related Processes">Recipe 16.10</A
+> and <a class="xref" href="ch16_14.htm" title="Listing Available Signals">Recipe 16.13</A
+>.</P
+><p class="para">The real power and expressiveness in <em class="emphasis">psgrep</EM
+> derive from Perl's use of string arguments not as mere strings but directly as Perl code. This is similar to the technique in <a class="xref" href="ch09_10.htm" title="Renaming Files">Recipe 9.9</A
+>, except that in <em class="emphasis">psgrep</EM
+>, the user's arguments are wrapped with a routine called <code class="literal">is_desirable</CODE
+>. That way, the cost of compiling strings into Perl code happens only once, before the program whose output we'll process is even begun. For example, asking for UIDs under 10 creates this string to <code class="literal">eval</CODE
+>:</P
+><pre class="programlisting">eval &quot;sub is_desirable { uid &lt; 10 } &quot; . 1;</PRE
+><p class="para">The mysterious &quot;<code class="literal">.1</CODE
+>&quot; at the end is so that if the user code compiles, the whole <code class="literal">eval</CODE
+> returns true. That way we don't even have to check <code class="literal">$@</CODE
+> for compilation errors as we do in <a class="xref" href="ch10_13.htm" title="Handling Exceptions">Recipe 10.12</A
+>.</P
+><p class="para">Specifying arbitrary Perl code in a filter to select records is a breathtakingly powerful approach, but it's not entirely original. Perl owes much to the <em class="emphasis">awk</EM
+> programming language, which is often used for such filtering. One problem with <em class="emphasis">awk</EM
+> is that it can't easily treat input as fixed-size fields instead of fields separated by something. Another is that the fields are not mnemonically named: <em class="emphasis">awk</EM
+> uses <code class="literal">$1</CODE
+>, <code class="literal">$2</CODE
+>, etc. Plus Perl can do much that <em class="emphasis">awk</EM
+> cannot.</P
+><p class="para">The user criteria don't even have to be simple expressions. For example, this call initializes a variable <code class="literal">$id</CODE
+> to user <em class="emphasis">nobody </EM
+>'s number to use later in its expression:</P
+><pre class="programlisting">% psgrep 'no strict &quot;vars&quot;;
+          BEGIN { $id = getpwnam(&quot;nobody&quot;) }
+          uid == $id '</PRE
+><p class="para">How can we use unquoted words without even a dollar sign, like <code class="literal">uid</CODE
+>, <code class="literal">command</CODE
+>, and <code class="literal">size</CODE
+>, to represent those respective fields in each input record? We directly manipulate the symbol table by assigning closures to indirect <a class="indexterm" name="ch01-idx-1000011522-0"></A
+>typeglobs, which creates functions with those names. The function names are created using both uppercase and lowercase names, allowing both &quot;<code class="literal">UID</CODE
+> <code class="literal">&lt;</CODE
+> <code class="literal">10</CODE
+>&quot; and &quot;<code class="literal">uid</CODE
+> <code class="literal">&lt;</CODE
+> <code class="literal">10</CODE
+>&quot;. Closures are described in <a class="xref" href="ch11_05.htm" title="Taking References to Functions">Recipe 11.4</A
+>, and assigning them to typeglobs to create function aliases is shown in <a class="xref" href="ch10_15.htm" title="Redefining a Function">Recipe 10.14</A
+>.</P
+><p class="para">One twist here not seen in those recipes is empty parentheses on the closure. These allowed us to use the function in an expression anywhere we'd use a single term, like a string or a numeric constant. It creates a void prototype so the field-accessing function named <code class="literal">uid</CODE
+> accepts no arguments, just like the built-in function <code class="literal">time</CODE
+>. If these functions weren't prototyped void, expressions like &quot;<code class="literal">uid</CODE
+> <code class="literal">&lt;</CODE
+> <code class="literal">10</CODE
+>&quot; or &quot;<code class="literal">size</CODE
+> <code class="literal">/</CODE
+> <code class="literal">2</CODE
+> <code class="literal">&gt;</CODE
+> <code class="literal">rss</CODE
+>&quot; would confuse the parser because it would see the unterminated start of a wildcard glob and of a pattern match, respectively. Prototypes are discussed in <a class="xref" href="ch10_12.htm" title="Prototyping Functions">Recipe 10.11</A
+>.</P
+><p class="para">The version of <em class="emphasis">psgrep</EM
+> demonstrated here expects the output from Red Hat Linux's <em class="emphasis">ps</EM
+>. To port to other systems, look at which columns the headers begin at. This approach isn't relevant only to <em class="emphasis">ps</EM
+> or only to Unix systems. It's a generic technique for filtering input records using Perl expressions, easily adapted to other record layouts. The input format could be in columns, space separated, comma separated, or the result of a pattern match with capturing parentheses.</P
+><p class="para">The program could even be modified to handle a user-defined database with a small change to the selection functions. If you had an array of records as described in <a class="xref" href="ch11_10.htm" title="Constructing Records">Recipe 11.9</A
+>, you could let users specify arbitrary selection criteria, such as:</P
+><pre class="programlisting">sub id()         { $_-&gt;{ID}   }
+sub title()      { $_-&gt;{TITLE} }
+sub executive()  { title =~ /(?:vice-)?president/i }
+
+# user search criteria go in the grep clause
+@slowburners = grep { id &lt; 10 &amp;&amp; !executive } @employees;</PRE
+><p class="para">For reasons of security and performance, this kind of power is seldom found in database engines like those described in <a class="xref" href="ch14_01.htm" title="Database Access">Chapter 14, <cite class="chapter">Database Access</CITE
+></A
+>. SQL doesn't support this, but given Perl and small bit of ingenuity, it's easy to roll it up on your own. The search engine at <a class="systemitem.url" href="http://mox.perl.com/cgi-bin/MxScreen">http://mox.perl.com/cgi-bin/MxScreen </A
+>uses such a technique, but instead of output from <em class="emphasis">ps</EM
+>, its records are Perl hashes loaded from a database. <a class="indexterm" name="ch01-idx-1000010111-0"></A
+><a class="indexterm" name="ch01-idx-1000010111-1"></A
+><a class="indexterm" name="ch01-idx-1000010111-2"></A
+></P
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch01_18.htm" title="1.17. Program: fixstyle"><img src="../gifs/txtpreva.gif" alt="Previous: 1.17. Program: fixstyle" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="chapter" href="ch02_01.htm" title="2. Numbers"><img src="../gifs/txtnexta.gif" alt="Next: 2. Numbers" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">1.17. Program: fixstyle</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">2. Numbers</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

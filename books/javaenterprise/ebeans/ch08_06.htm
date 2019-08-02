@@ -1,0 +1,814 @@
+<html>
+<head>
+<title>EJB 1.1:  Exceptions and Transactions (Enterprise JavaBeans)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Richard Monson-Haefel">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-869-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="EJB 1.1: Exceptions and Transactions">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm" alt="Enterprise JavaBeans"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch08_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_05.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_01.htm">Chapter 8: Transactions</a></td><td align="right" valign="top" width="172"><a href="ch08_07.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_07.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">8.6. EJB 1.1: Exceptions and Transactions</h2>
+
+<a name="JBEANS-CH-8-SECT-6.1"></a>
+<h3 class="sect2">8.6.1. Application Exceptions Versus System Exceptions</h3>
+
+<p>
+<a name="INDEX-1767"></a><a name="INDEX-1768"></a>In EJB 1.1, an application exception is
+any exception that does <em class="emphasis">not</em> extend
+<tt class="literal">java.lang.RuntimeException</tt> or the
+<tt class="literal">java.rmi.RemoteException</tt>. System exceptions are
+<tt class="literal">java.lang.RuntimeException</tt> and
+<tt class="literal">java.rmi.RemoteException</tt> types and subtypes,
+including <tt class="literal">EJBException</tt>.
+</p>
+
+<p>Transactions are <em class="emphasis">automatically</em> rolled back if a
+system exception is thrown from a bean method. Transactions are
+<em class="emphasis">not automatically</em> rolled
+back if an application exception is thrown. If you remember these two
+rules, you will be well prepared to deal with exceptions and
+transactions in EJB 1.1.
+</p>
+
+<p>The <tt class="literal">bookPassage()</tt> method provides a good
+illustration of an application exception and how it's used. The
+following code shows the <tt class="literal">bookPassage()</tt> method with
+the relevant exception handling in bold:
+</p>
+
+<blockquote>
+<pre class="programlisting">public Ticket bookPassage(CreditCard card, double price)
+    throws <tt class="userinput"><b>IncompleteConversationalState</b></tt> {
+
+<b class="emphasis-bold">    if (customer == null || cruise == null || cabin == null) {</b>
+<b class="emphasis-bold">        throw new IncompleteConversationalState();</b>
+<b class="emphasis-bold">    }</b>
+    try {
+        ReservationHome resHome = (ReservationHome)
+            getHome("ReservationHome",ReservationHome.class);
+        Reservation reservation =
+        resHome.create(customer, cruise, cabin, price);
+        ProcessPaymentHome ppHome = (ProcessPaymentHome)
+            getHome("ProcessPaymentHome",ProcessPaymentHome.class);
+        ProcessPayment process = ppHome.create();
+        process.byCredit(customer, card, price);
+
+        Ticket ticket = new Ticket(customer,cruise,cabin,price);
+        return ticket;
+<b class="emphasis-bold">        } catch(Exception e) {</b>
+<b class="emphasis-bold">            throw new EJBException(e);</b>
+<b class="emphasis-bold">        }</b>
+}</pre>
+</blockquote>
+
+<a name="JBEANS-CH-8-SECT-6.1.1"></a>
+<h3 class="sect3">8.6.1.1. System exceptions</h3>
+
+<p>
+<a name="INDEX-1769"></a>System
+exceptions are <tt class="literal">RuntimeException</tt>s,
+<tt class="literal">RemoteException</tt>s, and their subtypes. The
+<tt class="literal">EJBException</tt> is a subclass of the
+<tt class="literal">RuntimeException</tt>, so it's considered a
+system exception.
+</p>
+
+<p>System exceptions always cause a transaction to roll back when thrown
+from a bean method. Any <tt class="literal">RuntimeException</tt>
+(<tt class="literal">NullPointerException</tt>,
+<tt class="literal">IndexOutOfBoundsException</tt>, etc.) thrown within the
+<tt class="literal">bookPassage()</tt> method is handled by the container
+automatically, and also results in a transaction rollback. In Java,
+<tt class="literal">RuntimeException</tt> types do not need to be declared
+in the <tt class="literal">throws</tt> clause of the method signature or
+handled using <tt class="literal">try</tt>/<tt class="literal">catch</tt> blocks;
+they are automatically thrown from the method.
+</p>
+
+<p>System exceptions thrown from within beans always cause the current
+transaction to roll back. If the method in which the exception occurs
+started the transaction, the transaction is rolled back. If the
+transaction started from a client that invoked the method, the
+client's transaction is marked for rollback and cannot be
+committed.
+</p>
+
+<p>System exceptions are handled automatically by the container, which
+will always:
+</p>
+
+<ul>
+<li>
+<p>Roll back the transaction </p>
+</li>
+<li>
+<p>Log the exception to alert the system administrator</p>
+</li>
+<li>
+<p>Discard the bean instance</p>
+</li>
+<li>
+<p>Throw a <tt class="literal">RemoteException</tt> or one of its subtypes</p>
+</li>
+</ul>
+<p>Exceptions thrown from the callback methods
+(<tt class="literal">ejbLoad()</tt>, <tt class="literal">ejbActivate()</tt>,
+etc.) are treated the same as exceptions thrown from business
+methods.
+</p>
+
+<p>While EJB 1.1 requires that system exceptions be logged, it does not
+specify how exceptions should be logged or the format of the log
+file. The exact mechanism for recording the exception and reporting
+it to the system administrator is left to the vendor.
+</p>
+
+<p>When a system exception occurs, the bean instance is discarded, which
+means that it's dereferenced and garbage collected. The
+container assumes that the bean instance may have corrupt variables
+or otherwise be unstable, and is therefore unsafe to use.
+</p>
+
+<p>The impact of discarding a bean instance depends on the bean's
+type. In the case of stateless session beans and entity beans, the
+client does not notice that the instance was discarded. These types
+of beans are not dedicated to a particular client; they are swapped
+in and out of an instance pool, so any instance can service a new
+request. With stateful session beans, however, the impact on the
+client is severe. Stateful session beans are dedicated to a single
+client and maintain conversational state. Discarding a stateful bean
+instance destroys the instance's conversation state and
+invalidates the client's reference to the bean. When stateful
+session instances are discarded, subsequent invocations of the
+bean's methods by the client result in a
+<tt class="literal">NoSuchObjectException</tt>, a subclass of the
+<tt class="literal">RemoteException</tt>.<a href="#FOOTNOTE-6">[6]</a>
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-6"></a>
+<p>[6]Although the
+instance is always discarded with a
+<tt class="literal">RuntimeException</tt>, the impact on the remote
+reference may vary depending on the vendor. </p> </blockquote>
+
+<p>When a system exception occurs and the instance is discarded, a
+<tt class="literal">RemoteException</tt> is always thrown to the client. If
+the client started the transaction, which was then propagated to the
+bean, a system exception (thrown by the bean method) will be caught
+by the container and rethrown as a
+<tt class="literal">javax.transaction.TransactionRolledbackException</tt>.
+The <tt class="literal">TransactionRolledbackException</tt> is a subtype of
+the <tt class="literal">RemoteException</tt>; it's a more explicit
+indication to the client that a rollback occurred. In all other
+cases, whether the bean is container-managed or bean-managed, a
+system exception thrown from within the bean method will be caught by
+the container and rethrown as a <tt class="literal">RemoteException</tt>. A
+system exception always results in a rollback of the transaction.
+</p>
+
+
+
+<a name="JBEANS-CH-8-SECT-6.1.2"></a>
+<h3 class="sect3">8.6.1.2. Application exceptions</h3>
+
+<p>An a<a name="INDEX-1770"></a>pplication exception is normally
+thrown in response to a business logic error, as opposed to a system
+error. They are always delivered directly to the client, without
+being repackaged as <tt class="literal">RemoteException</tt>s. They do not
+typically cause transactions to roll back; the client usually has an
+opportunity to recover after an application exception is thrown.
+</p>
+
+<p>The <tt class="literal">bookPassage()</tt> method throws an application
+exception called <tt class="literal">IncompleteConversationalState</tt>;
+this is an application exception because it does not extend
+<tt class="literal">RuntimeException</tt> or
+<tt class="literal">RemoteException</tt>. The
+<tt class="literal">IncompleteConversationalState</tt> exception is thrown
+if one of the arguments passed into the
+<tt class="literal">bookPassage()</tt> method is <tt class="literal">null</tt>.
+(Application errors are frequently used to report validation errors
+like this.) In this case, the exception is thrown before tasks are
+started, and is clearly not the result of a subsystem (JDBC, Java
+RMI, JNDI, etc.) failure.
+</p>
+
+<p>Because it is an application exception, throwing the
+<tt class="literal">IncompleteConversationalState</tt> exception does not
+result in a transaction rollback. The exception is thrown before any
+work is done, avoiding unnecessary processing by the
+<tt class="literal">bookPassage()</tt> method and providing the client (the
+bean or application that invoked the <tt class="literal">bookPassage()</tt>
+method) with an opportunity to recover and possibly retry the method
+call with valid arguments.
+</p>
+
+<p>The ProcessPayment bean also throws an application exception,
+<tt class="literal">PaymentException</tt>, to indicate that a validation
+error has occurred. In the <tt class="literal">bookPassage()</tt> method,
+we have always allowed this exception to be captured by the
+<tt class="literal">try</tt>/<tt class="literal">catch</tt> block and rethrown as
+a <tt class="literal">EJBException</tt>, which would result in a
+transaction rollback. An alternative would be to rearrange the
+sequence of events a little and allow the
+<tt class="literal">bookPassage()</tt> method to throw the
+<tt class="literal">PaymentException</tt>. This approach would allow more
+concise reporting of the business error to the client and, if
+organized correctly, would avoid a transaction rollback. Upon
+catching the <tt class="literal">PaymentException</tt>, the client could
+attempt to recover by retrying the <tt class="literal">bookPassage()</tt>
+method with the valid payment arguments. The following code shows a
+revised <tt class="literal">bookPassage()</tt> method that illustrates this
+strategy. Notice that the payment is processed before the reservation
+and that more explicit exception handling allows the
+<tt class="literal">PaymentException</tt> (thrown by the
+<tt class="literal">byCredit()</tt> method) to escape the
+<tt class="literal">try</tt>/<tt class="literal">catch</tt> block, so it can be
+thrown by the <tt class="literal">bookPassage()</tt> method.
+</p>
+
+<blockquote>
+<pre class="programlisting">public Ticket bookPassage(CreditCard card, double price)
+    throws IncompleteConversationalState, <tt class="userinput"><b>PaymentException</b></tt> {
+
+    if (customer == null || cruise == null || cabin == null){
+        throw new IncompleteConversationalState();
+    }
+<b class="emphasis-bold">    try {</b>
+        ProcessPaymentHome ppHome = (ProcessPaymentHome)
+            getHome("ProcessPaymentHome",ProcessPaymentHome.class);
+        ProcessPayment process = ppHome.create();
+<b class="emphasis-bold">        process.byCredit(customer, card, price);</b>
+            
+        ReservationHome resHome = (ReservationHome) 
+            getHome("ReservationHome", ReservationHome.class);
+
+        Reservation reservation =
+            resHome.create(customer, cruise, cabin, price);
+
+        Ticket ticket = new Ticket(customer,cruise,cabin,price);
+        return ticket;
+<b class="emphasis-bold">    } catch(RemoteException re) {</b>
+<b class="emphasis-bold">        throw new EJBException(re);</b>
+<b class="emphasis-bold">    } catch(NamingException ne) {</b>
+<b class="emphasis-bold">        throw new EJBException(ne);</b>
+<b class="emphasis-bold">    } catch(CreateException ce) {</b>
+<b class="emphasis-bold">        throw new EJBException(ce);</b>
+<b class="emphasis-bold">    } catch(FinderException fe) {</b>
+<b class="emphasis-bold">        throw new EJBException(fe);</b>
+<b class="emphasis-bold">    }</b>
+}</pre>
+</blockquote>
+
+<p>Business methods defined in the remote interface can throw any kind
+of application exception. These application exceptions must be
+declared in the method signatures of the remote interface and in the
+corresponding method in the bean class.
+</p>
+
+<p>The EJB create, find, and remove methods can also throw several
+exceptions defined in the <tt class="literal">javax.ejb</tt> package:
+<tt class="literal">CreateException</tt>,
+<tt class="literal">DuplicateKeyException</tt>,
+<tt class="literal">FinderException</tt>,
+<tt class="literal">ObjectNotFoundException</tt>, and
+<tt class="literal">RemoveException</tt>. These exceptions are also
+considered application exceptions: they are delivered to the client
+as is, without being repackaged as
+<tt class="literal">RemoteExceptions</tt>. Furthermore, these exceptions
+don't necessarily cause a transaction to roll back, giving the
+client the opportunity to retry the operation. These exceptions may
+be thrown by the beans themselves; in the case of container managed
+persistence (CMP), the container can also throw any of these
+exceptions while handling the bean's create, find, or remove
+methods (<tt class="literal">ejbCreate()</tt>,
+<tt class="literal">ejbFind...()</tt>, and <tt class="literal">ejbRemove()</tt>).
+The container might, for example, throw a
+<tt class="literal">CreateException</tt> if the container encounters a bad
+argument while attempting to insert a record for a container-managed
+bean. A bean developer can always choose to throw a standard
+application exception from the appropriate method regardless of how
+persistence is managed.
+</p>
+
+<p>Here is a detailed explanation of the five standard application
+exceptions and the situations in which they are thrown:
+</p>
+
+<dl>
+<dt>
+<b><tt class="literal">CreateException</tt>
+<a name="INDEX-1771"></a>
+</b>
+</dt>
+<dd>
+<p>The <tt class="literal">CreateException</tt> is thrown by the
+<tt class="literal">create()</tt> method in the remote interface. This
+exception can be thrown by the container if the container is managing
+persistence, or it can be thrown explicitly by the bean developer in
+the <tt class="literal">ejbCreate()</tt> or
+<tt class="literal">ejbPostCreate()</tt> methods. This exception indicates
+that an application error has occurred (invalid arguments, etc.)
+while the bean was being created. If the container throws this
+exception, it <em class="emphasis">may or may not</em> roll back the
+transaction. Explicit transaction methods must be used to determine
+the outcome. Bean developers should roll back the transaction before
+throwing this exception only if data integrity is a concern.
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">DuplicateKeyException</tt>
+<a name="INDEX-1772"></a>
+</b>
+</dt>
+<dd>
+<p>The <tt class="literal">DuplicateKeyException</tt> is an subtype of the
+<tt class="literal">CreateException</tt>; it is thrown by the
+<tt class="literal">create()</tt> method in the remote interface. This
+exception can be thrown by the container, if the container is
+managing persistence, or it can be thrown explicitly by the bean
+developer in the <tt class="literal">ejbCreate()</tt> method. This
+exception indicates that a bean with the same primary key already
+exists in the database. The transaction is typically
+<em class="emphasis">not</em> rolled back by the bean provider or
+container before throwing this exception.
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">FinderException</tt>
+<a name="INDEX-1773"></a>
+</b>
+</dt>
+<dd>
+<p>The <tt class="literal">FinderException</tt> is thrown by the find methods
+in the home interface. This exception can be thrown by the container,
+if the container is managing persistence, or it can be thrown
+explicitly by the bean developer in the
+<tt class="literal">ejbFind...()</tt> methods. This exception indicates
+that an application error occurred (invalid arguments, etc.) while
+the container attempted to find the beans. Do not use this method to
+indicate that entities were not found. Multi-entity find methods
+return an empty collection if no entities were found; single-entity
+<tt class="literal">find</tt> methods throw an
+<tt class="literal">ObjectNotFoundException</tt> to indicate that no object
+was found. The transaction is typically <em class="emphasis">not</em>
+rolled back by the bean provider or container before throwing this
+exception.
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">ObjectNotFoundException</tt>
+<a name="INDEX-1774"></a>
+</b>
+</dt>
+<dd>
+<p>The <tt class="literal">ObjectNotFoundException</tt> is thrown from a
+single-entity <tt class="literal">find</tt> method to indicate that the
+container couldn't find the requested entity. This exception
+can be thrown by the container if the container is managing
+persistence, or it can be thrown explicitly by the bean developer in
+the <tt class="literal">ejbFind...()</tt> methods. This exception should
+<em class="emphasis">not</em> be thrown to indicate a business logic error
+(invalid arguments, etc.). Use the <tt class="literal">FinderException</tt>
+to indicate business logic errors in single-entity find methods. The
+<tt class="literal">ObjectNotFoundException</tt> is only thrown by
+single-entity <tt class="literal">find</tt> methods to indicate that the
+entity requested was not found. Find methods that return multiple
+entities should return an empty collection if nothing is found. The
+transaction is typically <em class="emphasis">not</em> rolled back by the
+bean provider or container before throwing this exception.
+</p>
+</dd>
+
+<dt>
+<b><tt class="literal">RemoveException</tt>
+<a name="INDEX-1775"></a>
+</b>
+</dt>
+<dd>
+<p>The <tt class="literal">RemoveException</tt> is thrown from the
+<tt class="literal">remove()</tt> methods in the remote and home
+interfaces. This exception can be thrown by the container, if the
+container is managing persistence, or it can be thrown explicitly by
+the bean developer in the <tt class="literal">ejbRemove()</tt> method. This
+exception indicates that an application error has occurred while the
+bean was being removed. The transaction <em class="emphasis">may or may
+not</em> have been rolled back by the container before throwing
+this exception. Explicit transaction methods must be used to
+determine the outcome. Bean developers should roll back the
+transaction before throwing the exception only if data integrity is a
+concern.
+</p>
+</dd>
+
+</dl>
+
+<p>
+<a href="#JBEANS-CH-8-TABLE-6">Table 8-3</a> summarizes the interactions between
+different types of exceptions and transactions.
+</p>
+
+<p>
+</p>
+
+<a name="JBEANS-CH-8-TABLE-6"></a>
+<h4 class="objtitle">Table 8-3. Exception Summary</h4>
+<table border="1">
+
+
+
+
+
+
+<tr>
+<th>
+<p>Transaction Scope</p>
+</th>
+<th>
+<p>Transaction Type Attributes</p>
+</th>
+<th>
+<p>Exception Thrown</p>
+</th>
+<th>
+<p>Container's Action</p>
+</th>
+<th>
+<p>Client's View</p>
+</th>
+</tr>
+
+<tr>
+<td>
+<p>Client Initiated Transaction</p>
+
+<p>
+</p>
+
+<p>Transaction is started by the client (application or bean) and is
+propagated to the bean method.
+</p>
+</td>
+<td>
+<p>transaction-type =</p>
+
+<blockquote class="simplelist">
+
+<p>Container</p>
+
+</blockquote>
+
+<p>transaction-attribute =</p>
+
+<blockquote class="simplelist">
+
+<p>Required |</p>
+
+<p>Mandatory |</p>
+
+<p>Supports |</p>
+
+</blockquote>
+</td>
+<td>
+<p>Application Exception</p>
+</td>
+<td>
+<p>If the bean invoked <tt class="literal">setRollbackOnly()</tt>, then mark
+the client's transaction for rollback.
+</p>
+
+<p>Rethrow the Application Exception.</p>
+</td>
+<td>
+<p>Receives the Application Exception. The client's transaction
+may or may not have been marked for rollback.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<p>
+</p>
+</td>
+<td>
+<p>
+</p>
+</td>
+<td>
+<p>System Exception</p>
+</td>
+<td>
+<p>Mark the client's transaction for rollback.</p>
+
+<p>Log the error.</p>
+
+<p>Discard the instance.</p>
+
+<p>Rethrow the <tt class="literal">TransactionRollbackException</tt>.</p>
+</td>
+<td>
+<p>Receives the <tt class="literal">TransactionRollbackException</tt>
+</p>
+
+<p>The client's transaction has been rolled back. </p>
+</td>
+</tr>
+<tr>
+<td>
+<p>Container Initiated Transaction</p>
+
+<p>
+</p>
+
+<p>The transaction started when the bean's method was invoked and
+will end when method completes.
+</p>
+</td>
+<td>
+<p>transaction-type =</p>
+
+<blockquote class="simplelist">
+
+<p>Container</p>
+
+</blockquote>
+
+<p>transaction-attribute =</p>
+
+<blockquote class="simplelist">
+
+<p>Required |</p>
+
+<p>RequiresNew</p>
+
+</blockquote>
+</td>
+<td>
+<p>Application Exception</p>
+</td>
+<td>
+<p>If the bean called <tt class="literal">setRollbackOnly()</tt>, then roll
+back the transaction and rethrow the Application Exception.
+</p>
+
+<p>If the bean didn't explicitly roll back the transaction, then
+attempt to commit the transaction and rethrow the Application
+Exception.
+</p>
+</td>
+<td>
+<p>Receives the Application Exception. The bean's transaction may
+or may not have been rolled back. The client's transaction is
+not affected.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<p>
+</p>
+</td>
+<td>
+<p>
+</p>
+</td>
+<td>
+<p>System Exception</p>
+</td>
+<td>
+<p>Roll back the transaction.</p>
+
+<p>Log the error.</p>
+
+<p>Discard the instance.</p>
+
+<p>Rethrow <tt class="literal">RemoteException</tt>.</p>
+</td>
+<td>
+<p>Receives the <tt class="literal">RemoteException</tt>.</p>
+
+<p>The bean's transaction was rolled back.</p>
+
+<p>The client's transaction is not affected.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p>Bean is not part of a transaction</p>
+
+<p>
+</p>
+
+<p>The bean was invoked but does not propagate the client's
+transaction and does not start its own transaction.
+</p>
+</td>
+<td>
+<p>transaction-type =</p>
+
+<blockquote class="simplelist">
+
+<p>Container</p>
+
+</blockquote>
+
+<p>transaction-attribute =</p>
+
+<blockquote class="simplelist">
+
+<p>Never |</p>
+
+<p>NotSupported |</p>
+
+<p>Supports |</p>
+
+</blockquote>
+</td>
+<td>
+<p>Application Exception</p>
+</td>
+<td>
+<p>Rethrow the Application Exception.</p>
+</td>
+<td>
+<p>Receives the Application Exception. </p>
+
+<p>The client's transaction is not affected.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p>
+</p>
+</td>
+<td>
+<p>
+</p>
+</td>
+<td>
+<p>System Exception</p>
+</td>
+<td>
+<p>Log the error.</p>
+
+<p>Discard the instance.</p>
+
+<p>Rethrow <tt class="literal">RemoteException</tt>.</p>
+</td>
+<td>
+<p>Receives the <tt class="literal">RemoteException</tt>.</p>
+
+<p>The client's transaction is not affected.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p>Bean Managed Transaction.</p>
+
+<p>The stateful or stateless session bean uses the
+<tt class="literal">EJBContext</tt> to explicitly manage its own
+transaction
+</p>
+</td>
+<td>
+<p>transaction-type = </p>
+
+<blockquote class="simplelist">
+
+<p>bean</p>
+
+</blockquote>
+
+<p>transaction-attribute =</p>
+
+<blockquote class="simplelist">
+
+<p>Bean-managed transaction beans do not use transaction attributes.</p>
+
+</blockquote>
+</td>
+<td>
+<p>Application Exception</p>
+</td>
+<td>
+<p>Rethrow the Application Exception.</p>
+</td>
+<td>
+<p>Receives the Application Exception.</p>
+
+<p>The client's transaction is not affected.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p>
+</p>
+</td>
+<td>
+<p>
+</p>
+</td>
+<td>
+<p>
+<a name="INDEX-1776"></a>
+System Exception
+</p>
+</td>
+<td>
+<p>Roll back the transaction.</p>
+
+<p>Log the error.</p>
+
+<p>Discard the instance.</p>
+
+<p>
+<a name="INDEX-1777"></a><a name="INDEX-1778"></a>
+Rethrow <tt class="literal">RemoteException</tt>.
+</p>
+</td>
+<td>
+<p>Receives the <tt class="literal">RemoteException</tt>.</p>
+
+<p>The client's transaction is not affected.</p>
+</td>
+</tr>
+
+</table>
+
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch08_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_05.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch08_07.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_07.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">8.5. Explicit Transaction Management</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">8.7. EJB 1.0: Exceptions and Transactions</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

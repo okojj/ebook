@@ -1,0 +1,726 @@
+<html><head>
+<title>[Chapter 20] 20.2 The Cookbook</TITLE>
+<meta name="DC.title" content="sendmail"><meta name="DC.creator" content="Bryan Costales &amp; Eric Allman"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-01-06T19:24:37Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-222-0" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch20_01.htm" title="20. The checkcompat() Cookbook"><link rel="prev" href="ch20_01.htm" title="20.1 How checkcompat() Works"><link rel="next" href="ch20_03.htm" title="20.3 Alphabetized V8.8 Subroutines"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="sendmail" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="sendmail"><area shape="RECT" coords="467,0,514,18" href="../search/ssrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch20_01.htm" title="20.1 How checkcompat() Works"><img src="../gifs/txtpreva.gif" alt="Previous: 20.1 How checkcompat() Works" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 20<br>The checkcompat() Cookbook</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch20_03.htm" title="20.3 Alphabetized V8.8 Subroutines"><img src="../gifs/txtnexta.gif" alt="Next: 20.3 Alphabetized V8.8 Subroutines" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="SML2-CH-20-SECT-2">20.2 The Cookbook</A
+></H2
+><p class="para">In this section we show several examples of possible uses for the
+<em class="emphasis">checkcompat</EM
+>() routine. Among those we illustrate are the following:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para">Accept mail only from our domain. (see <a class="xref" href="#SML2-CH-20-SECT-2-1" title="Accept Mail Only From Our Domain">Section 20.2.1, "Accept Mail Only From Our Domain"</A
+>).</P
+></LI
+><li class="listitem"><p class="para">Cause your workstation to refuse to work as a mail gateway (see <a class="xref" href="#SML2-CH-20-SECT-2-2" title="Workstation Refuses to Act as a Mail Gateway">Section 20.2.2, "Workstation Refuses to Act as a Mail Gateway"</A
+>).</P
+></LI
+><li class="listitem"><p class="para">Limit the size of guest account messages (see <a class="xref" href="#SML2-CH-20-SECT-2-3" title="Limit the Size of Guest Messages">Section 20.2.3, "Limit the Size of Guest Messages"</A
+>).</P
+></LI
+><li class="listitem"><p class="para">Verify that <em class="emphasis">identd</EM
+> information is correct (see <a class="xref" href="#SML2-CH-20-SECT-2-4" title="Verify identd Information">Section 20.2.4, "Verify identd Information"</A
+>).</P
+></LI
+><li class="listitem"><p class="para">Prune <code class="literal">Received:</CODE
+> headers at a firewall (see <a class="xref" href="#SML2-CH-20-SECT-2-5" title="Prune Received: Headers at Firewall">Section 20.2.5, "Prune Received: Headers at Firewall"</A
+>).</P
+></LI
+><li class="listitem"><p class="para">Reject mail from spamming or mail-bombing sites (see <a class="xref" href="#SML2-CH-20-SECT-2-6" title="Reject Mail from Spamming or Mail-bombing Sites">Section 20.2.6, "Reject Mail from Spamming or Mail-bombing Sites"</A
+>).</P
+></LI
+></UL
+><p class="para">Note that in all of the following examples the numbers to the
+left indicate line numbers for discussion and are not a part of the code.&#13;</P
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-20-SECT-2-1">20.2.1 Accept Mail Only From Our Domain</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-16342"></A
+><a class="indexterm" name="AUTOID-16345"></A
+><a class="indexterm" name="AUTOID-16348"></A
+><a class="indexterm" name="AUTOID-16351"></A
+><a class="indexterm" name="AUTOID-16354"></A
+>If your site lives behind a <em class="emphasis">firewall</EM
+>,
+[2]
+you might want to use <em class="emphasis">checkcompat</EM
+>() to configure 
+the internal <em class="emphasis">sendmail</EM
+> so
+that it accepts only mail that is generated locally. 
+The external <em class="emphasis">sendmail</EM
+> (outside the firewall or part of it)
+acts as a proxy. That is, it accepts external mail that is destined
+for internal delivery from the outside
+and forwards it to the internal <em class="emphasis">sendmail</EM
+>.
+Because the external <em class="emphasis">sendmail</EM
+> is part of the local domain,
+its envelope always appears to be local. 
+Any external mail that somehow bypasses the
+firewall needs to be bounced.
+The way to do this in <em class="emphasis">checkcompat</EM
+>() looks like this:</P
+><blockquote class="footnote"><p class="para">[2] A firewall is a machine that lies between the local network and the
+outside world. It intercepts and filters all network traffic
+and rejects any that are considered inappropriate.</P
+></BLOCKQUOTE
+><p class="para"><blockquote class="screen"><pre class="screen"># define OUR_NET_IN_HEX 0x7b2d4300 /* 123.45.67.0 in hex */
+# define OUR_NETMASK 0xffffff00
+
+checkcompat(to, e)
+      register ADDRESS *to;
+      register ENVELOPE *e;
+{
+      if (tTd(49, 1))
+              printf(&quot;checkcompat(to=%s, from=%s)\n&quot;,
+                      to-&gt;q_paddr, e-&gt;e_from.q_paddr);
+
+
+      if (RealHostAddr.sa.sa_family == 0)
+      {
+              /* this is a locally submitted message */
+              return EX_OK;
+      }
+      if (RealHostAddr.sa.sa_family != AF_INET ||
+      (RealHostAddr.sin.sin_addr.s_addr &amp; OUR_NETMASK)!= OUR_NET_IN_HEX)
+      {
+<code class="userinput"><b>              usrerr(&quot;553 End run mail not allowed&quot;);</B
+></CODE
+>
+<code class="userinput"><b>              e-&gt;e_flags |= EF_NO_BODY_RETN;</B
+></CODE
+>
+<code class="userinput"><b>              to-&gt;q_status = &quot;5.7.1&quot;;</B
+></CODE
+>
+<code class="userinput"><b>              return (EX_UNAVAILABLE);</B
+></CODE
+>
+      }
+      return (EX_OK);
+}</PRE
+></BLOCKQUOTE
+></P
+><p class="para"><a class="indexterm" name="AUTOID-16374"></A
+>The <code class="literal">usrerr</CODE
+>() routine (line <em class="emphasis">21</EM
+>)
+causes a warning to be printed
+at the sending site, and returning EX_UNAVAILABLE
+(line <em class="emphasis">24</EM
+>)
+causes the mail message to be bounced.
+Bounced mail is sent back to the originating
+sender. A copy may also be sent to the local postmaster
+depending on the setting of <code class="literal">PostmasterCopy</CODE
+> (<code class="literal">P</CODE
+>) option
+(see <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-46" title="">Section 34.8.46, PostmasterCopy (P)</A
+>).</P
+><p class="para"><a class="indexterm" name="AUTOID-16383"></A
+>
+The EF_NO_BODY_RETN (line <em class="emphasis">22</EM
+>) causes only the headers from the message
+to be returned in bounced mail, not the original message body.
+Other envelope flags of interest can be found in 
+<a class="xref" href="ch37_05.htm#SML2-CH-37-TAB-2" title="Hexadecimal Envelope Flags">Table 37.3</A
+> of <a class="xref" href="ch37_05.htm#SML2-CH-37-SECT-5-12" title="">Section 37.5.12</A
+>.</P
+><p class="para">The <code class="literal">to-&gt;q_status</CODE
+> (line <em class="emphasis">23</EM
+>)
+conveys the DSN error status in
+the bounced mail message (see RFC1893).  Here, <code class="literal">5.7.1</CODE
+> indicates
+a permanent failure (<code class="literal">5</CODE
+>) of policy status (<code class="literal">7</CODE
+>),
+where delivery is not authorized and the message is refused (<code class="literal">1</CODE
+>).</P
+><p class="para">Also note that this code sample is only a suggestion. It doesn't take into account
+that <code class="literal">RealHostAddr</CODE
+> may contain 
+<code class="literal">0x7f000001</CODE
+> (<em class="emphasis">127.0.0.1</EM
+> for <em class="emphasis">localhost</EM
+>).&#13;</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-20-SECT-2-2">20.2.2 Workstation Refuses to Act as a Mail Gateway</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-16403"></A
+><a class="indexterm" name="AUTOID-16406"></A
+>If you've spent many months getting your workstation set up
+and running perfectly, you might not want outsiders using
+it as a knowledgeable mail relay. One way to prevent such
+unwanted use is to set up <em class="emphasis">checkcompat</EM
+>() in <em class="emphasis">conf.c</EM
+>
+so that it rejects any mail from outside
+your machine that is destined to another site outside your machine. <a class="indexterm" name="AUTOID-16411"></A
+><a class="indexterm" name="AUTOID-16413"></A
+>
+A desirable side effect is that
+this will also prevent outsiders from directly posting into your
+internal mailing lists.</P
+><p class="para"><blockquote class="screen"><pre class="screen">checkcompat(to, e)
+        register ADDRESS *to;
+        register ENVELOPE *e;
+{
+
+        if (tTd(49, 1))
+                printf(&quot;checkcompat(to=%s, from=%s)\n&quot;,
+                        to-&gt;q_paddr, e-&gt;e_from.q_paddr);
+
+        if (RealHostAddr.sa.sa_family == 0)
+        {
+                /* this is a locally submitted message */
+                return (EX_OK);
+        }
+        /* only accept local delivery from outside */
+<code class="userinput"><b>        if (!bitnset(M_LOCALMAILER, to-&gt;q_mailer-&gt;m_flags))</B
+></CODE
+>
+        {
+                usrerr(&quot;553 External gateway use prohibited&quot;);
+                e-&gt;e_flags |= EF_NO_BODY_RETN;
+                to-&gt;q_status = &quot;5.7.1&quot;;
+                return (EX_UNAVAILABLE);
+        }
+        return (EX_OK);
+}</PRE
+></BLOCKQUOTE
+></P
+><p class="para">Although <code class="literal">to</CODE
+> (line <em class="emphasis">16</EM
+>) is really a linked list
+of recipients, we check only the current recipient to prevent spurious warnings.
+This is done because <em class="emphasis">checkcompat</EM
+>() is called once for <em class="emphasis">every</EM
+>
+
+recipient.
+The check in line <em class="emphasis">16</EM
+> is to see whether
+<code class="literal">F=l</CODE
+> delivery agent flag is not set (see <a class="xref" href="ch30_08.htm#SML2-CH-30-SECT-8-28" title="">Section 30.8.28, F=l (lowercase L)</A
+>)
+thus implying that the recipient is not local.</P
+><p class="para">Note that this form of rejecting messages will <em class="emphasis">not</EM
+> work on a mail hub.
+In that case more sophisticated checks need to be made. Among them are the following:</P
+><ul class="itemizedlist"><li class="listitem"><p class="para">Check all the IP domains for your site. If you have only one,
+the check in <a class="xref" href="#SML2-CH-20-SECT-2-1" title="Accept Mail Only From Our Domain">Section 20.2.1</A
+> will work. If you have several
+(as in an assortment of class <code class="literal">C</CODE
+> domains), the check will be more
+complex. If the connecting host is in your domain or one of your domains,
+you should accept the message.</P
+></LI
+><li class="listitem"><p class="para">The envelope sender's host (<code class="literal">e-&gt;e_from-&gt;q_host</CODE
+>) should be checked to
+see whether it is in the class <code class="literal">$=w</CODE
+> (see <a class="xref" href="ch32_05.htm#SML2-CH-32-SECT-5-8" title="">Section 32.5.8, $=w</A
+>). You
+can use the <em class="emphasis">wordinclass</EM
+>() routine (see <a class="xref" href="ch20_03.htm#SML2-CH-20-SECT-3-8" title="">Section 20.3.8, wordinclass()</A
+>)
+to look it up. If it is in <code class="literal">$=w</CODE
+>, you should accept the message.
+This prevents a message from being forwarded through a workstation.</P
+></LI
+><li class="listitem"><p class="para">If the delivery agent for a recipient is <code class="literal">*include*</CODE
+>, the message
+is destined for a mailing list. You might wish to screen further at this
+point.</P
+></LI
+></UL
+><p class="para"></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-20-SECT-2-3">20.2.3 Limit the Size of Guest Messages</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-16449"></A
+><a class="indexterm" name="AUTOID-16452"></A
+><a class="indexterm" name="AUTOID-16455"></A
+>Suppose your site has reserved <em class="emphasis">uid</EM
+>s numbered from
+900 to 999 for guest users.
+Because guests are sometimes inconsiderate, you
+might want to limit the size of their messages and
+the number of simultaneous recipients they may specify.
+One way to do this is with the <em class="emphasis">checkcompat</EM
+>() routine:</P
+><p class="para"><blockquote class="screen"><pre class="screen">#define MAXGUESTSIZE 8000
+#define MAXGUESTNRCP 4
+
+checkcompat(to, e)
+        register ADDRESS *to;
+        register ENVELOPE *e;
+{
+
+        if (tTd(49, 1))
+                printf(&quot;checkcompat(to=%s, from=%s)\n&quot;,
+                        to-&gt;q_paddr, e-&gt;e_from.q_paddr);
+
+        /* does q_uid contain a valid uid? - no external */
+<code class="userinput"><b>        if (! bitset(QGOODUID, e-&gt;e_from.q_flags))</B
+></CODE
+>
+                return (EX_OK);
+<code class="userinput"><b>        if (e-&gt;e_from.q_uid &lt; 900 || e-&gt;e_from.q_uid &gt; 999)</B
+></CODE
+>
+                return (EX_OK);
+        if (e-&gt;e_msgsize &gt; MAXGUESTSIZE)
+        {
+                syslog(LOG_NOTICE,
+                        &quot;Guest %s attempted to send %d size&quot;,
+                        e-&gt;e_from.q_user, e-&gt;e_msgsize);
+                usrerr(&quot;553 Message too large, %d max&quot;, MAXGUESTSIZE);
+<code class="userinput"><b>                e-&gt;e_flags |= EF_NO_BODY_RETN;</B
+></CODE
+>
+                to-&gt;q_status = &quot;5.7.1&quot;;
+                return (EX_UNAVAILABLE);
+        }
+        if (e-&gt;e_nrcpts &gt; MAXGUESTNRCP)
+        {
+                syslog(LOG_NOTICE,
+                        &quot;Guest %s attempted to send %d recipients&quot;,
+                        e-&gt;e_from.q_user, e-&gt;e_nrcpts);
+                usrerr(&quot;553 Too many recipients for guest, %d max&quot;,
+                        MAXGUESTNRCP);
+<code class="userinput"><b>                e-&gt;e_flags &amp;= ~EF_NO_BODY_RETN;</B
+></CODE
+>
+                to-&gt;q_status = &quot;5.7.1&quot;;
+                return (EX_UNAVAILABLE);
+        }
+        return (EX_OK);
+}</PRE
+></BLOCKQUOTE
+></P
+><p class="para">Note that <code class="literal">q_uid</CODE
+> will have a valid <em class="emphasis">uid</EM
+> (QGOODUID will be set)
+only if the sender
+is local (line <em class="emphasis">14</EM
+>). For external mail coming in, QGOODUID will be clear.</P
+><p class="para">Also note that we specifically do not return the message body (EF_NO_BODY_RETN)
+if the message was returned because it was too large (line <em class="emphasis">24</EM
+>).
+But we do return the message body
+if the message was rejected for too many recipients (line <em class="emphasis">35</EM
+>).
+Other envelope flags of interest can be found in
+<a class="xref" href="ch37_05.htm#SML2-CH-37-TAB-2" title="Hexadecimal Envelope Flags">Table 37.3</A
+> of <a class="xref" href="ch37_05.htm#SML2-CH-37-SECT-5-12" title="">Section 37.5.12</A
+>.&#13;</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-20-SECT-2-4">20.2.4 Verify identd Information</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-16477"></A
+><a class="indexterm" name="AUTOID-16479"></A
+><a class="indexterm" name="AUTOID-16482"></A
+>When an outside host connects to the local <em class="emphasis">sendmail</EM
+> via SMTP,
+its hostname is saved in the <code class="literal">$s</CODE
+> macro (see <a class="xref" href="ch31_10.htm#SML2-CH-31-SECT-10-33" title="">Section 31.10.33, $s</A
+>).
+If the <code class="literal">Timeout.ident</CODE
+> option (see <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-70" title="">Section 34.8.70, Timeout (r)</A
+>) is nonzero,
+<em class="emphasis">sendmail</EM
+> uses the RFC1413 identification protocol to record 
+the identity of the host at the other end, that is, the identity
+of the host that made the connection.
+That identity is recorded in the <code class="literal">$_</CODE
+> macro (see <a class="xref" href="ch31_10.htm#SML2-CH-31-SECT-10-1" title="">Section 31.10.1, $-</A
+>).<a class="indexterm" name="AUTOID-16493"></A
+><a class="indexterm" name="AUTOID-16495"></A
+></P
+><p class="para">If you are unusually picky about the identity of other hosts,
+you may wish to confirm that the host in <code class="literal">$s</CODE
+> is
+the same as the host in <code class="literal">$_</CODE
+>. One way to perform
+such a check is with the <em class="emphasis">checkcompat</EM
+>() routine:</P
+><p class="para"><blockquote class="screen"><pre class="screen">checkcompat(to, e)
+        register ADDRESS *to;
+        register ENVELOPE *e;
+{
+        char *s, *u, *v;
+        int len;
+        static char old_s[MAXHOSTNAMELEN];
+
+        if (tTd(49, 1))
+                printf(&quot;checkcompat(to=%s, from=%s)\n&quot;,
+                        to-&gt;q_paddr, e-&gt;e_from.q_paddr);
+
+        /* if $s is localhost or in $=w, accept it */
+        if ((s = macvalue('s', e)) == NULL)
+                return (EX_OK);
+<code class="userinput"><b>        if (strncasecmp(s, old_s, MAXHOSTNAMELEN-1) == 0)</B
+></CODE
+>
+                return (EX_OK);
+        else
+                (void)sprintf(old_s, &quot;%.*s&quot;, MAXHOSTNAMELEN-1, s);
+<code class="userinput"><b>        if (strcasecmp(s, &quot;localhost&quot;) == 0)</B
+></CODE
+>
+                return (EX_OK);
+<code class="userinput"><b>        if (wordinclass(s, 'w') == TRUE)</B
+></CODE
+>
+                return (EX_OK);
+
+        if ((u = macvalue('_', e)) == NULL)
+                return (EX_OK);
+        if ((u = strchr(u, '@')) == NULL)
+                return (EX_OK);
+        if ((v = strchr(u, ' ')) != NULL)
+                *v = ' ';
+        len = strlen(u);
+        if (v != NULL)
+                *v = ' ';
+
+<code class="userinput"><b>        if (strncasecmp(s, u, len) != 0)</B
+></CODE
+>
+        {
+<code class="userinput"><b>             auth_warning(e, &quot;$s=%s doesn't match $_=%.*s&quot;, s, len, u);</B
+></CODE
+>
+        }
+        return (EX_OK);
+}</PRE
+></BLOCKQUOTE
+></P
+><p class="para">First (line <em class="emphasis">16</EM
+>) we check to see whether we have already checked
+this value of <code class="literal">$s</CODE
+>. If so, we don't check again because
+<em class="emphasis">checkcompat</EM
+>() is called once for each recipient. If <code class="literal">$s</CODE
+> is
+new, we save a copy of its value for next time.</P
+><p class="para">Then we make sure that the local host (no
+matter what its name) is acceptable (lines <em class="emphasis">20</EM
+> and <em class="emphasis">22</EM
+>).
+If this is an offsite host,
+we compare the values of <code class="literal">$s</CODE
+> and the host part of <code class="literal">$_</CODE
+> (line <em class="emphasis">35</EM
+>).
+If they don't match, we insert an <code class="literal">X-Authentication-Warning:</CODE
+>
+header (line <em class="emphasis">37</EM
+>). This keeps such warnings under the control of the 
+<code class="literal">PrivacyOptions.authwarnings</CODE
+> (<code class="literal">p</CODE
+>)
+option (see <a class="xref" href="ch34_08.htm#SML2-CH-34-SECT-8-47" title="">Section 34.8.47, PrivacyOptions (p)</A
+>).&#13;</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-20-SECT-2-5">20.2.5 Prune Received: Headers at Firewall</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-16529"></A
+><a class="indexterm" name="AUTOID-16532"></A
+><a class="indexterm" name="AUTOID-16535"></A
+>In routing mail outward from a firewall (see <a class="xref" href="#SML2-CH-20-SECT-2-1" title="Accept Mail Only From Our Domain">Section 20.2.1</A
+>),
+it may be advantageous to
+replace all the internal <code class="literal">Received:</CODE
+> headers with one master header.<a class="indexterm" name="AUTOID-16541"></A
+>
+A way to do this with <em class="emphasis">checkcompat</EM
+>() looks like this:</P
+><p class="para"><blockquote class="screen"><pre class="screen"># define OUR_NET_IN_HEX 0x7b2d4300 /* 123.45.67.0 in hex */
+# define OUR_NETMASK 0xffffff00
+# define LOOP_CHECK &quot;X-Loop-Check&quot;
+
+checkcompat(to, e)
+        register ADDRESS *to;
+        register ENVELOPE *e;
+{
+        HDR *h;
+        int cnt;
+
+<code class="userinput"><b>        if (RealHostAddr.sa.sa_family == 0)</B
+></CODE
+>
+        {
+                /* this is a locally submitted message */
+                return EX_OK;
+        }
+<code class="userinput"><b>        if (RealHostAddr.sa.sa_family != AF_INET ||</B
+></CODE
+>
+<code class="userinput"><b>        (RealHostAddr.sin.sin_addr.s_addr &amp; OUR_NETMASK) != OUR_NET_IN_HEX)</B
+></CODE
+>
+        {
+                /* not received from the internal network */
+                return EX_OK;
+        }
+<code class="userinput"><b>        if (hvalue(LOOP_CHECK, e-&gt;e_header) != NULL)</B
+></CODE
+>
+        {
+                /* We've stripped them once already */
+                return EX_OK;
+        }
+<code class="userinput"><b>        addheader(LOOP_CHECK, &quot;&quot;, &amp;e-&gt;e_header);</B
+></CODE
+>
+
+<code class="userinput"><b>        for (cnt = 0, h = e-&gt;e_header; h != NULL; h = h-&gt;h_link)</B
+></CODE
+>
+        {
+<code class="userinput"><b>               if (strcasecmp(h-&gt;h_field, &quot;received&quot;) != 0)</B
+></CODE
+>
+                       continue;
+<code class="userinput"><b>               if (cnt++ == 0)</B
+></CODE
+>
+                       continue;
+<code class="userinput"><b>               clrbitmap(h-&gt;h_mflags);</B
+></CODE
+>
+<code class="userinput"><b>               h-&gt;h_flags |= H_ACHECK;</B
+></CODE
+>
+        }
+        return (EX_OK);
+}</PRE
+></BLOCKQUOTE
+></P
+><p class="para">Because we are stripping the message of <code class="literal">Received:</CODE
+> headers, we need to be careful.
+We shouldn't do it if the message originated on the firewall machine (line <em class="emphasis">12</EM
+>).
+We also shouldn't do it if the message originated from outside the internal (firewalled)
+network (lines <em class="emphasis">17</EM
+> and <em class="emphasis">18</EM
+>). To prevent possibly disastrous mail loops,
+we check for a special header (line <em class="emphasis">23</EM
+>) and skip stripping again if that
+header is found. We then add that special header (line <em class="emphasis">120</EM
+>), just in case
+the mail flows though this firewall again.</P
+><p class="para">If it is okay to do so, we scan all the headers (line <em class="emphasis">30</EM
+>) looking 
+for all <code class="literal">Received:</CODE
+> headers (line <em class="emphasis">32</EM
+>).
+We skip deleting the first one because it was placed there by the firewall
+(line <em class="emphasis">34</EM
+>). We delete all the others by clearing their <code class="literal">?</CODE
+><code class="replaceable"><i>flags</I
+></CODE
+><code class="literal">?</CODE
+>
+bits (line <em class="emphasis">36</EM
+>) and setting the H_ACHECK flag (line <em class="emphasis">37</EM
+>).
+See <a class="xref" href="ch20_03.htm#SML2-CH-20-SECT-3-3" title="">Section 20.3.3, </A
+> for a general discussion of this technique.</P
+><p class="para">Be aware that this is only one possible approach and that, depending on
+what other hosts on the Internet do to the message, this loop detection may
+break. A safer but more difficult approach is to rewrite the <code class="literal">Received:</CODE
+>
+headers themselves and to mask out sensitive information in them.&#13;</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="SML2-CH-20-SECT-2-6">20.2.6 Reject Mail from Spamming or Mail-bombing Sites</A
+></H3
+><p class="para"><a class="indexterm" name="AUTOID-16579"></A
+><a class="indexterm" name="AUTOID-16581"></A
+><a class="indexterm" name="AUTOID-16584"></A
+><a class="indexterm" name="AUTOID-16587"></A
+><a class="indexterm" name="AUTOID-16589"></A
+>As the Internet grows, your site may become more and more subject to
+advertising and vengeful attacks from the outside. Advertising attacks
+are called &quot;spams&quot; and are symptomized by advertisers sending multiple
+copies of advertisements through your internal mail lists or to
+several of your users. Vengeful attacks are called &quot;mail bombs&quot; 
+and usually are detected by your mail spool directory filling with
+a huge number of messages from a single sender.
+[3]</P
+><blockquote class="footnote"><p class="para">[3] Often in response to one of your users sending an offensive spam.</P
+></BLOCKQUOTE
+><p class="para">To limit your vulnerability to such events (and to others of a similar
+nature that may be invented in the future), you may screen mail
+from outside hosts using a combination of a database and <em class="emphasis">checkcompat</EM
+>().
+First we show you how to set up such a database, then we show you a <em class="emphasis">checkcompat</EM
+>()
+routine for using it.
+[4]</P
+><blockquote class="footnote"><p class="para">[4] You may also screen sender addresses at the SMTP MAIL command
+with the new V8.8 <code class="literal">check_mail</CODE
+> rule set (see <a class="xref" href="ch29_10.htm#SML2-CH-29-SECT-10-1" title="The check_mail Rule Set">Section 29.10.1, "The check_mail Rule Set"</A
+>).<a class="indexterm" name="AUTOID-16601"></A
+><a class="indexterm" name="AUTOID-16603"></A
+>
+Although it can be easier to design <code class="literal">check_mail</CODE
+> rules, the <em class="emphasis">checkcompat</EM
+>() routine
+can be more powerful.</P
+></BLOCKQUOTE
+><p class="para">The source file for the database will look like this:</P
+><p class="para"><blockquote class="screen"><pre class="screen">user@spam.host      spam
+user@bomb.host      bomb</PRE
+></BLOCKQUOTE
+></P
+><p class="para">Here, each left-hand side entry is an email address with a user part,
+an <code class="literal">@</CODE
+>, and a host part. We will be screening on the basis of individual
+sender addresses rather than screening at a sitewide level. The right-hand side is either
+the word <code class="literal">spam</CODE
+> to represent a spamming sender or <code class="literal">bomb</CODE
+>
+to represent a mail-bombing sender.</P
+><p class="para">If the source file is called <em class="emphasis">/etc/mail/blockusers</EM
+>, the database
+will be created like this:</P
+><p class="para"><blockquote class="screen"><pre class="screen">% <code class="userinput"><b>makemap hash /etc/mail/blockusers.db &lt; /etc/mail/blockusers</B
+></CODE
+></PRE
+></BLOCKQUOTE
+></P
+><p class="para">Here, we create a <code class="literal">hash</CODE
+> <em class="emphasis">db</EM
+> style database. For other available
+styles, see <a class="xref" href="ch33_02.htm" title="Create Files with makemap">Section 33.2, "Create Files with makemap"</A
+>. </P
+><p class="para">Once the database is in place, your configuration file needs to be
+told of its existence. To do that, we use the <code class="literal">K</CODE
+> configuration
+command (see <a class="xref" href="ch33_03.htm" title="The K Configuration Command">Section 33.3, "The K Configuration Command"</A
+>):</P
+><p class="para"><blockquote class="screen"><pre class="screen">Kbadusers hash -o /etc/mail/blockusers.db</PRE
+></BLOCKQUOTE
+></P
+><p class="para">For the <em class="emphasis">m4</EM
+> configuration technique you would place this
+declaration under the LOCAL_CONFIG line in your <em class="emphasis">mc</EM
+> file
+(see <a class="xref" href="ch19_06.htm#SML2-CH-19-SECT-6-30" title="">Section 19.6.30, LOCAL-CONFIG</A
+>).</P
+><p class="para">&#13;One possible <em class="emphasis">checkcompat</EM
+>() routine to handle all this will
+look like this:</P
+><p class="para"><blockquote class="screen"><pre class="screen">checkcompat(to, e)
+        register ADDRESS *to;
+        register ENVELOPE *e;
+{
+        STAB *map;
+        char *p;
+        int  ret = 0;
+
+<code class="userinput"><b>        map = stab(&quot;badusers&quot;, ST_MAP, ST_FIND);</B
+></CODE
+>
+        if (map == (STAB *)NULL)
+<code class="userinput"><b>                return (EX_OK);</B
+></CODE
+>
+<code class="userinput"><b>        p = (*map-&gt;s_map.map_class-&gt;map_lookup)</B
+></CODE
+>
+                 (&amp;map-&gt;s_map, e-&gt;e_from.q_paddr, NULL, &amp;ret);
+        if (p == NULL)
+<code class="userinput"><b>                return (EX_OK);</B
+></CODE
+>
+
+<code class="userinput"><b>        if (strcasecmp(p, &quot;spam&quot;) == 0)</B
+></CODE
+>
+        {
+<code class="userinput"><b>                usrerr(&quot;553 Spamming mail rejected from %s&quot;,</B
+></CODE
+>
+                        e-&gt;e_from.q_paddr);
+                to-&gt;q_status = &quot;5.7.1&quot;;
+                return (EX_UNAVAILABLE);
+        }
+<code class="userinput"><b>        if (strcasecmp(p, &quot;bomb&quot;) == 0)</B
+></CODE
+>
+        {
+                usrerr(&quot;553 Message rejected from mail-bomber %s&quot;,
+                        e-&gt;e_from.q_paddr);
+                e-&gt;e_flags &amp;= ~EF_NO_BODY_RETN;
+                to-&gt;q_status = &quot;5.7.1&quot;;
+                return (EX_UNAVAILABLE);
+        }
+        return (EX_OK);
+}</PRE
+></BLOCKQUOTE
+></P
+><p class="para">Here we first look up the database named <code class="literal">badusers</CODE
+> in the symbol table
+(line <em class="emphasis">9</EM
+>). It is okay for the database not to exist (line <em class="emphasis">11</EM
+>).
+If the database exists, we look up the sender's address in it (line <em class="emphasis">12</EM
+>).
+If the address is not found, all is okay (line <em class="emphasis">15</EM
+>).</P
+><p class="para">If the address was found in the database, we have a potential bad person. So we first
+check to see whether the address was marked as a <code class="literal">spam</CODE
+> (line <em class="emphasis">17</EM
+>).
+If it was, we bounce it with an appropriate error message (line <em class="emphasis">19</EM
+>).</P
+><p class="para">We also bounce the message if it is a mail bomb (line <em class="emphasis">24</EM
+>).
+This is fraught with risk however. The bounced mail can fill up the outgoing
+queue, thereby accomplishing the bomber's ends in a different way.
+A better approach might be to drop the mail on the floor (see <em class="emphasis">dropenvelope</EM
+>()
+in <em class="emphasis">envelope.c</EM
+>), but we leave this as an exercise for the reader.&#13;</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch20_01.htm" title="20.1 How checkcompat() Works"><img src="../gifs/txtpreva.gif" alt="Previous: 20.1 How checkcompat() Works" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="sendmail"><img src="../gifs/txthome.gif" alt="sendmail" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="SECT1" href="ch20_03.htm" title="20.3 Alphabetized V8.8 Subroutines"><img src="../gifs/txtnexta.gif" alt="Next: 20.3 Alphabetized V8.8 Subroutines" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">20.1 How checkcompat() Works</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">20.3 Alphabetized V8.8 Subroutines</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.htm" title="The Networking CD Bookshelf">Library Home</A
+> | <a href="../dnsbind/index.htm" title="DNS &amp; BIND">DNS &amp; BIND</A
+> | <a href="../tcpip/index.htm" title="TCP/IP Network Administration">TCP/IP</A
+> | <a href="index.htm" title="sendmail">sendmail</A
+> | <a href="../smdref/index.htm" title="sendmail Desktop Reference">sendmail Reference</A
+> | <a href="../firewall/index.htm" title="Building Internet Firewalls">Firewalls</A
+> | <a href="../puis/index.htm" title="Practical UNIX &amp; Internet Security">Practical Security</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

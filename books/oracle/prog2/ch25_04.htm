@@ -1,0 +1,2093 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 25] 25.4 Tuning Your Algorithms</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein &amp; Bill Pribyl"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T19:13:30Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates CD-ROM-1-56592-335-9E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-335-9E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle PL/SQL"><META
+NAME="DC.Title"
+CONTENT="Oracle PL/SQL Programming, 2nd Edition"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch25_01.htm"
+TITLE="25. Tuning PL/SQL Applications"><LINK
+REL="prev"
+HREF="ch25_03.htm"
+TITLE="25.3 Tuning Access to Your Data"><LINK
+REL="next"
+HREF="ch25_05.htm"
+TITLE="25.5 Overview of PL/SQL8 Enhancements"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd Edition"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch25_03.htm"
+TITLE="25.3 Tuning Access to Your Data"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 25.3 Tuning Access to Your Data"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch25_01.htm"
+TITLE="25. Tuning PL/SQL Applications"
+>Chapter 25<BR>Tuning PL/SQL Applications</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch25_05.htm"
+TITLE="25.5 Overview of PL/SQL8 Enhancements"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 25.5 Overview of PL/SQL8 Enhancements"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-4"
+>25.4 Tuning Your Algorithms</A
+></H2
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999840-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999840-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999840-3"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999840-4"
+></A
+>Tuning algorithms is a very application-specific activity. There is no general rule to be applied, and I have no generic tips. Instead, in this section I offer two "case studies" of tuning exercises I performed on some real-world code. Following those explorations are more general suggestions for writing optimized PL/SQL code. </P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-4.1"
+>25.4.1 There Are No Sacred Cows</A
+></H3
+><P
+CLASS="para"
+>In many places in this book, I recommend that you follow the principle of top-down design in building your applications and even single modules. This step-by-step process almost guarantees that you will come up with the most modular, logical solution to your problem. Unfortunately, that solution may not always be the most efficient performer. In such situations, you need to be ready to switch gears, tear down what you have built, and reconstruct it to improve performance. </P
+><P
+CLASS="para"
+>In other words, you must be creative and, in some cases, even take a counter-intuitive approach to achieve the required performance levels in your application. Do not hang onto code just because you happened to have stayed up too late too many nights in a row to get it "just right." If it doesn't do the job, don't hesitate to scrap your implementation and try again. </P
+><P
+CLASS="para"
+>Consider the build_pv_lease_schedule procedure shown below: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE build_pv_lease_schedule
+/* Construct present value lease schedule over 20 years. */
+IS
+   /* Temporary variable to hold lease accumulation. */
+   pv_total_lease NUMBER(9);
+   /* Table structure to hold the lease accumulations. */
+   TYPE pv_table_type IS TABLE OF NUMBER(9) INDEX BY BINARY_INTEGER;
+   pv_table pv_table_type;
+BEGIN
+   FOR year_count in 1 .. 20
+   LOOP
+      /* Reset the lease amount for this year. */
+      pv_total_lease := 0;
+      /*
+      || Build the PV based on the remaining years
+      || plus the fixed and variable amounts.
+      */
+      FOR year_count2 in year_count..20
+      LOOP
+         /* Add annual total lease amount to cummulative. */
+         pv_total_lease :=
+            pv_total_lease +
+            pv_of_fixed (year_count2) +
+            pv_of_variable (year_count2);
+      END LOOP;
+      /* Add the annual PV to the table. */
+      pv_table (year_count) := pv_total_lease;
+   END LOOP;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This module constructs a schedule of lease payments for a store and saves them in a PL/SQL table. For each of 20 years, the lease amount is calculated as the sum of lease amounts for the remaining years. The total lease for year 10, in other words, would consist of the lease amounts (fixed and variable) for years 10 through 20. The procedure reflects this logic directly and simply with nested loops: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FOR year_count IN 1 .. 20
+LOOP
+   FOR year_count2 IN year_count .. 20
+   LOOP
+      ... computation ...
+   END LOOP;
+END LOOP;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The build_pv_lease_schedule procedure is clean, direct, and to the point. The only problem with this code it that it took six seconds to calculate the 20 values in the lease schedule. This was simply too long a time, combined as it was with several other operations. A new approach was needed and I was asked to come up with alternatives. </P
+><P
+CLASS="para"
+>One reason that I was brought in to perform the review is that it can be very difficult for a program's author to be creative about new ways of doing things. I have found that once I write something, once I feel I have reached a resolution, and once I see it in a printout, that particular approach entraps me, limiting my vision. </P
+><P
+CLASS="para"
+>The nested loop technique was such a natural fit for this algorithm that it took an outsider to break away from this construct to tune the code. Now that you have seen this technique, can you see a more efficient way to perform this calculation? </P
+><P
+CLASS="para"
+>My first step in analyzing and correcting the procedure was to be aware of just how many computations the program performed to come up with its answer. For each of the 20 years, the inner loop performs 20-<EM
+CLASS="emphasis"
+>N</EM
+> +1 calculations. So over 20 years, the nested loop performs: </P
+><TABLE
+CLASS="simplelist"
+BORDER="0"
+><TR
+><TD
+CLASS="member"
+>20 + 19 + 18 + ... + 3 + 2 + 1 = 210 calculations of annual lease amounts </TD
+></TR
+></TABLE
+><P
+CLASS="para"
+>to come up with the 20 accumulated lease amounts. Well, that's a lot of activity! No wonder it takes six seconds. The question in my mind then became: are all these calculations necessary? They would certainly all be required if each computation were unique, that is, not repeated during the nested loop execution. This is not, however, the case. In fact, many of the computations are exactly the same. For year 1, I calculate the annual lease amounts for years 1 through 20 to produce the year 1 accumulation. For year 2, I calculate the annual lease amount for years 2 through 20, and so on. For each year <EM
+CLASS="emphasis"
+>N</EM
+>, in other words, I calculate the annual lease amount for that year <EM
+CLASS="emphasis"
+>N</EM
+> times. Furthermore, within each execution of the inner loop, I am simply summing up the annual lease amounts for the subset of the full 20 years, as shown here: </P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Outer Loop Year Number</P
+> </TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Years Over Which Lease Amounts are Summed in Inner Loop</P
+> </TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>1</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Year 1 + Year 2 + ... + Year 20</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>2</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Year 2 + ... + Year 20</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>...</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+>  </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>18</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Year 18 + Year 19 + Year 20</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>19</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Year 19 + Year 20</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>20</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Year 20</P
+> </TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+>From this table you can see that the difference between the total amount for year <EM
+CLASS="emphasis"
+>N</EM
+> and the total amount for year <EM
+CLASS="emphasis"
+>N-</EM
+>1 is the lease amount for year <EM
+CLASS="emphasis"
+>N</EM
+>. Starting with year 1, it then becomes clear that the total lease amounts are all reductions from that year 1 total. From this understanding, I found that I could generate the accumulated lease amounts for each year by substracting from the full 20-year accumulation, rather than having to build it up each time anew. </P
+><P
+CLASS="para"
+>With this approach, I would build my lease schedule in two phases: first, for each year, calculate the annual lease amount and save that value. Simultaneously, add that value to the 20-year accumulation. In pseudo-code I have: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FOR year_count IN 1 .. 20
+LOOP
+   save annual lease amount
+   add annual lease amount to 20-year accumulated total
+END LOOP;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Once I have my 20-year accumulation and my 20 individual annual lease amounts, I can produce the 19 other accumulations as follows: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>copy 20-year total to accumulated total variable
+FOR year_count IN 2 .. 20
+LOOP
+   subtract annual lease amount from accumulated total
+   save difference to PL/SQL table
+END LOOP;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In other words, for year 2, subtract the annual lease amount of year 2 from the 20-year total. This is the 19-year accumulation. For year 3, subtract the annual lease amount of year 3 from the 19-year total. This is the 18-year accumulation. And so on. </P
+><P
+CLASS="para"
+>With this approach, shown in full PL/SQL glory below, I perform only 20 lease computations and then another 20 simple subtractions, down from 210 lease computations: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE build_pv_lease_schedule
+IS
+   pv_total_lease NUMBER(9) := 0;
+   TYPE pv_table_type IS TABLE OF NUMBER(9) INDEX BY BINARY_INTEGER;
+   pv_table pv_table_type;
+BEGIN
+   /*
+   || Build the 20-year accumulated total and save each
+   || of the annual lease amounts to the PL/SQL table. Notice that
+   || pv_table (N) is set to the annual lease amount for year N-1.
+   */
+   FOR year_count in 1 .. 20
+   LOOP
+      one_year_pv :=
+         pv_of_fixed (year_count) + pv_of_variable (year_count);
+      pv_total_lease := pv_total_lease + one_year_pv;
+      IF year_count &lt; 20
+      THEN
+         pv_table (year_count+1) := one_year_pv;
+      END IF;
+   END LOOP;
+
+   /* Save the 20-year total in the first row. */
+   pv_table (1) := pv_total_lease;
+
+   /* For each of the remaining years... */
+   FOR year_count IN 2 .. 20
+   LOOP
+      /* Subtract the annual amount from the remaining total. */
+      pv_total_lease := pv_total_lease - pv_table (year_count);
+      /*
+      || Save the Nth accumulation to the table (this writes right
+      || over the annual lease amount, which is no longer needed.
+      || I get double use out of the pv_table in this way.
+      */
+      pv_table (year_count) := pv_total_lease;
+   END LOOP;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>By converting the nested loop to a sequence of two distinct loops, I cut down the elapsed time of this procedure from six seconds to three seconds. Both approaches produce the same number. The first technique was the more obvious and straightforward of the two. It did not, however, minimize the amount of effort required to produce the computations. It took careful analysis and rewriting both to preserve the correct values and to optimize the performance. </P
+><P
+CLASS="para"
+>One should never underestimate the value of code review. In the process of having this chapter reviewed, both Eric Givler and Kannan Muthukkaruppan were quick to point out an even simpler and faster solution to this problem: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE build_pv_lease_schedule
+IS
+   pv_total_lease number(9) := 0;
+   one_year_pv number(9) := 0;
+   type pv_table_type IS TABLE OF NUMBER(9) INDEX BY BINARY_INTEGER;
+   pv_table pv_table_type;
+BEGIN
+   FOR year_count IN REVERSE 1..20
+   LOOP
+      one_year_pv := pv_of_fixed(year_count) +
+                     pv_of_variable(year_count);
+      pv_total_lease := pv_total_lease + one_year_pv;
+      pv_table (year_count) := pv_total_lease;
+   END LOOP;
+END build_pv_lease_schedule;            </PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I was at first resistant to accepting that this use of a REVERSE FOR LOOP gets the job done. Eric, fortunately, did not give up and finally I was convinced. You just start from the last year and go backwards accumulating the values, completely eliminating the need for two different loops and much extraneous processing! </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-4.2"
+>25.4.2 Zen and the Art of PL/SQL Tuning</A
+></H3
+><P
+CLASS="para"
+>My search for excellence and quality in PL/SQL coding takes me to many strange and wonderful places on our spanking-new virtual planet. It presents me with a myriad of challenges that can simultaneously make me despair of my fellow humans and also wonder at their capacity for renewal and creativity. In this section I share with you a journey of discovery I took in the arena of PL/SQL tuning. </P
+><P
+CLASS="para"
+>It all started with a call from a valued customer and a very common opening line. "Steven," the gravely, despairing voice of Dave came over the line, "we've got a problem." Company X was massaging large volumes of data on a daily basis (an Oracle-to-Oracle conversion of gigabytes, actually, which involved a parse and denormalization of data to aid in query performance). The PL/SQL code used to perform the conversion was a bottleneck (or maybe the bottleneck was related to a limitation of the 24 hours normally encountered in each day). </P
+><P
+CLASS="para"
+>When Dave first explained to me that his program parsed strings, I felt immediately certain that there would be many opportunities for improvement. PL/SQL string manipulation is, shall we say, not lightning fast. Furthermore, there are usually a number of paths one can take to meet the same requirements. Not all are equally desirable. When a particular action or program is performed thousands, or perhaps millions, of times, in a single pass of data, an improvement of even 10% in a low-level program can make a big difference. </P
+><P
+CLASS="para"
+>Had Dave's developers chosen the highest quality route? It was time to find out. </P
+><P
+CLASS="para"
+>I scanned the body of the main stored procedure. Deep within a series of nested loops, I encountered the following statement: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>IF NOT is_number (stg)
+THEN
+   stg := remove_punctation (stg);
+END IF;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In other words, if the current token was not a number, then remove the punctuation from the token. Straightforward enough&nbsp;-- on the surface, anyway. </P
+><P
+CLASS="para"
+>Now, this "is_number" function <EM
+CLASS="emphasis"
+>sounded</EM
+> like a PL/SQL built-in. Having written a book on PL/SQL, however, I knew immediately that is_number is not provided by Oracle, so instead it must be a low-level operator built by a developer at Company X. Since this function might be executed 20 or 30 million times a day, I decided it was as good a place as any to start. The following function shows the implementation of is_number I found stored in the database: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION is_number (word_in IN VARCHAR2) RETURN BOOLEAN
+IS
+   BOOL_RC          boolean;
+   ASCII_CHAR_VAL   number;
+   WORD_LENGTH      number;
+   CHAR_POS         number;
+BEGIN
+   BOOL_RC := TRUE;
+   WORD_LENGTH := LENGTH(WORD_IN);
+   for CHAR_POS in 1..WORD_LENGTH loop
+      ASCII_CHAR_VAL := ASCII(SUBSTR(WORD_IN, CHAR_POS, 1));
+      if  ASCII_CHAR_VAL &lt; 48 or ASCII_CHAR_VAL &gt; 57
+          and  ASCII_CHAR_VAL != 46 then
+         BOOL_RC := FALSE;
+         return BOOL_RC;
+      end if;
+   end loop;
+   return BOOL_RC;
+END is_number;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Granted, the programmer did not use my conventions for spacing within lines, line breaks, UPPER-lower case style, and the use of the RETURN statement. He even declared char_pos, which is unnecessary and dangerous, since it is actually the index variable of the FOR LOOP and is therefore implicitly declared by PL/SQL. I was ready to look past that, however, and focus on the inner life of the program: its logical flow. Here is what I found is_number doing: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>For each of the N characters in a string, isolate that character using SUBSTR and see if it is a digit or a period.</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The programmer made use of the ASCII function to convert the character to its ASCII collating sequence number, and then checked to see if that value fell within the allowable range of values. If you are like me, you would also have broken out into a cold sweat. Where the heck could I get a copy of the ASCII collating sequence to verify the numbers in that program? Whoa! Why scan a book when you have PL/SQL? I quickly knocked out the following SQL*Plus script to spit out all the information I needed to know: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>BEGIN
+   FOR let_index IN &amp;1 .. &amp;2
+   LOOP
+      DBMS_OUTPUT.PUT_LINE ('Ascii ' ||
+             TO_CHAR (let_index) ||
+             ' = ' ||
+             CHR (let_index));
+   END LOOP;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>CHR is a built-in function which converts a number in the ASCII collating sequence to a character (the reverse of ASCII). Naming this script <I
+CLASS="filename"
+>showasci.sql</I
+>, I executed it as follows and got the output shown below: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; start showasci 46 58
+Ascii 46 = .
+Ascii 47 = /
+Ascii 48 = 0
+Ascii 49 = 1
+Ascii 50 = 2
+Ascii 51 = 3
+Ascii 52 = 4
+Ascii 53 = 5
+Ascii 54 = 6
+Ascii 55 = 7
+Ascii 56 = 8
+Ascii 57 = 9
+Ascii 58 = :</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Who needs a printed chart, right? So far as I could tell, then, the programmer got it right. A number should not have any character whose ASCII value is <EM
+CLASS="emphasis"
+>not</EM
+> 46 or 48 through 57. </P
+><P
+CLASS="para"
+>I had now completed the first stage of my journey: the is_number function seemed to do its job. This is a necessary, but not sufficent, condition for a successful module. I took a deep breath and a large, double-strength latte (Company X being in the Pacific Northwest), and prepared to grapple with a deeper question: <EM
+CLASS="emphasis"
+>Was this implementation of is_number the best possible implementation?</EM
+> </P
+><P
+CLASS="para"
+>I was troubled, first of all, by the character-by-character scan through the string. Was this really necessary? The longer the string, the more work the program had to do. It would have been preferable to have a test for a number whose performance did not depend greatly on the input value. This scan also required lots of code to do its job (the loop, local variables, etc.). Finally, the use of ASCII to test the value of the individual character was obscure and "low level" (at least to a 4GL, 90s type of fellow like me!). </P
+><P
+CLASS="para"
+>At times like this, I wonder if there might be a PL/SQL built-in function that could help out. Could I replace this loop through the string with a single call to a higher-level built-in? </P
+><P
+CLASS="para"
+>I meditated about the various string functions available to me and my mind soon circled around <A
+CLASS="indexterm"
+NAME="ch25-idx-999957-1"
+></A
+>TRANSLATE. This function translates individual characters in a string by matching up characters in a match string with those in a replacement string. If I could simply replace all digits and the decimal point with NULL, then the translated string should be NULL if the original string was a number. To test out my idea, I executed the following SQL statement: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT TRANSLATE ('567.6', '0123456789.', '')
+  FROM dual;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>and the result in SQL*Plus was:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>T
+-</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>which means NULL (the name of the column was truncated to a single character to match this minimal value length). That was perfect! Then I tested the negative condition as follows: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT TRANSLATE ('567A6', '0123456789.', '')
+  FROM dual;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>but I got the same result: NULL. What is going on? Well, the problem is that if you supply a NULL replacement string, it converts your string to NULL, regardless of the original string and the match string. If, on the other hand, I added the same "placeholder" letter at the start of both the match and replacement string, I would get the desired behavior. This statement: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT TRANSLATE ('567.6', 'A0123456789.', 'A'),
+       TRANSLATE ('567A6', 'A0123456789.', 'A')
+  FROM dual;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>results in:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>T T
+- -
+  A</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>In other words, '567A6' translates to 'A' and is NOT NULL. My technique validated, I then converted this "FROM dual" SQL statement into a PL/SQL function: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION is_number (stg_in IN VARCHAR2)
+   RETURN BOOLEAN
+IS
+BEGIN
+   RETURN
+      TRANSLATE
+        (stg_in, 'A0123456789.', 'A')
+      IS NULL;
+END is_number;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This approach used <EM
+CLASS="emphasis"
+>much</EM
+> less code than the original is_number. I wondered how its performance would compare with the original, per-character scan. Rather than execute myriad individual calls to is_number within SQL*Plus, I decided to write a test script as shown below, saved to a file named <I
+CLASS="filename"
+>testnum.sql</I
+>: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SET SERVEROUTPUT ON
+SET VERIFY OFF
+DECLARE
+   start_time BINARY_INTEGER;
+   stg VARCHAR2(100) := '&amp;2';
+   bool BOOLEAN;
+BEGIN
+   start_time := DBMS_UTILITY.GET_TIME;
+   FOR test_index IN 1 .. &amp;1
+   LOOP
+      bool := is_number (stg);
+      IF test_index = 1 AND bool
+      THEN
+         DBMS_OUTPUT.PUT_LINE(`TRUE');
+      ELSIF test_index = 1 AND NOT bool
+      THEN
+         DBMS_OUTPUT.PUT_LINE(`FALSE');
+      END IF;
+   END LOOP;
+   DBMS_OUTPUT.PUT_LINE (DBMS_UTILITY.GET_TIME - start_time);
+END;
+/</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This script uses the DBMS_UTILITY.GET_TIME function to capture and display elapsed time in 100ths of seconds. It also displays the result of the first execution so I can verify correctness. This SQL*Plus script takes two parameters (&amp;1 and &amp;2): </P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The number of times the loop (and, therefore, is_number) executes</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>The input string</P
+></LI
+></OL
+><P
+CLASS="para"
+>I can then CREATE OR REPLACE is_number before I call the script to try out my different version. The following call to testnum executes is_number 100 times for the string "12345R5". </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; start testnum 100 12345R5</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I ran this script for a number of different strings and made the following discovery: the TRANSLATE version is faster than the original version in almost every case and for many string values is much faster. In fact, the TRANSLATE version records the same performance, regardless of input (.44 seconds), while the performance of the original version varies greatly by length of string and value (if a non-numeric character appears early in the string, the original is_number is similar in performance to the translate version). The results are shown in <A
+CLASS="xref"
+HREF="ch25_04.htm#SQL2-CH-25-TABLE-4"
+>Table 25.1</A
+>. </P
+><BR><TABLE
+CLASS="table"
+BORDER="1"
+CELLPADDING="3"
+><CAPTION
+CLASS="table"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-TABLE-4"
+>Table 25.1: Packages</A
+></CAPTION
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>String Value</P
+> </TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Original</P
+> </TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>TRANSLATE</P
+> </TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>123456</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>181</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>44</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>1A3456</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>88</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>44</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>123456.8888</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>330</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>44</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>123</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>110</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>44</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>1</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>50</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>44</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>1A</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>77</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>44</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>A1</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>44</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>44</P
+> </TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+>I had clearly come up with a superior version of is_number. Yet I couldn't help but wonder: was this the <EM
+CLASS="emphasis"
+>best</EM
+> implementation? I decided to continue on my journey. I treated myself to a cappuccino and settled into Company X's finest ergonomic swivel chair. I adjusted the lumbar support. I raised the arm rests to relieve stress to my wrists. And I thought about TRANSLATE. It was clearly a very efficient implementation. Regardless of the length of the input string, this built-in took the same amount of time to execute. Yet from a theoretical and aesthetic standpoint, I couldn't help but dwell on the fact that, however efficiently, TRANSLATE had to do a lot of work. For each character in the original string, it had to see if that character appeared in the match string and then replace it with the corresponding character in the replacement string. Was all that truly necessary?<A
+CLASS="indexterm"
+NAME="AUTOID-23074"
+></A
+> </P
+><P
+CLASS="para"
+>When you came right down to it, what I wanted TRANSLATE to do was "throw away" all digits&nbsp;-- and the decimal point&nbsp;-- and see if anything was left. I didn't really need to translate. I needed to trim, and I had just the built-in to do it. Rather, I had my choice of two: RTRIM and <A
+CLASS="indexterm"
+NAME="AUTOID-23076"
+></A
+>LTRIM. And so my third attempt at fine-tuning is_number looked like this: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION is_number (stg_in IN VARCHAR2)
+   RETURN BOOLEAN
+IS
+BEGIN
+   RETURN
+     LTRIM (stg_in, '0123456789.')
+     IS NULL;
+END is_number;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Using this version, PL/SQL would start on the left and discard any characters found in the trim string. If there was nothing left when it was done, I had a number. There was a little less code using LTRIM instead of TRANSLATE. But what about performance? I ran the same battery of tests using my looping script and discovered that the LTRIM version achieved a steady state elapsed time of just .22 seconds&nbsp;-- half the time of the TRANSLATE version! </P
+><P
+CLASS="para"
+>So, given a string of "123456", my latest is_number returned TRUE in .22 seconds (for 100 iterations) compared with 1.81 for the original version. And for longer strings, the delta was even more dramatic: I had achieved an order of magnitude improvement. </P
+><P
+CLASS="para"
+>I was very tempted to call in my friends at Company X to show them my results. But then I executed my test script one last time and accidently added another decimal point on my input as follows: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SQL&gt; execute testnum 100 12345.56.6</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I watched in horror as my script showed me that is_number returned TRUE for this value. Sure, it returned the value really quickly. But it was the <EM
+CLASS="emphasis"
+>wrong</EM
+> answer! I feverishly tried all my different versions of is_number and each one was happy to accept "123456.56.6" as a number. But that is <EM
+CLASS="emphasis"
+>not</EM
+> a number. Clouds seemed to cover the sun and darken every corner. I felt the walls of my cubicle closing in on me. Everything I had taken for granted about is_number had been cast into doubt. </P
+><P
+CLASS="para"
+>What had gone wrong? The original algorithm and (since I did not challenge the basic approach) my subsequent replacements all treated the string as a <EM
+CLASS="emphasis"
+>string</EM
+>, not as a number. They then evaluated individual characters as candidates for being <EM
+CLASS="emphasis"
+>part</EM
+> of a number. Yet none of my is_numbers ever bothered to check the validity of the number as a whole. </P
+><P
+CLASS="para"
+>When I looked at it from this angle, the solution to my problem was clear: forget the string built-ins. Instead, use the <A
+CLASS="indexterm"
+NAME="AUTOID-23090"
+></A
+> TO_NUMBER built-in to try to convert the string to a number. If the conversion worked, I would return TRUE. If an exception was raised, I would return FALSE. My fourth incarnation of is_number looked like this: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION is_number (stg_in IN VARCHAR2)
+   RETURN BOOLEAN
+IS
+   val NUMBER;
+BEGIN
+   val := TO_NUMBER (stg_in);
+   RETURN TRUE;
+EXCEPTION
+   WHEN OTHERS THEN RETURN FALSE;
+END is_number;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I ran my performance test with some trepidation. I was certain that this version would always return the correct value; that was, after all, the whole point of TO_NUMBER. I was less certain of the performance, particularly when the string was not a valid number. Raising and handling exceptions are not necessarily very efficient. It is a sad fact of life that the most elegant and correct solution is not always the most efficient. </P
+><P
+CLASS="para"
+>So you can imagine my joy when I discovered that the TO_NUMBER version was far and away the fastest of the is_numbers. It registered a steady .17 seconds for any and all inputs and 100 iterations. Feeling my oats, I then executed my test script for 10000 iterations to check the string "123123.45". The elapsed times were as follows: </P
+><P
+CLASS="para"
+>A conversion process testing one million strings could require three hours just to test for numbers with the original, per-character version, while the TO_NUMBER version would consume just ten or twenty minutes! And it would return the correct answer 100% of the time. </P
+><P
+CLASS="para"
+>This was news I was ready to bring to the attention of Company X. I was sure there were still other areas of improvement to discover in the PL/SQL conversion code, but this was definitely a start. </P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-4.2.1"
+>25.4.2.1 Looking back</A
+></H4
+><P
+CLASS="para"
+>I learned a number of things about debugging, tuning, and my character in the process of revamping is_number. My biggest surprise and most important lesson regards making assumptions. When I started to analyze is_number, I was so sure that I could improve performance that I didn't take the time to step back and fully challenge all aspects of the program. I assumed that it performed properly, and I assumed that its basic approach to the problem was correct. </P
+><P
+CLASS="para"
+>Both of these assumptions were wrong. There was a basic flaw in the program, and that flaw was directly related to an inappropriate strategy in the development plan. Once I no longer assumed the assumptions, it was easy to see my way through to a far better implementation. </P
+><P
+CLASS="para"
+>Sure, I wasted some time exploring a variety of options for the design of is_number. On the other hand, I was reminded once again of the need to identify and challenge all assumptions before proceeding. In any case, I ended up with some tightly tuned PL/SQL code. </P
+><P
+CLASS="para"
+>Now let's look at some more specific actions you can take to tune your algorithms. </P
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-4.3"
+>25.4.3 Rely on Local Variables to Improve Performance</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999967-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999967-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999967-3"
+></A
+> When you are inside a PL/SQL block manipulating variable data, the PL/SQL runtime engine will work most efficiently with data structures declared locally (i.e., inside that block). You can use this fact to your advantage by working with local copies of parameters and also by minimizing references to host variables. Both of these topics are explored in this section. </P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-4.3.1"
+>25.4.3.1 Work with local copies</A
+></H4
+><P
+CLASS="para"
+>For anyone calling a procedure or function, the parameter list provides the interface into the program, which is otherwise a "black box." The parameter list acts as a boundary between the internals of the program and the outside world. It is also useful to extend this concept of the boundary inside the program. </P
+><P
+CLASS="para"
+>The IN and <A
+CLASS="indexterm"
+NAME="AUTOID-23120"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-23122"
+></A
+>IN OUT parameters carry data into the program. Often, these formal parameters are manipulated and modified during the execution of the program. Rather than act directly on those parameters, you should transfer the parameters to local variables and then manipulate those local variables. This transfer potentially gives the following advantages: </P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Guarantees a consistent format for the incoming parameter value. In particular, you can use the local variable to avoid problems with different cases (upper, lower, mixed) of incoming text. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Avoids repetitive execution of functions.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Modifies the value of the parameter value, which may not be possible if it is an IN parameter. </P
+></LI
+></UL
+><P
+CLASS="para"
+>Let's look at examples of each of these motivators to create local copies of parameters. The following program calculates different types of sales for a company: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE calc_sales (company_id IN NUMBER, action_in IN VARCHAR2)
+IS
+BEGIN
+   IF UPPER (action_in) = 'ANNUAL' THEN ...
+   ELSIF UPPER (action_in) = 'QUARTERLY' THEN ...
+   ELSIF UPPER ...
+   END IF;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I need to uppercase the action code since it is being checked against all-caps literals. But it is wasteful to call the UPPER function repeatedly. Instead, I should copy the incoming action parameter in the declaration section, performing an UPPER conversion of the parameter at the same time. I then reference this internal variable, rather than the parameter itself, in the procedure's logic: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE calc_sales (company_id IN NUMBER, action_in IN VARCHAR2)
+IS
+   action_int VARCHAR2(10) := UPPER (action_in);
+BEGIN
+   IF action_int = 'ANNUAL' THEN ...
+   ELSIF action_int = 'QUARTERLY' THEN ...
+   END IF;
+END;</PRE
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-4.3.2"
+>25.4.3.2 Minimize references to host variables</A
+></H4
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999969-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999969-2"
+></A
+> Each time a PL/SQL program encounters a bind variable from the host environment which is using PL/SQL, the PL/SQL engine must halt execution and request from that host environment the current value of the bind variable. You can avoid these interruptions by passing a bind variable as a parameter to a procedure or function. You can also minimize the interruptions by copying bind variables to local variables, and then reference those local PL/SQL variables in the rest of the program. Consider the following code from a block-level Oracle Forms When-Validate-Item trigger: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>-- Validate that a first and last name have been entered.
+IF :SYSTEM.TRIGGER_ITEM = 'EMPLOYEE.LAST_NAME' OR
+   :SYSTEM.TRIGGER_ITEM = 'EMPLOYEE.FIRST_NAME'
+THEN
+   IF :employee.first_name IS NULL OR
+      :employee.last_name IS NULL
+   THEN
+      MESSAGE (' Enter a full name for employee ' ||
+               TO_CHAR (:employee.employee_id));
+      RAISE FORM_TRIGGER_FAILURE;
+   ELSE
+      -- Create full name and place in header.
+      :header.name :=
+          :employee.first_name || ' ' || :employee.last_name;
+   END IF;
+-- Validate that a company has been entered.
+ELSIF :SYSTEM.TRIGGER_ITEM = 'EMPLOYEE.COMPANY_NAME'
+THEN
+   IF :employee.company_name IS NULL
+   THEN
+      MESSAGE (' Enter a company for employee ' ||
+               TO_CHAR (:employee.employee_id));
+      RAISE FORM_TRIGGER_FAILURE;
+   ELSE
+      -- Look up the company id for this name.
+      :employee.company_id := get_company_name (:employee.company_name);
+   END IF;
+-- Validate the entry of the employee's hire date.
+ELSIF :SYSTEM.TRIGGER_ITEM = 'EMPLOYEE.HIRE_DATE'
+THEN
+   IF SYSDATE &lt; :employee.hire_date
+   THEN
+      :employee.hire_date := SYSDATE;
+   ELSIF ADD_MONTHS (SYSDATE, -120) &gt; :employee.hire_date
+   THEN
+      MESSAGE (' Hire date ' ||
+               TO_CHAR (:employee.hire_date, 'MM/DD/YY') ||
+               ' more than ten years past.');
+      RAISE FORM_TRIGGER_FAILURE;
+   END IF;
+END IF;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I obtain the value of bind variables from Oracle Forms (variables with a ":" in front of the name) repetitively, as follows: </P
+><TABLE
+CLASS="informaltable"
+BORDER="1"
+CELLPADDING="3"
+><THEAD
+CLASS="thead"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Data Structure</P
+> </TH
+><TH
+CLASS="entry"
+ALIGN="LEFT"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Number of Touches</P
+> </TH
+></TR
+></THEAD
+><TBODY
+CLASS="tbody"
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>The SYSTEM variable TRIGGER_ITEM</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>4</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Item last_name of employee block</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>2</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Item first_name of employee block</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>2</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Item company_name of employee block</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>2</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Item employee_id of employee block</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>2</P
+> </TD
+></TR
+><TR
+CLASS="row"
+VALIGN="TOP"
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>Item hire_date of employee block</P
+> </TD
+><TD
+CLASS="entry"
+ROWSPAN="1"
+COLSPAN="1"
+> <P
+CLASS="para"
+>3</P
+> </TD
+></TR
+></TBODY
+></TABLE
+><P
+CLASS="para"
+>If I apply all of the guidelines mentioned earlier in this section to the trigger logic you saw above&nbsp;-- and consolidate some repetitive code as well&nbsp;-- I end up with a procedure like validate_employee, which passes in many of the bind variables as arguments: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE validate_employee
+   (empid IN INTEGER,
+    fname IN VARCHAR2,
+    lname IN VARCHAR2,
+    cname IN VARCHAR2,
+    item_in IN VARCHAR2,
+    cid IN OUT INTEGER,
+    hdate IN OUT DATE)
+IS
+   c_emp_id VARCHAR2(10) := TO_CHAR (empid_in);
+   right_now DATE := SYSDATE;
+BEGIN
+   -- Validate that a first and last name have been entered.
+   IF item_in IN ('EMPLOYEE.LAST_NAME', 'EMPLOYEE.FIRST_NAME')
+   THEN
+      IF fname IS NULL OR lname IS NULL
+      THEN
+         MESSAGE (' Enter a full name for employee ' || c_emp_id);
+         RAISE FORM_TRIGGER_FAILURE;
+      ELSE
+         -- Create full name and place in header.
+         :header.name := fname || ' ' || lname;
+      END IF;
+
+   -- Validate that a company has been entered.
+   ELSIF item_in = 'EMPLOYEE.COMPANY_NAME'
+   THEN
+      IF company_name IS NULL
+      THEN
+         MESSAGE (' Enter a company for employee ' || c_emp_id);
+         RAISE FORM_TRIGGER_FAILURE;
+      ELSE
+         -- Look up the company id for this name.
+         cid := get_company_name (company_name);
+      END IF;
+
+   -- Validate the entry of the employee's hire date.
+   ELSIF item_in = 'EMPLOYEE.HIRE_DATE'
+   THEN
+      IF right_now &lt; hire_date
+      THEN
+         hdate := right_now;
+      ELSIF ADD_MONTHS (right_now, -120) &gt; hire_date
+      THEN
+         MESSAGE (' Hire date ' ||
+                  TO_CHAR (hire_date, 'MM/DD/YY') ||
+                  ' more than ten years past.');
+         RAISE FORM_TRIGGER_FAILURE;
+      END IF;
+   END IF;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The performance gain from each of these conversions may be slight. If they were the only tuning steps you took (or the only ones left to take) in your PL/SQL programs, I doubt that you would notice a difference. Combined with all the other tuning tips, however, avoidance of host variables in PL/SQL blocks will contribute to a more efficient PL/SQL layer in your application.<A
+CLASS="indexterm"
+NAME="AUTOID-23189"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-23190"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-23191"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-23192"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-23193"
+></A
+> </P
+></DIV
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-4.4"
+>25.4.4 Use Package Data to Avoid Passing "Bulky" Parameter Values</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999973-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999973-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999973-3"
+></A
+>With the exception of cursor variables, PL/SQL passes arguments by value, instead of reference, in the parameter lists of procedures and functions. If the argument can be changed (i.e., it is an OUT or IN OUT parameter), then the runtime engine makes a local copy of your structure and applies changes to that copy. If the program terminates without error, the local data is copied to your structure, which is then returned to the calling program. </P
+><P
+CLASS="para"
+>This approach preserves the values of actual parameters against the possibility of program failure, but it introduces some potential performance problems. This is particularly the case when your OUT or IN OUT parameters are complex data structures such as records and PL/SQL tables. </P
+><P
+CLASS="para"
+>Suppose that a record has 15 columns in it. Every time you pass that record into a procedure or function as an OUT or IN OUT parameter, PL/SQL copies the entire record into an internal record structure, column by column. </P
+><P
+CLASS="para"
+>Suppose that a PL/SQL table has 100 rows defined in it. Every time you pass that table into a procedure or function as an OUT or IN OUT parameter, PL/SQL copies the entire table into an internal table structure, row by row. </P
+><P
+CLASS="para"
+>Suppose, now, that you have a record with 15 columns in it, three of which are PL/SQL tables, each with 100 rows. Then, every time you pass that record into a procedure or function as an OUT or IN OUT parameter, PL/SQL copies the entire record into an internal record structure, column by column <EM
+CLASS="emphasis"
+>and</EM
+> row by row&nbsp;-- for a total of 312 copies! And if that procedure calls another procedure, passing the record down to that inner procedure, well, PL/SQL executes the same copy process within the second procedure. </P
+><P
+CLASS="para"
+>As you can easily imagine, this copying could consume a noticeable amount of memory and CPU cycles in your application. </P
+><P
+CLASS="para"
+>So should you avoid using records and PL/SQL tables as parameters in programs? Absolutely not! These advanced, multi-component data structures are powerful constructs in your program&nbsp;-- you definitely should take advantage of them. However, you should be aware of the kinds of problems you might encounter when using these kinds of parameters. And you should be ready to implement a workaround if you find that performance in your application is dragged down as a result of record or PL/SQL table copying. </P
+><P
+CLASS="para"
+>The workaround for this problem is straightforward enough: don't pass the record or table as a parameter. But then how can you get your data inside your program? Replacing a record with a parameter list of 20 different parameters isn't really an answer, since PL/SQL will continue to execute 20 copies to internal variables. No, the answer is to stop PL/SQL from executing the copies altogether. To accomplish this, make use of package-level data, as explained in <A
+CLASS="xref"
+HREF="ch16_01.htm"
+>Chapter 16, <CITE
+CLASS="chapter"
+>Packages</CITE
+></A
+>. </P
+><P
+CLASS="para"
+>Here's an example of the steps you could take to avoid passing these data structures as parameters. Suppose you have a procedure which accepts both a record and a PL/SQL table as parameters, as follows: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PROCEDURE massage_mucho_data
+   (io_columns_galore_rec IN OUT columns_galore%ROWTYPE,
+    io_lotsarows_tab IN OUT lotsarows_tabtype);</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>To use this procedure, I first declare and populate both the row and table. Then, I call the procedure: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>DECLARE
+   galore_rec columns_galore%rowtype;
+   TYPE lotsarows_tabtype IS TABLE OF VARCHAR2 INDEX BY BINARY_INTEGER;
+   my_table lotsarows_tabtype;
+BEGIN
+   fill_table (my_table);
+   massage_mucho_data (galore_rec, my_table);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>As PL/SQL executes the statements in massage_mucho_data, the contents of the record and PL/SQL table are copied into local structures. Upon successful termination of the program, the data in those local structures is copied back to galore_rec and my_table. </P
+><P
+CLASS="para"
+>If, on the other hand, I create a package with the record and table types and instances in the specification as shown below, those data structures are "global" in my session. I can manipulate them directly in any procedure or function without passing them into those programs as parameters. </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PACKAGE mucho_data_pkg
+IS
+   /* Declare the record in the package specification. */
+   galore_rec columns_galore%rowtype;
+
+   /* Define the table structure and declare the table. */
+   TYPE lotsarows_tabtype IS TABLE OF VARCHAR2 INDEX BY BINARY_INTEGER;
+
+   my_table lotsarows_tabtype;
+
+END mucho_data_pkg;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>After I populate the table, I can call the revised version of massage_mucho_data &nbsp;-- which no longer has any parameter at all! </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>BEGIN
+   fill_table;
+   massage_mucho_data;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I do not need to declare the package table. Nor do I need to declare the record. I simply modify the internals of massage_mucho_data to append the package name "mucho_data_pkg" to the names of the record and PL/SQL table. In other words, whereas a line in the original massage_mucho_data procedure might have looked like this: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FOR row_count IN 1 .. 100
+LOOP
+   io_lotsarows_tab (row_count) := row_count ** 2;
+END LOOP;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>this same loop in the new, parameter-less version of massage_mucho_data would appear as follows: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FOR row_count IN 1 .. 100
+LOOP
+   mucho_data_pkg.my_table (row_count) := row_count ** 2;
+END LOOP;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>I no longer pass the complex data structures as parameters. I reference them directly in the procedure. PL/SQL no longer copies the values to internal variables. </P
+><P
+CLASS="para"
+>There are, by the way, a number of downsides to globalizing your data as shown above. When you use global data structures, you increase the dependencies between modules in your system. The massage_mucho_data is no longer a black box, completely independent of other elements of the application. Instead, it requires the data structures in the mucho_data_pkg. When I passed in the table as a parameter to fill_table, I gave myself the flexibility to call fill_table for any table of the correct table type. If I need this flexibility, then I cannot push the data structure down inside the package. If, on the other hand, these programs really will be run only for that record and that table, then package-level data would be the way to go. </P
+><P
+CLASS="para"
+>The power of packages, particularly to provide package-level data, should make you want to place most, if not all, of your modules inside a package. You may not need to group additional modules into that package immediately. You may not need package-level data at this time. By using a package right from the start, however, you ensure that all references to the procedure or function are already prefaced with the package name. Otherwise, when you decide you need to wrap a package around a procedure, you either have to create a synonym for the newly-packaged object or change all references to the unqualified program name. </P
+><P
+CLASS="para"
+>Given these drawbacks, you should convert from parameters to global variables only when you have verified that the parameter-copying of these data structures has an unacceptable impact on your application. Document clearly the changes you have to make and, most importantly, the data structures which have become globals in your system. A later release of PL/SQL might fix this problem by no longer insisting on performing the copies for OUT and IN OUT parameters. When this is the case, you will want to consider converting back to a parameter interface. This will be practical only if you have documented your workarounds.<A
+CLASS="indexterm"
+NAME="AUTOID-23232"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-23233"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-23234"
+></A
+> </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="ch25-26-fm2xml"
+>25.4.5 Use <A
+CLASS="indexterm"
+NAME="AUTOID-23237"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-23239"
+></A
+> PLS_INTEGER for All Integer Operations</A
+></H3
+><P
+CLASS="para"
+>When you need an integer variable, use the PLS_INTEGER type and not BINARY_INTEGER, INTEGER, or <A
+CLASS="indexterm"
+NAME="AUTOID-23243"
+></A
+>NUMBER. PLS_INTEGER is the most efficient implementation for integer types (available in PL/SQL 2.3 and above). </P
+><P
+CLASS="para"
+>Numeric types such as INTEGER and NUMBER are represented in the 22-byte Oracle number format. Arithmetic operations on these types are implemented using Oracle number libraries. Furthermore, the <A
+CLASS="indexterm"
+NAME="AUTOID-23246"
+></A
+>INTEGER type is a constrained subtype of NUMBER with a precision of 0. On assignments to INTEGER variables precision checking is done at runtime. </P
+><P
+CLASS="para"
+>Both PLS_INTEGER and <A
+CLASS="indexterm"
+NAME="AUTOID-23249"
+></A
+>BINARY_INTEGER are represented as a signed 4-byte quantity (sb4). But BINARY_INTEGER arithmetic is costly; the operands are first converted to an Oracle number, and then the Oracle number library is used to compute the result as another Oracle number. This results in increased use of temporaries, data conversion, and, hence, poor performance. On the other hand, arithmetic operations on PLS_INTEGERs are efficiently implemented using native integer arithmetic. </P
+><P
+CLASS="para"
+>Unfortunately, it is not possible to fix all the implementation inefficiencies with INTEGER and BINARY_INTEGER datatypes without breaking backward compatibility of old applications. For instance, Oracle cannot simply implement these types the same way as PLS_INTEGER without changing the overflow/underflow semantics. (The sum of two BINARY_INTEGERs will result in an overflow only if the result exceeds the maximum value storable in an Oracle number. The sum of two PLS_INTEGERs will result in an overflow when the sb4 limit is exceeded.) </P
+><P
+CLASS="para"
+>The numeric types NATURAL, NATURALN, POSITIVE, POSITIVEN, and SIGNTYPE are subtypes of BINARY_INTEGER with narrower range constraints. There is considerable overhead (about three or four byte-code instructions) in the enforcement of these range constraints on every assignment (or parameter passing) to variables of these types. </P
+><P
+CLASS="para"
+>One caution about the use of PLS_INTEGER: this is a PL/SQL-specific datatype, so if you are constructing a function or procedure to be used in an environment which does not support that datatype, you could run into trouble. For example, a function which will be called inside SQL cannot have a PLS_INTEGER parameter. Instead, declare the parameter to be INTEGER, but then (if there is sufficient internal integer arithmetic) copy that value to a local variable of type PLS_INTEGER and perform computations on that variable. </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-4.6"
+>25.4.6 Avoid NOT NULL Constraints</A
+></H3
+><P
+CLASS="para"
+>Using <A
+CLASS="indexterm"
+NAME="AUTOID-23257"
+></A
+><A
+CLASS="indexterm"
+NAME="AUTOID-23260"
+></A
+>NOT NULL constraints in PL/SQL comes with a performance penalty. Consider the program fragment below: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>procedure foo is
+  m number not null;
+  a number;
+  b number;
+begin
+  m := a + b;
+  m := m * 1.2;
+  m := m * m;
+  ..
+end;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Since "m" is a NOT NULL constrained number, the result of the expression "a+b" is first computed into a temporary, and the temporary is then tested for NULLity, If the temporary is NULL an exception is raised; otherwise the value of the temporary is moved to "m". </P
+><P
+CLASS="para"
+>On the other hand, if "m" were not constrained, then the result of the expression "a+b" could directly be computed into "m". So a more efficient way to rewrite the above fragment with reduced use of temporaries is: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>procedure foo is
+  m number;  -- Note: m doesn't have NOT NULL constraint
+  a number;
+  b number;
+begin
+  m := a + b;
+  m := m * 1.2;
+  m := m * m;
+  -- enforce constraint programmatically
+  if (m is null) then
+    -- raise appropriate error
+  end if;
+  ..
+end;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Another thing to note is that the types NATURALN and POSITIVEN are defined to be NOT NULL subtypes of NATURAL and POSITIVE, respectively; thus, you will incur the performance penalty described above when you use them. </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-4.7"
+>25.4.7 Avoid Type Conversions When Possible</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999982-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch25-idx-999982-2"
+></A
+>PL/SQL does implicit conversions between structurally different types at runtime. Currently, this is true even when the source item is a literal constant. A common case where implicit conversions result in a performance penalty, but can be avoided, is with numeric types. For instance, assigning a PLS_INTEGER variable to a NUMBER variable or vice-versa will result in a conversion since their representations are different. Such implicit conversions can happen during parameter passing as well. </P
+><P
+CLASS="para"
+>Some examples of inefficient code and suggestions to fix them are shown below: </P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Prevent conversions between numeric types. Consider:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+> number_variable := number_variable + 1;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The literal constant 1 is represented as an sb4; it gets converted to Oracle number format before the addition. Instead, use: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+> number_variable := number_variable + 1.0;   </PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The above is more efficient because literal floats (like 1.0) are represented as Oracle numbers, so no type conversion happens at runtime. </P
+><P
+CLASS="para"
+>Or better still, when dealing with integer data, use:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+> pls_integer_variable := pls_integer_variable + 1;</PRE
+></BLOCKQUOTE
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Prevent numeric to character type conversion. Consider:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+> char_variable := 10;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The literal 10 is converted to CHAR at runtime, and then copied. Instead use: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>char_variable := '10';<A
+CLASS="indexterm"
+NAME="AUTOID-23293"
+></A
+>
+<A
+CLASS="indexterm"
+NAME="AUTOID-23294"
+></A
+></PRE
+></BLOCKQUOTE
+></LI
+></OL
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-25-SECT-4.8"
+>25.4.8 Use Index-By Tables of Records and Objects</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-23298"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-23300"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-23303"
+></A
+>In Oracle 7.3, PL/SQL added support for index-by tables of records. (Index-by tables were formerly known as PL/SQL tables.) Prior to that, users modeled the same as a bunch of index-by tables of scalars (one for each record attribute). Users should strongly consider rewriting such applications to use table of records (or objects). The effort will pay off in two major ways: </P
+><UL
+CLASS="itemizedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+><EM
+CLASS="emphasis"
+>Better application performance</EM
+>: The number of index-by table lookup, insert, copy, and similar operations will be reduced dramatically if the data is packaged into an index-by table of records. </P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+><EM
+CLASS="emphasis"
+>Improved memory utilization</EM
+>: There is memory overhead associated with each index-by table (primarily due to its tree structured implementation). Having fewer index-by tables will help cut this overhead, and also reduce memory fragmentation caused due to the varying size allocations in different tables.<A
+CLASS="indexterm"
+NAME="AUTOID-23313"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-23314"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-23315"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-23316"
+></A
+> </P
+></LI
+></UL
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch25_03.htm"
+TITLE="25.3 Tuning Access to Your Data"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 25.3 Tuning Access to Your Data"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming, 2nd Edition"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch25_05.htm"
+TITLE="25.5 Overview of PL/SQL8 Enhancements"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 25.5 Overview of PL/SQL8 Enhancements"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>25.3 Tuning Access to Your Data</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>25.5 Overview of PL/SQL8 Enhancements</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

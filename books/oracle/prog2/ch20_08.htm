@@ -1,0 +1,452 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 20] 20.8 Postscript: Using the BFILE Datatype</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein &amp; Bill Pribyl"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T19:10:02Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates CD-ROM-1-56592-335-9E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-335-9E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle PL/SQL"><META
+NAME="DC.Title"
+CONTENT="Oracle PL/SQL Programming, 2nd Edition"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch20_01.htm"
+TITLE="20. Object Views"><LINK
+REL="prev"
+HREF="ch20_07.htm"
+TITLE="20.7 Object Views Housekeeping"><LINK
+REL="next"
+HREF="ch21_01.htm"
+TITLE="21. External Procedures"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd Edition"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch20_07.htm"
+TITLE="20.7 Object Views Housekeeping"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 20.7 Object Views Housekeeping"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch20_01.htm"
+TITLE="20. Object Views"
+>Chapter 20<BR>Object Views</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch21_01.htm"
+TITLE="21. External Procedures"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 21. External Procedures"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="SQL2-CH-20-SECT-8"
+>20.8 Postscript: Using the BFILE Datatype</A
+></H2
+><P
+CLASS="para"
+>A better abstraction for the Planetary Pages datatype Image_t would include a <A
+CLASS="indexterm"
+NAME="ch20-idx-6408-1"
+></A
+> BFILE datatype rather than a VARCHAR2 file_name attribute. A BFILE is a file in the external operating system that Oracle can retrieve, but not store, using built-in packages. (We discuss the BFILE datatype in <A
+CLASS="xref"
+HREF="ch04_01.htm"
+>Chapter 4, <CITE
+CLASS="chapter"
+>Variables and Program Data</CITE
+></A
+>.) We chose not to include this alternate representation in the core part of the chapter to avoid detracting from the basic themes of object views. However, let's look at it now. </P
+><P
+CLASS="para"
+>The DDL follows for this alternate representation, with the changes highlighted in bold. First, here is the new version of the object type itself: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE TYPE Image_t AS OBJECT (
+    image_id INTEGER,
+   <B
+CLASS="emphasis.bold"
+> image_file BFILE,</B
+>
+    file_type VARCHAR2(12),
+    bytes INTEGER,
+    keywords Keyword_tab_t,
+    MEMBER FUNCTION set_attrs (new_image_file IN BFILE,
+       new_file_type IN VARCHAR2, new_bytes IN INTEGER)
+       RETURN Image_t,
+    MEMBER FUNCTION set_keywords (new_keywords IN Keyword_tab_t)
+       RETURN Image_t,
+    PRAGMA RESTRICT_REFERENCES (DEFAULT, RNDS, WNDS, RNPS, WNPS)
+);
+
+CREATE TYPE BODY Image_t
+AS
+   MEMBER FUNCTION set_attrs (<B
+CLASS="emphasis.bold"
+>new_image_file IN BFILE</B
+>,
+       new_file_type IN VARCHAR2, new_bytes IN INTEGER)
+       RETURN Image_t
+   IS
+      image_holder Image_t := SELF;
+   BEGIN
+      <B
+CLASS="emphasis.bold"
+>image_holder.image_file := new_image_file;</B
+>
+      image_holder.file_type := new_file_type;
+      image_holder.bytes := new_bytes;
+      RETURN image_holder;
+   END;
+   MEMBER FUNCTION set_keywords (new_keywords IN Keyword_tab_t)
+       RETURN Image_t
+   IS
+      image_holder Image_t := SELF;
+   BEGIN
+      image_holder.keywords := new_keywords;
+      RETURN image_holder;
+   END;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Now we need to create an "alias" known to Oracle for the directory that will contain the images. In this case, the alias is "webpix." </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE DIRECTORY webpix
+AS
+   '/files/web/pix';</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The new version of the view uses the built-in BFILENAME to convert the filename in the underlying table into an Oracle BFILE datatype: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE VIEW images_v
+   OF Image_t
+   WITH OBJECT OID (image_id)
+AS
+   SELECT i.image_id, <B
+CLASS="emphasis.bold"
+>BFILENAME('WEBPIX', i.file_name)</B
+>,
+      i.file_type, i.bytes,
+      CAST (MULTISET (SELECT keyword
+                        FROM keywords k
+                       WHERE k.image_id = i.image_id)
+        AS Keyword_tab_t)
+     FROM images i;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The INSTEAD OF trigger will need to make the inverse conversion&nbsp;-- that is, accept a BFILE and extract a filename. This is easy to do using the built-in procedure DBMS_LOB.FILEGETNAME: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE OR REPLACE TRIGGER images_v_insert
+INSTEAD OF INSERT ON images_v
+FOR EACH ROW
+<B
+CLASS="emphasis.bold"
+>DECLARE</B
+>
+   <B
+CLASS="emphasis.bold"
+>l_file_name images.file_name%TYPE;</B
+>
+   <B
+CLASS="emphasis.bold"
+>l_directory VARCHAR2(30);</B
+>
+BEGIN
+   <B
+CLASS="emphasis.bold"
+>/* Determine the directory name */</B
+>
+   <B
+CLASS="emphasis.bold"
+>DBMS_LOB.FILEGETNAME (file_loc =&gt; :NEW.image_file,</B
+>
+      <B
+CLASS="emphasis.bold"
+>dir_alias =&gt; l_directory,</B
+>
+      <B
+CLASS="emphasis.bold"
+>filename =&gt; l_file_name);</B
+>
+
+   /* This will fail with DUP_VAL_ON_INDEX if the images table
+   || already contains a record with the new image_id.
+   */
+   INSERT INTO images
+      VALUES (:NEW.image_id, <B
+CLASS="emphasis.bold"
+>l_file_name</B
+>, :NEW.file_type,
+              :NEW.bytes);
+
+   IF :NEW.keywords IS NOT NULL THEN
+      DECLARE
+         /* Note: apparent bug prevents use of :NEW.keywords.LAST.
+         || The workaround is to store :NEW.keywords as a local
+         || variable (in this case keywords_holder.)
+         */
+         keywords_holder Keyword_tab_t := :NEW.keywords;
+      BEGIN
+         FOR the_keyword IN 1..keywords_holder.LAST
+         LOOP
+            INSERT INTO keywords
+            VALUES (:NEW.image_id, keywords_holder(the_keyword));
+         END LOOP;
+       END;
+   END IF;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>And finally, we can demonstrate how an insert would be made using the object view: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>INSERT INTO images_v VALUES
+   (Image_t (1002, <B
+CLASS="emphasis.bold"
+>BFILENAME('WEBPIX','abc.gif')</B
+>, 'GIF', 1024,
+             Keyword_tab_t('ALPHABET', 'LETTERS')));</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+><A
+CLASS="xref"
+HREF="appc_01.htm"
+>Appendix C, <CITE
+CLASS="appendix"
+>Built-In Packages</CITE
+></A
+>, contains information about these built-in packages. </P
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch20_07.htm"
+TITLE="20.7 Object Views Housekeeping"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 20.7 Object Views Housekeeping"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming, 2nd Edition"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch21_01.htm"
+TITLE="21. External Procedures"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 21. External Procedures"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>20.7 Object Views Housekeeping</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>21. External Procedures</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

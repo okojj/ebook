@@ -1,0 +1,204 @@
+<html>
+<head>
+<title>POSIX (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="POSIX">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch32_35.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch32_01.htm">Chapter 32: Standard Modules</a></td><td align="right" valign="top" width="172"><a href="ch32_37.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">32.36. POSIX</h2>
+
+<p>
+<blockquote>
+<pre class="programlisting">use POSIX;
+
+# Round floats up or down to nearest integer.
+$n = ceil($n);      # round up
+$n = floor($n);     # round down
+
+# Produces "2000-04-01" for today.
+$datestr = strftime("%Y-%m-%d", localtime);
+
+# Produces "Saturday 04/01/00" for same date.
+$datestr = strftime("%A %D", localtime);
+
+# Try new temporary filenames until we get one
+# that didn't already exist; see also File::Temp
+# on CPAN, or in v5.6.1.
+do {
+    $name = tmpnam();
+} until sysopen(FH, $name, O_CREAT|O_EXCL|O_RDWR, 0666);
+
+# Check for whether system has insecure chown giveaway.
+if (sysconf(_PC_CHOWN_RESTRICTED)) {
+    print "Hurray -- only the superuser may call chown\n";
+}
+
+# Find current system's uname info.
+my($kernel, $hostname, $release, $version, $hardware) = uname();
+
+use POSIX ":sys_wait_h";
+while (($dead_pid = waitpid(-1, &amp;WNOHANG)) &gt; 0) {
+    # Do something with $dead_pid if you want.
+}
+
+# Become new session/process-group leader (needed to create daemons
+# unaffected by keyboard signals or exiting login shells).
+setsid(0)           or die "setsid failed: $!";</pre>
+</blockquote>
+
+Perl's <tt class="literal">POSIX</tt> module permits you to access all (or
+nearly all) the standard POSIX 1003.1 identifiers, plus a few more
+from ANSI C that we didn't know where else to put.  This module
+provides more functions than any other.  See its online documentation
+for the gory details or the <em class="emphasis">POSIX Programmer's
+Guide</em>, by Donald Lewine (O'Reilly, 1991).</p>
+
+<p>Identifiers that are parameterless <tt class="literal">#define</tt>s in C, such as <tt class="literal">EINTR</tt>
+or <tt class="literal">O_NDELAY</tt>, are automatically exported into your namespace as
+constant functions.  Functions that aren't normally available in
+Perl (like <tt class="literal">floor</tt>, <tt class="literal">ceil</tt>, <tt class="literal">strftime</tt>, <tt class="literal">uname</tt>, <tt class="literal">setsid</tt>,
+<tt class="literal">setlocale</tt>, and <tt class="literal">sysconf</tt>) are exported by default.  Functions
+with the same name as a Perl built-in, like <tt class="literal">open</tt>, are not exported
+unless specifically requested, but most folks are likely to prefer
+fully qualified function names to distinguish <tt class="literal">POSIX::open</tt> from
+<tt class="literal">CORE::open</tt>.</p>
+
+<p>A few functions are not implemented because they are C-specific.
+If you attempt to call these, they print a message telling you
+that they aren't implemented, and suggest using the Perl equivalent
+should one exist.  For example, trying to access the <tt class="literal">setjmp</tt>
+function elicits the message "<tt class="literal">setjmp() is C-specific: use eval
+{} instead</tt>", and <tt class="literal">tmpfile</tt> tells you to "<tt class="literal">Use method
+IO::File::new_tmpfile()</tt>". (But as of 5.6.1 you should be using <tt class="literal">File::Temp</tt> instead.)</p>
+
+<p>The <tt class="literal">POSIX</tt> module lets you get as close to the operating system (or
+those parts of the POSIX standard addresses, at least) as any C programmer
+could.  This lets you do some phenomenally powerful and useful
+things, like blocking signals and controlling the terminal I/O settings.
+However, it also means that your code will end up looking quasi-C-like.
+By way of useful demonstration of how to get around input buffering,
+here's an example of a complete program for getting unbuffered,
+single-character input under any POSIX system:
+<blockquote>
+<pre class="programlisting">#!/usr/bin/perl -w
+use strict;
+$| = 1;
+for (1..4) {
+    my $got;
+    print "gimme: ";
+    $got = getone();
+    print "--&gt; $got\n";
+}
+exit;
+
+BEGIN {
+    use POSIX qw(:termios_h);
+    my ($term, $oterm, $echo, $noecho, $fd_stdin);
+    $fd_stdin = fileno(STDIN);
+    $term     = POSIX::Termios-&gt;new();
+    $term-&gt;getattr($fd_stdin);
+    $oterm    = $term-&gt;getlflag();
+    $echo     = ECHO | ECHOK | ICANON;
+    $noecho   = $oterm &amp; ~$echo;
+    sub cbreak {
+        $term-&gt;setlflag($noecho);
+        $term-&gt;setcc(VTIME, 1);
+        $term-&gt;setattr($fd_stdin, TCSANOW);
+    }
+
+    sub cooked {
+        $term-&gt;setlflag($oterm);
+        $term-&gt;setcc(VTIME, 0);
+        $term-&gt;setattr($fd_stdin, TCSANOW);
+    }
+    sub getone {
+        my $key = "";
+        cbreak();
+        sysread(STDIN, $key, 1);
+        cooked();
+        return $key;
+    }
+}
+END { cooked() }</pre>
+</blockquote>
+
+The <tt class="literal">POSIX</tt> module's manpage provides a complete
+listing of which functions and constants it exports.  It has so
+many that you'll often wind up importing only a subset of
+them, such as "<tt class="literal">:sys_wait_h</tt>", "<tt class="literal">:sys_stat_h</tt>", or "<tt class="literal">:termios_h"</tt>.
+An example of blocking signals with the <tt class="literal">POSIX</tt> module is given in
+<a href="ch16_01.htm">Chapter 16, "Interprocess Communication"</a>.</p>
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch32_35.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch32_37.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">32.35. Net::hostent</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">32.37. Safe</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

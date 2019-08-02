@@ -1,0 +1,310 @@
+<!doctype html public "-//ORA//DTD CD HTML 3.2//EN">
+<html>
+<head>
+<title>[Chapter 13] 13.4 Images</TITLE>
+<meta name="author" content="Pat Niemeyer and Josh Peck">
+<meta name="date" content="Tue Jul 22 19:03:05 1997">
+<meta name="form" content="html">
+<meta name="metadata" content="dublincore.0.1">
+<meta name="objecttype" content="book part">
+<meta name="otheragent" content="gmat dbtohtml">
+<meta name="publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="source" content="SGML">
+<meta name="subject" content="Java">
+<meta name="title" content="Exploring Java">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+</HEAD>
+<body bgcolor="#FFFFFF">
+
+<div class=htmlnav>
+<h1><a href='index.htm'><img src="gifs/smbanner.gif" alt="Exploring Java" border=0></a></H1>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch13_03.htm"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 13<br>Drawing With the AWT</FONT></B></TD>
+<td width=172 align=right valign=top><a href="ch13_05.htm"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+</table>
+
+&nbsp;
+<hr align=left width=515>
+</DIV>
+<div class=sect1>
+<h2 class=sect1><a class="TITLE" name="EXJ-CH-13-SECT-3">13.4 Images</A></h2>
+
+<p class=para>
+<a name="CH11.I2"></A>So far, we've worked with methods for drawing simple shapes and
+displaying text. For more complex graphics, we'll be working
+with images. AWT has a powerful set of tools for
+generating and displaying image data that address the problems
+of working in a distributed and multithreaded application
+environment. We'll start with the basics of the
+<tt class=literal>java.awt.Image</tt> class and see how to get an image
+into an <tt class=literal>Applet</tt> and draw it on a display. This job
+isn't quite as simple as it sounds; the browser might have to
+retrieve the image from a networked source when we ask for
+it. Fortunately, if we're just interested in getting the image on the
+screen whenever it's ready, we can let AWT handle
+the details for us. Later in this chapter, we'll discuss how to
+manage image loading ourselves, as well as how to create raw image
+data and feed it efficiently to the rest of an application.
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="EXJ-CH-13-SECT-3.1">The Image Class</A></h3>
+
+<p class=para>
+The <tt class=literal>java.awt.Image</tt> class represents a view of an
+image. The view is created from an image source that produces pixel
+data. Images can be from a static source, such as
+GIF or JPEG data, or a dynamic
+one, such as a video stream or a graphics engine. The
+<tt class=literal>Image</tt> class in Java 1.1 also handles
+GIF89a animations.
+
+<p class=para>
+An applet can ask its viewer to retrieve an image by calling
+the <tt class=literal>getImage()</tt> method. The location of the image to
+be retrieved is given as a URL, either absolute or
+fetched from the applet's resources:
+
+<div class=programlisting>
+<p>
+<pre>
+public class MyApplet extends java.applet.Applet { 
+    public void init() { 
+        try { 
+            // absolute URL 
+            URL monaURL = new URL(
+                "http://myserver/images/mona_lisa.gif"); 
+            Image monaImage = getImage( monaURL ); 
+ 
+            // applet resource URL 
+            URL daffyURL = getClass().getResource("cartoons/images/daffy.gif"); 
+            Image daffyDuckImage = getImage( daffyURL );
+        }  
+        catch ( MalformedURLException e ) { // unintelligable url } 
+</PRE>
+</DIV>
+
+<p class=para>
+We usually want to package an applet's images with the applet itself,
+so the second form, using <tt class=literal>getResource()</tt>, is
+preferred; it looks for the image in the applet's JAR file (if there
+is one), before looking elsewhere in the server's file system.  See
+<a href="ch08_01.htm">Chapter 8, <i>Input/Output Facilities</i></A> (I/O) for more about loading class resources.
+
+<p class=para>
+<a name="CH11.DRAWIMAGE"></A>Once we have an <tt class=literal>Image</tt> object, we can draw it into
+a graphics context with the <tt class=literal>drawImage()</tt> method of
+the <tt class=literal>Graphics</tt> class. The simplest form of
+<tt class=literal>drawImage()</tt> takes four parameters: the
+<tt class=literal>Image</tt> object, the <tt class=literal>x</tt>,
+<tt class=literal>y</tt> coordinates at which to draw it, and a reference
+to a special <i class=emphasis>image observer</I> object.
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="EXJ-CH-13-SECT-3.2">Image Observers</A></h3>
+
+<p class=para>
+<a name="CH11.OBS"></A>Images in AWT are processed asynchronously, which
+means Java performs image operations like loading and scaling on its
+own time. For example, the <tt class=literal>getImage()</tt> method always
+returns immediately, even if the image data has to be retrieved over
+the network from Mars and isn't available yet. In fact, if it's
+a new image, Java won't even begin to fetch it until we try to
+use it. The advantage of this technique is that Java can do the work
+of a powerful, multithreaded image-processing environment for
+us. However, it also introduces several problems. If Java is loading
+an image for us, how do we know when it's completely loaded? What if
+we want to work with the image as it arrives? What if we need to know
+properties of the image (like its dimensions) before we can start
+working with it? What if there's an error in loading the image?
+
+<p class=para>
+These problems are handled by image observers--designated
+objects that implement the <tt class=literal>ImageObserver</tt>
+interface. All operations that draw or examine
+<tt class=literal>Image</tt> objects return immediately, but they take an
+image-observer object as a parameter. The
+<tt class=literal>ImageObserver</tt> monitors the image's status and
+can make that information available to the rest of the
+application. When image data is loaded from its source, an image
+observer is notified of its progress, including when new pixels
+are available, when a complete frame of the image is ready, and if
+there is an error during loading. The image observer also receives
+attribute information about the image, such as its dimensions and
+properties, as soon as they are known.
+
+<p class=para>
+The <tt class=literal>drawImage()</tt> method, like other image
+operations, takes a reference to an <tt class=literal>ImageObserver</tt>
+object as a parameter. <tt class=literal>drawImage()</tt> returns a
+<tt class=literal>boolean</tt> value specifying whether or not the image
+was painted in its entirety. If the image data has not yet been
+loaded or is only partially available, <tt class=literal>drawImage()</tt>
+paints whatever fraction of the image it can and returns. The
+image-observer object, however, is registered as being interested
+in information about the image. It's then called repeatedly as more
+pixel information is available and again when the entire image is
+complete. The image observer can do whatever it wants with this
+information. Most often it calls <tt class=literal>repaint()</tt> to
+prompt the applet to draw the image again with the updated data; as
+you should recall, a call to <tt class=literal>repaint()</tt> initiates a
+call to <tt class=literal>paint()</tt> to be scheduled. In this way an
+applet can redraw the image as it arrives, for a progressive loading
+effect.  Alternatively, it could wait until the entire image is loaded 
+before displaying it.
+
+<p class=para>
+We'll discuss creating image observers a bit later. For
+now, we can avoid the issue by using a prefabricated image
+observer. It just so happens that the <tt class=literal>Component</tt>
+class implements the <tt class=literal>ImageObserver</tt> interface and
+provides some simple repainting behavior for us. This means that every
+component can serve as its own default image observer; we simply pass
+a reference to our applet (or other component) as the image-observer
+parameter of a <tt class=literal>drawImage()</tt> call. Hence the
+mysterious <tt class=literal>this</tt> we've occasionally seen
+when working with graphics:
+
+<div class=programlisting>
+<p>
+<pre>
+class MyApplet extends java.applet.Applet { 
+    ... 
+    public void paint( Graphics g ) { 
+        drawImage( monaImage, x, y, this ); 
+        ... 
+</PRE>
+</DIV>
+
+<p class=para>
+Our applet serves as the image observer and calls
+<tt class=literal>repaint()</tt> for us to redraw the image as
+necessary. If the image arrives slowly, our applet is notified
+repeatedly, as new chunks become available. As a result, the image
+appears gradually, as it's loaded. 
+The <tt class=literal>awt.image.incrementaldraw</tt> and
+<tt class=literal>awt.image.redrawrate</tt> system properties control
+this behavior. <tt class=literal>redrawrate</tt> limits how often
+<tt class=literal>repaint()</tt> is called; the default value is every 100
+milliseconds. <tt class=literal>incrementaldraw</tt> prevents drawing
+until the entire image has arrived. By default, this property is set
+to "true"; set it to "false" to turn off
+incremental redrawing.
+
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="EXJ-CH-13-SECT-3.3">Scaling and Size</A></h3>
+
+<p class=para>
+Another version of <tt class=literal>drawImage()</tt> renders a scaled 
+version of the image: 
+
+<div class=programlisting>
+<p>
+<pre>
+drawImage( monaImage, x, y, x2, y2, this ); 
+</PRE>
+</DIV>
+
+<p class=para>
+This draws the entire image within the rectangle formed by the points
+<tt class=literal>x</tt>, <tt class=literal>y</tt> and <tt class=literal>x2</tt>,
+<tt class=literal>y2</tt>, scaling as necessary. (Cool, eh?)
+<tt class=literal>drawImage()</tt> behaves the same as before; the image
+is processed by the component as it arrives and the image observer is
+notified as more pixel data and the completed image are available.
+Several other overloaded versions of <tt class=literal>drawImage()</tt>
+provide more complex options: you can scale, crop, and perform some
+simple transpositions.
+
+<p class=para>
+If you want to actually make a scaled copy of an image (as opposed to
+simply painting one at draw time), you can call
+<tt class=literal>getScaledInstance()</tt>. Here's how:
+
+<div class=programlisting>
+<p>
+<pre>
+Image scaledDaffy =
+    daffyImage.getScaledInstance(100,200,SCALE_AREA_AVERAGING);
+</PRE>
+</DIV>
+
+<p class=para>
+This method scales the original image to the given size; in this case,
+100 by 200 pixels. It returns a new <tt class=literal>Image</tt> that you
+can draw like any other image. <tt class=literal>SCALE_AREA_AVERAGING</tt>
+is a constant that tells <tt class=literal>getScaledImage()</tt> what
+scaling algorithm to use. The algorithm used here tries to do a decent
+job of scaling, at the expense of time. Some alternatives that take
+less time are <tt class=literal>SCALE_REPLICATE</tt>, which scales by
+replicating scan lines and columns (which is fast, but probably not
+pretty).  You can also specify either <tt class=literal>SCALE_FAST</tt>,
+or <tt class=literal>SCALE_SMOOTH</tt> and let the implementation choose
+an appropriate algorithm that optimizes for time or quality.  If you
+don't have specific requirements, you should use
+<tt class=literal>SCALE_DEFAULT</tt> which, ideally, would be set by a
+preference in the user's environment.
+
+<p class=para>
+Scaling an image before calling
+<tt class=literal>drawImage()</tt> can improve performance, because the
+image loading and scaling can take place before the image is actually
+needed. Of course, the same amount of work takes place, but in most
+situations, prescaling will make the program appear faster because it
+takes place while other things are going on; the user doesn't have to
+wait as long for the image to display.  
+
+<p class=para>
+The <tt class=literal>Image</tt> <tt class=literal>getHeight()</tt> and
+<tt class=literal>getWidth()</tt> methods retrieves the dimensions of an
+image. Since this information may not be available until the
+image data is completely loaded, both methods also take an
+<tt class=literal>ImageObserver</tt> object as a parameter. If the
+dimensions aren't yet available, they return values of
+<tt class=literal>-1</tt> and notify the observer when the true value
+is known. We'll see how to
+deal with these and other problems a bit later. For now, we'll
+use <tt class=literal>Component</tt> as an image observer to get by, and
+move on to some general painting techniques.
+
+</DIV>
+
+</DIV>
+
+
+<div class=htmlnav>
+
+<p>
+<hr align=left width=515>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch13_03.htm"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><a href="index.htm"><img src='gifs/txthome.gif' border=0 alt='Home'></a></td>
+<td width=172 align=right valign=top><a href="ch13_05.htm"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+<tr>
+<td width=172 align=left valign=top>Fonts</td>
+<td width=171 align=center valign=top><a href="index/idx_0.htm"><img src='gifs/index.gif' alt='Book Index' border=0></a></td>
+<td width=172 align=right valign=top>Drawing Techniques</td>
+</tr>
+</table>
+<hr align=left width=515>
+
+<img src="gifs/smnavbar.gif" usemap="#map" border=0> 
+<map name="map"> 
+<area shape=RECT coords="0,0,108,15" href="../javanut/index.htm" alt="Java in a Nutshell"> 
+<area shape=RECT coords="109,0,200,15" href="../langref/index.htm" alt="Java Language Reference"> 
+<area shape=RECT coords="203,0,290,15" href="../awt/index.htm" alt="Java AWT"> 
+<area shape=RECT coords="291,0,419,15" href="../fclass/index.htm" alt="Java Fundamental Classes"> 
+<area shape=RECT coords="421,0,514,15" href="index.htm" alt="Exploring Java"> 
+</MAP>
+</DIV>
+
+</BODY>
+</HTML>

@@ -1,0 +1,716 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 12] 12.2 Date Function Examples</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein &amp; Bill Pribyl"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T19:01:16Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates CD-ROM-1-56592-335-9E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-335-9E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle PL/SQL"><META
+NAME="DC.Title"
+CONTENT="Oracle PL/SQL Programming, 2nd Edition"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="ch12_01.htm"
+TITLE="12. Date Functions"><LINK
+REL="prev"
+HREF="ch12_01.htm"
+TITLE="12.1 Date Function Descriptions"><LINK
+REL="next"
+HREF="ch13_01.htm"
+TITLE="13. Numeric, LOB, and Miscellaneous Functions"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd Edition"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch12_01.htm"
+TITLE="12.1 Date Function Descriptions"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 12.1 Date Function Descriptions"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+><A
+CLASS="chapter"
+REL="up"
+HREF="ch12_01.htm"
+TITLE="12. Date Functions"
+>Chapter 12<BR>Date Functions</A
+></SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch13_01.htm"
+TITLE="13. Numeric, LOB, and Miscellaneous Functions"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 13. Numeric, LOB, and Miscellaneous Functions"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="SQL2-CH-12-SECT-2"
+>12.2 Date Function Examples</A
+></H2
+><P
+CLASS="para"
+>This section contains more detailed examples of some of the functions summarized in this chapter. </P
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-12-SECT-2.1"
+>12.2.1 Customizing the Behavior of ADD_MONTHS</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch12-idx-765961-1"
+></A
+>As noted earlier, if you pass a day to ADD_MONTHS which is the last day in the month, PL/SQL always returns the last day in the resulting month, regardless of the number of actual days in each of the months. While this may work perfectly well for many, if not most, Oracle installations, I have encountered at least one company in the insurance industry that definitely cannot use ADD_MONTHS the way it works by default. At this site, if I am on the 28th day of February and shift forward a month, I need to land on the 28th of March&nbsp;-- not the 31st of March. What's a programmer to do? </P
+><P
+CLASS="para"
+>The best solution is to write your own version of ADD_MONTHS that performs the way you want it to, and then use it in place of ADD_MONTHS. <A
+CLASS="indexterm"
+NAME="ch12-idx-765962-1"
+></A
+>The following example shows a new_add_months function. It always lands you on the same day in the month, unless the original day does not exist in the new month, in which case the day is set to the last day in the new month. </P
+><P
+CLASS="para"
+>This code uses the LAST_DAY function to see if the original date falls on the last day of that month: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: addmths.sf */
+CREATE OR REPLACE FUNCTION new_add_months (date_in IN DATE, months_shift IN
+NUMBER)
+   RETURN DATE
+IS
+   /* Return value of function */
+   return_value DATE;
+
+   /* The day in the month */
+   day_of_month VARCHAR2(2);
+
+   /* The month and year for the return value */
+   month_year VARCHAR2(6);
+
+   /* The calculated end of month date */
+   end_of_month DATE;
+BEGIN
+   return_value := ADD_MONTHS (date_in, months_shift);
+
+   /* Is original date the last day of its month? */
+   IF date_in = LAST_DAY (date_in)
+   THEN
+      /* Pull out the day number of the original date */
+      day_of_month := TO_CHAR (date_in, 'DD');
+
+      /* Grab the month and year of the new date */
+      month_year := TO_CHAR (return_value, 'MMYYYY');
+
+      /* Combine these components into an actual date */
+      BEGIN
+         end_of_month := TO_DATE (month_year || day_of_month, 'MMYYYYDD');
+         /*
+         || Return the earliest of (a) the normal result of ADD_MONTHS
+         || and (b) the same day in the new month as in the original month.
+         */
+         return_value := LEAST (return_value, end_of_month);
+      EXCEPTION
+         WHEN OTHERS THEN NULL;
+      END;
+   END IF;
+
+   /* Return the shifted date */
+   RETURN return_value;
+END new_add_months;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Take a look at the difference between ADD_MONTHS and new_add_months:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>ADD_MONTHS ('31-JAN-1995', 1) ==&gt; 28-FEB-1995
+new_add_months ('31-JAN-1995', 1) ==&gt; 28-FEB-1995
+
+ADD_MONTHS ('28-FEB-1994', 2) ==&gt; 30-APR-1994
+new_add_months ('28-FEB-1994', 2) ==&gt; 28-APR-1995</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The above function can be used in a PL/SQL program like the following:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>IF new_add_months (order_date, 3) &gt; SYSDATE
+THEN
+   ship_order;
+END IF;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>If you want new_add_months to also accept the two arguments in either date-number or number-date order, you need to place the function inside a package and then overload the function definition, as shown below; see <A
+CLASS="xref"
+HREF="ch16_01.htm"
+>Chapter 16, <CITE
+CLASS="chapter"
+>Packages</CITE
+></A
+>, for more information on constructing packages and overloading module definitions. </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>PACKAGE date_pkg
+IS
+   FUNCTION new_add_months (date_in IN DATE, months_shift IN NUMBER)
+      RETURN DATE;
+
+   FUNCTION new_add_months (months_shift IN NUMBER, date_in IN DATE)
+      RETURN DATE;
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-11173"
+></A
+>If you are using PL/SQL Release 2.1 or beyond, you can use this substitute for ADD_MONTHS in your SQL DML statements, as well as your PL/SQL programs: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT new_add_months (SYSDATE, 3) FROM dual;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>A final observation: the unexpected behavior of ADD_MONTHS for the last day in a month demonstrates once again that it is always a good idea to test both your programs and the programs of others at their limits. Don't assume that a program will work in any particular fashion until you test it. In this case, if the program shifts dates by months, then be sure to test for the end and beginning of months. <A
+CLASS="indexterm"
+NAME="AUTOID-11178"
+></A
+> <A
+CLASS="indexterm"
+NAME="AUTOID-11179"
+></A
+> </P
+></DIV
+><DIV
+CLASS="sect2"
+><H3
+CLASS="sect2"
+><A
+CLASS="title"
+NAME="SQL2-CH-12-SECT-2.2"
+>12.2.2 Using NEW_TIME in Client-Server Environments</A
+></H3
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch12-idx-765965-1"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-765965-2"
+></A
+><A
+CLASS="indexterm"
+NAME="ch12-idx-765965-3"
+></A
+> One issue to keep in mind with SYSDATE is that it will always reflect the date and time on the server and not on the individual client workstation or computer (unless, of course, your workstation is also the server). This may not be an issue when all machines are located in the same general vicinity, but when you have a server in New York and a client in Iowa, the times will definitely not match up. This is a more difficult problem to resolve. </P
+><P
+CLASS="para"
+>You can use the NEW_TIME date function to convert the date and time returned by SYSDATE to the actual date and time in the client's location. To do this you need to know the time zones in each of these locations. The best way to be sure the time zones are available is to store them in a configuration table; the zones may then be read into some kind of global variables when an application is initiated. In PL/SQL, you would do this with package variables. </P
+><P
+CLASS="para"
+>Note that this example relies heavily on the package structure, which is explained in <A
+CLASS="xref"
+HREF="ch16_01.htm"
+>Chapter 16</A
+>. </P
+><P
+CLASS="para"
+>In the following examples, I will store the client and server time zone values directly in PL/SQL variables and provide a way to change them if necessary. I will then build a function called system_date, which replaces the SYSDATE function. The objectives of this function are twofold: </P
+><OL
+CLASS="orderedlist"
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Keep to a minimum the number of times that SYSDATE is called.</P
+></LI
+><LI
+CLASS="listitem"
+><P
+CLASS="para"
+>Adjust the time automatically to account for time zone changes.</P
+></LI
+></OL
+><P
+CLASS="para"
+>The tz package shown below provides a set of procedures and functions to manage both the system date and the client and server time zones. Users of the package can access the package data only through the functions (retrieval) and the procedures (change values). The main module in the package is system_date; its specification follows: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION system_date
+   (refresh_in IN VARCHAR2 := 'NOREFRESH',
+    server_time_zone IN VARCHAR2 := server,
+    client_time_zone IN VARCHAR2 := client)
+RETURN DATE;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>This package-based version of SYSDATE takes up to three parameters:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+>refresh_in</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>If you need the current time or want to update the global current date value, then you really do want SYSDATE to be called again. If you refresh, then SYSDATE is used to update the package globals. </P
+></DD
+><DT
+CLASS="term"
+>server_time_zone</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The time zone of the server; the default is the packaged value.</P
+></DD
+><DT
+CLASS="term"
+>client_time_zone</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+>The time zone of the client; the default is the packaged value.</P
+></DD
+></DL
+><P
+CLASS="para"
+>The tz package relies on the following global variables inside the package to keep track of the current date/time and the default client and server time zones: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>system_date_global DATE := SYSDATE;
+client_tz   VARCHAR2(3) := 'AST';
+server_tz   VARCHAR2(3) := 'PST';</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The very first time the system_date function is called, the package will be loaded into memory and these variables assigned their default values. I can now call system_date using both of the default configuration time zones&nbsp;-- and I will not get a new time computed each time I do so: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>IF tz.system_date
+   BETWEEN '15-JAN-1994' AND '22-JAN-1994'
+THEN
+   ...
+END IF;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Or I can override the default time zones with Greenwich Mean and Newfoundland Standard times, also requesting a refresh of the time: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>current_date :=
+   tz.system_date ('REFRESH', 'GMT', 'NST');</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>If you do not want to have to specify the package name, tz, in front of the system_date function name, you can create a standalone stored procedure of the same name which, in effect, hides the package ownership: </P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>FUNCTION system_date
+   (refresh_in IN VARCHAR2 := 'NOREFRESH',
+    server_time_zone VARCHAR2 := tz.server,
+    client_time_zone VARCHAR2 := tz.client)
+   RETURN DATE
+IS
+BEGIN
+   RETURN tz.system_date
+      (refresh_in, server_time_zone, client_time_zone);
+END;</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>The following sections contain the code for the specification and body of the tz package. </P
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="SQL2-CH-12-SECT-2.2.1"
+>12.2.2.1 The time zone package specification</A
+></H4
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk:tz.spp */
+PACKAGE tz
+IS
+   /* Return the client timezone */
+   FUNCTION client RETURN VARCHAR2;
+
+   /* Return the server timezone */
+   FUNCTION server RETURN VARCHAR2;
+   /*
+   || Retrieve system date. Can ask to refresh the value
+   || from the database and also over-ride the default
+   || time zones, just as you would with NEW_TIME.
+   */
+   FUNCTION system_date
+      (refresh_in IN VARCHAR2 := 'NOREFRESH',
+       server_time_zone IN VARCHAR2 := server,
+       client_time_zone IN VARCHAR2 := client)
+      RETURN DATE;
+
+   /* Change the client timezone */
+   PROCEDURE set_client (tz_in IN VARCHAR2);
+
+   /* Change the server timezone */
+   PROCEDURE set_server (tz_in IN VARCHAR2);
+END tz;</PRE
+></BLOCKQUOTE
+></DIV
+><DIV
+CLASS="sect3"
+><H4
+CLASS="sect3"
+><A
+CLASS="title"
+NAME="SQL2-CH-12-SECT-2.2.2"
+>12.2.2.2 The time zone package body</A
+></H4
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>/* Filename on companion disk: tz.spp */
+PACKAGE BODY tz
+IS
+   /* The actual &quot;global&quot; variables stored in the package */
+   system_date_global DATE := SYSDATE;
+   client_tz VARCHAR2(3) := 'AST';
+   server_tz VARCHAR2(3) := 'PST';
+
+   FUNCTION client RETURN VARCHAR2
+   IS
+   BEGIN
+      RETURN client_tz;
+   END;
+
+   FUNCTION server RETURN VARCHAR2
+   IS
+   BEGIN
+      RETURN server_tz;
+   END;
+
+   FUNCTION system_date
+      (refresh_in IN VARCHAR2 := 'NOREFRESH',
+       server_time_zone IN VARCHAR2 := tz.server,
+       client_time_zone IN VARCHAR2 := tz.client)
+      RETURN DATE
+   IS
+   BEGIN
+      /* Update the system date global if requested */
+      IF UPPER (refresh_in) = 'REFRESH'
+      THEN
+         tz.system_date_global := SYSDATE;
+      END IF;
+
+      /* Use NEW_TIME to shift the date/time */
+      RETURN NEW_TIME (system_date_global,
+                       server_time_zone,
+                       client_time_zone);
+   END;
+
+   PROCEDURE set_client (tz_in IN VARCHAR2)
+   IS
+   BEGIN
+      assert (valid_time_zone (tz_in ));
+      client_tz := tz_in;
+   END;
+
+   PROCEDURE set_server (tz_in IN VARCHAR2)
+   IS
+   BEGIN
+      assert (valid_time_zone (tz_in ));
+      server_tz := tz_in;
+   END;
+
+   PROCEDURE assert( condition_in IN BOOLEAN )
+   IS
+   BEGIN
+      IF NOT condition_in THEN
+         RAISE VALUE_ERROR;
+      END IF;
+   END;
+
+   FUNCTION valid_time_zone( time_zone_in IN VARCHAR2 )
+      RETURN BOOLEAN
+   IS
+      validation_tz VARCHAR2(3) := 'EST'; -- a valid time zone
+      validation_date DATE;
+      invalid_time_zone EXCEPTION;
+      PRAGMA EXCEPTION_INIT(invalid_time_zone, -1857);
+   BEGIN
+      validation_date :=
+         NEW_TIME( SYSDATE, time_zone_in, validation_tz );
+      RETURN TRUE;
+   EXCEPTION
+      WHEN invalid_time_zone
+      THEN
+         RETURN FALSE;
+   END;
+END tz; <A
+CLASS="indexterm"
+NAME="AUTOID-11231"
+></A
+>
+<A
+CLASS="indexterm"
+NAME="AUTOID-11232"
+></A
+>
+<A
+CLASS="indexterm"
+NAME="AUTOID-11233"
+></A
+>
+<A
+CLASS="indexterm"
+NAME="AUTOID-11234"
+></A
+>
+<A
+CLASS="indexterm"
+NAME="AUTOID-11235"
+></A
+></PRE
+></BLOCKQUOTE
+></DIV
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch12_01.htm"
+TITLE="12.1 Date Function Descriptions"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 12.1 Date Function Descriptions"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming, 2nd Edition"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle PL/SQL Programming, 2nd Edition"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="chapter"
+HREF="ch13_01.htm"
+TITLE="13. Numeric, LOB, and Miscellaneous Functions"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 13. Numeric, LOB, and Miscellaneous Functions"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>12.1 Date Function Descriptions</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>13. Numeric, LOB, and Miscellaneous Functions</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="../guide8i/index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

@@ -1,0 +1,201 @@
+<html><head>
+<title>Recipe 20.9. Creating HTML Templates</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:46:00Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch20_01.htm" title="20. Web Automation"><link rel="prev" href="ch20_09.htm" title="20.8. Finding Fresh Links"><link rel="next" href="ch20_11.htm" title="20.10. Mirroring Web Pages"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch20_09.htm" title="20.8. Finding Fresh Links"><img src="../gifs/txtpreva.gif" alt="Previous: 20.8. Finding Fresh Links" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch20_01.htm" title="20. Web Automation">Chapter 20<br>Web Automation</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch20_11.htm" title="20.10. Mirroring Web Pages"><img src="../gifs/txtnexta.gif" alt="Next: 20.10. Mirroring Web Pages" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch20-82283">20.9. Creating HTML Templates</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-965">Problem<a class="indexterm" name="ch20-idx-1000002660-0"></A
+><a class="indexterm" name="ch20-idx-1000002660-1"></A
+><a class="indexterm" name="ch20-idx-1000002660-2"></A
+><a class="indexterm" name="ch20-idx-1000002660-3"></A
+><a class="indexterm" name="ch20-idx-1000002660-4"></A
+><a class="indexterm" name="ch20-idx-1000002660-5"></A
+></A
+></H3
+><p class="para">You want to store a parameterized template in an external file, read it in from your CGI script, and substitute your own variables for escapes embedded in the text. This way you can separate your program from the static parts of the document.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-971">Solution</A
+></H3
+><p class="para">To expand only variable references, use this <code class="literal">template</CODE
+> function:</P
+><pre class="programlisting">sub template {
+    my ($filename, $fillings) = @_;
+    my $text;
+    local $/;                   # slurp mode (undef)
+    local *F;                   # create local filehandle
+    open(F, &quot;&lt; $filename\0&quot;)    || return;
+    $text = &lt;F&gt;;                # read whole file
+    close(F);                   # ignore retval
+    # replace quoted words with value in %$fillings hash
+    $text =~ s{ %% ( .*? ) %% }
+              { exists( $fillings-&gt;{$1} )
+                      ? $fillings-&gt;{$1}
+                      : &quot;&quot;
+              }gsex;
+    return $text;
+}</PRE
+><p class="para">On a data file like this:</P
+><pre class="programlisting">&lt;!-- simple.template for internal template() function --&gt;
+&lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Report for %%username%%&lt;/TITLE&gt;&lt;/HEAD&gt;
+&lt;BODY&gt;&lt;H1&gt;Report for %%username%%&lt;/H1&gt;
+%%username%% logged in %%count%% times, for a total of %%total%% minutes.</PRE
+><p class="para">Or use the CPAN module Text::Template to expand full expressions if you can guarantee the data file is secure from tampering. A data file for Text::Template looks like this:</P
+><pre class="programlisting">&lt;!-- fancy.template for Text::Template --&gt;
+&lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Report for {$user}&lt;/TITLE&gt;&lt;/HEAD&gt;
+&lt;BODY&gt;&lt;H1&gt;Report for {$user}&lt;/H1&gt;
+{ lcfirst($user) } logged in {$count} times, for a total of 
+{ int($total / 60) } minutes.</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-1031">Discussion</A
+></H3
+><p class="para">Parameterized output for your CGI scripts is a good idea for many reasons. Separating your program from its data lets you give other people (art directors, for instance) the ability to change the HTML but not the program. Even better, two programs can share the same template, so style changes in the template will be immediately reflected in both.</P
+><p class="para">For example, suppose you have stored the first template from the Solution in a file. Then your CGI program contains the definition of the <code class="literal">template</CODE
+> subroutine above and makes appropriate settings for variables <code class="literal">$username</CODE
+>, <code class="literal">$count</CODE
+>, and <code class="literal">$total</CODE
+>. You can fill in the template by simply using:</P
+><pre class="programlisting">%fields = (
+            username =&gt; $whats_his_name,
+            count    =&gt; $login_count,
+            total    =&gt; $minute_used,
+);
+
+print template(&quot;/home/httpd/templates/simple.template&quot;, \%fields);</PRE
+><p class="para">The template file contains keywords surrounded with double percent symbols (<code class="literal">%%KEYWORD%%</CODE
+>). These keywords are looked up in the <code class="literal">%$fillings</CODE
+> hash whose reference was passed as the second argument to <code class="literal">template</CODE
+>. <a class="xref" href="#ch20-18112" title="userrep1">Example 20.7</A
+> is a more elaborate example using an <a class="indexterm" name="ch20-idx-1000002720-0"></A
+>SQL database.</P
+><div class="example"><h4 class="example"><a class="title" name="ch20-18112">Example 20.7: userrep1</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# userrep1 - report duration of user logins using SQL database
+
+use DBI;
+use CGI qw(:standard);
+
+# template() defined as in the Solution section above
+
+$user = param(&quot;username&quot;)                   or die &quot;No username&quot;;
+
+$dbh = DBI-&gt;connect(&quot;dbi:mysql:connections:mysql.domain.com&quot;,
+    &quot;connections&quot;, &quot;seekritpassword&quot;)       or die &quot;Couldn't connect\n&quot;;
+$sth = $dbh-&gt;prepare(&lt;&lt;&quot;END_OF_SELECT&quot;)     or die &quot;Couldn't prepare SQL&quot;;
+    SELECT COUNT(duration),SUM(duration) 
+    FROM logins WHERE username='$user'
+END_OF_SELECT
+
+# this time the duration is assumed to be in seconds
+if (@row = $sth-&gt;fetchrow_array()) {
+    ($count, $seconds) = @row;
+} else {
+    ($count, $seconds) = (0,0);
+} 
+
+$sth-&gt;finish();
+$dbh-&gt;disconnect;
+
+print header();
+print template(&quot;report.tpl&quot;, {   
+    'username' =&gt; $user,
+    'count'    =&gt; $count,
+    'total'    =&gt; $seconds 
+});</PRE
+></DIV
+><p class="para">If you want a fancier, more flexible solution, look at the second template in the Solution section, which relies upon the CPAN module Text::Template. Contents of braces found within the template file are evaluated as Perl code. Ordinarily, these substitutions will just be simple variables:</P
+><pre class="programlisting">You owe: {$total}</PRE
+><p class="para">but they can also include full expressions:</P
+><pre class="programlisting">The average was {$count ?  ($total/$count) : 0}.</PRE
+><p class="para"><a class="xref" href="#ch20-31884" title="userrep2">Example 20.8</A
+> is an example of how you could use that template.</P
+><div class="example"><h4 class="example"><a class="title" name="ch20-31884">Example 20.8: userrep2</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# userrep2 - report duration of user logins using SQL database
+
+use Text::Template;
+use DBI;
+use CGI qw(:standard);
+
+$tmpl = &quot;/home/httpd/templates/fancy.template&quot;;
+$template = Text::Template-&gt;new(-type =&gt; &quot;file&quot;, -source =&gt; $tmpl);
+$user = param(&quot;username&quot;)                   or die &quot;No username&quot;;
+
+$dbh = <a class="indexterm" name="ch20-idx-1000004616-0"></A
+>DBI-&gt;connect(&quot;dbi:mysql:connections:mysql.domain.com&quot;,
+    &quot;connections&quot;, &quot;secret passwd&quot;)         or die &quot;Couldn't db connect\n&quot;;
+$sth = $dbh-&gt;prepare(&lt;&lt;&quot;END_OF_SELECT&quot;)     or die &quot;Couldn't prepare SQL&quot;;
+    SELECT COUNT(duration),SUM(duration) 
+    FROM logins WHERE username='$user'
+END_OF_SELECT
+
+$sth-&gt;execute()                             or die &quot;Couldn't execute SQL&quot;;
+
+if (@row = $sth-&gt;fetchrow_array()) {
+    ($count, $total) = @row;
+} else {
+    $count = $total = 0;
+}
+
+$sth-&gt;finish();
+$dbh-&gt;disconnect;
+
+print header();
+print $template-&gt;fill_in();</PRE
+></DIV
+><p class="para">The more powerful approach raises security concerns. Anyone who can write to the template file can insert code that your program will run. See <a class="xref" href="ch08_18.htm" title="Testing a File for Trustworthiness">Recipe 8.17</A
+> for ways to lessen this danger.<a class="indexterm" name="ch20-idx-1000002662-0"></A
+><a class="indexterm" name="ch20-idx-1000002662-1"></A
+><a class="indexterm" name="ch20-idx-1000002662-2"></A
+><a class="indexterm" name="ch20-idx-1000002662-3"></A
+><a class="indexterm" name="ch20-idx-1000002662-4"></A
+><a class="indexterm" name="ch20-idx-1000002662-5"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch20-pgfId-1195">See Also</A
+></H3
+><p class="para">The documentation for the CPAN module Text::Template; <a class="xref" href="ch08_17.htm" title="Reading Configuration Files">Recipe 8.16</A
+>; <a class="xref" href="ch14_11.htm" title="Executing an SQL Command Using DBI and DBD">Recipe 14.10</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch20_09.htm" title="20.8. Finding Fresh Links"><img src="../gifs/txtpreva.gif" alt="Previous: 20.8. Finding Fresh Links" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch20_11.htm" title="20.10. Mirroring Web Pages"><img src="../gifs/txtnexta.gif" alt="Next: 20.10. Mirroring Web Pages" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">20.8. Finding Fresh Links</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">20.10. Mirroring Web Pages</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

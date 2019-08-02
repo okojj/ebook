@@ -1,0 +1,366 @@
+<html>
+<head>
+<title>Object Construction (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Object Construction">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch12_03.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch12_01.htm">Chapter 12: Objects</a></td><td align="right" valign="top" width="172"><a href="ch12_05.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">12.4. Object Construction</h2>
+
+<a name="INDEX-2401"></a><a name="INDEX-2402"></a><a name="INDEX-2403"></a><a name="INDEX-2404"></a>
+<p>All objects are references, but not all references are objects.  A
+reference won't work as an object unless its referent is specially
+marked to tell Perl what package it belongs to.  The act of marking a
+referent with a package name--and therefore, its class, since a class
+is just a package--is known as <em class="emphasis">blessing</em>.  You can think of the
+blessing as turning a reference into an object, although it's more
+accurate to say that it turns the reference into an object reference.</p>
+
+<p>
+<a name="INDEX-2405"></a>
+The <tt class="literal">bless</tt> function takes either one or two arguments.  The first
+argument is a reference and the second is the package to bless the
+referent into.  If the second argument is omitted, the current package
+is used.
+<blockquote>
+<pre class="programlisting">$obj = { };                 # Get reference to anonymous hash.
+bless($obj);                # Bless hash into current package.
+bless($obj, "Critter");     # Bless hash into class Critter.</pre>
+</blockquote>
+<a name="INDEX-2406"></a><a name="INDEX-2407"></a><a name="INDEX-2408"></a><a name="INDEX-2409"></a>
+Here we've used a reference to an anonymous hash, which is what people
+usually use as the data structure for their objects.  Hashes are
+extremely flexible, after all.  But allow us to emphasize that you can
+bless a reference to anything you can make a reference to in Perl,
+including scalars, arrays, subroutines, and typeglobs.  You can even
+bless a reference to a package's symbol table hash if you can think of
+a good reason to.  (Or even if you can't.)  Object orientation in Perl
+is completely orthogonal to data structure.</p>
+
+<p>
+<a name="INDEX-2410"></a><a name="INDEX-2411"></a>
+Once the referent has been blessed, calling the built-in <tt class="literal">ref</tt> function
+on its reference returns the name of the blessed class instead of the built-in type, such as <tt class="literal">HASH</tt>.  If you want
+the built-in type, use the <tt class="literal">reftype</tt> function from the <tt class="literal">attributes</tt>
+module.  See <tt class="literal">use attributes</tt> in <a href="ch31_01.htm">Chapter 31, "Pragmatic Modules"</a>.</p>
+
+<p>
+<a name="INDEX-2412"></a><a name="INDEX-2413"></a><a name="INDEX-2414"></a>
+And that's how to make an object.  Just take a reference to something,
+give it a class by blessing it into a package, and you're done.  That's
+all there is to it if you're designing a minimal class.  If you're using a
+class, there's even less to it, because the author of a class will have
+hidden the <tt class="literal">bless</tt> inside a method called a <em class="emphasis">constructor</em>, which
+creates and returns instances of the class.  Because <tt class="literal">bless</tt> returns
+its first argument, a typical constructor can be as simple as this:
+<blockquote>
+<pre class="programlisting">package Critter;
+sub spawn { bless {}; }</pre>
+</blockquote>
+
+Or, spelled out slightly more explicitly:
+<blockquote>
+<pre class="programlisting">package Critter;
+sub spawn {
+    my     $self = {};       # Reference to an empty anonymous hash
+    bless  $self, "Critter"; # Make that hash a Critter object
+    return $self;            # Return the freshly generated Critter
+}</pre>
+</blockquote>
+
+With that definition in hand, here's how one might create a <tt class="literal">Critter</tt>
+object:
+<blockquote>
+<pre class="programlisting">$pet = Critter-&gt;spawn;</pre>
+</blockquote>
+</p>
+
+
+<h3 class="sect2">12.4.1. Inheritable Constructors</h3>
+
+<p>
+<a name="INDEX-2415"></a><a name="INDEX-2416"></a><a name="INDEX-2417"></a><a name="INDEX-2418"></a>
+Like all methods, a constructor is just a subroutine, but we don't
+call it as a subroutine.  We always invoke it as a method--a class
+method, in this particular case, because the invocant is a package
+name.  Method invocations differ from regular subroutine calls in two
+ways.  First, they get the extra argument we discussed earlier.
+Second, they obey inheritance, allowing one class to use another's
+methods.</p>
+
+<p>We'll describe the underlying mechanics of inheritance more rigorously
+in the next section, but for now, some simple examples of its effects
+should help you design your constructors.  For instance, suppose we
+have a <tt class="literal">Spider</tt> class that inherits methods from the <tt class="literal">Critter</tt>
+class.  In particular, suppose the <tt class="literal">Spider</tt> class doesn't have its own
+<tt class="literal">spawn</tt> method.  The following correspondences apply:
+<a name="INDEX-2419"></a><a name="INDEX-2420"></a>
+</p>
+
+<a name="method-invocation-vs-subroutine-calls"></a>
+<table border="1">
+
+<tr>
+<th>Method Call</th>
+<th>Resulting Subroutine Call</th>
+</tr>
+
+
+
+
+<tr>
+<td><tt class="literal">Critter-&gt;spawn()</tt></td>
+<td><tt class="literal">Critter::spawn("Critter")</tt></td>
+</tr>
+
+<tr>
+<td><tt class="literal">Spider-&gt;spawn()</tt></td>
+<td><tt class="literal">Critter::spawn("Spider")</tt></td>
+</tr>
+
+
+</table>
+<p>
+The subroutine called is the same in both cases, but the argument
+differs.  Note that our <tt class="literal">spawn</tt> constructor above completely ignored
+its argument, which means our <tt class="literal">Spider</tt> object was incorrectly blessed
+into class <tt class="literal">Critter</tt>.  A better constructor would provide the package
+name (passed in as the first argument) to <tt class="literal">bless</tt>:
+<blockquote>
+<pre class="programlisting">sub spawn {
+    my $class =  shift;       # Store the package name
+    my $self  =  { };
+    bless($self, $class);     # Bless the reference into that package
+    return $self;
+}</pre>
+</blockquote>
+Now you could use the same subroutine for both these cases:
+<blockquote>
+<pre class="programlisting">$vermin = Critter-&gt;spawn;
+$shelob = Spider-&gt;spawn;</pre>
+</blockquote>
+
+And each object would be of the proper class.
+This even works indirectly, as in:
+<blockquote>
+<pre class="programlisting">$type  = "Spider";
+$shelob = $type-&gt;spawn;         # same as "Spider"-&gt;spawn</pre>
+</blockquote>
+
+That's still a class method, not an instance method, because its
+invocant holds a string and not a reference.</p>
+
+<p>
+<a name="INDEX-2421"></a>
+If <tt class="literal">$type</tt> were an object instead of a class name, the previous
+constructor definition wouldn't have worked, because <tt class="literal">bless</tt> needs a
+class name.  But for many classes, it makes sense to use an existing
+object as the template from which to create another.  In these cases,
+you can design your constructors so that they work with either objects
+or class names:
+<blockquote>
+<pre class="programlisting">sub spawn {
+    my $invocant = shift;
+    my $class    = ref($invocant) || $invocant;  # Object or class name
+    my $self     = { };
+    bless($self, $class);
+    return $self;
+}</pre>
+</blockquote>
+</p>
+
+
+
+
+
+
+<h3 class="sect2">12.4.2. Initializers</h3>
+
+<p>
+<a name="INDEX-2422"></a><a name="INDEX-2423"></a><a name="INDEX-2424"></a><a name="INDEX-2425"></a><a name="INDEX-2426"></a><a name="INDEX-2427"></a><a name="INDEX-2428"></a><a name="INDEX-2429"></a>
+Most objects maintain internal information that is indirectly
+manipulated by the object's methods.  All our constructors so far have
+created empty hashes, but there's no reason to leave them empty.  For
+instance, we could have the constructor accept extra arguments to
+store into the hash as key/value pairs.  The OO literature often
+refers to such data as <em class="emphasis">properties</em>, <em class="emphasis">attributes</em>, <em class="emphasis">accessors</em>,
+<em class="emphasis">member data</em>, <em class="emphasis">instance data</em>, or <em class="emphasis">instance variables</em>.  The
+section "Instance Variables" later in this chapter discusses attributes in more detail.</p>
+
+<p>Imagine a <tt class="literal">Horse</tt> class with instance attributes like "name" and
+"color":
+<blockquote>
+<pre class="programlisting">$steed = Horse-&gt;new(name =&gt; "Shadowfax", color =&gt; "white");</pre>
+</blockquote>
+
+If the object is implemented as a hash reference, the key/value pairs
+can be interpolated directly into the hash once the invocant is
+removed from the argument list:
+<blockquote>
+<pre class="programlisting">sub new {
+    my $invocant = shift;
+    my $class = ref($invocant) || $invocant;
+    my $self = { @_ };          # Remaining args become attributes
+    bless($self, $class);       # Bestow objecthood
+    return $self;
+}</pre>
+</blockquote>
+<a name="INDEX-2430"></a><a name="INDEX-2431"></a>
+This time we used a method named <tt class="literal">new</tt> for the
+class's constructor, which just might lull C++ programmers into
+thinking they know what's going on.  But Perl doesn't consider
+"<tt class="literal">new</tt>" to be anything special; you may name your
+constructors whatever you like.  Any method that happens to create and
+return an object is a de facto constructor.  In general, we recommend
+that you name your constructors whatever makes sense in the context of
+the problem you're solving.  For example, constructors in the
+<tt class="literal">Tk</tt> module are named after the widgets they create.
+In the <tt class="literal">DBI</tt> module, a constructor named
+<tt class="literal">connect</tt> returns a database handle object, and
+another constructor named <tt class="literal">prepare</tt> is invoked as an
+instance method and returns a statement handle object.  But if there
+is no suitable context-specific constructor name,
+<tt class="literal">new</tt> is perhaps not a terrible choice.  Then again,
+maybe it's not such a bad thing to pick a random name to force people
+to read the interface contract (meaning the class documentation)
+before they use its constructors.</p>
+
+<p>Elaborating further, you can set up your constructor with default
+key/value pairs, which the user could later override by supplying them
+as arguments:
+<blockquote>
+<pre class="programlisting">sub new {
+    my $invocant = shift;
+    my $class   = ref($invocant) || $invocant;
+    my $self = {
+        color  =&gt; "bay",
+        legs   =&gt; 4,
+        owner  =&gt; undef,
+        @_,                 # Override previous attributes
+    };
+    return bless $self, $class;
+}
+
+$ed       = Horse-&gt;new;                    # A 4-legged bay horse
+$stallion = Horse-&gt;new(color =&gt; "black");  # A 4-legged black horse</pre>
+</blockquote>
+
+This <tt class="literal">Horse</tt> constructor ignores its invocant's existing attributes
+when used as an instance method.  You could create a second
+constructor designed to be called as an instance method, and if
+designed properly, you could use the values from the invoking object as
+defaults for the new one:
+<blockquote>
+<pre class="programlisting">$steed  = Horse-&gt;new(color =&gt; "dun");
+$foal   = $steed-&gt;clone(owner =&gt; "EquuGen Guild, Ltd.");
+
+sub clone {
+    my $model = shift;
+    my $self  = $model-&gt;new(%$model, @_);
+    return $self;     # Previously blessed by -&gt;new
+}</pre>
+</blockquote>
+
+(You could also have rolled this functionality directly into <tt class="literal">new</tt>,
+but then the name wouldn't quite fit the function.)</p>
+
+<p>Notice how even in the <tt class="literal">clone</tt> constructor, we don't hardcode the
+name of the <tt class="literal">Horse</tt> class.  We have the original object invoke its
+own <tt class="literal">new</tt> method, whatever that may be.  If we had written that as
+<tt class="literal">Horse-&gt;new</tt> instead of <tt class="literal">$model-&gt;new</tt>, then the class
+wouldn't have facilitated inheritance by a <tt class="literal">Zebra</tt> or <tt class="literal">Unicorn</tt>
+class.  You wouldn't want to clone Pegasus and suddenly find yourself
+with a horse of a different color.</p>
+
+<p>
+<a name="INDEX-2432"></a>
+Sometimes, however, you have the opposite problem: rather than
+trying to share one constructor among several classes, you're trying to
+have several constructors share one class's object.  This happens
+whenever a constructor wants to call a base class's constructor to do
+part of the construction work.  Perl doesn't do hierarchical
+construction for you.  That is, Perl does not automatically call the
+constructors (or the destructors) for any base classes of the class
+requested, so your constructor will have to do that itself and then add
+any additional attributes the derived class needs.  So the situation is
+not unlike the <tt class="literal">clone</tt> routine, except that instead of copying an
+existing object into the new object, you want to call your base class's
+constructor and then transmogrify the new base object into your new
+derived object.</p>
+
+<a name="INDEX-2433"></a><a name="INDEX-2434"></a>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch12_03.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch12_05.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">12.3. Method Invocation</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">12.5. Class Inheritance</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

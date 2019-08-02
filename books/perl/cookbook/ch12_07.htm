@@ -1,0 +1,131 @@
+<html><head>
+<title>Recipe 12.6. Automating Module Clean-Up</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:41:34Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch12_01.htm" title="12. Packages, Libraries, and Modules"><link rel="prev" href="ch12_06.htm" title="12.5. Determining the Caller's Package"><link rel="next" href="ch12_08.htm" title="12.7. Keeping Your Own Module Directory"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch12_06.htm" title="12.5. Determining the Caller's Package"><img src="../gifs/txtpreva.gif" alt="Previous: 12.5. Determining the Caller's Package" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch12_01.htm" title="12. Packages, Libraries, and Modules">Chapter 12<br>Packages, Libraries, and Modules</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch12_08.htm" title="12.7. Keeping Your Own Module Directory"><img src="../gifs/txtnexta.gif" alt="Next: 12.7. Keeping Your Own Module Directory" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch12-chap12_automating_0">12.6. Automating Module Clean-Up</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch12-pgfId-1000005924">Problem</A
+></H3
+><p class="para"><a class="indexterm" name="ch12-idx-1000005228-0"></A
+><a class="indexterm" name="ch12-idx-1000005228-1"></A
+><a class="indexterm" name="ch12-idx-1000005228-2"></A
+>You need to create setup code and clean-up code for a module that gets called automatically, without user intervention.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch12-pgfId-1000004202">Solution</A
+></H3
+><p class="para">For setup code, put executable statements outside subroutine definitions in the module file. For clean-up code, use an END subroutine in that module.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch12-pgfId-862">Discussion</A
+></H3
+><p class="para">In some languages, the programmer must call a module's initialization code before any of that module's regular functions can be safely accessed. Similarly, when the program is done, the programmer may have to call module-specific finalization code.</P
+><p class="para">Not so in Perl. For per-module initialization code, executable statements outside of any subroutines in your module suffice. When the module is loaded in, that code runs right then and there. The user never has to remember to do this, because it's done automatically.</P
+><p class="para">Now, why would you want automatic clean-up code? It depends on the module. You might want to write a shutdown message to a logfile, tell a database server to commit any pending state, refresh a screen, or return the tty to its original state.</P
+><p class="para">Suppose you want a module to log quietly whenever a program using it starts up or finishes. Add code in an END subroutine to run after your program finishes:</P
+><pre class="programlisting">$Logfile = &quot;/tmp/mylog&quot; unless defined $Logfile;
+open(LF, &quot;&gt;&gt;$Logfile&quot;)
+    or die &quot;can't append to $Logfile: $!&quot;;
+select(((select(LF), $|=1))[0]);  # unbuffer LF
+logmsg(&quot;startup&quot;);
+
+sub logmsg {
+    my $now = scalar gmtime;
+    print LF &quot;$0 $$ $now: @_\n&quot;
+        or die &quot;write to $Logfile failed: $!&quot;;
+}
+
+END {
+    logmsg(&quot;shutdown&quot;);
+    close(LF)                     
+        or die &quot;close $Logfile failed: $!&quot;;
+}</PRE
+><p class="para">The first part of code, outside any subroutine declaration, is executed at module load time. The module user doesn't have to do anything special to make this happen. Someone might be unpleasantly surprised, however, if the file can't be accessed, since the <code class="literal">die</CODE
+> would make the <code class="literal">use</CODE
+> or <code class="literal">require</CODE
+> fail.</P
+><p class="para">END routines work like exit handlers, such as <code class="literal">trap</CODE
+> <code class="literal">0</CODE
+> in the shell, <code class="literal">atexit</CODE
+> in C programming, or global destructors or finalizers in object-oriented languages. All the ENDs in a program are run in the opposite order that they were loaded; that is, last seen, first run. These get called whether the program finishes through normal process termination by implicitly reaching the end of your main program, through an explicit call to the <code class="literal">exit</CODE
+> function, or via an uncaught exception such as <code class="literal">die</CODE
+> or a mistake involving division by zero.</P
+><p class="para">Uncaught signals are a different matter, however. Death by signal does not run your exit handlers. The following pragma takes care of them:</P
+><pre class="programlisting">use sigtrap qw(die normal-signals error-signals);</PRE
+><p class="para">END also isn't called when a process polymorphs itself via the <code class="literal">exec</CODE
+> function because you are still in the same process, just a different program. All normal process attributes remain, like process ID and parent PID, user and group IDs, umask, current directory, environment variables, resource limits and accumulated statistics, open file descriptors (however, see the <code class="literal">$^F</CODE
+> variable in <i class="filename">perlvar </I
+>(1) or Camel:2). If it didn't work this way, exit handlers would execute redundantly in programs managing <code class="literal">fork</CODE
+> and <code class="literal">exec</CODE
+> manually. This would not be good.<a class="indexterm" name="ch12-idx-1000005230-0"></A
+><a class="indexterm" name="ch12-idx-1000005230-1"></A
+><a class="indexterm" name="ch12-idx-1000005230-2"></A
+><a class="indexterm" name="ch12-idx-1000005230-3"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch12-pgfId-918">See Also</A
+></H3
+><p class="para">The standard <code class="literal">use</CODE
+> <code class="literal">sigtrap</CODE
+> pragma, also in <a class="olink" href="../prog/ch07_01.htm">Chapter 7</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; the section on  <a class="olink" href="../prog/ch05_01.htm#PERL2-CH-5-SECT-1.2">"Package Constructors and Destructors"</A
+> in <a class="olink" href="../prog/ch05_01.htm">Chapter 5</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlmod </I
+>(1); the <code class="literal">$^F</CODE
+> variable in the section on <a class="olink" href="../prog/ch02_09.htm#PERL2-CH-2-SECT-9.3">"Special Global Variables"</A
+> in <a class="olink" href="../prog/ch02_01.htm">Chapter 2</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perldata</I
+> (1); the <a class="olink" href="../prog/ch03_040.htm"><code class="literal">fork</CODE
+></A
+> and <a class="olink" href="../prog/ch03_033.htm"><code class="literal">exec</CODE
+></A
+> functions in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and in <i class="filename">perlmod </I
+>(1)</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch12_06.htm" title="12.5. Determining the Caller's Package"><img src="../gifs/txtpreva.gif" alt="Previous: 12.5. Determining the Caller's Package" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch12_08.htm" title="12.7. Keeping Your Own Module Directory"><img src="../gifs/txtnexta.gif" alt="Next: 12.7. Keeping Your Own Module Directory" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">12.5. Determining the Caller's Package</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">12.7. Keeping Your Own Module Directory</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

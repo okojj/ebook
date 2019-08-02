@@ -1,0 +1,480 @@
+<HTML
+><HEAD
+><TITLE
+>[Chapter 8] Deploying Fine-Grained Access Control</TITLE
+><META
+NAME="DC.Creator"
+CONTENT="Steven Feuerstein"><META
+NAME="DC.Date"
+CONTENT="2000-04-29T19:26:50Z"><META
+NAME="DC.Format"
+CONTENT="text/html"
+SCHEME="MIME"><META
+NAME="DC.Identifier"
+CONTENT="O'Reilly and Associates CDROM-1-56592-675-7E"><META
+NAME="DC.Language"
+CONTENT="en-US"><META
+NAME="DC.Publisher"
+CONTENT="O'Reilly &amp; Associates, Inc."><META
+NAME="DC.Source"
+CONTENT="1-56592-675-7E"
+SCHEME="ISBN"><META
+NAME="DC.Subject.Keyword"
+CONTENT="Oracle 8i Features"><META
+NAME="DC.Title"
+CONTENT="Oracle PL/SQL Programming Guide to Oracle 8i Features"><META
+NAME="DC.Type"
+CONTENT="Text.Monograph"><META
+NAME="generator"
+CONTENT="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><LINK
+REL="stylesheet"
+TYPE="text/css"
+HREF="../style/style1.css"><LINK
+REV="made"
+HREF="mailto:online-books@oreilly.com"
+TITLE="Online Books Comments"><LINK
+REL="up"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming Guide to Oracle 8i Features"><LINK
+REL="prev"
+HREF="ch07_07.htm"
+TITLE="7.7 New DBMS_UTILITY Features"><LINK
+REL="next"
+HREF="ch08_02.htm"
+TITLE="8.2 CREATE CONTEXT: Creating Contexts"></HEAD
+><BODY
+><DIV
+CLASS="htmlnav"
+><H1
+><IMG
+SRC="gifs/smbanner.gif"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+USEMAP="#srchmap"
+BORDER="0"></H1
+><MAP
+NAME="srchmap"
+><AREA
+SHAPE="RECT"
+COORDS="0,0,466,65"
+HREF="index.htm"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"><AREA
+SHAPE="RECT"
+COORDS="467,0,514,18"
+HREF="jobjects/fsearch.htm"
+ALT="Search this book"></MAP
+><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch07_07.htm"
+TITLE="7.7 New DBMS_UTILITY Features"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 7.7 New DBMS_UTILITY Features"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><SPAN
+CLASS="NAVTITLE"
+>Chapter 8</SPAN
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch08_02.htm"
+TITLE="8.2 CREATE CONTEXT: Creating Contexts"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 8.2 CREATE CONTEXT: Creating Contexts"
+BORDER="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><DIV
+CLASS="chapter"
+><H1
+CLASS="chapter"
+><A
+CLASS="title"
+NAME="ch08-73949"
+>8. Deploying Fine-Grained Access Control</A
+></H1
+><DIV
+CLASS="htmltoc"
+><P
+><B
+>Contents:</B
+><BR><A
+CLASS="sect1"
+HREF="#ch08-44569"
+TITLE="8.1 FGAC Components"
+>FGAC Components</A
+><BR><A
+CLASS="sect1"
+HREF="ch08_02.htm"
+TITLE="8.2 CREATE CONTEXT: Creating Contexts"
+>CREATE CONTEXT: Creating Contexts</A
+><BR><A
+CLASS="sect1"
+HREF="ch08_03.htm"
+TITLE="8.3 SET_CONTEXT: Setting Context and Attribute Values"
+>SET_CONTEXT: Setting Context and Attribute Values</A
+><BR><A
+CLASS="sect1"
+HREF="ch08_04.htm"
+TITLE="8.4 SYS_CONTEXT and LIST_CONTEXT: Obtaining Context Information"
+>SYS_CONTEXT and LIST_CONTEXT: Obtaining Context Information</A
+><BR><A
+CLASS="sect1"
+HREF="ch08_05.htm"
+TITLE="8.5 A Complete FGAC Example"
+>A Complete FGAC Example</A
+></P
+><P
+></P
+></DIV
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch-08-ov"
+></A
+>Fine-grained access control (FGAC) is a new feature in Oracle8<EM
+CLASS="emphasis"
+>i</EM
+> that allows you to implement security policies with functions and then use those security policies to implement row-level security on tables and views. The database server automatically enforces these security policies, no matter how the data is accessed&nbsp;-- through SQL*Plus or the Internet, as an ad hoc query, or as an update processed through an Oracle Forms application. </P
+><P
+CLASS="para"
+>What, you might ask, is a <I
+CLASS="filename"
+>security policy </I
+>? Consider the following very simple scenario (I'll expand upon this scenario in the full example at the end of this chapter). Suppose that I have tables of hospital patients and their doctors defined as follows:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>CREATE TABLE patient (       
+   patient_id NUMBER,           
+   name VARCHAR2(100),          
+   dob DATE,                    
+   doctor_id INTEGER
+   ); 
+
+CREATE TABLE doctor (
+   doctor_id NUMBER,
+   name VARCHAR2(100)
+   );</PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Now suppose that I want to let a doctor see only her own patients when she issues a query against the table. More than that, I don't want to let a doctor modify patient records unless those records belong to that doctor's patients. </P
+><P
+CLASS="para"
+>You could achieve much of what is needed through the creation of a set of views, and many organizations have been doing just that for years. The view-based approach can become quite complex, especially if you want to make it foolproof. Wouldn't it be so much more elegant if you could just let any doctor connect to her schema in Oracle, issue the following query:</P
+><BLOCKQUOTE
+><PRE
+CLASS="programlisting"
+>SELECT * FROM patient;  </PRE
+></BLOCKQUOTE
+><P
+CLASS="para"
+>and then make certain that the doctor sees information only about her patients? With this approach, you embed all the rules needed to enforce the appropriate privacy and security rules into the database itself as a security policy so that it is transparent to users of the data structures. Oracle uses that policy to modify the WHERE clause of any SQL statement executed against the table,thereby restricting access to data. This process is illustrated in <A
+CLASS="xref"
+HREF="ch08_01.htm#ch08-58361"
+>Figure 8.1</A
+>.</P
+><H4
+CLASS="figure"
+><A
+CLASS="title"
+NAME="ch08-58361"
+>Figure 8.1: Automatic application of a security policy (WHERE clause predicate)</A
+></H4
+><IMG
+CLASS="graphic"
+SRC="figs/o8if.0801.gif"
+ALT="Figure 8.1"><P
+CLASS="para"
+>With Oracle8<EM
+CLASS="emphasis"
+>i </EM
+>'s fine-grained access control, you can apply different policies to SELECT, INSERT, UPDATE, and DELETE operations and use security policies only where you need them (for example, on salary information). You can also design and enforce more than one policy for a table, and can even construct layers of policies (one policy building on top of an existing policy) to handle complex situations.<A
+CLASS="indexterm"
+NAME="AUTOID-4964"
+></A
+></P
+><DIV
+CLASS="sect1"
+><H2
+CLASS="sect1"
+><A
+CLASS="title"
+NAME="ch08-44569"
+>8.1 FGAC Components</A
+></H2
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="ch-08-fgaccom"
+></A
+>To take advantage of FGAC, you have to use programs and functionality from a wide variety of sources within Oracle, including the following:</P
+><DL
+CLASS="variablelist"
+><DT
+CLASS="term"
+>CREATE CONTEXT DDL statement</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+> <A
+CLASS="indexterm"
+NAME="ch-08-ccs"
+></A
+>Allows you to define a system or application context by name, and associate that context with a PL/SQL package. A <I
+CLASS="firstterm"
+>context</I
+> is a named set of attribute/value pairs that are global to your session.</P
+></DD
+><DT
+CLASS="term"
+>DBMS_SESSION.SET_CONTEXT procedure</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+> <A
+CLASS="indexterm"
+NAME="AUTOID-4983"
+></A
+> Allows you to set the value for a specific attribute in a particular context.</P
+></DD
+><DT
+CLASS="term"
+>SYS_CONTEXT function</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+> <A
+CLASS="indexterm"
+NAME="AUTOID-4989"
+></A
+> Returns the value of a specific attribute of a context. These attributes can be system values, such as the schema name, or they can be application-specific elements that you define. </P
+></DD
+><DT
+CLASS="term"
+>DBMS_SESSION.LIST_CONTEXT procedure</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-4995"
+></A
+>Returns the value of all attributes and values defined across all contexts in the current session.</P
+></DD
+><DT
+CLASS="term"
+>DBMS_RLS package</DT
+><DD
+CLASS="listitem"
+><P
+CLASS="para"
+><A
+CLASS="indexterm"
+NAME="AUTOID-5001"
+></A
+>A variety of programs you can use to define security policies and to associate those policies with specific PL/SQL functions that will generate WHERE clause predicates for use in fine-grained access queries. See <A
+CLASS="xref"
+HREF="ch07_01.htm"
+>Chapter 7, <CITE
+CLASS="chapter"
+>New and Enhanced Built-in Packages in Oracle8i</CITE
+></A
+>.</P
+></DD
+></DL
+><BLOCKQUOTE
+CLASS="tip"
+><P
+CLASS="para"
+><STRONG
+>TIP:</STRONG
+> <A
+CLASS="indexterm"
+NAME="AUTOID-5006"
+></A
+>The default database installation does <EM
+CLASS="emphasis"
+>not</EM
+> grant the EXECUTE privilege on the DBMS_RLS package to PUBLIC. Access is granted only to EXECUTE_CATALOG_ROLE, so schemas calling the package must have that role assigned to them.</P
+></BLOCKQUOTE
+><P
+CLASS="para"
+>Oracle discusses each of these topics in a different area of its documentation, making it difficult to pull them all together into a sensible, easy-to-deploy feature. This chapter takes a different approach. I will explain each area of functionality and the standalone steps needed to use them, but then immediately move to an extended example that will show you exactly how to implement FGAC in your own environment.<A
+CLASS="indexterm"
+NAME="AUTOID-5010"
+></A
+> </P
+></DIV
+></DIV
+><DIV
+CLASS="htmlnav"
+><P
+></P
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"><TABLE
+WIDTH="515"
+BORDER="0"
+CELLSPACING="0"
+CELLPADDING="0"
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch07_07.htm"
+TITLE="7.7 New DBMS_UTILITY Features"
+><IMG
+SRC="../gifs/txtpreva.gif"
+ALT="Previous: 7.7 New DBMS_UTILITY Features"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="book"
+HREF="index.htm"
+TITLE="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+><IMG
+SRC="../gifs/txthome.gif"
+ALT="Oracle PL/SQL Programming Guide to Oracle 8i Features"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+><A
+CLASS="sect1"
+HREF="ch08_02.htm"
+TITLE="8.2 CREATE CONTEXT: Creating Contexts"
+><IMG
+SRC="../gifs/txtnexta.gif"
+ALT="Next: 8.2 CREATE CONTEXT: Creating Contexts"
+BORDER="0"></A
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+VALIGN="TOP"
+WIDTH="172"
+>7.7 New DBMS_UTILITY Features</TD
+><TD
+ALIGN="CENTER"
+VALIGN="TOP"
+WIDTH="171"
+><A
+CLASS="index"
+HREF="index/idx_0.htm"
+TITLE="Book Index"
+><IMG
+SRC="../gifs/index.gif"
+ALT="Book Index"
+BORDER="0"></A
+></TD
+><TD
+ALIGN="RIGHT"
+VALIGN="TOP"
+WIDTH="172"
+>8.2 CREATE CONTEXT: Creating Contexts</TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="515"
+TITLE="footer"></DIV
+><IMG SRC="../gifs/smnavbar.gif"
+USEMAP="#map"
+BORDER="0"
+ALT="The Oracle Library Navigation">
+
+<P><font size="-1">
+<a href="../copyrght.htm">Copyright (c) 2000</a> O'Reilly &amp; Associates. All rights reserved.
+</font></P>
+
+<MAP NAME="map">
+
+<AREA SHAPE="RECT"
+COORDS="0,0,35,30"
+HREF="../index.htm"
+ALT="Library Home">
+
+<AREA SHAPE="RECT"
+COORDS="40,0,95,30"
+HREF="../prog2/index.htm"
+ALT="Oracle PL/SQL Programming, 2nd. Ed.">
+
+<AREA SHAPE="RECT"
+COORDS="100,0,200,30"
+HREF="index.htm"
+ALT="Guide to Oracle 8i Features">
+
+<AREA SHAPE="RECT"
+COORDS="205,0,245,30"
+HREF="../bipack/index.htm"
+ALT="Oracle Built-in Packages">
+
+<AREA SHAPE="RECT"
+COORDS="250,0,320,30"
+HREF="../advprog/index.htm"
+ALT="Advanced PL/SQL Programming with Packages">
+
+<AREA SHAPE="RECT"
+COORDS="325,0,420,30"
+HREF="../webapp/index.htm"
+ALT="Oracle Web Applications">
+
+<AREA SHAPE="RECT"
+COORDS="425,0,490,30"
+HREF="../langpkt/index.htm"
+ALT="Oracle PL/SQL Language Pocket Reference">
+
+<AREA SHAPE="RECT"
+COORDS="495,0,570,30"
+HREF="../bipkt/index.htm"
+ALT="Oracle PL/SQL Built-ins Pocket Reference">
+</MAP>
+
+</BODY
+>
+<!-- Mirrored from liso.cs.pusan.ac.kr by HTTrack Website Copier/3.x [XR&CO'2001] -->
+</HTML
+>

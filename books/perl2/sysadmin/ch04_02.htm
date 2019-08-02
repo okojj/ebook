@@ -1,0 +1,1608 @@
+<html>
+<head>
+<title>NT/2000 Process Control  (Perl for System Administration)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="David N. Blank-Edelman">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1565926099L" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="NT/2000 Process Control">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Perl for System Administration"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch04_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch04_01.htm">Chapter 4: User Activity</a></td><td align="right" valign="top" width="172"><a href="ch04_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">4.2. NT/2000 Process Control</h2>
+
+
+
+
+
+<p>
+<a name="INDEX-277"></a><a name="INDEX-278"></a>We're going to briefly look at
+four different ways to deal with process control on NT/2000 because
+each of these approaches opens up a door to interesting functionality
+outside the scope of our discussion. We're primarily going to
+concentrate on two tasks: finding all of the running processes and
+killing select processes.</p>
+
+
+
+
+
+<a name="ch04-2-fm2xml"></a>
+<h3 class="sect2">4.2.1. Using the Microsoft Resource Kit Binaries</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-279"></a>As we've mentioned in <a href="ch03_01.htm">Chapter 3, "User Accounts"</a>, the NT Resource Kit is a wonderful source of
+scripts and information. The two programs we are going to use from
+the resource kit are <tt class="command">pulist.exe</tt> and
+<tt class="command">kill.exe</tt>. The former lists processes, the second
+nukes them. There is another utility in the resource kit similar to
+<tt class="command">pulist.exe</tt> called <tt class="command">tlist.exe</tt>
+that can list processes in a pleasant tree format, but it but lacks
+some features of <tt class="command">pulist.exe</tt>. For instance,
+<tt class="command">pulist.exe</tt> can list processes on other machines
+besides the current one.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-280"></a><a name="INDEX-281"></a>Here's an excerpt from some
+<tt class="command">pulist</tt> output:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Process           PID  User
+TAPISRV.EXE       119  NT AUTHORITY\SYSTEM
+TpChrSrv.exe      125  NT AUTHORITY\SYSTEM
+RASMAN.EXE        131  NT AUTHORITY\SYSTEM
+mstask.exe        137  NT AUTHORITY\SYSTEM
+mxserver.exe      147  NT AUTHORITY\SYSTEM
+PSTORES.EXE       154  NT AUTHORITY\SYSTEM
+NDDEAGNT.EXE      46   OMPHALOSKEPSIS\Administrator
+explorer.exe      179  OMPHALOSKEPSIS\Administrator
+SYSTRAY.EXE       74   OMPHALOSKEPSIS\Administrator
+cardview.exe      184  OMPHALOSKEPSIS\Administrator
+ltmsg.exe         167  OMPHALOSKEPSIS\Administrator
+daemon.exe        185  OMPHALOSKEPSIS\Administrator</pre>
+</blockquote>
+
+
+
+
+
+<p>Using <tt class="command">pulist.exe</tt> from Perl is trivial.
+Here's one way to do it:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$pulistexe = "\\bin\\PULIST.EXE"; # location of the executable
+open(PULIST,"$pulistexe|") or die "Can't execute $pulistexe:$!\n";
+
+scalar &lt;PULIST&gt;; # drop the first title line
+while(defined($_=&lt;PULIST&gt;)){
+    ($pname,$pid,$puser) = /^(\S+)\s*(\d+)\s*(.+)/;
+    print "$pname:$pid:$puser\n";
+
+close(PULIST);</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<a name="INDEX-282"></a><a name="INDEX-283"></a>The other program we mentioned,
+<tt class="command">kill.exe,</tt> is equally easy to use. It takes as an
+argument either a process ID or part of a task name. I recommend the
+process ID format, to err on the safe side, since it is very easy to
+kill the wrong process if you use task names.</p>
+
+
+
+
+
+<p>
+<tt class="command">kill.exe</tt> offers two different ways to shoot down
+processes. The first is the polite death: <tt class="command">kill.exe
+&lt;process id&gt; </tt>will ask that process to shut itself
+down. But if we add <em class="emphasis">/f</em> to the command line,
+<tt class="command">kill.exe /f &lt;process id&gt;</tt> works more like the
+native Perl function and kills the process with extreme prejudice.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch04-3-fm2xml"></a>
+<h3 class="sect2">4.2.2. Using the Win32::IProc Module</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-284"></a><a name="INDEX-285"></a><a name="INDEX-286"></a>Our second approach uses the
+<tt class="literal">Win32::IProc</tt> module by Amine Moulay Ramdane.
+Though you wouldn't know it from the name,
+<tt class="literal">Win32::IProc</tt> is actually more useful for our
+purposes than <tt class="literal">Win32::Process</tt>, the more obviously
+named choice. <tt class="literal">Win32::Process</tt> has one significant
+drawback that takes it out of the running: it is designed to control
+processes that are started by the module itself. We're more
+interested in the processes <em class="emphasis">other</em> users have
+started. If you have trouble installing
+<tt class="literal">Win32::IProc</tt>, see the section <a href="ch04_05.htm#ch04-56559">Section 4.5, "Module Information for This Chapter"</a> at the end of the chapter for
+installation hints.</p>
+
+
+
+
+
+<p>First, create a process object like so:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::IProc;
+
+# note case of object is important, must be "IProc"
+$pobj = new Win32::IProc or die "Unable to create proccess object: $!\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>This object is mostly used as a springboard from which to launch the
+module's object methods. For instance, to find the list of all
+of the running processes on a machine, we would use:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">$pobj-&gt; EnumProccesses(\@processlist) or 
+   die "Unable to get process list:$!\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">@processlist</tt> is now an array of references to
+anonymous hashes. Each anonymous hash has two keys,
+<tt class="literal">ProcessName</tt> and <tt class="literal">ProcessId</tt>, with
+their expected values. To display this info nicely, we could use the
+following code:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::IProc;
+
+$pobj=new Win32::IProc or die "Unable to create process object: $!\n";
+
+$pobj-&gt;EnumProcesses(\@processlist) or 
+   die "Unable to get process list:$!\n";
+
+foreach $process (@processlist){
+  $pid  = $process-&gt;{ProcessId};
+  $name = $process-&gt;{ProcessName};
+  write;
+}
+
+format STDOUT_TOP =
+Process ID      Process Name
+==========      ===============================
+.
+format STDOUT =
+@&lt;&lt;&lt;&lt;&lt;&lt;&lt;        @&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;
+$pid,           $name
+.</pre>
+</blockquote>
+
+
+
+
+
+<p>We get output like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Process ID      Process Name
+==========      ================================
+0               System-Idle
+2               System
+25              smss.exe
+39              winlogon.exe
+41              services.exe
+48              lsass.exe
+78              spoolss.exe
+82              DKSERVICE.EXE
+...</pre>
+</blockquote>
+
+
+
+
+
+<p>One difference between this approach and our use of
+<tt class="command">pulist.exe</tt> earlier is that
+<tt class="literal">Win32::IProc</tt> does not have the ability to tell you
+the user context for a given process. If this information is
+important to you, you will need to use <tt class="command">pulist.exe</tt>.</p>
+
+
+
+
+
+<p>
+<tt class="command">pulist.exe</tt> can only produce one kind of output,
+but the fun with <tt class="literal">Win32::IProc</tt> is just beginning.
+Let's say you were curious about not only which processes were
+running, but also which executable and dynamically loaded libraries
+(<em class="filename">.dll</em>s) each process was using. Finding this
+information is simple:<a name="INDEX-287"></a><a name="INDEX-288"></a><a name="INDEX-289"></a>
+</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># imports the FULLPATH constant to show the path for the dlls, could be NOPATH
+use Win32::IProc "FULLPATH"; 
+$pobj = new Win32::IProc;
+
+$pobj-&gt;EnumProcesses(\@processlist) or 
+  die "Unable to get process list:$!\n";
+
+foreach $process (@processlist){
+  print "\n",$process-&gt;{ProcessName},
+        "\n",('=' x length($process-&gt;{ProcessName})),"\n";
+  
+  $pobj-&gt;GetProcessModules($process-&gt;{ProcessId},\@modules,FULLPATH);
+  print join("\n",map {lc $_-&gt;{ModuleName}} @modules),"\n";
+  
+ }</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">GetProcessModules( )</tt> takes a process ID, an
+array reference, and a flag that indicates whether the full directory
+path of the module will be returned. The array we reference is
+populated with references to anonymous hashes that contain
+information about each module used for that process. In our code we
+gather the names of all of the modules. <tt class="literal">map( )</tt>
+is used to iterate over the array of references, dereferencing each
+anonymous hash and looking up the <tt class="literal">ModuleName</tt> key
+as we go.</p>
+
+
+
+
+
+<p>Here's an excerpt from some sample output:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">smss.exe
+========
+\systemroot\system32\smss.exe
+c:\winnt\system32\ntdll.dll
+
+winlogon.exe
+============
+\??\c:\winnt\system32\winlogon.exe
+c:\winnt\system32\ntdll.dll
+c:\winnt\system32\msvcrt.dll
+c:\winnt\system32\kernel32.dll
+c:\winnt\system32\advapi32.dll
+c:\winnt\system32\user32.dll
+c:\winnt\system32\gdi32.dll
+c:\winnt\system32\rpcrt4.dll
+c:\winnt\system32\userenv.dll
+c:\winnt\system32\shell32.dll
+c:\winnt\system32\shlwapi.dll
+c:\winnt\system32\comctl32.dll
+c:\winnt\system32\netapi32.dll
+c:\winnt\system32\netrap.dll
+c:\winnt\system32\samlib.dll
+c:\winnt\system32\winmm.dll
+c:\winnt\system32\cwcmmsys.dll
+c:\winnt\system32\cwcfm3.dll
+c:\winnt\system32\msgina.dll
+c:\winnt\system32\rpclts1.dll
+c:\winnt\system32\rpcltc1.dll...</pre>
+</blockquote>
+
+
+
+
+
+<p>Let's take this train of thought one stop further. We can find
+out <em class="emphasis">even more</em> about a running process with just
+a little bit of effort. To get the information we need about a
+process, we first have to get a handle for that process.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-290"></a>A process
+handle can be thought of as an open connection to a particular
+process. To illuminate the difference between a process handle and a
+process ID, let's take the analogy of a trailer park. If each
+trailer in the park is a process, then you can think of the process
+ID as the address of a trailer. It is a way of finding that specific
+trailer. A process handle is like the power/water/phone lines that
+run from the park itself into a specific trailer. Once these lines
+are in place, not only can you find a particular trailer, but you can
+also begin to communicate and exchange information with it from the
+outside.</p>
+
+
+
+
+
+<p>To get the process handle from a process if we have its ID, we use
+<tt class="literal">Win32::IProc</tt>'s <tt class="literal">Open( )</tt>
+method. <tt class="literal">Open( )</tt> takes a process ID, an access
+flag, an inheritance flag, and a reference to the scalar that will
+store the handle. The access flags we'll be using in the
+following example request just enough access to query a process for
+information. For more information on these flags, see the
+<tt class="literal">Win32::IProc</tt> documentation and the
+"Processes and Threads" section of the Win32 SDK base
+services documentation found on <a href="http://msdn.microsoft.com">http://msdn.microsoft.com</a>. Process handles
+that are <tt class="literal">Open( )</tt>'d need to be closed using
+<tt class="literal">CloseHandle( )</tt>.</p>
+
+
+
+
+
+<p>With process handle in hand, we can use the <tt class="literal">Kill(
+)</tt> method to kill this process:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting"># kill process and make it exit with that code
+$pobj-&gt;Kill($handle,$exitcode);</pre>
+</blockquote>
+
+
+
+
+
+<p>But killing processes is not the only use for process handles. For
+instance, we can use methods like <tt class="literal">GetStatus( )</tt>
+to learn more about the process. Here's sample code that dumps
+out timing information about a given process ID:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::IProc qw(PROCESS_QUERY_INFORMATION INHERITED DIGITAL);
+
+$pobj = new Win32::IProc;
+
+$pobj-&gt;Open($ARGV[0],PROCESS_QUERY_INFORMATION,INHERITED,\$handle) or
+  warn "Can't get handle:".$pobj-&gt;LastError(  )."\n";
+
+# DIGITAL = pretty-printed times
+$pobj-&gt;GetStatus($handle,\$statusinfo,DIGITAL); 
+
+$pobj-&gt;CloseHandle($handle);
+
+while (($procname,$value)=each %$statusinfo){
+  print "$procname: $value\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Its output looks something like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">KernelTime: 00:00:22:442:270
+ExitDate: 
+ExitTime: 
+CreationDate: 29/7/1999
+CreationTime: 17:09:28:100
+UserTime: 00:00:11:566:632</pre>
+</blockquote>
+
+
+
+
+
+<p>Now we know when this process was started and how much system time it
+has taken up. The <tt class="literal">ExitDate</tt> and
+<tt class="literal">ExitTime</tt> fields are blank because the process is
+still running. You may be wondering how these fields could ever get
+filled in, given that one has to use the process ID of a running
+process to get a process handle. There are two answers to this
+question. First, it is possible to get a process handle for a running
+process and have that process die before you've closed the
+handle. A <tt class="literal">GetStatus( )</tt> at that point will yield
+exit information for the deceased process. The second possibility
+involves a method we haven't seen yet called <tt class="literal">Create(
+)</tt>.</p>
+
+
+
+
+
+<p>
+<tt class="literal">Create(
+)</tt><a name="INDEX-291"></a> allows you to launch processes
+from <tt class="literal">Win32::IProc</tt>, similar to the
+<tt class="literal">Win32::Process</tt> functionality mentioned earlier. If
+you do launch processes from the module, then the process object
+(<tt class="literal">$pobj</tt>) we've mostly ignored so far will
+contain process and thread information for the created process. With
+this information, you can do fun things like manipulate thread
+priorities and the windows of that process. We're not going to
+look at this functionality, but its mention does offer us a good
+segue to the next process module approach.<a name="INDEX-292"></a><a name="INDEX-293"></a>
+</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch04-4-fm2xml"></a>
+<h3 class="sect2">4.2.3. Using the Win32::Setupsup Module</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-294"></a><a name="INDEX-295"></a>If last section's mention
+of manipulating the windows of a process piqued your interest, you
+will like our next approach. For this approach, we'll be
+looking at a module by Jens Helberg called
+<tt class="literal">Win32::Setupsup</tt>. It's called
+"Setupsup" because it is primarily designed to be used to
+supplement software installation (which often uses a program called
+<tt class="command">Setup.exe</tt>).</p>
+
+
+
+
+
+<p>Some installers can be run in so-called "silent mode" for
+totally automated installation. In this mode they ask no questions
+and require no "OK" buttons to be pushed, freeing the
+administrator from having to babysit the install. Software
+installation mechanisms that do not offer this mode (and there are
+far too many of them) make a system administrator's life
+difficult. <tt class="literal">Win32::Setupsup</tt> helps deal with these
+deficiencies. It can find information on running processes and
+manipulate them (or manipulate them dead if you so choose).</p>
+
+
+
+
+
+<p>To get and install <tt class="literal">Win32::Setupsup</tt>, you should
+refer to the section <a href="ch04_05.htm#ch04-56559">Section 4.5, "Module Information for This Chapter"</a> later for
+hints on getting it installed.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-296"></a>With
+<tt class="literal">Win32::Setupsup</tt>, getting the list of running
+processes is easy. Here's a slightly different version of the
+first full code sample we saw in the last section:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::Setupsup;
+
+$machine = ""; # query the list on the current machine
+
+Win32::Setupsup::GetProcessList($machine, \@processlist, \@threadlist) or 
+  die "process list error: ".Win32::Setupsup::GetLastError(  )."\n";
+
+pop(@processlist); # remove the bogus entry always appended to the list
+foreach $processlist (@processlist){
+  $pid  = $processlist-&gt;{pid};
+  $name = $processlist-&gt;{name};
+  write;
+}
+
+format STDOUT_TOP =
+Process ID      Process Name
+==========      ===============================
+.
+format STDOUT =
+@&lt;&lt;&lt;&lt;&lt;&lt;&lt;        @&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;
+$pid,           $name
+.</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<a name="INDEX-297"></a>Killing processes is equally easy:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">KillProcess($pid, $exitvalule, $systemprocessflag) or 
+  die "Unable to kill process: ".Win32::Setupsup::GetLastError(  )."\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>The last two arguments are optional. The first kills the process and
+sets its exit value accordingly (by default it is set to
+<tt class="literal">0</tt>). The second argument allows you to kill
+system-run processes (providing you have the <tt class="literal">Debug
+Programs</tt> user right).</p>
+
+
+
+
+
+<p>
+<a name="INDEX-298"></a><a name="INDEX-299"></a>That's the boring stuff. We can take
+process manipulation to yet another level by interacting with the
+windows a running process may have open. To list all of the windows
+available on the desktop, we use:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Win32::Setupsup::EnumWindows(\@windowlist) or 
+  die "process list error: ".Win32::Setupsup::GetLastError(  )."\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">@windowlist</tt> now contains a list of window handles
+that just look like normal numbers when you print them. To learn more
+about each window, you can use a few different functions. For
+instance, to find the titles of each window, you can use
+<tt class="literal">GetWindowText( )</tt> like so:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::Setupsup;
+
+Win32::Setupsup::EnumWindows(\@windowlist) or 
+  die "process list error: ".Win32::Setupsup::GetLastError(  )."\n";
+
+foreach $whandle (@windowlist){
+    if (Win32::Setupsup::GetWindowText($whandle,\$text)){
+      print "$whandle: $text","\n";
+    }
+    else {
+      warn "Can't get text for $whandle" .    
+            Win32::Setupsup::GetLastError(  )."\n";
+    }
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Here's a little bit of sample output:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">66130: chapter02 - Microsoft Word
+66184: Style
+194905150: 
+66634: setupsup - WordPad
+65716: Fuel
+328754: DDE Server Window
+66652: 
+66646: 
+66632: OleMainThreadWndName</pre>
+</blockquote>
+
+
+
+
+
+<p>As you can see, some windows have titles, while others do not.
+Observant readers might notice something else interesting about this
+output. Window <tt class="literal">66130</tt> belongs to a Microsoft Word
+session that is currently running (it is actually the one this
+chapter was composed into). Window <tt class="literal">66184</tt> looks
+vaguely like the name of another window that might be connected to
+Microsoft Word. How can we tell if they are related?</p>
+
+
+
+
+
+<p>
+<tt class="literal">Win32::Setupsup</tt> also has an
+<tt class="literal">EnumChildWindows( )</tt> function that can show us
+the children of any given window. Let's use it to write
+something that will show us a basic tree of the current window
+hierarchy:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::Setupsup;
+
+# get the list of windows
+Win32::Setupsup::EnumWindows(\@windowlist) or 
+  die "process list error: ".Win32::Setupsup::GetLastError(  )."\n";
+
+# turn window handle list into a hash
+# NOTE: this conversion populates the hash with plain numbers and 
+# not actual window handles as keys. Some functions, like 
+# GetWindowProperties (which we'll see in a moment), can't use these 
+# converted numbers. Caveat implementor.
+for (@windowlist){$windowlist{$_}++;}
+
+# check each window for children
+foreach $whandle (@windowlist){
+    if (Win32::Setupsup::EnumChildWindows($whandle,\@children)){
+       # keep a sorted list of children for each window
+       $children{$whandle} = [sort {$a &lt;=&gt;$b} @children];     
+
+       # remove all children from the hash, we won't directly 
+       # iterate over them
+       foreach $child (@children){
+         delete $windowlist{$child};
+       }
+    }
+}
+
+# iterate through the list of parent or childless windows and
+# recursively print each window handle and its children (if any)
+foreach my $window (sort {$a &lt;=&gt; $b} keys %windowlist){
+ &amp;printfamily($window,0);
+}
+
+# print a given window handle number and its children (recursively)
+sub printfamily {
+  # starting window, how deep in a tree are we?
+  my($startwindow,$level) = @_; 
+
+  # print the window handle number at the appropriate indentation
+  print(("  " x $level)."$startwindow\n");
+ 
+  return unless (exists $children{$startwindow}); # no children, done.
+ 
+  # otherwise, we have to recurse for each child
+  $level++;
+  foreach $childwindow (@{$children{$startwindow}}){
+     &amp;printfamily($childwindow,$level);
+  }
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>There's one last window property function we should look at
+before moving on:<tt class="literal"> GetWindowProperties( )</tt>.
+<tt class="literal">GetWindowProperties( )</tt> is basically a catchall
+for the rest of the window properties we haven't seen yet. For
+instance, using <tt class="literal">GetWindowProperties( )</tt> we can
+query the process ID for the process that created a specific window.
+This could be combined with some of the functionality we just saw for
+the <tt class="literal">Win32::IProc</tt>
+module.<a name="INDEX-300"></a><a name="INDEX-301"></a>
+</p>
+
+
+
+
+
+<p>The <tt class="literal">Win32::Setupsup</tt> documentation contains a list
+of the available properties that can be queried. Let's use one
+of them to write a very simple program that will print the dimensions
+of the rectangle of a window on the desktop.
+<tt class="literal">GetWindowProperties( )</tt> takes three arguments: a
+window handle, a reference to an array that contains the names of the
+properties to query, and a reference to a hash where the query
+results will be stored. Here's the code we need for our task:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Win32::Setupsup::GetWindowProperties($ARGV[0],[rect,id],\%info);
+
+print "\t" . $info{rect}{top} . "\n";
+print $info{rect}{left} . " -" . $ARGV[0] . 
+      "- " . $info{rect}{right} . "\n";
+print "\t" . $info{rect}{bottom} . "\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>The output is a bit cutesy. Here's a sample showing the top,
+left, right, and bottom dimensions of the window with handle
+<tt class="literal">66180</tt>:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">154
+272 -66180- 903
+	595</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<tt class="literal">GetWindowProperties( )</tt> returns a special data
+structure for only one property, <tt class="literal">rect</tt>. All of the
+others will simply show up in the referenced hash as normal keys and
+values. If you are uncertain about the properties being returned by
+Perl for a specific window, the <tt class="command">windowse</tt> utility
+found at <a href="http://greatis.virtualave.net/products.htm">http://greatis.virtualave.net/products.htm</a> is
+often helpful.<a name="INDEX-302"></a>
+</p>
+
+
+
+
+
+<p>Now that we've seen how to determine various window properties,
+wouldn't it be spiffy if we could make changes to some of these
+properties? For instance, it might be useful to change the title of a
+particular window. With this capability, we could create scripts that
+used the window title as a status indicator:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">"Prestidigitation In Progress ... 32% complete"</pre>
+</blockquote>
+
+
+
+
+
+<p>
+<a name="INDEX-303"></a>Making this change to a window is a single
+function call:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">Win32::Setupsup::SetWindowText($handle,$text);</pre>
+</blockquote>
+
+
+
+
+
+<p>We can also set the <tt class="literal">rect</tt> property we just saw.
+This code makes the specified window jump to the position we've
+specified:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::Setupsup;
+
+$info{rect}{left}  = 0;
+$info{rect}{right} = 600;
+$info{rect}{top}   = 10;
+$info{rect}{bottom}= 500;
+Win32::Setupsup::SetWindowProperties($ARGV[0],\%info);</pre>
+</blockquote>
+
+
+
+
+
+<p>I've saved the most impressive function for last. With
+<tt class="literal">SendKeys( )</tt> it is possible to send arbitrary
+keystrokes to any window on the desktop. For example:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::Setupsup;
+
+$texttosend = "\\DN\\Low in the gums";
+Win32::Setupsup::SendKeys($ARGV[0],$texttosend,'',0);</pre>
+</blockquote>
+
+
+
+
+
+<p>This will send a "down cursor key" followed by some text
+to the specified window. The arguments to <tt class="literal">SendKeys(
+)</tt> are pretty simple: window handle, text to send, a flag
+to determine if a window should be activated for each keystroke, and
+an optional time between keystrokes. Special key codes like the
+"down cursor" are surrounded by backslashes. The list of
+available keycodes can be found in the module's
+documentation.<a name="INDEX-304"></a>
+</p>
+
+
+
+
+
+<p>With the help of this module, we've taken process control to an
+entirely new level. Now it is possible to remotely control
+applications (and parts of the OS) without requiring the explicit
+cooperation of those applications. We don't need them to offer
+command line support or a special API. We have the ability to
+essentially script a GUI, useful in a myriad of system administration
+contexts.<a href="#FOOTNOTE-1">[1]</a><a name="INDEX-305"></a>
+</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-1"></a>
+<p>[1]Another module for GUI scripting you may
+find useful is Ernesto Guisado's
+<tt class="literal">Win32Guitest</tt>. It offers similar functionality to
+<tt class="literal">Win32::Setupsup</tt>.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<a name="ch04-5-fm2xml"></a>
+<h3 class="sect2">4.2.4. Using Window Management Instrumentation (WMI)</h3>
+
+
+
+
+
+<p>
+<a name="INDEX-306"></a><a name="INDEX-307"></a><a name="INDEX-308"></a>Let's look at one final approach to
+NT/2000 process control before we switch to another operating system.
+This approach might be subtitled "Futureland" because it
+involves a technology which isn't widely available now, but is
+right on the horizon. Window Management Instrumentation (WMI) is
+available in Windows 2000 (and NT4.0SP4+ if explicitly
+installed).<a href="#FOOTNOTE-2">[2]</a> Over time, when Windows 2000
+is widely deployed, this has the potential to become an important
+part of the NT/2000 administration landscape.</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-2"></a>
+<p>[2]The "Download SDK"<em class="emphasis"></em>page linked off of the WMI section at <a href="http://msdn.microsoft.com/developer/sdk">http://msdn.microsoft.com/developer/sdk</a> lets
+you download the core WMI libraries needed to run WMI on an NT4.0SP4
+(or higher) machine.</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<p>Unfortunately WMI is one of those not-for-the-faint-of-heart
+technologies that gets very complex, very quickly. It is based on an
+object-oriented model that has the power to represent not only data,
+but relationships between objects as well. For instance, it is
+possible to create an association between a web server and the
+Redundant Arrays of Independent Disks (RAID) that holds the data for
+this server, so if the RAID device should fail, a problem for the web
+server will be reported as well. To deal with this complexity,
+we're just going to skim the very surface of WMI by providing a
+small and simple introduction, followed by a few code samples.</p>
+
+
+
+
+
+<p>If you want to get a deeper look at this technology, I recommend
+downloading the WMI white papers, LearnWBM tutorial, and WMI SDK from
+the WMI section found at <a href="http://msdn.microsoft.com/developer/sdk">http://msdn.microsoft.com/developer/sdk</a>. You
+should also have a look at the information found provided at the
+Distributed Management Task Force's web site, <a href="http://www.dtmf.org">http://www.dtmf.org</a>. In the meantime, here is
+a brief synopsis to get you started.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-309"></a>WMI is the Microsoft implementation
+and extension of an unfortunately named initiative called the
+<em class="emphasis">Web-Based Enterprise Management</em> initiative, or
+WBEM for short. Though the name conjures up visions of something that
+requires a browser, it has virtually nothing to do with the World
+Wide Web. The companies that were part of the Distributed Management
+Task Force (DMTF) wanted to create something that could make it
+easier to perform management tasks using browsers. Putting the name
+aside, it is clearer to say that WBEM defines a data model for
+management and instrumentation information. It provides
+specifications for organizing, accessing, and moving this data
+around. WBEM is also meant to offer a cohesive frontend for accessing
+data provided by the other management protocols like Simple Network
+Management Protocol (SNMP) (discussed in <a href="ch10_01.htm">Chapter 10, "Security and Network Monitoring"</a>) and Common Management Information Protocol
+(CMIP). <a name="INDEX-310"></a><a name="INDEX-311"></a>
+</p>
+
+
+
+
+
+<p>
+<a name="INDEX-312"></a><a name="INDEX-313"></a>Data in the WBEM world is
+organized using the <em class="emphasis">Common Information Model</em>
+(CIM). CIM is the source of the power and complexity in WBEM/WMI. It
+provides an extensible data model that contains objects and object
+classes for any physical or logical entity one might want to manage.
+For instance, there are object classes for entire networks, and
+objects for a single slot in a specific machine. There are objects
+for hardware settings and objects for software application settings.
+On top of this, CIM allows us to define object classes that describe
+relationships between other objects.</p>
+
+
+
+
+
+<p>This data model is documented in two parts: the CIM
+<em class="emphasis">Specification</em> and the CIM
+<em class="emphasis">Schema</em>. The former describes the
+<em class="emphasis">how</em> of CIM (how the data will be specified, its
+connection to prior management standards, etc.); the latter provides
+the <em class="emphasis">what</em> of CIM (the actual objects). This
+division may remind you of the SNMP SMI and MIB relationship (see
+<a href="ch10_01.htm">Chapter 10, "Security and Network Monitoring"</a>).</p>
+
+
+
+
+
+<p>In practice, you'll be consulting the CIM Schema more than the
+CIM Specification once you get the hang of how the data is
+represented. The schema format (called MOF for <em class="emphasis">Managed
+Object Format</em>) is fairly easy to
+read.<a name="INDEX-314"></a><a name="INDEX-315"></a>
+</p>
+
+
+
+
+
+<p>
+<a name="INDEX-316"></a>The CIM
+Schema has two layers:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>The <em class="emphasis">core model</em> for objects and classes useful in
+all types of WBEM interaction.</p>
+</li>
+<li>
+<p>The <em class="emphasis">common model</em> for generic objects that are
+vendor- and operating-system independent. Within the common model
+there are currently five specific areas defined: Systems, Devices,
+Applications, Networks, and Physical.</p>
+</li>
+</ul>
+<p>Built on top of these two layers can be any number of
+<em class="emphasis">Extension schema</em> that define objects and classes
+for vendor- and OS-specific information.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-317"></a>A crucial part
+of WMI that distinguishes it from generic WBEM implementations is the
+Win32 Schema, an extension schema for Win32-specific information
+built on the core and common models. WMI also adds to the generic
+WBEM framework by providing Win32-specific access mechanisms to the
+CIM data.<a href="#FOOTNOTE-3">[3]</a>
+Using this schema extension and set of data access methods, we can
+explore how to perform process control using WMI in Perl.</p>
+<blockquote class="footnote">
+
+
+
+
+<a name="FOOTNOTE-3"></a>
+<p>[3]As much as Microsoft would like to see
+these data access mechanisms become ubiquitous, the likelihood of
+finding them in a non-Win32 environment is slight. This is why I
+refer to them as "Win32-specific."</p>
+
+
+
+
+</blockquote>
+
+
+
+
+
+<p>Two of these access methods, Open Database Connectivity (ODBC) and
+Compnent Object Model/Distributed Component Object Model (COM/DCOM),
+will receive a more complete treatment in other places in this book.
+We're going to use the latter for these examples because ODBC
+only allows us to query information from WMI (albeit in a simple,
+database-like manner). COM/DCOM allows us to both query management
+information and interact with it, crucial for the
+"control" part of process control.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-318"></a><a name="INDEX-319"></a>The Perl code that follows does not appear
+to be particularly complex, so you may wonder about the "gets
+very complex, very quickly" description. The code below looks
+simple because:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>We're only scratching the surface of WMI. We're not even
+going to touch subjects like "associations" (i.e.,
+relationships between objects and object classes).</p>
+</li>
+<li>
+<p>The management operations we are performing are simple. Process
+control in this context will consist of querying the running
+processes and being able to terminate them at will. These operations
+are easy in WMI using the Win32 Schema extension.</p>
+</li>
+<li>
+<p>Our samples are hiding the complexity of translating WMI
+documentation and code samples in VBscript/JScript to Perl code.</p>
+</li>
+<li>
+<p>Our samples are hiding the opaqueness of the debugging process. When
+WMI-related Perl code fails, it does so with very little information
+that would help debug the problem. You may receive error messages,
+but they never say <tt class="literal">ERROR: YOUR EXACT PROBLEM
+IS....</tt> You're more likely to get back
+<tt class="literal">wbemErrFailed 0x8004100</tt> or just an empty data
+structure. To be fair to Perl, most of this opaqueness comes from
+Perl's role in this process. It is acting as a frontend to a
+set of fairly complex multilayered operations that don't
+concern themselves with passing back useful feedback when something
+fails.</p>
+</li>
+</ul>
+<p>I know this sounds pretty grim, so let me offer some potentially
+helpful advice before we actually get into the code itself:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>
+<a name="INDEX-320"></a>Look at
+all of the <tt class="literal">Win32::OLE</tt> sample code you can lay your
+hands on. The ActiveState <em class="citetitle">Win32-Users</em> mailing
+list archives found at <a href="http://www.activestate.com">http://www.activestate.com</a> are a good source
+for this. If you compare this sample code to equivalent VBscript
+examples, you'll start to understand the translation idioms
+necessary. <a href="ch06_05.htm#ch06-20948">Section 4.5, "ADSI (Active Directory Service Interfaces)"</a> in <a href="ch06_01.htm">Chapter 6, "Directory Services"</a>, may also help.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-321"></a>Make
+friends with the Perl debugger, and use it to try out code snippets
+as part of this learning process. Another way to test out Perl
+snippets on Win32 platforms is to combine the TurboPerl program by
+William P. Smith (found at <a href="http://users.erols.com/turboperl/)">http://users.erols.com/turboperl/)</a> with the
+<em class="filename">dumpvar.pl</em> or <tt class="literal">Data::Dumper</tt>
+modules. It has some bugs (I recommend you save your code often), but
+in general it can make prototyping Perl code easier. Other Integrated
+Development Environment tools may also offer this functionality.</p>
+</li>
+<li>
+<p>Keep a copy of the WMI SDK handy. The documentation and the VBscript
+code examples are very helpful.</p>
+</li>
+<li>
+<p>Use the WMI object browser in the WMI SDK frequently. It helps you
+get the lay of the land.</p>
+</li>
+</ul>
+<p>Let's get to the Perl part of this section. Our initial task
+will be to determine the information we can retrieve about Win32
+processes and how we can interact with that information.</p>
+
+
+
+
+
+<p>First we need to establish a connection to a WMI
+<em class="emphasis">namespace</em>. A namespace is defined in the WMI SDK
+as "a unit for grouping classes and instances to control their
+scope and visibility." In our case we're interested in
+connecting to the root of the standard <tt class="literal">cimv2</tt>
+namespace, which contains all of the data that is interesting to us.</p>
+
+
+
+
+
+<p>We will also have to set up a connection with the appropriate
+security privileges and impersonation level. Our program will need to
+be given the privilege to debug a process and to impersonate us; in
+other words, run as the user calling the script. After we get this
+connection, we will retrieve a <tt class="literal">Win32_Process</tt>
+object (as defined in the Win32 Schema).</p>
+
+
+
+
+
+<p>There is a hard way and an easy way to create this connection and get
+the object. We'll look at both in the first example, so you get
+an idea of what the methods entail. Here's the hard way, with
+explanation to follow.</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE('in');
+
+$server = ''; # connect to local machine
+
+# get a SWbemLocator object
+$lobj = Win32::OLE-&gt;new('WbemScripting.SWbemLocator') or 
+  die "can't create locator object: ".Win32::OLE-&gt;LastError(  )."\n";
+
+# set the impersonate level to "impersonate"
+$lobj-&gt;{Security_}-&gt;{impersonationlevel}<tt class="userinput"><b> </b></tt>=<tt class="userinput"><b> </b></tt>3;
+
+# use it to get a an SWbemServices object 
+$sobj = $lobj-&gt;ConnectServer($server, 'root\cimv2') or 
+  die "can't create server object: ".Win32::OLE-&gt;LastError(  )."\n";
+
+# get the schema object
+$procschm = $sobj-&gt;Get('Win32_Process');</pre>
+</blockquote>
+
+
+
+
+
+<p>The hard way involves:</p>
+
+
+
+
+
+<ul>
+<li>
+<p>Getting a locator object, used to find a connection to a server object</p>
+</li>
+<li>
+<p>Setting the impersonation so our program will run with our privileges</p>
+</li>
+<li>
+<p>Using this locator object to get a server connection to the
+<tt class="literal">cimv2</tt> WMI namespace</p>
+</li>
+<li>
+<p>Using this connection to retrieve a <tt class="literal">Win32_Process</tt>
+object</p>
+</li>
+</ul>
+<p>
+<a name="INDEX-322"></a>We can do this all in one
+step using a COM <em class="emphasis">moniker's display name</em>.
+According to the WMI SDK, "in Common Object Model (COM), a
+moniker is standard mechanism for encapsulating the location and
+binding of another COM object. The textual representation of a
+moniker is called a display name." Here's an easy way to
+do the same thing as the previous code snippet:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE('in');
+
+$procschm = Win32::OLE-&gt;GetObject(                    
+  'winmgmts:{impersonationLevel=impersonate}!Win32_Process')
+     or die "can't create server object: ".Win32::OLE-&gt;LastError(  )."\n";</pre>
+</blockquote>
+
+
+
+
+
+<p>Now that we have a <tt class="literal">Win32_Process</tt> object in hand,
+we can use it to show us the relevant parts of the schema that
+represents processes under Win32. This includes all of the available
+<tt class="literal">Win32_Process</tt> properties and methods we can use.
+The code to do this is fairly simple; the only magic in the following
+code is the use of the <tt class="literal">Win32::OLE</tt><tt class="literal">in</tt> operator. To explain this, we need a quick
+digression.</p>
+
+
+
+
+
+<p>
+<a name="INDEX-323"></a>Our <tt class="literal">$procschm</tt> object
+has two special properties, <tt class="literal">Properties_</tt> and
+<tt class="literal">Methods_</tt>. Each holds a special child object, known
+as a <em class="emphasis">collection object</em> in COM parlance. A
+collection object is just a parent container for other objects; in
+this case, they are holding the schema's property method
+description objects. The <tt class="literal">in</tt> operator just
+returns an array with references to each child object of a container
+object. Once we have this array, we can iterate through it, returning
+the <tt class="literal">Name</tt> property of each child object as we go.
+See the section on <a href="ch06_05.htm#ch06-20948">Section 4.5, "ADSI (Active Directory Service Interfaces)"</a> in <a href="ch06_01.htm">Chapter 6, "Directory Services"</a> for another prominent use of
+<tt class="literal">in</tt>. Here's what the code looks like:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE('in');
+
+# connect to namespace, set the impersonate level, and retrieve the 
+# Win32_process object just by using a display name
+$procschm = Win32::OLE-&gt;GetObject(
+             'winmgmts:{impersonationLevel=impersonate}!Win32_Process')
+     or die "can't create server object: ".Win32::OLE-&gt;LastError(  )."\n"; 
+
+print "--- Properties ---\n";
+print join("\n",map {$_-&gt;{Name}}(in $procschm-&gt;{Properties_}));
+print "\n--- Methods ---\n";
+print join("\n",map {$_-&gt;{Name}}(in $procschm-&gt;{Methods_}));</pre>
+</blockquote>
+
+
+
+
+
+<p>The output (on an NT4.0 machine) looks like this:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">--- Properties ---
+Caption
+CreationClassName
+CreationDate
+CSCreationClassName
+CSName
+Description
+ExecutablePath
+ExecutionState
+Handle
+InstallDate
+KernelModeTime
+MaximumWorkingSetSize
+MinimumWorkingSetSize
+Name
+OSCreationClassName
+OSName
+PageFaults
+PageFileUsage
+PeakPageFileUsage
+PeakWorkingSetSize
+Priority
+ProcessId
+QuotaNonPagedPoolUsage
+QuotaPagedPoolUsage
+QuotaPeakNonPagedPoolUsage
+QuotaPeakPagedPoolUsage
+Status
+TerminationDate
+UserModeTime
+WindowsVersion
+WorkingSetSize
+--- Methods ---
+Create
+Terminate
+GetOwner
+GetOwnerSid</pre>
+</blockquote>
+
+
+
+
+
+<p>Let's get down to the business at hand. To retrieve a list of
+running processes, we need to ask for all instances of
+<tt class="literal">Win32_Process</tt> objects:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">use Win32::OLE('in');
+
+# perform all of the initial steps in one swell foop
+
+$sobj = Win32::OLE-&gt;GetObject(
+                      'winmgmts:{impersonationLevel=impersonate}')
+      or die "can't create server object: ".Win32::OLE-&gt;LastError(  )."\n"; 
+
+foreach $process (in $sobj-&gt;InstancesOf("Win32_Process")){
+  print $process-&gt;{Name}." is pid #".$process-&gt;{ProcessId},"\n";
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>Our initial display name did not include a path to a specific object
+(i.e., we left off <tt class="literal">!Win32_Process</tt>). As a result,
+we receive a server connection object. When we call the
+<tt class="literal">InstancesOf( )</tt> method, it returns a collection
+object that holds all of the instances of that particular object. Our
+code visits each object in turn and prints its
+<tt class="literal">Name</tt> and <tt class="literal">ProcessId</tt> property.
+This yields a list of all the running processes.</p>
+
+
+
+
+
+<p>If we want to be a little less beneficent when iterating over each
+process, we could instead use one of the methods we saw listed above:</p>
+
+
+
+
+
+<blockquote>
+<pre class="programlisting">foreach $process (in $sobj-&gt;InstancesOf("Win32_Process")){
+  $process-&gt;Terminate(1);
+}</pre>
+</blockquote>
+
+
+
+
+
+<p>This will terminate every process running. I do not recommend you run
+this code as is; customize it for your specific needs by making it
+more selective.</p>
+
+
+
+
+
+<p>Now you have the knowledge necessary to begin using WMI for process
+control. WMI has Win32 extensions for many other parts of the
+operating system, including the registry and event log facility.</p>
+
+
+
+
+
+<p>This is as far as we're going to delve into process control on
+WinNT/2000. Let's turn our attention to one last operating
+system.<a name="INDEX-324"></a><a name="INDEX-325"></a><a name="INDEX-326"></a><a name="INDEX-327"></a>
+</p>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch04_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch04_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">4.1. MacOS Process Control</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">4.3. Unix Process Control</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

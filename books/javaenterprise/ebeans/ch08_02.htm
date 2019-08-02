@@ -1,0 +1,918 @@
+<html>
+<head>
+<title>Declarative Transaction Management (Enterprise JavaBeans)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Richard Monson-Haefel">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-869-5E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Declarative Transaction Management">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm" alt="Enterprise JavaBeans"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_01.htm">Chapter 8: Transactions</a></td><td align="right" valign="top" width="172"><a href="ch08_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">8.2. Declarative Transaction Management</h2>
+
+<p>
+<a name="INDEX-1591"></a><a name="INDEX-1592"></a><a name="INDEX-1593"></a>One of the primary
+advantages of Enterprise JavaBeans is that it allows for declarative
+transaction management. Without this feature, transactions must be
+controlled using explicit transaction demarcation. This involves the
+use of fairly complex APIs like the OMG's OTS (Object
+Transaction Service) or its Java implementation, JTS ( Java
+Transaction Service). Explicit demarcation is difficult for
+developers to use at best, particularly if you are new to
+transactional systems. In addition, explicit transaction demarcation
+requires that the transactional code be written within the business
+logic, which reduces the clarity of the code and more importantly
+creates inflexible distributed objects. Once transaction demarcation
+is "hardcoded" into the business object, changes in
+transaction behavior require changes to the business logic itself. We
+talk more about explicit transaction management and EJB later in this
+chapter.
+</p>
+
+<p>With EJB's declarative transaction management, the
+transactional behavior of beans can be controlled using the
+deployment descriptor, which sets transaction attributes for
+individual bean methods. This means that the transactional behavior
+of a bean within an application can be changed easily without
+changing the bean's business logic. In addition, a bean
+deployed in one application can be defined with very different
+transactional behavior than the same bean deployed in a different
+application. Declarative transaction management reduces the
+complexity of transactions for bean developers and application
+developers and makes it easier for you to create robust transactional
+applications.
+</p>
+
+<a name="JBEANS-CH-8-SECT-2.1"></a>
+<h3 class="sect2">8.2.1. Transaction Scope</h3>
+
+<p>
+<em class="emphasis">Transaction scope</em><a name="INDEX-1594"></a><a name="INDEX-1595"></a><a name="INDEX-1596"></a>is a crucial concept for
+understanding transactions. In this context, transaction scope means
+those beans--both session and entity--that are
+participating in a particular transaction.
+</p>
+
+<p>In the <tt class="literal">bookPassage()</tt> method of the TravelAgent
+bean, all the beans involved are a part of the same transaction
+scope. The scope of the transaction starts when a client invokes the
+TravelAgent bean's <tt class="literal">bookPassage()</tt> method.
+Once the transaction scope has started, it is
+<a name="INDEX-1597"></a><a name="INDEX-1598"></a><em class="emphasis">propagated</em> to both the newly created Reservation
+bean and the ProcessPayment bean:
+</p>
+
+<blockquote>
+<pre class="programlisting">public Ticket bookPassage(CreditCard card, double price)
+    throws IncompleteConversationalState{// EJB 1.0: also throws RemoteException
+
+    if (customer == null || cruise == null || cabin == null) {
+        throw new IncompleteConversationalState();
+    }
+    try {
+        ReservationHome resHome =
+            (ReservationHome) getHome("ReservationHome",ReservationHome.class);
+        Reservation reservation =
+        resHome.create(customer, cruise, cabin, price);
+        ProcessPaymentHome ppHome = (ProcessPaymentHome)
+            getHome("ProcessPaymentHome",ProcessPaymentHome.class);
+        ProcessPayment process = ppHome.create();
+        process.byCredit(customer, card, price);
+
+        Ticket ticket = new Ticket(customer,cruise,cabin,price);
+        return ticket;
+    } catch(Exception e) {
+        // EJB 1.0: throw new RemoteException("",e);
+        throw new EJBException(e);
+    }
+}</pre>
+</blockquote>
+
+<p>
+<a name="INDEX-1599"></a>As you know, a transaction is a
+unit-of-work that is made up of one or more tasks. In a transaction,
+all the tasks that make up the unit-of-work must succeed for the
+entire transaction to succeed; the transaction must be atomic. If any
+task fails, the updates made by all the other tasks in the
+transaction will be rolled back or undone. In EJB, tasks are
+expressed as bean methods, and a unit-of-work consists of every bean
+method invoked in a transaction. The scope of a transaction includes
+every bean that participates in the unit-of-work.
+</p>
+
+<p>It is easy to trace the scope of a transaction by following the
+thread of execution. If the invocation of the
+<tt class="literal">bookPassage()</tt> method begins a transaction, then
+logically, the transaction ends when the method completes. The scope
+of the <tt class="literal">bookPassage()</tt> transaction would include the
+TravelAgent, Reservation, and ProcessPayment beans--every bean
+touched by the <tt class="literal">bookPassage()</tt> method. A transaction
+is propagated to a bean when that bean's method is invoked and
+included in the scope of a transaction.
+</p>
+
+<p>A transaction can end if an exception is thrown while the
+<tt class="literal">bookPassage()</tt> method is executing. The exception
+could be thrown from one of the other beans or from the
+<tt class="literal">bookPassage()</tt> method itself. An exception may or
+may not cause a rollback, depending on its type. More about
+exceptions and transactions later.
+</p>
+
+<p>The thread of execution isn't the only factor that determines
+whether a bean is included in the scope of a transaction; the
+bean's transaction attributes also play a role. Determining
+whether a bean participates in the transaction scope of any
+unit-of-work is accomplished either implicitly using EJB's
+transaction attributes or explicitly using the
+<a name="INDEX-1600"></a>
+Java Transaction API ( JTA).
+</p>
+
+
+<a name="JBEANS-CH-8-SECT-2.2"></a>
+<h3 class="sect2">8.2.2. Transaction Attributes</h3>
+
+<p>
+<a name="INDEX-1601"></a><a name="INDEX-1602"></a>
+As an application developer, you do <em class="emphasis">not</em> normally
+need to control transactions explicitly when using an EJB server. EJB
+servers can manage transactions <a name="INDEX-1603"></a>implicitly, based on the transaction
+attributes established for beans at deployment time. The ability to
+specify how business objects participate in transactions through
+attribute-based programming is a common characteristic of
+<a name="INDEX-1604"></a>CTMs, and one of the most important
+features of the EJB component model.
+</p>
+
+<p>When an enterprise bean is <a name="INDEX-1605"></a><a name="INDEX-1606"></a>deployed, you can set its runtime
+transaction attribute in the deployment descriptor to one of several
+values. <a href="#JBEANS-CH-8-TABLE-2">Table 8-1</a> shows the transaction
+attributes, the XML attribute values used to specify these
+transaction attributes in an EJB 1.1 deployment descriptor, and the
+constants that represent these attributes in an EJB 1.0 deployment
+descriptor. We'll discuss the meaning of these attributes later
+in the chapter.
+</p>
+
+<p>
+</p>
+
+<a name="JBEANS-CH-8-TABLE-2"></a>
+<h4 class="objtitle">Table 8-1. Transaction Attributes</h4>
+<table border="1">
+
+
+
+
+<tr>
+<th>
+<p>Transaction Attribute</p>
+</th>
+<th>
+<p>EJB 1.1 Text Value </p>
+</th>
+<th>
+<p>EJB 1.0 Constant</p>
+</th>
+</tr>
+
+<tr>
+<td>
+<p>
+<em class="emphasis">Not Supported</em>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">NotSupported</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">TX_NOT_SUPPORTED</tt>
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<p>
+<em class="emphasis">Supports</em>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">Supports</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">TX_SUPPORTS</tt>
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<p>
+<em class="emphasis">Required</em>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">Required</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">TX_REQUIRED</tt>
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<p>
+<em class="emphasis">Requires New</em>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">RequiresNew</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">TX_REQUIRES_NEW</tt>
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<p>
+<em class="emphasis">Mandatory</em>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">Mandatory</tt>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">TX_MANDATORY</tt>
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<p>
+<em class="emphasis">Never (1.1)</em>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">Never</tt>
+</p>
+</td>
+<td>
+<p>
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<p>
+<em class="emphasis">Bean Managed (1.0)</em>
+</p>
+</td>
+<td>
+<p>
+</p>
+</td>
+<td>
+<p>
+<tt class="literal">TX_BEAN_MANAGED</tt>
+</p>
+</td>
+</tr>
+
+</table>
+
+<p>
+</p>
+
+<a name="JBEANS-CH-8-ADMON-1"></a>
+<blockquote class="note">
+<h4 class="objtitle">NOTE</h4>
+<p>The transaction attributes are declared
+differently in EJB 1.1 and EJB 1.0. In EJB 1.1, they are text values
+declared without spaces between words as shown in the "EJB 1.1
+Text Value" column. In the EJB 1.0
+deployment descriptors, transaction attributes are uppercase
+constants as shown in the "EJB 1.0 Constant" column. In
+this book we use the natural language format shown in the first
+column of <a href="#JBEANS-CH-8-TABLE-2">Table 8-1</a> (words are separated by
+spaces), which maps to either the EJB 1.1 or EJB 1.0 declarations.1
+</p>
+</blockquote>
+
+<p>Using transaction attributes simplifies building transactional
+applications by reducing the risks associated with improper use of
+transactional protocols like JTA (discussed later in this chapter).
+It's more efficient and easier to use transaction attributes
+than to control transactions explicitly.
+</p>
+
+<p>It is possible to set a transaction attribute for the entire bean (in
+which case, it applies to all methods) or to set different
+transaction attributes for individual methods. The former is much
+simpler and less error prone, but setting attributes at the method
+level offers more flexibility. The code fragments in the following
+sections show how the default transaction attribute of a bean can be
+set in the bean's deployment descriptor.
+</p>
+
+<a name="JBEANS-CH-8-SECT-2.2.1"></a>
+<h3 class="sect3">8.2.2.1. EJB 1.1: Setting a transaction attribute</h3>
+
+<p>In
+<a name="INDEX-1607"></a><a name="INDEX-1608"></a>EJB
+1.1, a
+<tt class="literal">&lt;container-transaction&gt;</tt><a name="INDEX-1609"></a> element specifies the transaction
+attributes for the beans described in the deployment descriptor:
+</p>
+
+<blockquote>
+<pre class="programlisting">&lt;ejb-jar&gt;
+  ...
+  &lt;assembly-descriptor&gt;
+     ...
+     &lt;container-transaction&gt;
+        &lt;method&gt;
+            &lt;ejb-name&gt;TravelAgentBean&lt;/ejb-name&gt;
+            &lt;method-name&gt; * &lt;/method-name&gt;
+        &lt;/method&gt;
+        &lt;trans-attribute&gt;<tt class="userinput"><b>Required</b></tt>&lt;/trans-attribute&gt;
+     &lt;/container-transaction&gt;
+     &lt;container-transaction&gt;
+        &lt;method&gt;
+            &lt;ejb-name&gt;TravelAgentBean&lt;/ejb-name&gt;
+            &lt;method-name&gt;listAvailableCabins&lt;/method-name&gt;
+        &lt;/method&gt;
+        &lt;trans-attribute&gt;<tt class="userinput"><b>Supports</b></tt>&lt;/trans-attribute&gt;
+     &lt;/container-transaction&gt;
+     ...
+   &lt;/assembly-descriptor&gt;
+   ...
+&lt;/ejb-jar&gt;
+     </pre>
+</blockquote>
+
+<p>This deployment descriptor specifies the transaction attributes for
+the TravelAgent bean. The
+<tt class="literal">&lt;container-transaction&gt;</tt> element specifies a
+method and the transaction attribute that should be applied to that
+method. The first <tt class="literal">&lt;container-transaction&gt;</tt>
+element specifies that all methods by default have a transaction
+attribute of <tt class="literal">Required</tt>; the <tt class="literal">*</tt> is
+a wildcard that indicates all of the methods of the TravelAgent bean.
+The second <tt class="literal">&lt;container-transaction&gt;</tt> element
+overrides the default setting to specify that the
+<tt class="literal">listAvailableCabins()</tt> method will have a
+<tt class="literal">Supports</tt> transaction attribute. Note that we have
+to specify which bean we're referring to with the
+<tt class="literal">&lt;ejb-name&gt;</tt><a name="INDEX-1610"></a> element; an XML deployment descriptor
+can cover many beans.
+</p>
+
+
+
+<a name="JBEANS-CH-8-SECT-2.2.2"></a>
+<h3 class="sect3">8.2.2.2. EJB 1.0: Setting a transaction attribute</h3>
+
+<p>EJB 1.0 uses a control descriptor object within the
+<a name="INDEX-1611"></a>deployment descriptor to set transaction
+attributes:
+</p>
+
+<blockquote>
+<pre class="programlisting">ControlDescriptor cd = new ControlDescriptor();
+cd.setMethod(<tt class="userinput"><b>null</b></tt>);
+<b class="emphasis-bold">cd.setTransactionAttribute (ControlDescriptor.TX_NOT_SUPPORTED);</b>
+ControlDescriptor [] cdArray = {cd};
+sd.setControlDescriptors(cdArray);</pre>
+</blockquote>
+
+<p>The <tt class="literal">null</tt> argument to
+<tt class="literal">setMethod()</tt> means that the
+<tt class="literal">ControlDescriptor</tt> applies to the entire bean. To
+set the transaction attributes for a specific method, change the
+argument passed into <tt class="literal">setMethod()</tt> from
+<tt class="literal">null</tt> to a <tt class="literal">java.lang.reflect.</tt><tt class="literal">Method</tt> object representing a business method in
+the bean class. Here is an example of how this might work:
+</p>
+
+<blockquote>
+<pre class="programlisting">ControlDescriptor cd = new ControlDescriptor();
+Class [] parameters = new Class[0];
+<b class="emphasis-bold">Method method = ShipBean.class.getDeclaredMethod("getName",parameters);</b>
+cd.setMethod(<tt class="userinput"><b>method</b></tt>);
+cd.setTransactionAttribute(ControlDescriptor.TX_NOT_SUPPORTED); 
+ControlDescriptor [] cdArray = {cd};
+sd.setControlDescriptors(cdArray);</pre>
+</blockquote>
+
+
+
+<a name="JBEANS-CH-8-SECT-2.3"></a>
+<h3 class="sect2">8.2.3. Transaction Attributes Defined</h3>
+
+<p>Here are the definitions of the transaction attributes identified in
+the table of transaction attributes (<a href="#JBEANS-CH-8-TABLE-2">Table 8-1</a>).
+In a few of the definitions, we say that the client transaction is
+<em class="emphasis">suspended</em>. This means that the transaction is
+not propagated to the bean method being invoked; propagation of the
+transaction is temporarily halted until the bean method returns.
+</p>
+
+<dl>
+<dt>
+<b>Not Supported </b>
+</dt>
+<dd>
+<p>Invoking a method on a bean with this transaction attribute suspends
+the transaction until the method is completed. This means that the
+transaction scope is not propagated to the <em class="emphasis">Not
+Supported</em><a name="INDEX-1612"></a>bean or any of the beans it calls.
+Once the method on the <em class="emphasis">Not Supported</em> bean is
+done, the original transaction resumes its execution.
+</p>
+
+<p>
+<a href="#JBEANS-CH-8-FIG-1">Figure 8-1</a> shows that a <em class="emphasis">Not
+Supported</em> bean does not propagate the client transaction
+when one of its methods is invoked.
+</p>
+</dd>
+
+</dl>
+
+<a name="JBEANS-CH-8-FIG-1"></a>
+<div class="figure">
+<img alt="figure" src="figs/ejb2_0801.gif" webstripperlinkwas="figs/ejb2_0801.gif"></div>
+<h4 class="objtitle">Figure 8-1. Not Supported attribute</h4>
+
+<dl>
+<dt>
+<b>Supports</b>
+</dt>
+<dd>
+<p>This attribute means that the bean method will be included in the
+transaction scope if it is invoked within a transaction. In other
+words, if the bean or client that invokes the
+<em class="emphasis">Supports</em><a name="INDEX-1613"></a>bean is part of a transaction scope,
+the <em class="emphasis">Supports</em> bean and all beans accessed by that
+bean become part of the original transaction. However, the
+<em class="emphasis">Supports</em> bean doesn't have to be part of a
+transaction and can interact with clients and beans that are not
+included in a transaction scope.
+</p>
+
+<p>
+<a href="#JBEANS-CH-8-FIG-2">Figure 8-2</a>(a) shows the
+<em class="emphasis">Supports</em> bean being invoked by a transactional
+client and propagating the transaction. <a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_01.htm">Chapter 8, "Transactions"</a>(b) shows the <em class="emphasis">Supports</em>
+bean being invoked from a non-transactional client.
+</p>
+</dd>
+
+</dl>
+
+<a name="JBEANS-CH-8-FIG-2"></a>
+<div class="figure">
+<img alt="figure" src="figs/ejb2_0802.gif" webstripperlinkwas="figs/ejb2_0802.gif"></div>
+<h4 class="objtitle">Figure 8-2. Supports attribute</h4>
+
+<dl>
+<dt>
+<b><em class="emphasis">Required</em></b>
+</dt>
+<dd>
+<p>This attribute means that the bean method must be invoked within the
+scope of a transaction. If the calling client or bean is part of a
+transaction, the
+<em class="emphasis">Required</em><a name="INDEX-1614"></a>bean is automatically included in its
+transaction scope. If, however, the calling client or bean is not
+involved in a transaction, the <em class="emphasis">Required</em> bean
+starts its own new transaction. The new transaction's scope
+covers only the <em class="emphasis">Required</em> bean and all beans
+accessed by that bean. Once the method invoked on the
+<em class="emphasis">Required</em> bean is done, the new
+transaction's scope ends.
+</p>
+
+<p>
+<a href="#JBEANS-CH-8-FIG-3">Figure 8-3</a>(a) shows the
+<em class="emphasis">Required</em> bean being invoked by a transactional
+client and propagating the transaction. <a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_01.htm">Chapter 8, "Transactions"</a>(b) shows the <em class="emphasis">Required</em>
+bean being invoked from a non-transactional client, which causes the
+<em class="emphasis">Required</em> bean to start its own transaction.
+</p>
+</dd>
+
+</dl>
+
+<a name="JBEANS-CH-8-FIG-3"></a>
+<div class="figure">
+<img alt="figure" src="figs/ejb2_0803.gif" webstripperlinkwas="figs/ejb2_0803.gif"></div>
+<h4 class="objtitle">Figure 8-3. Required attribute</h4>
+
+<dl>
+<dt>
+<b><em class="emphasis">Requires New</em></b>
+</dt>
+<dd>
+<p>This attribute means that a new transaction is always started.
+Regardless of whether the calling client or bean is part of a
+transaction, a method with the <em class="emphasis">Requires
+New</em><a name="INDEX-1615"></a>attribute begins a new transaction
+when invoked. If the calling client is already involved in a
+transaction, that transaction is suspended until the
+<em class="emphasis">Requires New</em> bean's method call returns.
+The new transaction's scope only covers the <em class="emphasis">Requires
+New</em> bean and all the beans accessed by that bean. Once the
+method invoked on the <em class="emphasis">Requires New</em> bean is done,
+the new transaction's scope ends and the original transaction
+resumes.
+</p>
+
+<p>
+<a href="#JBEANS-CH-8-FIG-4">Figure 8-4</a>(a) shows the <em class="emphasis">Requires
+New</em> bean being invoked by a transactional client. The
+client's transaction is suspended while the bean executes under
+its own transaction. <a href="#JBEANS-CH-8-FIG-4">Figure 8-4</a>(b) shows the
+<em class="emphasis">Requires New</em> bean being invoked from a
+non-transactional client; the <em class="emphasis">Requires New</em>
+executes under its own transaction.
+</p>
+</dd>
+
+</dl>
+
+<a name="JBEANS-CH-8-FIG-4"></a>
+<div class="figure">
+<img alt="figure" src="figs/ejb2_0804.gif" webstripperlinkwas="figs/ejb2_0804.gif"></div>
+<h4 class="objtitle">Figure 8-4. Requires New attribute</h4>
+
+<dl>
+<dt>
+<b><em class="emphasis">Mandatory</em></b>
+</dt>
+<dd>
+<p>This <a name="INDEX-1616"></a>attribute means that the bean method
+must always be made part of the transaction scope of the calling
+client. If the calling client or bean is not part of a transaction,
+the invocation will fail, throwing a
+<tt class="literal">javax.transaction.</tt><tt class="literal">TransactionRequiredException</tt>.
+</p>
+
+<p>
+<a href="#JBEANS-CH-8-FIG-5">Figure 8-5</a>(a) shows the
+<tt class="literal">Mandatory</tt> bean being invoked by a transactional
+client and propagating the transaction. <a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_01.htm">Chapter 8, "Transactions"</a>(b) shows the <em class="emphasis">Mandatory</em>
+bean being invoked from a non-transactional client; the method throws
+the <tt class="literal">TransactionRequiredException</tt> because there is
+no transaction scope.
+</p>
+</dd>
+
+</dl>
+
+<a name="JBEANS-CH-8-FIG-5"></a>
+<div class="figure">
+<img alt="figure" src="figs/ejb2_0805.gif" webstripperlinkwas="figs/ejb2_0805.gif"></div>
+<h4 class="objtitle">Figure 8-5. Mandatory attribute</h4>
+
+<dl>
+<dt>
+<b><em class="emphasis">Never (EJB 1.1 only)</em></b>
+</dt>
+<dd>
+<p>This <a name="INDEX-1617"></a>attribute means that the bean method
+must never be invoked within the scope of a transaction. If the
+calling client or bean is part of a transaction, the
+<em class="emphasis">Never</em> bean will throw a
+<tt class="literal">RemoteException</tt>. If, however, the calling client
+or bean is not involved in a transaction, the
+<em class="emphasis">Never</em> bean will execute normally without a
+transaction.
+</p>
+
+<p>
+<a href="#JBEANS-CH-8-FIG-6">Figure 8-6</a>(a) shows the <em class="emphasis">Never</em>
+bean being invoked by a non-transactional client. <a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_01.htm">Chapter 8, "Transactions"</a>(b) shows the <em class="emphasis">Never</em> bean
+being invoked by transactional client; the method throws the
+<tt class="literal">RemoteException</tt> because the method can never be
+invoked by a client or bean that is included in a transaction.
+</p>
+</dd>
+
+</dl>
+
+<a name="JBEANS-CH-8-FIG-6"></a>
+<div class="figure">
+<img alt="figure" src="figs/ejb2_0806.gif" webstripperlinkwas="figs/ejb2_0806.gif"></div>
+<h4 class="objtitle">Figure 8-6. Never attribute</h4>
+
+<dl>
+<dt>
+<b><em class="emphasis">Bean Managed (EJB 1.0 only)</em></b>
+</dt>
+<dd>
+<p>This attribute means that the bean or method doesn't have its
+transactional context implicitly managed by the EJB server. Instead,
+the developer can use the <a name="INDEX-1618"></a><a name="INDEX-1619"></a>Java Transaction API ( JTA) to
+explicitly manage transactions. The use of JTA and explicit
+transaction management are described later in this chapter.
+</p>
+
+<p>The use of <em class="emphasis">Bean Managed</em><a name="INDEX-1620"></a>imposes the
+unusual restriction that transaction attributes of methods cannot be
+mixed. If one of a bean's methods is <em class="emphasis">Bean
+Managed</em>, then all methods of that bean must be
+<em class="emphasis">Bean Managed</em>. This is not the case with the
+other transaction attributes, which can be mixed within the same
+bean: different methods of the same bean may have different
+attributes. Transactions created within a <em class="emphasis">Bean
+Managed</em> bean can be propagated normally to other beans
+that support existing transactions (<em class="emphasis">Supports</em>,
+<em class="emphasis">Required</em>, and <em class="emphasis">Mandatory</em>).
+</p>
+
+<p>How are bean-managed transactions supported in EJB 1.1? We'll
+discuss this in more detail later in the chapter. For the time being,
+it's enough to say that only session beans are allowed to
+manage transactions explicitly; entity beans cannot. The deployment
+descriptor of a session bean can have a
+<tt class="literal">transaction-type</tt><a name="INDEX-1621"></a> element that specifies whether the bean
+manages its own transactions.
+</p>
+
+<p>
+<a href="#ch08-99345">Figure 8-7</a>(a) shows the <em class="emphasis">Bean
+Managed</em> bean being invoked by a transactional client. The
+client's transaction is suspended while the bean executes under
+its own transaction. <a href="#ch08-99345">Figure 8-7</a>(b) shows the
+<em class="emphasis">Bean Managed</em> bean being invoked from a
+non-transactional client; the <em class="emphasis">Bean Managed</em> bean
+executes under its own transaction.
+</p>
+</dd>
+
+</dl>
+
+<a name="ch08-99345"></a>
+<div class="figure">
+<img alt="figure" src="figs/ejb2_0807.gif" webstripperlinkwas="figs/ejb2_0807.gif"></div>
+<h4 class="objtitle">Figure 8-7. Bean Managed attribute</h4>
+<p>
+<a name="INDEX-1622"></a><a name="INDEX-1623"></a>
+</p>
+
+<a name="JBEANS-CH-8-SECT-2.4"></a>
+<h3 class="sect2">8.2.4. Transaction Propagation</h3>
+
+<p>
+<a name="INDEX-1624"></a><a name="INDEX-1625"></a>
+To illustrate the impact of transaction attributes on bean methods,
+we'll look once again at the <tt class="literal">bookPassage()</tt>
+method of the TravelAgent bean created in <a href="ch07_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch07_01.htm">Chapter 7, "Session Beans"</a>:
+</p>
+
+<blockquote>
+<pre class="programlisting">public Ticket bookPassage(CreditCard card, double price)
+throws IncompleteConversationalState{// EJB 1.0: also throws RemoteException
+
+    if (customer == null || cruise == null || cabin == null) {
+        throw new IncompleteConversationalState();
+    }
+    try {
+        ReservationHome resHome =
+            (ReservationHome) getHome("ReservationHome",ReservationHome.class);
+        Reservation reservation =
+        resHome.create(customer, cruise, cabin, price);
+        ProcessPaymentHome ppHome = (ProcessPaymentHome)
+            getHome("ProcessPaymentHome",ProcessPaymentHome.class);
+        ProcessPayment process = ppHome.create();
+        process.byCredit(customer, card, price);
+
+        Ticket ticket = new Ticket(customer,cruise,cabin,price);
+        return ticket;
+    } catch(Exception e) {
+        // EJB 1.0: throw new RemoteException("",e);
+        throw new EJBException(e);
+    }
+}</pre>
+</blockquote>
+
+<p>In order for <tt class="literal">bookPassage()</tt> to execute as a
+successful transaction, both the creation of the Reservation bean and
+the charge to the customer must be successful. This means that both
+operations must be included in the same transaction. If either
+operation fails, the entire transaction fails. In these beans, we
+could have specified the <em class="emphasis">Required</em> transaction
+attribute as the default. This transaction attribute enforces our
+desired policy that all beans must execute within a transaction and
+thus ensures data consistency.
+</p>
+
+<p>
+<a name="INDEX-1626"></a><a name="INDEX-1627"></a>As a transaction monitor, an EJB server
+watches each method call in the transaction. If any of the updates
+fail, all the updates to all the beans will be reversed or
+<em class="emphasis">rolled back</em>. A rollback is like an
+<em class="emphasis">undo</em> command. If you have worked with relational
+databases, then the concept of a rollback should be familiar. Once an
+update is executed, you can either commit the update or roll it back.
+A commit makes the changes requested by the update permanent; a
+rollback aborts the update and leaves the database in its original
+state. Making beans transactional provides the same kind of
+<a name="INDEX-1628"></a><a name="INDEX-1629"></a>rollback/commit control.
+For example, if the Reservation bean cannot be created, the charge
+made by the ProcessPayment bean is rolled back. Transactions make
+updates an all-or-nothing proposition. This ensures that the
+unit-of-work, like the <tt class="literal">bookPassage()</tt> method,
+executes as intended, and it prevents inconsistent data from being
+written to databases.
+</p>
+
+<p>In cases where the container implicitly manages the transaction, the
+commit and rollback decisions are handled automatically. When
+transactions are managed explicitly within a bean or by the client,
+the responsibility falls on the bean or application developer to
+commit or roll back a transaction. Explicit demarcation of
+transactions is covered in detail later in this chapter.
+</p>
+
+<p>Let's assume that the TravelAgent bean is created and used on a
+client as follows:
+</p>
+
+<blockquote>
+<pre class="programlisting">TravelAgent agent = agentHome.create(customer);
+agent.setCabinID(cabin_id);
+agent.setCruiseID(cruise_id):
+try {
+  agent.bookPassage(card,price);
+} catch(Exception e) {
+  System.out.println("Transaction failed!");
+}</pre>
+</blockquote>
+
+<p>Furthermore, let's assume that the
+<tt class="literal">bookPassage()</tt> method has been given the
+transaction attribute <em class="emphasis">Requires New.</em> In this
+case, the client that invokes the <tt class="literal">bookPassage()</tt>
+method is not itself part of a transaction. When
+<tt class="literal">bookPassage()</tt> is invoked on the TravelAgent bean,
+a new transaction is created, as required by the <em class="emphasis">Requires
+New</em> attribute. This means that the TravelAgent bean
+registers itself with the EJB server's transaction manager,
+which will manage the transaction automatically. The transaction
+manager coordinates transactions, propagating the transaction scope
+from one bean to the next to ensure that all beans touched by a
+transaction are included in the transaction's unit-of-work.
+That way, the transaction manager can monitor the updates made by
+each bean and decide, based on the success of those updates, whether
+to commit all changes made by all beans to the database or roll them
+all back. If a <em class="emphasis">system exception</em> is thrown by the
+<tt class="literal">bookPassage()</tt> method, the transaction is
+automatically rolled back. We will talk more about exceptions later
+in this chapter.
+</p>
+
+<a name="JBEANS-CH-8-ADMON-2"></a>
+<blockquote class="note">
+<h4 class="objtitle">NOTE</h4>
+<p>
+In EJB 1.0, where the transaction scope begins and ends with the <tt class="literal">bookPassage()</tt> method, an application exception thrown by <tt class="literal">bookPassage()</tt> also causes a transaction rollback.</p>
+</blockquote>
+<p>When the <tt class="literal">byCredit()</tt> method is invoked within the
+<tt class="literal">bookPassage()</tt> method, the ProcessPayment bean
+registers with the manager under the transactional context that was
+created for the TravelAgent bean; the transactional context is
+propagated to the ProcessPayment bean. When the new Reservation bean
+is created, it is also registered with the manager under the same
+transaction. When all the beans are registered and their updates
+made, the transaction manager checks to ensure that their updates
+will work. If all the updates will work, then the manager allows the
+changes to become permanent. If one of the beans reports an error or
+fails, any changes made by either the ProcessPayment or Reservation
+bean are rolled back by the manager. <a href="#JBEANS-CH-8-FIG-8">Figure 8-8</a>
+illustrates the propagation and management of the TravelAgent
+bean's transactional context.
+</p>
+
+<a name="JBEANS-CH-8-FIG-8"></a>
+<div class="figure">
+<img alt="figure" src="figs/ejb2_0808.gif" webstripperlinkwas="figs/ejb2_0808.gif"></div>
+<h4 class="objtitle">Figure 8-8. Managing the TravelAgent bean's transactional context</h4>
+
+<p>
+<a name="INDEX-1630"></a>In addition to managing
+transactions in its own environment, an EJB server can coordinate
+with other transactional systems. If, for example, the ProcessPayment
+bean actually came from a different EJB server than the TravelAgent
+bean, the two EJB servers would cooperate to manage the transaction
+as one unit-of-work. This is called a<em class="emphasis"> distributed
+transaction</em>.<a href="#FOOTNOTE-1">[1]</a>
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-1"></a>
+<p>[1] Not all EJB servers support
+distributed transactions. </p> </blockquote>
+
+<p>A distributed transaction is a great deal more complicated, requiring
+what is called a <a name="INDEX-1631"></a><a name="INDEX-1632"></a><a name="INDEX-1633"></a><em class="emphasis">two-phase commit</em>
+(2-PC or TPC). 2-PC is a mechanism that allows transactions to be
+managed across different servers and databases. The details of a 2-PC
+are beyond the scope of this book, but a system that supports it will
+not require any extra operations by a bean or application developer.
+If distributed transactions are supported, the protocol for
+propagating transactions, as discussed earlier, will be supported. In
+other words, as an application or bean developer, you should not
+notice a <a name="INDEX-1634"></a> difference <a name="INDEX-1635"></a><a name="INDEX-1636"></a> between local and
+<a name="INDEX-1637"></a><a name="INDEX-1638"></a><a name="INDEX-1639"></a>
+distributed <a name="INDEX-1640"></a><a name="INDEX-1641"></a> transactions.
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch08_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_01.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch08_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/ch08_03.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">8.1. ACID Transactions</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">8.3. Isolation and Database Locking</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="../security/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

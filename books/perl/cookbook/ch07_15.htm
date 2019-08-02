@@ -1,0 +1,117 @@
+<html><head>
+<title>Recipe 7.14. Doing Non-Blocking I/O</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:37:18Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch07_01.htm" title="7. File Access"><link rel="prev" href="ch07_14.htm" title="7.13. Reading from Many Filehandles Without Blocking"><link rel="next" href="ch07_16.htm" title="7.15. Determining the Number of Bytes to Read"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_14.htm" title="7.13. Reading from Many Filehandles Without Blocking"><img src="../gifs/txtpreva.gif" alt="Previous: 7.13. Reading from Many Filehandles Without Blocking" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch07_01.htm" title="7. File Access">Chapter 7<br>File Access</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch07_16.htm" title="7.15. Determining the Number of Bytes to Read"><img src="../gifs/txtnexta.gif" alt="Next: 7.15. Determining the Number of Bytes to Read" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch07-17832">7.14. Doing Non-Blocking I/O</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-1410">Problem<a class="indexterm" name="ch07-idx-1000009722-0"></A
+><a class="indexterm" name="ch07-idx-1000009722-1"></A
+><a class="indexterm" name="ch07-idx-1000009722-2"></A
+><a class="indexterm" name="ch07-idx-1000009722-3"></A
+></A
+></H3
+><p class="para">You want to read from or write to a filehandle without the system blocking your process until the program, file, socket, or device at the other end is ready. This is desired less often of regular files than of special files.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-1416">Solution</A
+></H3
+><p class="para">Open the file with <code class="literal">sysopen,</CODE
+> and specify the <code class="literal">O_NONBLOCK</CODE
+><a class="indexterm" name="ch07-idx-1000009723-0"></A
+> option:</P
+><pre class="programlisting">use Fcntl;
+
+sysopen(MODEM, &quot;/dev/cua0&quot;, O_NONBLOCK|O_RDWR)
+    or die &quot;Can't open modem: $!\n&quot;;</PRE
+><p class="para">If you already have a filehandle, use <code class="literal">fcntl</CODE
+><a class="indexterm" name="ch07-idx-1000009724-0"></A
+> to change the flags:</P
+><pre class="programlisting">use Fcntl;
+
+$flags = '';
+fcntl(HANDLE, F_GETFL, $flags)
+    or die &quot;Couldn't get flags for HANDLE : $!\n&quot;;
+$flags |= O_NONBLOCK;
+fcntl(HANDLE, F_SETFL, $flags)
+    or die &quot;Couldn't set flags for HANDLE: $!\n&quot;;</PRE
+><p class="para">Once a filehandle is set for non-blocking I/O, the <code class="literal">sysread</CODE
+> or <code class="literal">syswrite</CODE
+> calls that would block will instead return <code class="literal">undef</CODE
+> and set <code class="literal">$!</CODE
+> to EAGAIN:</P
+><pre class="programlisting">use POSIX qw(:errno_h);
+
+$rv = syswrite(HANDLE, $buffer, length $buffer);
+if (!defined($rv) &amp;&amp; $! == EAGAIN) {
+    # would block
+} elsif ($rv != length $buffer) {
+    # incomplete write
+} else {
+    # successfully wrote
+}
+
+$rv = sysread(HANDLE, $buffer, $BUFSIZ);
+if (!defined($rv) &amp;&amp; $! == EAGAIN) {
+    # would block
+} else {
+    # successfully read $rv bytes from HANDLE
+}</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-1484">Discussion</A
+></H3
+><p class="para">The <code class="literal">O_NONBLOCK</CODE
+> constant is part of the POSIX standard, so most machines should support it. We use the POSIX module to get the numeric value for the error EAGAIN.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-1490">See Also</A
+></H3
+><p class="para">The <code class="literal">sysopen</CODE
+> and <code class="literal">fcntl</CODE
+> functions in <i class="filename">perlfunc </I
+>(1) and in <a class="olink" href="../prog/ch03_01.htm">Chapter 3</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>; the documentation for the standard POSIX module; your system's <i class="filename">open </I
+>(2) and <i class="filename">fcntl</I
+> (2) manpages; <a class="xref" href="ch07_14.htm" title="Reading from Many Filehandles Without Blocking">Recipe 7.13</A
+>; <a class="xref" href="ch07_16.htm" title="Determining the Number of Bytes to Read">Recipe 7.15</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_14.htm" title="7.13. Reading from Many Filehandles Without Blocking"><img src="../gifs/txtpreva.gif" alt="Previous: 7.13. Reading from Many Filehandles Without Blocking" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch07_16.htm" title="7.15. Determining the Number of Bytes to Read"><img src="../gifs/txtnexta.gif" alt="Next: 7.15. Determining the Number of Bytes to Read" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">7.13. Reading from Many Filehandles Without Blocking</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">7.15. Determining the Number of Bytes to Read</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

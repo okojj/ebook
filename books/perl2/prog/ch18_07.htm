@@ -1,0 +1,525 @@
+<html>
+<head>
+<title>Avant-Garde Compiler, Retro Interpreter (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Avant-Garde Compiler, Retro Interpreter">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch18_06.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch18_01.htm">Chapter 18: Compiling</a></td><td align="right" valign="top" width="172"><a href="ch19_01.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">18.7. Avant-Garde Compiler, Retro Interpreter</h2>
+
+<p>
+<a name="INDEX-3304"></a><a name="INDEX-3305"></a>
+There's a right time to think about everything; sometimes that time is
+beforehand, and sometimes it's after.  Sometimes it's somewhere in the middle.
+Perl doesn't presume to know when it's the right time to think,
+so it gives the programmer a number of options for telling it when to think.
+Other times it knows that some sort of thinking is necessary but doesn't
+have any idea what it ought to think, so it needs ways of asking your program.
+Your program answers these kinds of questions by defining subroutines
+with names appropriate to what Perl is trying to find out.</p>
+
+<p>
+<a name="INDEX-3306"></a>
+Not only can the compiler call into the interpreter when it wants to
+be forward thinking, but the interpreter can also call back to the
+compiler when it wants to revise history. Your program can use several
+operators to call back into the compiler.  Like the compiler, the
+interpreter can also call into named subroutines when it wants to find
+things out.  Because of all this give and take between the compiler,
+the interpreter, and your program, you need to be aware of what things
+happen when.  First we'll talk about when these named subroutines are
+triggered.</p>
+
+<p>In <a href="ch10_01.htm">Chapter 10, "Packages"</a>, we saw how a package's
+<tt class="literal">AUTOLOAD</tt> subroutine is triggered when an undefined
+function in that package is called.  In
+<a href="ch12_01.htm">Chapter 12, "Objects"</a>, we met the <tt class="literal">DESTROY</tt>
+method which is invoked when an object's memory is about to be
+automatically reclaimed by Perl.  And in
+<a href="ch14_01.htm">Chapter 14, "Tied Variables"</a>, we encountered the many
+functions implicitly called when a tied variable is accessed.</p>
+
+<p>
+<a name="INDEX-3307"></a><a name="INDEX-3308"></a><a name="INDEX-3309"></a><a name="INDEX-3310"></a>
+These subroutines all follow the convention that, if a subroutine is triggered
+automatically by either the compiler or the interpreter, we write its
+name in uppercase.  Associated with the different stages of your
+program's lifetime are four other such subroutines, named <tt class="literal">BEGIN</tt>,
+<tt class="literal">CHECK</tt>, <tt class="literal">INIT</tt>, and <tt class="literal">END</tt>.  The <tt class="literal">sub</tt> keyword is optional before
+their declarations.  Perhaps they are better called "blocks", because
+they're in some ways more like named blocks than real subroutines.</p>
+
+<p>For instance, unlike regular subroutines, there's no harm in declaring
+these blocks multiple times, since Perl keeps track of when to call
+them, so you never have to call them by name.  (They are also unlike
+regular subroutines in that <tt class="literal">shift</tt> and <tt class="literal">pop</tt> act as though you were
+in the main program, and so they act on <tt class="literal">@ARGV</tt> by default, not <tt class="literal">@_</tt>.)</p>
+
+<p>These four block types run in this order:</p>
+
+<dl>
+<dt>
+<b><tt class="literal">BEGIN</tt></b>
+</dt>
+<dd>
+<p>Runs ASAP (as soon as parsed) whenever encountered during
+compilation, before compiling the rest of the file.</p>
+</dd>
+
+
+<dt>
+<b><tt class="literal">CHECK</tt></b>
+</dt>
+<dd>
+<p>Runs when compilation is complete, but before the program
+starts. (<tt class="literal">CHECK</tt> can mean "checkpoint" or "double-check" or even just "stop".)</p>
+</dd>
+
+
+<dt>
+<b><tt class="literal">INIT</tt></b>
+</dt>
+<dd>
+<p>Runs at the beginning of execution right before the main flow of your
+program starts.</p>
+</dd>
+
+
+<dt>
+<b><tt class="literal">END</tt></b>
+</dt>
+<dd>
+<p>Runs at the end of execution right after the program finishes.</p>
+</dd>
+
+</dl>
+
+<p>
+</p>
+
+<p>If you declare more than one of these by the same name, even in
+separate modules, the <tt class="literal">BEGIN</tt>s all run before any <tt class="literal">CHECK</tt>s, which
+all run before any <tt class="literal">INIT</tt>s, which all run before any <tt class="literal">END</tt>s--which
+all run dead last, after your main program has finished.  Multiple
+<tt class="literal">BEGIN</tt>s and <tt class="literal">INIT</tt>s run in declaration order (FIFO), and the
+<tt class="literal">CHECK</tt>s and <tt class="literal">END</tt>s run in inverse declaration order (LIFO).</p>
+
+<p>This is probably easiest to see in a demo:
+<blockquote>
+<pre class="programlisting">#!/usr/bin/perl -l
+print       "start main running here";
+die         "main now dying here\n";
+die         "XXX: not reached\n";
+END         { print "1st END: done running"   }
+CHECK       { print "1st CHECK: done compiling" }
+INIT        { print "1st INIT: started running"  }
+END         { print "2nd END: done running"   }
+BEGIN       { print "1st BEGIN: still compiling" }
+INIT        { print "2nd INIT: started running"  }
+BEGIN       { print "2nd BEGIN: still compiling" }
+CHECK       { print "2nd CHECK: done compiling" }
+END         { print "3rd END: done running"   }</pre>
+</blockquote>
+
+When run, that demo program produces this output:
+<blockquote>
+<pre class="programlisting">1st BEGIN: still compiling
+2nd BEGIN: still compiling
+2nd CHECK: done compiling
+1st CHECK: done compiling
+1st INIT: started running
+2nd INIT: started running
+start main running here
+main now dying here
+3rd END: done running
+2nd END: done running
+1st END: done running</pre>
+</blockquote>
+<a name="INDEX-3311"></a>
+Because a <tt class="literal">BEGIN</tt> block executes immediately, it can pull in
+subroutine declarations, definitions, and importations before the rest
+of the file is even compiled.  These can alter how the compiler parses
+the rest of the current file, particularly if you import subroutine
+definitions.  At the very least, declaring a subroutine lets it be used
+as a list operator, making parentheses optional.  If the imported
+subroutine is declared with a prototype, calls to it can be parsed like
+built-ins and can even override built-ins of the same name in order to
+give them different semantics.  The <tt class="literal">use</tt> declaration is just a
+<tt class="literal">BEGIN</tt> block with an attitude.</p>
+
+<p>
+<a name="INDEX-3312"></a><tt class="literal">END</tt> blocks, by contrast, are executed as
+<em class="emphasis">late</em> as possible: when your program exits the
+Perl interpreter, even if as a result of an untrapped
+<tt class="literal">die</tt> or other fatal exception.  There are two
+situations in which an <tt class="literal">END</tt> block (or a
+<tt class="literal">DESTROY</tt> method) is skipped.  It isn't run if,
+instead of exiting, the current process just morphs itself from one
+program to another via <tt class="literal">exec</tt>.  A process blown out
+of the water by an uncaught signal also skips its
+<tt class="literal">END</tt> routines.  (See the <tt class="literal">use
+sigtrap</tt> pragma described in <a href="ch31_01.htm">Chapter 31, "Pragmatic Modules"</a>, for an easy way to convert
+catchable signals into exceptions.  For general information on signal
+handling, see "Signals" in <a href="ch16_01.htm">Chapter 16, "Interprocess Communication"</a>.)  To avoid all
+<tt class="literal">END</tt> processing, you can call
+<tt class="literal">POSIX::_exit</tt>, say <tt class="literal">kill -9, $$</tt>,
+or just <tt class="literal">exec</tt> any innocuous program, such as
+<em class="emphasis">/bin/true</em> on Unix systems.</p>
+
+<p>
+<a name="INDEX-3313"></a>
+Inside an <tt class="literal">END</tt> block, <tt class="literal">$?</tt> contains the status the program is going
+to <tt class="literal">exit</tt> with.  You can modify <tt class="literal">$?</tt> from within the <tt class="literal">END</tt> block to
+change the exit value of the program.  Beware of changing <tt class="literal">$?</tt>
+accidentally by running another program with <tt class="literal">system</tt> or backticks.</p>
+
+<p>If you have several <tt class="literal">END</tt> blocks within a file, they
+execute in <em class="emphasis">reverse</em> order of their definition.
+That is, the last <tt class="literal">END</tt> block defined is the first
+one executed when your program finishes.  This reversal enables
+related <tt class="literal">BEGIN</tt> and <tt class="literal">END</tt> blocks to
+nest the way you'd expect, if you pair them up.  For example, if the
+main program and a module it loads both have their own paired
+<tt class="literal">BEGIN</tt> and <tt class="literal">END</tt> subroutines, like
+so:
+<blockquote>
+<pre class="programlisting">BEGIN { print "main begun" }
+END { print "main ended" }
+use Module;</pre>
+</blockquote>
+
+and in that module, these declarations:
+<blockquote>
+<pre class="programlisting">BEGIN { print "module begun" }
+END { print "module ended" }</pre>
+</blockquote>
+
+then the main program knows that its <tt class="literal">BEGIN</tt> will
+always happen first, and its <tt class="literal">END</tt> will always happen
+last.  (Yes, <tt class="literal">BEGIN</tt> is really a compile-time block,
+but similar arguments apply to paired <tt class="literal">INIT</tt> and
+<tt class="literal">END</tt> blocks at run time.)  This principle is
+recursively true for any file that includes another when both have
+declarations like these.  This nesting property makes these blocks
+work well as package constructors and destructors.  Each module can
+have its own set-up and tear-down functions that Perl will call
+automatically.  This way the programmer doesn't have to remember that
+if a particular library is used, what special initialization or
+clean-up code ought to be invoked, and when.  The module's
+declarations assure these events.</p>
+
+<p>If you think of an <tt class="literal">eval</tt><em class="replaceable">STRING</em> as a call <em class="emphasis">back</em> from the
+interpreter to the compiler, then you might think of a <tt class="literal">BEGIN</tt> as a
+call <em class="emphasis">forward</em> from the compiler into the interpreter.  Both
+temporarily put the current activity on hold and switch modes of
+operation.  When we say that a <tt class="literal">BEGIN</tt> block is executed as early as
+possible, we mean it's executed just as soon as it is completely
+defined, even before the rest of the containing file is parsed.
+<tt class="literal">BEGIN</tt> blocks are therefore executed during compile time, never
+during run time.  Once a <tt class="literal">BEGIN</tt> block has run, it is immediately
+undefined and any code it used is returned to Perl's memory pool.
+You couldn't call a <tt class="literal">BEGIN</tt> block as a subroutine even if you tried,
+because by the time it's there, it's already gone.</p>
+
+<p>
+<a name="INDEX-3314"></a>
+Similar to <tt class="literal">BEGIN</tt> blocks, <tt class="literal">INIT</tt>
+blocks are run just before the Perl run time begins execution, in
+"first in, first out" (FIFO) order.  For example, the code generators
+documented in <em class="emphasis">perlcc</em> make use of
+<tt class="literal">INIT</tt> blocks to initialize and resolve pointers to
+XSUBs. <tt class="literal">INIT</tt> blocks are really just like
+<tt class="literal">BEGIN</tt> blocks, except they let the programmer
+distinguish construction that must happen at compile phase from
+construction that must happen at run phase.  When you're running a
+script directly, that's not terribly important because the compiler
+gets invoked every time anyway; but when compilation is separate from
+execution, the distinction can be crucial.  The compiler may only be
+invoked once, and the resulting executable may be invoked many times.</p>
+
+<p>Similar to <tt class="literal">END</tt> blocks, <tt class="literal">CHECK</tt>
+blocks are run just after the Perl compile phase ends but before run phase begins, in LIFO order.  <tt class="literal">CHECK</tt> blocks are
+useful for "winding down" the compiler just as <tt class="literal">END</tt>
+blocks are useful for winding down your program.  In particular, the backends all use <tt class="literal">CHECK</tt> blocks as the hook from
+which to invoke their respective code generators.  All they need to do
+is put a <tt class="literal">CHECK</tt> block into their own module, and it
+will run at the right time, so you don't have to install a
+<tt class="literal">CHECK</tt> into your program.  For this reason, you'll
+rarely write a <tt class="literal">CHECK</tt> block yourself, unless you're
+writing such a module.</p>
+
+<p>
+<a name="INDEX-3315"></a><a name="INDEX-3316"></a>
+Putting it all together, <a href="ch18_07.htm#perl3-tab-annotations">Table 18-1</a> lists various constructs with details on
+when they compile and when they run the code represented by "<tt class="literal">...</tt>".</p>
+
+
+<a name="perl3-tab-annotations"></a>
+<h4 class="objtitle">Table 18.1. What Happens When</h4>
+<table border="1">
+
+<tr>
+<th>
+<p>Block</p>
+</th>
+<th>
+<p>Compiles</p>
+</th>
+<th>
+<p>Traps</p>
+</th>
+<th>
+<p>Runs</p>
+</th>
+<th>
+<p>Traps</p>
+</th>
+<th>
+<p>Call</p>
+</th>
+</tr>
+
+<tr>
+<th>
+<p>or</p>
+</th>
+<th>
+<p>During</p>
+</th>
+<th>
+<p>Compile</p>
+</th>
+<th>
+<p>During</p>
+</th>
+<th>
+<p>Run</p>
+</th>
+<th>
+<p>Trigger</p>
+</th>
+</tr>
+
+<tr>
+<th>
+<p>Expression</p>
+</th>
+<th>
+<p>Phase</p>
+</th>
+<th>
+<p>Errors</p>
+</th>
+<th>
+<p>Phase</p>
+</th>
+<th>
+<p>Errors</p>
+</th>
+<th>
+<p>Policy</p>
+</th>
+</tr>
+
+
+
+
+<tr>
+<td><tt class="literal">use ...</tt></td>
+<td>C</td>
+<td>No</td>
+<td>C</td>
+<td>No</td>
+<td>Now</td>
+</tr>
+
+<tr>
+<td><tt class="literal">no ...</tt></td>
+<td>C</td>
+<td>No</td>
+<td>C</td>
+<td>No</td>
+<td>Now</td>
+</tr>
+
+<tr>
+<td><tt class="literal">BEGIN {...}</tt></td>
+<td>C</td>
+<td>No</td>
+<td>C</td>
+<td>No</td>
+<td>Now</td>
+</tr>
+
+<tr>
+<td><tt class="literal">CHECK {...}</tt></td>
+<td>C</td>
+<td>No</td>
+<td>C</td>
+<td>No</td>
+<td>Late</td>
+</tr>
+
+<tr>
+<td><tt class="literal">INIT {...}</tt></td>
+<td>C</td>
+<td>No</td>
+<td>R</td>
+<td>No</td>
+<td>Early</td>
+</tr>
+
+<tr>
+<td><tt class="literal">END {...}</tt></td>
+<td>C</td>
+<td>No</td>
+<td>R</td>
+<td>No</td>
+<td>Late</td>
+</tr>
+
+<tr>
+<td><tt class="literal">eval {...}</tt></td>
+<td>C</td>
+<td>No</td>
+<td>R</td>
+<td>Yes</td>
+<td>Inline</td>
+</tr>
+
+<tr>
+<td><tt class="literal">eval "..."</tt></td>
+<td>R</td>
+<td>Yes</td>
+<td>R</td>
+<td>Yes</td>
+<td>Inline</td>
+</tr>
+
+<tr>
+<td><tt class="literal">foo(...)</tt></td>
+<td>C</td>
+<td>No</td>
+<td>R</td>
+<td>No</td>
+<td>Inline</td>
+</tr>
+
+<tr>
+<td><tt class="literal">sub foo {...}</tt></td>
+<td>C</td>
+<td>No</td>
+<td>R</td>
+<td>No</td>
+<td>Call anytime</td>
+</tr>
+
+<tr>
+<td><tt class="literal">eval "sub {...}"</tt></td>
+<td>R</td>
+<td>Yes</td>
+<td>R</td>
+<td>No</td>
+<td>Call later</td>
+</tr>
+
+<tr>
+<td><tt class="literal">s/pat/.../e</tt></td>
+<td>C</td>
+<td>No</td>
+<td>R</td>
+<td>No</td>
+<td>Inline</td>
+</tr>
+
+<tr>
+<td><tt class="literal">s/pat/"..."/ee</tt></td>
+<td>R</td>
+<td>Yes</td>
+<td>R</td>
+<td>Yes</td>
+<td>Inline</td>
+</tr>
+
+
+</table>
+
+<p>
+Now that you know the score, we hope you'll be able to compose and
+perform your Perl pieces with greater confidence.</p>
+
+<a name="INDEX-3317"></a><a name="INDEX-3318"></a>
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch18_06.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch19_01.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">18.6. Code Development Tools</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">19. The Command-Line Interface</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

@@ -1,0 +1,858 @@
+<html>
+<head>
+<title>Efficiency (Programming Perl)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Efficiency">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<img src="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home">
+<map name="banner-map"><AREA SHAPE="RECT" COORDS="0,0,466,71" HREF="index.htm" ALT="Programming Perl"><AREA SHAPE="RECT" COORDS="467,0,514,18" HREF="jobjects/fsearch.htm" ALT="Search this book">
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch24_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch24_01.htm">Chapter 24: Common Practices</a></td><td align="right" valign="top" width="172"><a href="ch24_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">24.2. Efficiency</h2>
+
+<p>
+<a name="INDEX-4192"></a><a name="INDEX-4193"></a><a name="INDEX-4194"></a><a name="INDEX-4195"></a><a name="INDEX-4196"></a>
+While most of the work of programming may be simply getting your program
+working properly, you may find yourself wanting more bang for the buck
+out of your Perl program.  Perl's rich set of operators, data types, and
+control constructs are not necessarily intuitive when it comes to speed
+and space optimization.  Many trade-offs were made during Perl's design,
+and such decisions are buried in the guts of the code.  In general, the
+shorter and simpler your code is, the faster it runs, but there are
+exceptions.  This section attempts to help you make it work just a wee
+bit better.</p>
+
+<p>If you want it to work a lot better, you can play with the Perl
+compiler backend described in <a href="ch18_01.htm">Chapter 18, "Compiling"</a>, or rewrite your
+inner loop as a C extension as illustrated in <a href="ch21_01.htm">Chapter 21, "Internals and Externals"</a>.</p>
+
+<p>
+<a name="INDEX-4197"></a>
+Note that optimizing for time may sometimes cost you in space or
+programmer efficiency (indicated by conflicting hints below).  Them's
+the breaks.  If programming was easy, they wouldn't need something as
+complicated as a human being to do it, now would they?</p>
+
+
+<h3 class="sect2">24.2.1. Time Efficiency</h3>
+
+<ul>
+<li>
+<p>
+<a name="INDEX-4198"></a><a name="INDEX-4199"></a>
+Use hashes instead of linear searches. For example, instead of searching
+through <tt class="literal">@keywords</tt> to see if <tt class="literal">$_</tt> is a keyword, construct a hash
+with:
+<blockquote>
+<pre class="programlisting">my %keywords;
+for (@keywords) {
+    $keywords{$_}++;
+}</pre>
+</blockquote>
+
+Then you can quickly tell if <tt class="literal">$_</tt> contains a keyword by testing
+<tt class="literal">$keyword{$_}</tt> for a nonzero value.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4200"></a><a name="INDEX-4201"></a>
+Avoid subscripting when a <tt class="literal">foreach</tt> or list operator
+will do.  Not only is subscripting an extra operation, but if your
+subscript variable happens to be in floating point because you did
+arithmetic, an extra conversion from floating point back to integer is
+necessary.  There's often a better way to do it.  Consider using
+<tt class="literal">foreach</tt>, <tt class="literal">shift</tt>, and
+<tt class="literal">splice</tt> operations.  Consider saying <tt class="literal">use
+integer</tt>.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4202"></a>
+Avoid <tt class="literal">goto</tt>. It scans outward from your current location for the
+indicated label.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4203"></a><a name="INDEX-4204"></a>
+Avoid <tt class="literal">printf</tt> when <tt class="literal">print</tt> will do.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4205"></a><a name="INDEX-4206"></a><a name="INDEX-4207"></a>
+Avoid <tt class="literal">$&amp;</tt> and its two buddies, <tt class="literal">$`</tt> and <tt class="literal">$'</tt>. Any occurrence in
+your program causes all matches to save the searched string for
+possible future reference.  (However, once you've blown it, it doesn't
+hurt to have more of them.)</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4208"></a><a name="INDEX-4209"></a>
+Avoid using <tt class="literal">eval</tt> on a string.  An
+<tt class="literal">eval</tt> of a string (although not of a
+<em class="replaceable">BLOCK</em>) forces recompilation every time
+through.  The Perl parser is pretty fast for a parser, but that's not
+saying much.  Nowadays there's almost always a better way to do what
+you want anyway.  In particular, any code that uses
+<tt class="literal">eval</tt> merely to construct variable names is obsolete
+since you can now do the same directly using symbolic references:
+<blockquote>
+<pre class="programlisting">no strict 'refs';
+$name = "variable";
+$$name = 7;           # Sets $variable to 7</pre>
+</blockquote>
+</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4210"></a><a name="INDEX-4211"></a>
+Avoid <tt class="literal">eval</tt><em class="replaceable">STRING</em> inside
+a loop. Put the loop into the <tt class="literal">eval</tt> instead, to
+avoid redundant recompilations of the code.  See the
+<tt class="literal">study</tt> operator in <a href="ch29_01.htm">Chapter 29, "Functions"</a>
+for an example of this.</p>
+</li>
+<li>
+<p> 
+Avoid run-time-compiled patterns. Use the
+<tt class="literal">/</tt><em class="replaceable">pattern</em><tt class="literal">/o</tt>
+(once only) pattern modifier to avoid pattern recompilation when the
+pattern doesn't change over the life of the process. For patterns that
+change occasionally, you can use the fact that a null pattern refers
+back to the previous pattern, like this:
+<blockquote>
+<pre class="programlisting">"foundstring" =~ /$currentpattern/;        # Dummy match (must succeed).
+while (&lt;&gt;) {
+    print if //;
+}</pre>
+</blockquote>
+
+Alternatively, you can precompile your regular expression using the <tt class="literal">qr</tt>
+quote construct.  You can also use <tt class="literal">eval</tt> to recompile a subroutine
+that does the match (if you only recompile occasionally).  That works even better if you compile a bunch of matches into a single subroutine, thus amortizing the subroutine call overhead.</p>
+</li>
+<li>
+<p>Short-circuit alternation is often faster than the corresponding regex.  So:
+<blockquote>
+<pre class="programlisting">print if /one-hump/ || /two/;</pre>
+</blockquote>
+
+is likely to be faster than:
+<blockquote>
+<pre class="programlisting">print if /one-hump|two/;</pre>
+</blockquote>
+
+at least for certain values of <tt class="literal">one-hump</tt> and <tt class="literal">two</tt>. This is because the
+optimizer likes to hoist certain simple matching operations up into
+higher parts of the syntax tree and do very fast matching with a
+Boyer-Moore algorithm.  A complicated pattern tends to defeat this.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4212"></a>
+Reject common cases early with <tt class="literal">next if</tt>. As with simple regular
+expressions, the optimizer likes this.  And it just makes sense to avoid
+unnecessary work.  You can typically discard comment lines and blank
+lines even before you do a <tt class="literal">split</tt> or <tt class="literal">chop</tt>:
+<blockquote>
+<pre class="programlisting">while (&lt;&gt;) {
+    next if /^#/;
+    next if /^$/;
+    chop;
+    @piggies = split(/,/);
+    ...
+}</pre>
+</blockquote>
+</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4213"></a>
+Avoid regular expressions with many quantifiers or with big
+<tt class="literal">{</tt><em class="replaceable">MIN</em><tt class="literal">,</tt><em class="replaceable">MAX</em><tt class="literal">}</tt> numbers on parenthesized expressions.  Such patterns
+can result in exponentially slow backtracking behavior unless the
+quantified subpatterns match on their first "pass".  You can also
+use the <tt class="literal">(?&gt;...)</tt> construct to force a subpattern to either
+match completely or fail without backtracking.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4214"></a>
+Try to maximize the length of any nonoptional literal strings in
+regular expressions.  This is counterintuitive, but longer patterns
+often match faster than shorter patterns.  That's because the optimizer
+looks for constant strings and hands them off to a Boyer-Moore search,
+which benefits from longer strings.  Compile your pattern with Perl's
+<span class="option">-Dr</span> debugging switch to see what Dr. Perl thinks the longest literal
+string is.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4215"></a>
+Avoid expensive subroutine calls in tight loops. There is overhead
+associated with calling subroutines, especially when you pass lengthy
+parameter lists or return lengthy values.  In order of increasing
+desperation, try passing values by reference, passing values as
+dynamically scoped globals, inlining the subroutine, or rewriting the
+whole loop in C.  (Better than all of those solutions is if you can define the
+subroutine out of existence by using a smarter algorithm.)</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4216"></a>
+Avoid <tt class="literal">getc</tt> for anything but single-character terminal I/O. In fact,
+don't use it for that either.  Use <tt class="literal">sysread</tt>.</p>
+</li>
+<li>
+<p>Avoid frequent <tt class="literal">substr</tt>s on long strings, especially if the string
+contains UTF-8.  It's okay to use <tt class="literal">substr</tt> at the front of a string,
+and for some tasks you can keep the <tt class="literal">substr</tt> at the front by "chewing up"
+the string as you go with a four-argument <tt class="literal">substr</tt>, replacing the
+part you grabbed with <tt class="literal">""</tt>:
+<blockquote>
+<pre class="programlisting">while ($buffer) {
+    process(substr($buffer, 0, 10, ""));
+}</pre>
+</blockquote>
+</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4217"></a>
+Use <tt class="literal">pack</tt> and <tt class="literal">unpack</tt> instead of multiple <tt class="literal">substr</tt> invocations.</p>
+</li>
+<li>
+<p>Use <tt class="literal">substr</tt> as an lvalue rather than concatenating substrings. For
+example, to replace the fourth through seventh characters of <tt class="literal">$foo</tt> with
+the contents of the variable <tt class="literal">$bar</tt>, don't do this:
+<blockquote>
+<pre class="programlisting">$foo = substr($foo,0,3) . $bar . substr($foo,7);</pre>
+</blockquote>
+
+Instead, simply identify the part of the string to be replaced and
+assign into it, as in:
+<blockquote>
+<pre class="programlisting">substr($foo, 3, 4) = $bar;</pre>
+</blockquote>
+
+But be aware that if <tt class="literal">$foo</tt> is a huge string and <tt class="literal">$bar</tt> isn't
+exactly the length of the "hole", this can do a lot of copying too. Perl tries to minimize that by copying from either the front or the
+back, but there's only so much it can do if the <tt class="literal">substr</tt> is in the
+middle.</p>
+</li>
+<li>
+<p>Use <tt class="literal">s///</tt> rather than concatenating substrings. This is especially
+true if you can replace one constant with another of the same size. This results in an in-place substitution.</p>
+</li>
+<li>
+<p>Use statement modifiers and equivalent <tt class="literal">and</tt> and <tt class="literal">or</tt> operators
+instead of full-blown conditionals. Statement modifiers (like <tt class="literal">$ring
+= 0 unless $engaged</tt>) and logical operators avoid the overhead of
+entering and leaving a block.  They can often be more readable too.</p>
+</li>
+<li>
+<p>Use <tt class="literal">$foo = $a || $b || $c</tt>. This is much faster (and shorter to say)
+than:
+<blockquote>
+<pre class="programlisting">if ($a) {
+    $foo = $a;
+}
+elsif ($b) {
+    $foo = $b;
+}
+elsif ($c) {
+    $foo = $c;
+}</pre>
+</blockquote>
+
+Similarly, set default values with:
+<blockquote>
+<pre class="programlisting">$pi ||= 3;</pre>
+</blockquote>
+</p>
+</li>
+<li>
+<p>Group together any tests that want the same initial string. When testing
+a string for various prefixes in anything resembling a switch structure,
+put together all the <tt class="literal">/^a/</tt> patterns, all the <tt class="literal">/^b/</tt> patterns, and so
+on.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4218"></a><a name="INDEX-4219"></a>
+Don't test things you know won't match. Use <tt class="literal">last</tt> or <tt class="literal">elsif</tt>  to
+avoid falling through to the next case in your switch statement.</p>
+</li>
+<li>
+<p>Use special operators like <tt class="literal">study</tt>, logical string operations, <tt class="literal">pack
+'u'</tt>, and <tt class="literal">unpack '%'</tt> formats.</p>
+</li>
+<li>
+<p>Beware of the tail wagging the dog. Misstatements resembling 
+<tt class="literal">(&lt;STDIN&gt;)[0]</tt> can cause Perl much unnecessary work.  In accordance
+with Unix philosophy, Perl gives you enough rope to hang yourself.</p>
+</li>
+<li>
+<p>Factor operations out of loops. The Perl optimizer does not attempt to
+remove invariant code from loops. It expects you to exercise some sense.</p>
+</li>
+<li>
+<p>Strings can be faster than arrays.</p>
+</li>
+<li>
+<p>Arrays can be faster than strings. It all depends on
+whether you're going to reuse the strings or arrays and which
+operations you're going to perform.  Heavy modification of each element
+implies that arrays will be better, and occasional modification of some
+elements implies that strings will be better.  But you just have to try
+it and see.</p>
+</li>
+<li>
+<p>
+<tt class="literal">my</tt> variables are faster than <tt class="literal">local</tt> variables.</p>
+</li>
+<li>
+<p>Sorting on a manufactured key array may be faster than using a fancy
+sort subroutine. A given array value will usually be compared multiple
+times, so if the sort subroutine has to do much recalculation, it's
+better to factor out that calculation to a separate pass before the
+actual sort.</p>
+</li>
+<li>
+<p>If you're deleting characters, <tt class="literal">tr/abc//d</tt> is faster than <tt class="literal">s/[abc]//g</tt>.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4220"></a><a name="INDEX-4221"></a><a name="INDEX-4222"></a><a name="INDEX-4223"></a><tt class="literal">print</tt> with a comma separator may be faster than concatenating
+strings. For example:
+<blockquote>
+<pre class="programlisting">print $fullname{$name} . " has a new home directory " .
+    $home{$name} . "\n";</pre>
+</blockquote>
+
+has to glue together the two hashes and the two fixed strings before
+passing them to the low-level print routines, whereas:
+<blockquote>
+<pre class="programlisting">print $fullname{$name}, " has a new home directory ",
+    $home{$name}, "\n";</pre>
+</blockquote>
+
+doesn't.  On the other hand, depending on the values and the
+architecture, the concatenation may be faster.  Try it.</p>
+</li>
+<li>
+<p>Prefer <tt class="literal">join("", ...)</tt> to a series of concatenated strings. Multiple
+concatenations may cause strings to be copied back and forth multiple
+times.  The <tt class="literal">join</tt> operator avoids this.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4224"></a><tt class="literal">split</tt> on a fixed string is generally faster than <tt class="literal">split</tt> on a
+pattern. That is, use <tt class="literal">split(/ /, ...)</tt> rather than <tt class="literal">split(/ +/, ...)</tt>
+if you know there will only be one space. However, the patterns
+<tt class="literal">/\s+/</tt>, <tt class="literal">/^/</tt>, and <tt class="literal">/ /</tt> are specially optimized, as is the special <tt class="literal">split</tt>
+on whitespace.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4225"></a><a name="INDEX-4226"></a>
+Pre-extending an array or string can save some time. As strings and
+arrays grow, Perl extends them by allocating a new copy with some room
+for growth and copying in the old value.  Pre-extending a string with
+the <tt class="literal">x</tt> operator or an array by setting
+<tt class="literal">$#array</tt> can prevent this
+occasional overhead and reduce memory fragmentation.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4227"></a>
+Don't <tt class="literal">undef</tt> long strings and arrays if they'll be reused for the same
+purpose. This helps prevent reallocation when the string or array must
+be re-extended.</p>
+</li>
+<li>
+<p>Prefer <tt class="literal">"\0" x 8192</tt> over <tt class="literal">unpack("x8192",())</tt>.</p>
+</li>
+<li>
+<p>
+<tt class="literal">system("mkdir ...")</tt> may be faster on multiple directories if the
+<em class="emphasis">mkdir</em> syscall isn't available.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4228"></a>
+Avoid using <tt class="literal">eof</tt> if return values will already indicate it.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4229"></a><a name="INDEX-4230"></a>
+Cache entries from files (like <em class="emphasis">passwd</em> and
+<em class="emphasis">group</em> files) that are apt to be reused. It's
+particularly important to cache entries from the network.  For
+example, to cache the return value from
+<tt class="literal">gethostbyaddr</tt> when you are converting numeric
+addresses (like <tt class="literal">204.148.40.9</tt>) to names (like
+"<tt class="literal">www.oreilly.com</tt>"), you can use something like:
+<blockquote>
+<pre class="programlisting">sub numtoname {
+    local ($_) = @_;
+    unless (defined $numtoname{$_}) {
+        my (@a) = gethostbyaddr(pack('C4', split(/\./)),2);
+        $numtoname{$_} = @a &gt; 0 ? $a[0] : $_;
+    }
+    return $numtoname{$_};
+}</pre>
+</blockquote>
+</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4231"></a>
+Avoid unnecessary syscalls. Operating system calls tend to be rather
+expensive.  So for example, don't call the <tt class="literal">time</tt> operator when a
+cached value of <tt class="literal">$now</tt> would do.  Use the special <tt class="literal">_</tt> filehandle to
+avoid unnecessary <em class="emphasis">stat</em>(2) calls.  On some systems, even a minimal
+syscall may execute a thousand instructions.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4232"></a>
+Avoid unnecessary <tt class="literal">system</tt> calls. The <tt class="literal">system</tt> function has to fork a
+subprocess in order to execute the program you specify--or worse, execute a
+shell to execute the program.  This can easily execute a
+million instructions.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4233"></a>
+Worry about starting subprocesses, but only if they're frequent. Starting a single <em class="emphasis">pwd</em>, <em class="emphasis">hostname</em>, or <em class="emphasis">find</em> process isn't going to
+hurt you much--after all, a shell starts subprocesses all day long.  We
+do occasionally encourage the toolbox approach, believe it or not.</p>
+</li>
+<li>
+<p>Keep track of your working directory yourself rather than calling <em class="emphasis">pwd</em>
+repeatedly. (A standard module is provided for this. See
+ <tt class="literal">Cwd</tt> in <a href="ch30_01.htm">Chapter 30, "The Standard Perl Library"</a>.)</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4234"></a>
+Avoid shell metacharacters in commands--pass lists to <tt class="literal">system</tt> and
+<tt class="literal">exec</tt> where appropriate.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4235"></a><a name="INDEX-4236"></a>
+Set the sticky bit on the Perl interpreter on machines without demand
+paging:
+<blockquote>
+<pre class="programlisting">chmod +t /usr/bin/perl</pre>
+</blockquote>
+</p>
+</li>
+<li>
+<p>Allowing built-in functions' arguments to default to <tt class="literal">$_</tt> doesn't make your
+program faster.</p>
+</li>
+</ul>
+
+
+
+
+
+
+<h3 class="sect2">24.2.2. Space Efficiency</h3>
+
+<ul>
+<li>
+<p>
+<a name="INDEX-4237"></a>
+You can use <tt class="literal">vec</tt> for compact integer array storage
+if the integers are of fixed width.  (Integers of variable width can
+be stored in a UTF-8 string.)</p>
+</li>
+<li>
+<p>Prefer numeric values over equivalent string values--they require less
+
+memory.
+</p>
+</li>
+<li>
+<p>Use <tt class="literal">substr</tt> to store constant-length strings in a longer string.</p>
+</li>
+<li>
+<p>Use the <tt class="literal">Tie::SubstrHash</tt> module for very compact storage of a hash array,
+if the key and value lengths are fixed.</p>
+</li>
+<li>
+<p>Use <tt class="literal">__END__</tt> and the <tt class="literal">DATA</tt> filehandle to avoid storing program data
+as both a string and an array.</p>
+</li>
+<li>
+<p>Prefer <tt class="literal">each</tt> to <tt class="literal">keys</tt> where order doesn't matter.</p>
+</li>
+<li>
+<p>Delete or <tt class="literal">undef</tt> globals that are no longer in use.</p>
+</li>
+<li>
+<p>Use some kind of DBM to store hashes.</p>
+</li>
+<li>
+<p>Use temp files to store arrays.</p>
+</li>
+<li>
+<p>Use pipes to offload processing to other tools.</p>
+</li>
+<li>
+<p>Avoid list operations and entire file slurps.</p>
+</li>
+<li>
+<p>Avoid using <tt class="literal">tr///</tt>.  Each <tt class="literal">tr///</tt> expression must store a
+sizable translation table.</p>
+</li>
+<li>
+<p>Don't unroll your loops or inline your subroutines.</p>
+</li>
+</ul>
+
+
+
+
+
+
+<h3 class="sect2">24.2.3. Programmer Efficiency</h3>
+
+<ul>
+<li>
+<p>
+<a name="INDEX-4238"></a>
+Use defaults.</p>
+</li>
+<li>
+<p>Use funky shortcut command-line switches like <span class="option">-a</span>, <span class="option">-n</span>, <span class="option">-p</span>,
+<span class="option">-s</span>, and <span class="option">-i</span>.</p>
+</li>
+<li>
+<p>Use <tt class="literal">for</tt> to mean <tt class="literal">foreach</tt>.</p>
+</li>
+<li>
+<p>Run system commands with backticks.</p>
+</li>
+<li>
+<p>Use <tt class="literal">&lt;*&gt;</tt> and such.</p>
+</li>
+<li>
+<p>Use patterns created at run time.</p>
+</li>
+<li>
+<p>Use <tt class="literal">*</tt>, <tt class="literal">+</tt>, and <tt class="literal">{}</tt> liberally in your patterns.</p>
+</li>
+<li>
+<p>Process whole arrays and slurp entire files.</p>
+</li>
+<li>
+<p>Use <tt class="literal">getc</tt>.</p>
+</li>
+<li>
+<p>Use <tt class="literal">$`</tt>, <tt class="literal">$&amp;</tt>, and <tt class="literal">$'</tt>.</p>
+</li>
+<li>
+<p>Don't check error values on <tt class="literal">open</tt>, since <tt class="literal">&lt;</tt><em class="replaceable">HANDLE</em><tt class="literal">&gt;</tt> and
+<tt class="literal">print</tt><em class="replaceable">HANDLE</em> will simply behave as no-ops when given an invalid handle.</p>
+</li>
+<li>
+<p>Don't <tt class="literal">close</tt> your files--they'll be closed on the next <tt class="literal">open</tt>.</p>
+</li>
+<li>
+<p>Don't pass subroutine arguments. Use globals.</p>
+</li>
+<li>
+<p>Don't name your subroutine parameters. You can access them directly as
+<tt class="literal">$_[</tt><em class="replaceable">EXPR</em><tt class="literal">]</tt>.</p>
+</li>
+<li>
+<p>Use whatever you think of first.</p>
+</li>
+</ul>
+
+
+
+
+
+
+<h3 class="sect2">24.2.4. Maintainer Efficiency</h3>
+
+<ul>
+<li>
+<p>Don't use defaults.</p>
+</li>
+<li>
+<p>Use <tt class="literal">foreach</tt> to mean <tt class="literal">foreach</tt>.</p>
+</li>
+<li>
+<p>Use meaningful loop labels with <tt class="literal">next</tt> and <tt class="literal">last</tt>.</p>
+</li>
+<li>
+<p>Use meaningful variable names.</p>
+</li>
+<li>
+<p>Use meaningful subroutine names.</p>
+</li>
+<li>
+<p>Put the important thing first on the line using <tt class="literal">and</tt>, <tt class="literal">or</tt>, and
+statement modifiers (like <tt class="literal">exit if $done</tt>).</p>
+</li>
+<li>
+<p>Close your files as soon as you're done with them.</p>
+</li>
+<li>
+<p>Use packages, modules, and classes to hide your implementation details.</p>
+</li>
+<li>
+<p>Pass arguments as subroutine parameters.</p>
+</li>
+<li>
+<p>Name your subroutine parameters using <tt class="literal">my</tt>.</p>
+</li>
+<li>
+<p>Parenthesize for clarity.</p>
+</li>
+<li>
+<p>Put in lots of (useful) comments.</p>
+</li>
+<li>
+<p>Include embedded pod documentation.</p>
+</li>
+<li>
+<p>
+<tt class="literal">use warnings</tt>.</p>
+</li>
+<li>
+<p>
+<tt class="literal">use strict</tt>.</p>
+</li>
+</ul>
+
+
+
+
+
+
+<h3 class="sect2">24.2.5. Porter Efficiency</h3>
+
+<ul>
+<li>
+<p>
+<a name="INDEX-4239"></a>
+Wave a handsome tip under his nose.</p>
+</li>
+<li>
+<p>Avoid functions that aren't implemented everywhere. You can use <tt class="literal">eval</tt>
+tests to see what's available.</p>
+</li>
+<li>
+<p>Use the <tt class="literal">Config</tt> module or the <tt class="literal">$^O</tt> variable to find out what kind of
+machine you're running on.</p>
+</li>
+<li>
+<p>Don't expect native float and double to <tt class="literal">pack</tt> and <tt class="literal">unpack</tt> on foreign
+machines.</p>
+</li>
+<li>
+<p>Use network byte order (the "<tt class="literal">n</tt>" and "<tt class="literal">N</tt>" formats for <tt class="literal">pack</tt>) when
+sending binary data over the network.</p>
+</li>
+<li>
+<p>Don't send binary data over the network.  Send ASCII.  Better, send UTF-8.
+Better yet, send money.</p>
+</li>
+<li>
+<p>Check <tt class="literal">$]</tt> or <tt class="literal">$^V</tt> to see if the current version supports all the
+features you use.</p>
+</li>
+<li>
+<p>Don't use <tt class="literal">$]</tt> or <tt class="literal">$^V</tt>.  Use <tt class="literal">require</tt> or <tt class="literal">use</tt> with a version number.</p>
+</li>
+<li>
+<p>Put in the <tt class="literal">eval exec</tt> hack even if you don't use it, so your program
+will run on those few systems that have Unix-like shells but don't
+recognize the <tt class="literal">#!</tt> notation.</p>
+</li>
+<li>
+<p>Put the <tt class="literal">#!/usr/bin/perl</tt> line in even if you don't use it.</p>
+</li>
+<li>
+<p>Test for variants of Unix commands. Some <em class="emphasis">find</em> programs can't handle the <em class="emphasis">-xdev</em> switch,
+for example.</p>
+</li>
+<li>
+<p>Avoid variant Unix commands if you can do it internally. Unix commands
+don't work too well on MS-DOS or VMS.</p>
+</li>
+<li>
+<p>Put all your scripts and manpages into a single network filesystem that's
+mounted on all your machines.</p>
+</li>
+<li>
+<p>Publish your module on CPAN.  You'll get lots of feedback if it's not
+portable.</p>
+</li>
+</ul>
+
+
+
+
+
+
+<h3 class="sect2">24.2.6. User Efficiency</h3>
+
+<ul>
+<li>
+<p>
+<a name="INDEX-4240"></a>
+Instead of making users enter data line by line, pop users into
+their favorite editor.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4241"></a><a name="INDEX-4242"></a><a name="INDEX-4243"></a>
+Better yet, use a GUI like the Perl/Tk extension, where users can
+control the order of events.  (Perl/Tk is available on CPAN.)</p>
+</li>
+<li>
+<p>Put up something for users to read while you continue doing work.</p>
+</li>
+<li>
+<p>Use autoloading so that the program <em class="emphasis">appears</em> to run faster.</p>
+</li>
+<li>
+<p>Give the option of helpful messages at every prompt.</p>
+</li>
+<li>
+<p>Give a helpful usage message if users don't give correct input.</p>
+</li>
+<li>
+<p>Display the default action at every prompt, and maybe a few
+alternatives.</p>
+</li>
+<li>
+<p>Choose defaults for beginners.  Allow experts to change the defaults.</p>
+</li>
+<li>
+<p>Use single character input where it makes sense.</p>
+</li>
+<li>
+<p>Pattern the interaction after other things the user is familiar with.</p>
+</li>
+<li>
+<p>
+<a name="INDEX-4244"></a>
+Make error messages clear about what needs fixing.  Include all
+pertinent information such as filename and error code, like this:
+<blockquote>
+<pre class="programlisting">open(FILE, $file) or die "$0: Can't open $file for reading: $!\n";</pre>
+</blockquote>
+</p>
+</li>
+<li>
+<p>Use <tt class="literal">fork &amp;&amp; exit</tt> to detach from the terminal when the rest of the script is just batch
+processing.</p>
+</li>
+<li>
+<p>Allow arguments to come from either the command line or standard
+input.</p>
+</li>
+<li>
+<p>Don't put arbitrary limitations into your program.</p>
+</li>
+<li>
+<p>Prefer variable-length fields over fixed-length fields.</p>
+</li>
+<li>
+<p>Use text-oriented network protocols.</p>
+</li>
+<li>
+<p>Tell everyone else to use text-oriented network protocols!</p>
+</li>
+<li>
+<p>Tell everyone else to tell everyone else to use text-oriented network protocols!!!</p>
+</li>
+<li>
+<p>Be vicariously lazy.</p>
+</li>
+<li>
+<p>Be nice.</p>
+</li>
+</ul>
+<a name="INDEX-4245"></a><a name="INDEX-4246"></a><a name="INDEX-4247"></a>
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch24_01.htm"><img src="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm"><img src="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch24_03.htm"><img src="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">24.1. Common Goofs for Novices</td><td align="center" valign="top" width="171"><a href="index/index.htm"><img src="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">24.3. Programming with Style</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <area shape="rect" coords="2,-1,79,99" href="../index.htm"><area shape="rect" coords="84,1,157,108" href="../perlnut/index.htm"><area shape="rect" coords="162,2,248,125" href="../prog/index.htm"><area shape="rect" coords="253,2,326,130" href="../advprog/index.htm"><area shape="rect" coords="332,1,407,112" href="../cookbook/index.htm"><area shape="rect" coords="414,2,523,103" href="../sysadmin/index.htm">
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

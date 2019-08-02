@@ -1,0 +1,1112 @@
+<!doctype html public "-//ORA//DTD CD HTML 3.2//EN">
+<html>
+<head>
+<title>[Chapter 5] 5.4 Using Tied Variables</TITLE>
+<meta name="author" content="Larry Wall, Tom Christiansen, and Randal Schwartz">
+<meta name="date" content="Fri Aug 29 18:38:09 1997">
+<meta name="form" content="html">
+<meta name="metadata" content="dublincore.0.1">
+<meta name="objecttype" content="book part">
+<meta name="otheragent" content="gmat dbtohtml">
+<meta name="publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="source" content="SGML">
+<meta name="subject" content="Perl">
+<meta name="title" content="Programming Perl, Second Edition">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+</HEAD>
+<body bgcolor="#FFFFFF">
+
+<div class=htmlnav>
+<h1><a href='index.html'><img src="gifs/smbanner.gif" alt="Programming Perl, Second Edition" border=0></a></H1>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch05_03.html"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 5<br>Packages, Modules, and Object Classes</FONT></B></TD>
+<td width=172 align=right valign=top><a href="ch05_05.html"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+</table>
+
+&nbsp;
+<hr align=left width=515>
+</DIV>
+<div class=sect1>
+<h2 class=sect1><a class="TITLE" name="PERL2-CH-5-SECT-4">5.4 Using Tied Variables</A></h2>
+
+<p class=para>
+<a name="CH05.TIE1"></A><a name="CH05.TIE2"></A><a name="CH05.TIE3"></A>In older versions of Perl, a user could call <a href="ch03_02.html#PERL2-CMD-DBMOPEN">dbmopen</A> to
+tie a hash to a UNIX DBM file.  Whenever the
+hash was accessed, the database file on disk (really just a hash,
+not a full relational database) would be magically[16]
+read from or written to.  In modern versions of Perl, you can bind any
+ordinary variable (scalar, array, or hash) to an implementation
+class by using <a href="ch03_02.html#PERL2-CMD-TIE">tie</A>.  (The class may or may not implement a
+DBM file.)  You can break this association with <a href="ch03_02.html#PERL2-CMD-UNTIE">untie</A>.
+
+<blockquote class=footnote>
+<p class=para>[16] 
+In this case, magically means "transparently doing something very
+complicated".  You know the old saying--any technology sufficiently
+advanced is indistinguishable from a Perl script.
+</blockquote>
+<p class=para>
+The <a href="ch03_02.html#PERL2-CMD-TIE">tie</A> function creates the association by creating an object
+internally to represent the variable to the class.  If you have a tied
+variable, but want to get at the underlying object, there are
+two ways to do it.  First, the <a href="ch03_02.html#PERL2-CMD-TIE">tie</A>
+function returns a reference to the object.  
+But if you didn't bother to store that object reference
+anywhere, you could still retrieve it using the <a href="ch03_02.html#PERL2-CMD-TIED">tied</A> function.
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+$object = tie <tt class=replaceable><i>VARIABLE</i></tt>, <tt class=replaceable><i>CLASSNAME</i></tt>, <tt class=replaceable><i>LIST</i></tt>
+untie <tt class=replaceable><i>VARIABLE</i></tt>
+$object = tied <tt class=replaceable><i>VARIABLE</i></tt>
+</PRE>
+</DIV>
+
+<p class=para>
+The <a href="ch03_02.html#PERL2-CMD-TIE">tie</A> function binds the variable to the class package that
+provides the methods for that variable.  Once
+this magic has been performed, accessing a tied variable automatically
+triggers method calls in the proper class.  All the complexity of the
+class is hidden behind magic method calls.  The method names are
+predetermined, since they're called implicitly from within the innards
+of Perl.  These names are in <tt class=literal>ALL CAPS</tt>, which is a convention in Perl
+culture that indicates that the routines are called implicitly rather than
+explicitly--just like <tt class=literal>BEGIN</tt>, <tt class=literal>END</tt>, and <tt class=literal>DESTROY</tt>.
+And <tt class=literal>AUTOLOAD</tt> too, for that matter.
+
+<p class=para>
+You can almost think of <a href="ch03_02.html#PERL2-CMD-TIE">tie</A> as a funny kind of <a href="ch03_02.html#PERL2-CMD-BLESS">bless</A>, except
+that it blesses a bare variable instead of a thingy reference, and
+takes extra parameters, like a constructor.  That's because it actually
+does call a constructor internally.  (That's one of the magic methods we
+mentioned.)  This constructor is passed the <tt class=replaceable><i>CLASSNAME</i></tt> you specified, as
+well as any additional arguments you supply in the <tt class=replaceable><i>LIST</i></tt>.  It is not
+passed the <tt class=replaceable><i>VARIABLE</i></tt>, however.  The only way the constructor can
+tell which kind of <tt class=replaceable><i>VARIABLE</i></tt> is being tied is by knowing its
+own method name.  This is not the customary constructor name,
+<tt class=literal>new</tt>, but rather one of <tt class=literal>TIESCALAR</tt>, <tt class=literal>TIEARRAY</tt>, or
+<tt class=literal>TIEHASH</tt>.  (You can likely figure out which name goes with which
+variable type.)  The constructor just returns an object reference in the
+normal fashion, and doesn't worry about whether it was called from
+<a href="ch03_02.html#PERL2-CMD-TIE">tie</A>--which it may not have been, since you can call these methods
+directly if you like.  (Indeed, if you've tied your variable to a class
+that provides other methods not accessible through the variable,
+you <i class=emphasis>must</I> call the other methods directly yourself, via the object
+reference.  These extra methods might provide services like file locking
+or other forms of transaction protection.)
+
+<p class=para>
+As in any constructor, these constructors must <b>bless</b> a reference to a
+thingy and return it as the implementation object.  The thingy inside
+the implementation object doesn't have to be of the same type as the
+variable you're tying to.  It does have to be a properly blessed
+object, though.  See the example below on tied arrays, which uses a hash
+object to hold information about an array.
+
+<p class=para>
+The <a href="ch03_02.html#PERL2-CMD-TIE">tie</A> function will not <a href="ch03_02.html#PERL2-CMD-USE">use</A> or <a href="ch03_02.html#PERL2-CMD-REQUIRE">require</A> a module for you--you
+must do that explicitly yourself.  (On the other hand, the <a href="ch03_02.html#PERL2-CMD-DBMOPEN">dbmopen</A>
+emulator function will, for backward compatibility, attempt to
+use one or another DBM implementation.  But you can
+preempt its selection with an explicit <a href="ch03_02.html#PERL2-CMD-USE">use</A>, provided the module
+you <a href="ch03_02.html#PERL2-CMD-USE">use</A> is one of the modules in <a href="ch03_02.html#PERL2-CMD-DBMOPEN">dbmopen</A>'s list of modules
+to try.
+See the AnyDBM_File module in <a href="ch07_01.html">Chapter 7, <i>The Standard Perl Library</i></A> for a fuller explanation.
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-4.1">Tying Scalars</A></h3>
+
+<p class=para>
+<a name="CH05.SCAL"></A>A class implementing a tied scalar must define the following methods:
+<tt class=literal>TIESCALAR</tt>, <tt class=literal>FETCH</tt>, <tt class=literal>STORE</tt>, and possibly
+<tt class=literal>DESTROY</tt>.  These routines will be invoked implicitly when you
+<a href="ch03_02.html#PERL2-CMD-TIE">tie</A> a variable (<tt class=literal>TIESCALAR</tt>), read a tied variable
+(<tt class=literal>FETCH</tt>), or assign a value to a tied variable (<tt class=literal>STORE</tt>).  The
+<tt class=literal>DESTROY</tt> method is called (as always) when the last reference to
+the object disappears.  (This may or may not happen when you call
+<a href="ch03_02.html#PERL2-CMD-UNTIE">untie</A>, which destroys the reference used by the tie, but doesn't
+destroy any outstanding references you may have squirreled away
+elsewhere.)  The <tt class=literal>FETCH</tt> and <tt class=literal>STORE</tt> methods are triggered
+when you access the variable that's been tied, not the object it's been
+tied to.  If you have a handle on the object (either returned by the
+initial <a href="ch03_02.html#PERL2-CMD-TIE">tie</A> or retrieved later via <a href="ch03_02.html#PERL2-CMD-TIED">tied</A>), you can access the
+underlying object yourself without automatically triggering its
+<tt class=literal>FETCH</tt> or <tt class=literal>STORE</tt> methods.
+
+<p class=para>
+Let's look at each of these methods in turn, using as our example an
+imaginary class called <tt class=literal>Nice</tt>.[17]
+Variables tied to this class are scalars containing process priorities,
+and each such variable is implicitly associated with an object that
+contains a particular process ID, such the ID of the currently running
+process or of the parent process.  (Presumably you'd name your variables
+to remind you which process you're referring to.)  Variables are tied to
+the class this way:
+
+<blockquote class=footnote>
+<p class=para>[17] 
+UNIX priorities are associated with the word "nice" because they're
+inverted from what you'd expect.  Higher priorities run slower, hence
+are "nicer" to other processes.  A more portable module might prefer a
+less UNIX-centric name like <tt class=literal>Priority</tt>.  But if we were writing this
+class for the Perl library, we'd probably call it <tt class=literal>Tie::Priority</tt> or
+some such, to fit the library's hierarchical naming scheme.  Not
+everything can be a top-level class, or things will get rather confused.
+Not to mention people.
+</blockquote>
+<div class=programlisting>
+<p>
+<pre>
+use Nice;       # load the Nice.pm module
+tie $his_speed, 'Nice', getppid();
+tie $my_speed,  'Nice', $$;
+</PRE>
+</DIV>
+
+<p class=para>
+Once the variables have been tied, their previous contents are no longer
+accessible.  The internally forged connection between the variable and
+the object takes precedence over ordinary variable semantics.
+
+<p class=para>
+For example, let's say you copy a variable that's been tied:
+
+<div class=programlisting>
+<p>
+<pre>
+$speed = $his_speed;
+</PRE>
+</DIV>
+
+<p class=para>
+Instead of reading the value in the ordinary fashion from the
+<tt class=literal>$his_speed</tt> scalar variable, Perl implicitly calls the
+<tt class=literal>FETCH</tt> method on the associated underlying object.  It's as
+though you'd written this:
+
+<div class=programlisting>
+<p>
+<pre>
+$speed = (tied $his_speed)-&gt;FETCH():
+</PRE>
+</DIV>
+
+<p class=para>
+Or if you'd captured the object returned by the <a href="ch03_02.html#PERL2-CMD-TIE">tie</A>, you
+could simply use that reference instead of the <a href="ch03_02.html#PERL2-CMD-TIED">tied</A> function, as in the following sample code.
+
+<div class=programlisting>
+<p>
+<pre>
+$myobj = tie $my_speed, 'Nice', $$;
+$speed = $my_speed;       # through the implicit interface
+$speed = $myobj-&gt;FETCH(); # same thing, explicitly
+</PRE>
+</DIV>
+
+<p class=para>
+You can use <tt class=literal>$myobj</tt> to call methods other than the implicit ones, such
+as those provided by the <tt class=literal>DB_File</tt> class (see <a href="ch07_01.html">Chapter 7, <i>The Standard Perl Library</i></A>).
+However, one normally minds one's own business and leaves the underlying
+object alone, which is why you often see the return value from <a href="ch03_02.html#PERL2-CMD-TIE">tie</A>
+ignored.  You can still get at it if you need it later.
+
+<p class=para>
+That's the external view of it.  For our implementation, we'll use the
+<tt class=literal>BSD::Resource</tt> class (found in CPAN, but not included with
+Perl) to access the <tt class=literal>PRIO_PROCESS</tt>, <tt class=literal>PRIO_MIN</tt>, and
+<tt class=literal>PRIO_MAX</tt> constants from your system.  Here's the
+preamble of our class, which we will put into a file named <i class=emphasis>Nice.pm</I>:
+
+<div class=programlisting>
+<p>
+<pre>
+package Nice;
+use Carp;            # Propagates error messages nicely.
+use BSD::Resource;   # Use these hooks into the OS.
+use strict;          # Enforce some discipline on ourselves,
+use vars '$DEBUG';   # but exempt $DEBUG from discipline.
+</PRE>
+</DIV>
+
+<p class=para>
+The Carp module provides methods <tt class=literal>carp()</tt>, <tt class=literal>croak()</tt>,
+and <tt class=literal>confess()</tt>, which we'll use in various spots below.  As
+usual, see <a href="ch07_01.html">Chapter 7, <i>The Standard Perl Library</i></A> for more about Carp.
+
+<p class=para>
+The <tt class=literal>use strict</tt> would ordinarily disallow the use of unqualified
+package variables like <tt class=literal>$DEBUG</tt>, but we then declared the global
+with <tt class=literal>use vars</tt>, so it's exempt.  Otherwise we'd have to say
+<tt class=literal>$Nice::DEBUG</tt> everywhere.  But it is a global, and other modules
+can turn on debugging in our module by setting <tt class=literal>$Nice::DEBUG</tt> to
+some other value before using our module.
+
+<p>
+<dl class=variablelist>
+<dt class=varlistentry><tt class=literal>TIESCALAR</tt> <tt class=replaceable><i>CLASSNAME</i></tt>, <tt class=replaceable><i>LIST</i></tt><br>
+<dd>
+
+<p class=para>
+The <tt class=literal>TIESCALAR</tt> method of the class (that is, the
+class package, but we're going to stop reminding you of that) is
+implicitly invoked whenever <a href="ch03_02.html#PERL2-CMD-TIE">tie</A> is
+called on a scalar variable.  The <tt class=replaceable><i>LIST</i></tt> contains
+any optional parameters needed to properly initialize an object of the
+given class.  (In our example, there is only one parameter, the
+process ID.)  The method is expected to return an object, which may or
+may not contain an anonymous scalar as its blessed thingy.  In our
+example, it does.
+
+<div class=programlisting>
+<p>
+<pre>
+sub TIESCALAR {
+    my $class = shift;
+    my $pid   = shift;
+    $pid ||= $$;              # arg of 0 defaults to my process
+    if ($pid =~ /\D/) {
+        carp "Nice::TIESCALAR got non-numeric pid $pid" if $^W;
+        return undef;
+    }
+    unless (kill 0, $pid) {   # EPERM or ERSCH, no doubt
+        carp "Nice::TIESCALAR got bad pid $pid: $!" if $^W;
+        return undef;
+    }
+    return bless \$pid, $class;
+}
+</PRE>
+</DIV>
+
+<p class=para>
+Recall that the statement with the <tt class=literal>||=</tt> operator is just shorthand for
+
+<div class=programlisting>
+<p>
+<pre>
+$pid = $pid || $$;      # set if not set
+</PRE>
+</DIV>
+
+<p class=para>
+We say the object contains an anonymous scalar, but it doesn't really
+become anonymous until <tt class=literal>my $pid</tt> goes out of scope, since that's the
+variable we're generating a reference to when we bestow the blessing.
+When returning a reference to an array or hash, one could use the same
+approach by employing a lexically scoped array or hash variable, but
+usually people just use the anonymous array or hash composers,
+<tt class=literal>[]</tt> and <tt class=literal>{}</tt>.  There is no similar composer for anonymous
+scalars.
+
+<p class=para>
+On the subject of subterfuge, the <a href="ch03_02.html#PERL2-CMD-KILL">kill</A> isn't really killing the
+process.  On most UNIX systems, a signal 0 merely checks to see whether the
+process is there.
+
+<p class=para>
+This particular <a href="ch03_02.html#PERL2-CMD-TIE">tie</A> class has chosen to return an error value rather
+than raise an exception if its constructor fails.  Other classes may
+not wish to be so forgiving.  (In any event, the <a href="ch03_02.html#PERL2-CMD-TIE">tie</A> itself will
+throw an exception when the constructor fails to return an object.  But
+you get more error messages this way, which many folks seem to prefer.)
+This routine checks the global variable <b>$^W</b> (which reflects Perl's
+<b>-w</b> flag) to see whether to emit its extra bit of noise.
+
+<p class=para>
+But for all that, it's an ordinary constructor, and doesn't know it's being
+called from <a href="ch03_02.html#PERL2-CMD-TIE">tie</A>.  It just suspects it strongly.
+
+<p>
+<dt class=varlistentry><tt class=literal>FETCH</tt> <tt class=replaceable><i>THIS</i></tt><br>
+<dd>
+
+<p class=para>
+This method is triggered every time the tied variable is accessed
+(that is, read).  It takes no arguments beyond a reference to the object
+that is tied to the variable.  (The <tt class=literal>FETCH</tt> methods for arrays and
+hashes do, though.)  Since in this case we're just using a scalar
+thingy as the tied object, a simple scalar dereference, <tt class=literal>$$self</tt>,
+allows the method to get at the real value stored in its object.  In the
+example below, that real value is the process ID to which we've tied our
+variable.
+
+<div class=programlisting>
+<p>
+<pre>
+sub FETCH {
+    my $self = shift;       # ref to scalar
+    confess "wrong type" unless ref $self;
+    croak "too many arguments" if @_;
+    my $nicety;
+    local $! = 0;           # preserve errno
+    $nicety = getpriority(PRIO_PROCESS, $$self);
+    if ($!) { croak "getpriority failed: $!" }
+    return $nicety;
+}
+</PRE>
+</DIV>
+
+<p class=para>
+This time we've decided to blow up (raise an exception) if the
+<a href="ch03_02.html#PERL2-CMD-GETPRIORITY">getpriority</A> function fails--there's no place for us to return an
+error otherwise, and it's probably the right thing to do.
+
+<p class=para>
+Note the absence of a <tt class=literal>$</tt> on <tt class=literal>PRIO_PROCESS</tt>.  That's really a
+subroutine call into BSD::Resource that returns the appropriate constant
+to feed back into <a href="ch03_02.html#PERL2-CMD-GETPRIORITY">getpriority</A>.  The <tt class=literal>PRIO_PROCESS</tt>
+declaration was imported by the <a href="ch03_02.html#PERL2-CMD-USE">use</A> declaration.  And that's why
+there's no <tt class=literal>$</tt> on the front of it--it's not a variable.  (If you
+had put a <tt class=literal>$</tt>, the <tt class=literal>use strict</tt> would have caught it for you
+as an unqualified global.)
+
+<p>
+<dt class=varlistentry><tt class=literal>STORE</tt> <tt class=replaceable><i>THIS, VALUE</i></tt><br>
+<dd>
+
+<p class=para>
+This method is triggered every time the tied variable is set
+(assigned).  The first argument, <tt class=replaceable><i>THIS</i></tt>, is again a reference to
+the object associated with the variable, and <tt class=replaceable><i>VALUE</i></tt> is the value the
+user is assigning to the variable.
+
+<div class=programlisting>
+<p>
+<pre>
+sub STORE {
+    my $self = shift;
+    my $new_nicety = shift;
+    confess "wrong type" unless ref $self;
+    croak "too many arguments" if @_;
+    if ($new_nicety &lt; PRIO_MIN) {
+        carp sprintf
+          "WARNING: priority %d less than minimum system priority %d",
+              $new_nicety, PRIO_MIN if $^W;
+        $new_nicety = PRIO_MIN;
+    }
+    if ($new_nicety &gt; PRIO_MAX) {
+        carp sprintf
+          "WARNING: priority %d greater than maximum system priority %d",
+              $new_nicety, PRIO_MAX if $^W;
+        $new_nicety = PRIO_MAX;
+    }
+    unless (defined setpriority(PRIO_PROCESS, $$self, $new_nicety)) {
+        confess "setpriority failed: $!";
+    }
+    return $new_nicety;
+}
+</PRE>
+</DIV>
+
+<p class=para>
+There doesn't appear to be anything worth explaining there, except maybe
+that we return the new value because that's what an assignment returns.
+
+<p>
+<dt class=varlistentry><tt class=literal>DESTROY</tt> <tt class=replaceable><i>THIS</i></tt><br>
+<dd>
+
+<p class=para>
+This method is triggered when the object associated with the
+tied variable needs to be destructed (usually only when it goes out of
+scope).  As with other object classes, such a method is seldom necessary,
+since Perl deallocates the moribund object's memory for you automatically.
+Here, we'll use a <tt class=literal>DESTROY</tt> method for debugging purposes only.
+
+<div class=programlisting>
+<p>
+<pre>
+sub DESTROY {
+    my $self = shift;
+    confess "wrong type" unless ref $self;
+    carp "[ Nice::DESTROY pid $$self ]" if $DEBUG;
+}
+</PRE>
+</DIV>
+
+<p class=para>
+That's about all there is to it.  Actually, it's more than all there
+is to it, since we've done a few nice things here for the sake
+of completeness, robustness, and general aesthetics (or lack thereof).
+Simpler <tt class=literal>TIESCALAR</tt> classes are certainly possible.</DL>
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-4.2">Tying Arrays</A></h3>
+
+<p class=para>
+<a name="CH05.ARRAY"></A>A class implementing a tied ordinary array must define the following
+methods: <tt class=literal>TIEARRAY</tt>, <tt class=literal>FETCH</tt>, <tt class=literal>STORE</tt>, and perhaps
+<tt class=literal>DESTROY</tt>.
+
+<p class=para>
+Tied arrays are incomplete.  There are, as yet,
+no defined methods to deal with <tt class=literal>$#ARRAY</tt> access
+(which is hard, since it's an lvalue), nor with the other obvious
+array functions, like <a href="ch03_02.html#PERL2-CMD-PUSH">push</A>, <a href="ch03_02.html#PERL2-CMD-POP">pop</A>, <a href="ch03_02.html#PERL2-CMD-SHIFT">shift</A>,
+<a href="ch03_02.html#PERL2-CMD-UNSHIFT">unshift</A>, and <a href="ch03_02.html#PERL2-CMD-SPLICE">splice</A>.  This means that a tied array doesn't
+behave like an untied one.  You can't even determine the length of the
+array.  But if you use the tied arrays only for simple read and write
+access you'll be OK.  These restrictions will be removed in a future
+release.
+
+<p class=para>
+For the purpose of this discussion, we will implement an array whose indices are fixed at
+its creation.  If you try to access anything beyond those bounds, you will
+cause an exception.
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+require Bounded_Array;
+tie @ary, 'Bounded_Array', 2;   # maximum allowable subscript is 2
+$| = 1;
+for $i (0 .. 10) {
+    print "setting index $i: ";
+    $ary[$i] = 10 * $i;         # should raise exception on 3
+    print "value of element $i now $ary[$i]\n";
+}
+</PRE>
+</DIV>
+
+<p class=para>
+The preamble code for the class is as follows:
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+package Bounded_Array;
+use Carp;
+use strict;
+</PRE>
+</DIV>
+
+<p class=para>
+<p>
+<dl class=variablelist>
+<dt class=varlistentry><tt class=literal>TIEARRAY</tt> <tt class=replaceable><i>CLASSNAME</i></tt>, <tt class=replaceable><i>LIST</i></tt><br>
+<dd>
+
+<p class=para>
+This is the constructor for the class.  That means it is expected to
+return a blessed reference through which the new array (probably an
+anonymous array reference) will be accessed.
+
+<p class=para>
+In our example, just to demonstrate that you don't really have to
+use an array thingy, we'll choose a hash thingy to
+represent our object.  A hash works out well as a generic record type:
+the <tt class=literal>{BOUND}</tt> field will store the maximum bound allowed, and the
+<tt class=literal>{ARRAY}</tt> field will hold the true array reference.  Anyone outside
+the class who tries to dereference the object returned (doubtless thinking
+it an array reference), will blow up.  This just goes to show
+that you should respect an object's privacy (unless you're well
+acquainted and committed to maintaining a good relationship for the
+rest of your life).
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+sub TIEARRAY {
+    my $class = shift;
+    my $bound = shift;
+    confess "usage: tie(\@ary, 'Bounded_Array', max_subscript)"
+        if @_ or $bound =~ /\D/;
+    return bless {
+        BOUND =&gt; $bound,
+        ARRAY =&gt; [],
+    }, $class;
+}
+</PRE>
+</DIV>
+
+<p class=para>
+In this case we have used the anonymous hash composer rather than a
+lexically scoped variable that goes out of scope.  We also used the
+array composer within the hash composer.
+
+<p>
+<dt class=varlistentry><tt class=literal>FETCH</tt> <tt class=replaceable><i>THIS, INDEX</i></tt><br>
+<dd>
+
+<p class=para>
+This method will be triggered every time an individual element in the
+tied array is accessed (read).  It takes one argument beyond its self
+reference: the index we're trying to fetch.  (The index is an
+integer, but just because the caller thinks of it as a mundane integer
+doesn't mean you have to do anything "linear" with it.
+You could use it to seed a random number generator, for instance, or
+process it with a hash function to do a random lookup in a hash table.)
+
+<p class=para>
+Here we use list assignment rather than <a href="ch03_02.html#PERL2-CMD-SHIFT">shift</A> to process the
+method arguments.  TMTOWTDI.
+
+<p class=para>
+<div class=programlisting>
+<p>
+<pre>
+sub FETCH {
+    my ($self, $idx) = @_;
+    if ($idx &gt; $self-&gt;{BOUND}) {
+        confess "Array OOB: $idx &gt; $self-&gt;{BOUND}";
+    }
+    return $self-&gt;{ARRAY}[$idx];
+}
+</PRE>
+</DIV>
+
+<p class=para>
+As you may have noticed, the names of the <tt class=literal>FETCH</tt>, <tt class=literal>STORE</tt>, and
+<tt class=literal>DESTROY</tt> methods are
+the same for all tied classes, even though the constructors differ in name
+(<tt class=literal>TIESCALAR</tt> versus <tt class=literal>TIEARRAY</tt>).  While in theory you could have the
+same class servicing several tied types, in practice this becomes
+cumbersome, and it's easiest to simply write them with one type per
+class.
+
+<p>
+<dt class=varlistentry><tt class=literal>STORE</tt> <tt class=replaceable><i>THIS, INDEX, VALUE</i></tt><br>
+<dd>
+
+<p class=para>
+This method will be triggered every time an element in the tied array is set
+(written).  It takes two arguments beyond its self reference: the index at
+which we're trying to store something and the value we're trying to put
+there.  For example:
+
+<div class=programlisting>
+<p>
+<pre>
+sub STORE {
+    my ($self, $idx, $value) = @_;
+    if ($idx &gt; $self-&gt;{BOUND} ) {
+        confess "Array OOB: $idx &gt; $self-&gt;{BOUND}";
+    }
+    return $self-&gt;{ARRAY}[$idx] = $value;
+}
+</PRE>
+</DIV>
+
+<p>
+<dt class=varlistentry><tt class=literal>DESTROY</tt> <tt class=replaceable><i>THIS</i></tt><br>
+<dd>
+
+<p class=para>
+This method will be triggered when the tied object needs to be
+deallocated.  As with the scalar tie class, this is almost never needed
+in a language that does its own storage allocation, so this time we'll
+just leave it out.
+
+<p class=para>
+The code we presented at the beginning of this section attempts several
+out-of-bounds accesses.  It will therefore generate the following output:
+
+<div class=programlisting>
+<p>
+<pre>
+setting index 0: value of element 0 now 0
+setting index 1: value of element 1 now 10
+setting index 2: value of element 2 now 20
+setting index 3: Array OOB: 3 &gt; 2 at Bounded_Array.pm line 39
+        Bounded_Array::FETCH called at testba line 12
+</PRE>
+</DIV>
+
+</DL>
+</DIV>
+
+<div class=sect2>
+<h3 class=sect2><a class="TITLE" name="PERL2-CH-5-SECT-4.3">Tying Hashes</A></h3>
+
+<p class=para>
+<a name="CH05.HASH"></A>For historical reasons, hashes have the most complete and useful <a href="ch03_02.html#PERL2-CMD-TIE">tie</A>
+implementation.  A class implementing a tied associative array must
+define various methods.  <tt class=literal>TIEHASH</tt> is the constructor.  <tt class=literal>FETCH</tt> and
+<tt class=literal>STORE</tt> access the key/value pairs.  <tt class=literal>EXISTS</tt> reports
+whether a key is present in the hash, and <tt class=literal>DELETE</tt> deletes one.
+<tt class=literal>CLEAR</tt> empties the hash by deleting all the key/value pairs.
+<tt class=literal>FIRSTKEY</tt> and <tt class=literal>NEXTKEY</tt> implement the <a href="ch03_02.html#PERL2-CMD-KEYS">keys</A> and
+<a href="ch03_02.html#PERL2-CMD-EACH">each</A> built-in functions to iterate over all the keys.  And
+<tt class=literal>DESTROY</tt> (if defined) is called when the tied object is
+deallocated.
+
+<p class=para>
+If this seems like a lot, then feel free to inherit most of these
+methods from the standard Tie::Hash module, redefining only the
+interesting ones.  See the Tie::Hash module documentation in <a href="ch07_01.html">Chapter 7, <i>The Standard Perl Library</i></A> for
+details.
+
+<p class=para>
+Remember that Perl distinguishes a key not existing in the hash from
+a key that exists with an undefined value.
+The two possibilities can be tested with the <a href="ch03_02.html#PERL2-CMD-EXISTS">exists</A> and
+<a href="ch03_02.html#PERL2-CMD-DEFINED">defined</A> functions, respectively.
+
+<p class=para>
+Because functions like <a href="ch03_02.html#PERL2-CMD-KEYS">keys</A> and <a href="ch03_02.html#PERL2-CMD-VALUES">values</A> may return huge array
+values when used on large hashes (like tied DBM files), you may
+prefer to use the <a href="ch03_02.html#PERL2-CMD-EACH">each</A> function to iterate over such.
+For example:
+
+<div class=programlisting>
+<p>
+<pre>
+# print out B-news history file offsets
+use NDBM_File;
+tie(%HIST, 'NDBM_File', '/usr/lib/news/history', 1, 0);
+while (($key,$val) = each %HIST) {
+    print $key, ' = ', unpack('L',$val), "\n";
+}
+untie(%HIST);
+</PRE>
+</DIV>
+
+<p class=para>
+(But does anyone run B-news any more?)
+
+<p class=para>
+Here's an example of a somewhat peculiar tied hash class:  it gives you
+a hash representing a particular user's dotfiles (that is, files whose
+names begin with a period).  You index into the hash
+with the name of the file (minus the period) and you get back that dotfile's
+contents.  For example:
+
+<div class=programlisting>
+<p>
+<pre>
+use DotFiles;
+tie %dot, "DotFiles";
+if ( $dot{profile} =~ /MANPATH/ or
+     $dot{login}   =~ /MANPATH/ or
+     $dot{cshrc}   =~ /MANPATH/    )
+{
+    print "you've set your manpath\n";
+}
+</PRE>
+</DIV>
+
+<p class=para>
+Here's another way to use our tied class:
+
+<div class=programlisting>
+<p>
+<pre>
+# third argument is name of user whose dot files we will tie to
+tie %him, 'DotFiles', 'daemon';
+foreach $f ( keys %him ) {
+    printf "daemon dot file %s is size %d\n",
+        $f, length $him{$f};
+}
+</PRE>
+</DIV>
+
+<p class=para>
+In our DotFiles example we implement the object as a regular hash
+containing several important fields, of which only the <tt class=literal>{CONTENTS}</tt>
+field will be what the user thinks of as the real hash.  Here are the
+fields:
+
+<p>
+<dl class=variablelist>
+<dt class=varlistentry><tt class=literal>USER</tt><br>
+<dd>
+
+<p class=para>
+Whose dot files this object represents
+
+<p>
+<dt class=varlistentry><tt class=literal>HOME</tt><br>
+<dd>
+
+<p class=para>
+Where those dotfiles live
+
+<p>
+<dt class=varlistentry><tt class=literal>CLOBBER</tt><br>
+<dd>
+
+<p class=para>
+Whether we are allowed to change or remove those dot files
+
+<p>
+<dt class=varlistentry><tt class=literal>CONTENTS</tt><br>
+<dd>
+
+<p class=para>
+The hash of dotfile names and content mappings</DL>
+<p class=para>
+Here's the start of <i class=emphasis>DotFiles.pm</I>:
+
+<div class=programlisting>
+<p>
+<pre>
+package DotFiles;
+use Carp;
+sub whowasi { (caller(1))[3] . '()' }
+my $DEBUG = 0;
+sub debug { $DEBUG = @_ ? shift : 1 }
+</PRE>
+</DIV>
+
+<p class=para>
+For our example, we want to be able to emit debugging information to help in
+tracing during development.  We also keep one convenience function around
+internally to help print out warnings; <tt class=literal>whowasi()</tt> returns the name
+of the function that called the current function (<tt class=literal>whowasi()</tt>'s
+"grandparent" function).
+
+<p class=para>
+Here are the methods for the DotFiles tied hash.
+
+<p>
+<dl class=variablelist>
+<dt class=varlistentry><tt class=literal>TIEHASH</tt> <tt class=replaceable><i>CLASSNAME</i></tt>, <tt class=replaceable><i>LIST</i></tt><br>
+<dd>
+
+<p class=para>
+This is the constructor for the class.  That means it is expected to
+return a blessed reference through which the new object may be accessed.
+Again, the user of the tied class probably has little need of the object.
+It's Perl itself that needs the returned object so that it can magically
+call the right methods when the tied variable is accessed.
+
+<p class=para>
+Here's the constructor:
+
+<div class=programlisting>
+<p>
+<pre>
+sub TIEHASH {
+    my $self = shift;
+    my $user = shift || $&gt;;
+    my $dotdir = shift || "";
+    croak "usage: @{[&amp;whowasi]} [USER [DOTDIR]]" if @_;
+    $user = getpwuid($user) if $user =~ /^\d+$/;
+    my $dir = (getpwnam($user))[7]
+            or croak "@{[&amp;whowasi]}: no user $user";
+    $dir .= "/$dotdir" if $dotdir;
+    my $node = {
+        USER        =&gt; $user,
+        HOME        =&gt; $dir,
+        CONTENTS    =&gt; {},
+        CLOBBER     =&gt; 0,
+    };
+    opendir DIR, $dir
+            or croak "@{[&amp;whowasi]}: can't opendir $dir: $!";
+    foreach $dot ( grep /^\./ &amp;&amp; -f "$dir/$_", readdir(DIR)) {
+        $dot =~ s/^\.//;
+        $node-&gt;{CONTENTS}{$dot} = undef;
+    }
+    closedir DIR;
+    return bless $node, $self;
+}
+</PRE>
+</DIV>
+
+<p class=para>
+It's probably worth mentioning that if you're going to filetest the
+return values returned by that <a href="ch03_02.html#PERL2-CMD-READDIR">readdir</A>, you'd better prepend the
+directory in question (as we do).  Otherwise, since no <a href="ch03_02.html#PERL2-CMD-CHDIR">chdir</A> was
+done, you'd test the wrong file.
+
+<p>
+<dt class=varlistentry><tt class=literal>FETCH</tt> <tt class=replaceable><i>THIS, KEY</i></tt><br>
+<dd>
+
+<p class=para>
+This method will be triggered every time an element in the tied hash is
+accessed (read).  It takes one argument beyond its self reference: the key
+whose value we're trying to fetch.  The key is a string, and you can
+do anything you like with it (consistent with its being a string).
+
+<p class=para>
+Here's the fetch for our DotFiles example.
+
+<div class=programlisting>
+<p>
+<pre>
+sub FETCH {
+    carp &amp;whowasi if $DEBUG;
+    my $self = shift;
+    my $dot = shift;
+    my $dir = $self-&gt;{HOME};
+    my $file = "$dir/.$dot";
+    unless (exists $self-&gt;{CONTENTS}-&gt;{$dot} || -f $file) {
+        carp "@{[&amp;whowasi]}: no $dot file" if $DEBUG;
+        return undef;
+    }
+    # Implement a cache.
+    if (defined $self-&gt;{CONTENTS}-&gt;{$dot}) {
+        return $self-&gt;{CONTENTS}-&gt;{$dot};
+    } else {
+        return $self-&gt;{CONTENTS}-&gt;{$dot} = `cat $dir/.$dot`;
+    }
+}
+</PRE>
+</DIV>
+
+<p class=para>
+This function was easy to write by having it call the UNIX
+<i class=emphasis>cat</I> (1) command, but it would be more portable (and
+somewhat more efficient) to open the file ourselves.  On the other hand,
+since dot files are a UNIXy concept, we're not that concerned.
+
+<p>
+<dt class=varlistentry><tt class=literal>STORE</tt> <tt class=replaceable><i>THIS, KEY, VALUE</i></tt><br>
+<dd>
+
+<p class=para>
+This method will be triggered every time an element in the tied hash is set
+(written).  It takes two arguments beyond its self reference: the key under
+which we're storing the value and the value we're putting there.
+
+<p class=para>
+Here in our DotFiles example we won't let users overwrite a file without
+first calling the <tt class=literal>clobber()</tt>
+method on the original object reference returned by <a href="ch03_02.html#PERL2-CMD-TIE">tie</A>.
+
+<div class=programlisting>
+<p>
+<pre>
+sub STORE {
+    carp &amp;whowasi if $DEBUG;
+    my $self = shift;
+    my $dot = shift;
+    my $value = shift;
+    my $file = $self-&gt;{HOME} . "/.$dot";
+    croak "@{[&amp;whowasi]}: $file not clobberable"
+        unless $self-&gt;{CLOBBER};
+    open(F, "&gt; $file") or croak "can't open $file: $!";
+    print F $value;
+    close(F);
+}
+</PRE>
+</DIV>
+
+<p class=para>
+If they want to clobber something, they can say:
+
+<div class=programlisting>
+<p>
+<pre>
+$ob = tie %daemon_dots, 'daemon';
+$ob-&gt;clobber(1);
+$daemon_dots{signature} = "A true daemon\n";
+</PRE>
+</DIV>
+
+<p class=para>
+But there's also the <a href="ch03_02.html#PERL2-CMD-TIED">tied</A> function, so they could alternatively
+set <tt class=literal>clobber</tt> using:
+
+<div class=programlisting>
+<p>
+<pre>
+tie %daemon_dots, 'daemon';
+tied(%daemon_dots)-&gt;clobber(1);
+</PRE>
+</DIV>
+
+<p class=para>
+The <tt class=literal>clobber</tt> method is simply:
+
+<div class=programlisting>
+<p>
+<pre>
+sub clobber {
+    my $self = shift;
+    $self-&gt;{CLOBBER} = @_ ? shift : 1;
+}
+</PRE>
+</DIV>
+
+<p>
+<dt class=varlistentry><tt class=literal>DELETE</tt> <tt class=replaceable><i>THIS, KEY</i></tt><br>
+<dd>
+
+<p class=para>
+This method is triggered when we remove an element from the hash,
+typically by using the <a href="ch03_02.html#PERL2-CMD-DELETE">delete</A> function.  Again, we'll
+be careful to check whether the user really wants to clobber files.
+
+<div class=programlisting>
+<p>
+<pre>
+sub DELETE   {
+    carp &amp;whowasi if $DEBUG;
+    my $self = shift;
+    my $dot = shift;
+    my $file = $self-&gt;{HOME} . "/.$dot";
+    croak "@{[&amp;whowasi]}: won't remove file $file"
+        unless $self-&gt;{CLOBBER};
+    delete $self-&gt;{CONTENTS}-&gt;{$dot};
+    unlink $file or carp "@{[&amp;whowasi]}: can't unlink $file: $!";
+}
+</PRE>
+</DIV>
+
+<p>
+<dt class=varlistentry><tt class=literal>CLEAR</tt> <tt class=replaceable><i>THIS</i></tt><br>
+<dd>
+
+<p class=para>
+This method is triggered when the whole hash is to be cleared, usually by
+assigning the empty list to it.
+
+<p class=para>
+In our example, that would remove all the user's dotfiles!  It's such a
+dangerous thing that we'll require <tt class=literal>CLOBBER</tt>
+to be set higher than <tt class=literal>1</tt> before this can happen.
+
+<div class=programlisting>
+<p>
+<pre>
+sub CLEAR {
+    carp &amp;whowasi if $DEBUG;
+    my $self = shift;
+    croak "@{[&amp;whowasi]}: won't remove all dotfiles for $self-&gt;{USER}"
+        unless $self-&gt;{CLOBBER} &gt; 1;
+    my $dot;
+    foreach $dot ( keys %{$self-&gt;{CONTENTS}}) {
+        $self-&gt;DELETE($dot);
+    }
+}
+</PRE>
+</DIV>
+
+<p>
+<dt class=varlistentry><tt class=literal>EXISTS</tt> <tt class=replaceable><i>THIS, KEY</i></tt><br>
+<dd>
+
+<p class=para>
+This method is triggered when the user invokes the <a href="ch03_02.html#PERL2-CMD-EXISTS">exists</A> function
+on a particular hash.  In our example, we'll look at the <tt class=literal>{CONTENTS}</tt>
+hash element to find the answer:
+
+<div class=programlisting>
+<p>
+<pre>
+sub EXISTS   {
+    carp &amp;whowasi if $DEBUG;
+    my $self = shift;
+    my $dot = shift;
+    return exists $self-&gt;{CONTENTS}-&gt;{$dot};
+}
+</PRE>
+</DIV>
+
+<p>
+<dt class=varlistentry><tt class=literal>FIRSTKEY</tt> <tt class=replaceable><i>THIS</i></tt><br>
+<dd>
+
+<p class=para>
+This method is triggered when the user begins to iterate through the
+hash, such as with a <a href="ch03_02.html#PERL2-CMD-KEYS">keys</A> or <a href="ch03_02.html#PERL2-CMD-EACH">each</A> call.  By calling <a href="ch03_02.html#PERL2-CMD-KEYS">keys</A> in a scalar context, we reset its internal
+state to ensure that the next <a href="ch03_02.html#PERL2-CMD-EACH">each</A> used
+in the <a href="ch03_02.html#PERL2-CMD-RETURN">return</A> statement will get the
+first key.
+
+<div class=programlisting>
+<p>
+<pre>
+sub FIRSTKEY {
+    carp &amp;whowasi if $DEBUG;
+    my $self = shift;
+    my $a    = keys %{$self-&gt;{CONTENTS}};
+    return scalar each %{$self-&gt;{CONTENTS}};
+}
+</PRE>
+</DIV>
+
+<p>
+<dt class=varlistentry><tt class=literal>NEXTKEY</tt> <tt class=replaceable><i>THIS, LASTKEY</i></tt><br>
+<dd>
+
+<p class=para>
+This method is triggered during a <a href="ch03_02.html#PERL2-CMD-KEYS">keys</A>
+or <a href="ch03_02.html#PERL2-CMD-EACH">each</A> iteration.  It has a second
+argument which is the last key that has been accessed.  This is useful
+if the <tt class=literal>NEXTKEY</tt> method needs to know its previous
+state to calculate the next state.
+
+<p class=para>
+For our example, we are using a real hash to represent the tied
+hash's data, except that this hash is stored in the hash's
+<tt class=literal>CONTENTS</tt> field instead of in the hash itself.  So we can just
+rely on Perl's <a href="ch03_02.html#PERL2-CMD-EACH">each</A> iterator:
+
+<div class=programlisting>
+<p>
+<pre>
+sub NEXTKEY  {
+    carp &amp;whowasi if $DEBUG;
+    my $self = shift;
+    return scalar each %{ $self-&gt;{CONTENTS} }
+}
+</PRE>
+</DIV>
+
+<p>
+<dt class=varlistentry><tt class=literal>DESTROY</tt> <tt class=replaceable><i>THIS</i></tt><br>
+<dd>
+
+<p class=para>
+This method is triggered when a tied hash's object is about to be
+deallocated.  You don't really need it except for debugging and extra
+cleanup.  Here's a very simple
+function:
+
+<div class=programlisting>
+<p>
+<pre>
+sub DESTROY  {
+    carp &amp;whowasi if $DEBUG;
+}
+</PRE>
+</DIV>
+
+</DL>
+</DIV>
+
+</DIV>
+
+
+<div class=htmlnav>
+
+<p>
+<hr align=left width=515>
+<table width=515 border=0 cellpadding=0 cellspacing=0>
+<tr>
+<td width=172 align=left valign=top><a href="ch05_03.html"><img src="gifs/txtpreva.gif" alt="Previous" border=0></A></td>
+<td width=171 align=center valign=top><a href="index.html"><img src='gifs/txthome.gif' border=0 alt='Home'></a></td>
+<td width=172 align=right valign=top><a href="ch05_05.html"><img src="gifs/txtnexta.gif" alt="Next" border=0></A></td>
+</tr>
+<tr>
+<td width=172 align=left valign=top>Objects</td>
+<td width=171 align=center valign=top><a href="index/idx_0.html"><img src='gifs/index.gif' alt='Book Index' border=0></a></td>
+<td width=172 align=right valign=top>Some Hints About Object Design</td>
+</tr>
+</table>
+<hr align=left width=515>
+
+<img src="gifs/smnavbar.gif" usemap="#map" border=0> 
+<map name="map"> 
+<area shape="Rect" coords="0,0,45,20" href="../html/index.html" alt="HTML: The Definitive Guide">
+<area shape="Rect" coords="46,0,164,37" href="../cgi/index.html" alt="CGI Programming">
+<area shape="Rect" coords="163,0,248,32" href="../jscript/index.html" alt="JavaScript: The Definitive Guide">
+<area shape="Rect" coords="247,0,371,44" href="index.html" alt="Programming Perl">
+<area shape="Rect" coords="371,0,524,46" href="../webnut/index.html" alt="WebMaster in a Nutshell">
+</MAP>
+</DIV>
+
+</BODY>
+</HTML>

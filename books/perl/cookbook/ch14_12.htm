@@ -1,0 +1,192 @@
+<html><head>
+<title>Recipe 14.11. Program: ggh&nbsp- Grep Netscape Global History</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:43:02Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch14_01.htm" title="14. Database Access"><link rel="prev" href="ch14_11.htm" title="14.10. Executing an SQL Command Using DBI and DBD"><link rel="next" href="ch15_01.htm" title="15. User Interfaces"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch14_11.htm" title="14.10. Executing an SQL Command Using DBI and DBD"><img src="../gifs/txtpreva.gif" alt="Previous: 14.10. Executing an SQL Command Using DBI and DBD" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch14_01.htm" title="14. Database Access">Chapter 14<br>Database Access</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="chapter" href="ch15_01.htm" title="15. User Interfaces"><img src="../gifs/txtnexta.gif" alt="Next: 15. User Interfaces" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch14-94911">14.11. Program: ggh&nbsp;- Grep Netscape Global History</A
+></H2
+><p class="para"><a class="indexterm" name="ch14-idx-1000005014-0"></A
+><a class="indexterm" name="ch14-idx-1000005014-1"></A
+><a class="indexterm" name="ch14-idx-1000005014-2"></A
+><a class="indexterm" name="ch14-idx-1000005014-3"></A
+><a class="indexterm" name="ch14-idx-1000005014-4"></A
+>This program divulges the contents of Netscape's <em class="emphasis">history.db</EM
+> file. It can be called with full URLs or with a (single) pattern. If called without arguments, it displays every entry in the history file. The <em class="emphasis">~/.netscape/history.db</EM
+> file is used unless the <b class="emphasis.bold">-database</B
+> option is given.</P
+><p class="para">Each output line shows the URL and its access time. The time is converted into <code class="literal">localtime</CODE
+> representation with <b class="emphasis.bold">-localtime</B
+> (the default), <code class="literal">gmtime</CODE
+> representation with <b class="emphasis.bold">-gmtime </B
+>&nbsp;-  or left in raw form with <b class="emphasis.bold">-epochtime</B
+>, which is useful for sorting by date.</P
+><p class="para">To specify a pattern to match against, give one single argument without a <code class="literal">://</CODE
+>.</P
+><p class="para">To look up one or more URLs, supply them as arguments:</P
+><pre class="programlisting">% ggh http://www.perl.com/index.html</PRE
+><p class="para">To find out a link you don't quite recall, use a regular expression (a single argument without a <code class="literal">://</CODE
+> is a pattern):</P
+><pre class="programlisting">% ggh perl</PRE
+><p class="para">To find out all the people you've mailed:</P
+><pre class="programlisting">% ggh mailto:</PRE
+><p class="para">To find out the FAQ sites you've visited, use a snazzy Perl pattern with an embedded <code class="literal">/i</CODE
+> modifier:</P
+><pre class="programlisting">% ggh -regexp '(?i)\bfaq\b'</PRE
+><p class="para">If you don't want the internal date converted to localtime, use <b class="emphasis.bold">-epoch</B
+>:</P
+><pre class="programlisting">% ggh -epoch http://www.perl.com/perl/</PRE
+><p class="para">If you prefer gmtime to localtime, use <b class="emphasis.bold">-gmtime</B
+>:</P
+><pre class="programlisting">% ggh -gmtime http://www.perl.com/perl/</PRE
+><p class="para">To look at the whole file, give no arguments (but perhaps redirect to a pager):</P
+><pre class="programlisting">% ggh | less</PRE
+><p class="para">If you want the output sorted by date, use the <b class="emphasis.bold">-epoch</B
+> flag:</P
+><pre class="programlisting">% ggh -epoch | sort -rn | less</PRE
+><p class="para">If you want it sorted by date into your local time zone format, use a more sophisticated pipeline:</P
+><pre class="programlisting">% ggh -epoch | sort -rn | perl -pe 's/\d+/localtime $&amp;/e' | less</PRE
+><p class="para">The Netscape release notes claim that they're using NDBM format. This is misleading: they're actually using Berkeley DB format, which is why we require DB_File (not supplied standard with all systems Perl runs on) instead of NDBM_File (which is). The program is shown in <a class="xref" href="#ch14-14152" title="ggh">Example 14.8</A
+>.</P
+><div class="example"><h4 class="example"><a class="title" name="ch14-14152">Example 14.8: ggh</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# ggh -- grovel global history in netscape logs
+$USAGE = &lt;&lt;EO_COMPLAINT;
+usage: $0 [-database dbfilename] [-help]
+           [-epochtime | -localtime | -gmtime]
+           [ [-regexp] pattern] | href ... ]
+EO_COMPLAINT
+
+use Getopt::Long;
+
+($opt_database, $opt_epochtime, $opt_localtime,
+ $opt_gmtime,   $opt_regexp,    $opt_help,
+ $pattern,                                  )      = (0) x 7;
+
+usage() unless GetOptions qw{ database=s
+                              regexp=s
+                              epochtime localtime gmtime
+                              help
+                            };
+
+if ($opt_help) { print $USAGE; exit; }
+
+usage(&quot;only one of localtime, gmtime, and epochtime allowed&quot;)
+    if $opt_localtime + $opt_gmtime + $opt_epochtime &gt; 1;
+
+if ( $opt_regexp ) {
+    $pattern = $opt_regexp;
+} elsif (@ARGV &amp;&amp; $ARGV[0] !~ m(://)) {
+    $pattern = shift;
+}
+
+usage(&quot;can't mix URLs and explicit patterns&quot;)
+    if $pattern &amp;&amp; @ARGV;
+
+if ($pattern &amp;&amp; !eval { '' =~ /$pattern/; 1 } ) {
+    $@ =~ s/ at \w+ line \d+\.//;
+    die &quot;$0: bad pattern $@&quot;;
+}
+
+require DB_File; DB_File-&gt;import();  # delay loading until runtime
+$| = 1;                              # feed the hungry PAGERs
+
+$dotdir  = $ENV{HOME}    || $ENV{LOGNAME};
+$HISTORY = $opt_database || &quot;$dotdir/.netscape/history.db&quot;;
+
+die &quot;no netscape history dbase in $HISTORY: $!&quot; unless -e $HISTORY;
+die &quot;can't dbmopen $HISTORY: $!&quot; unless dbmopen %hist_db, $HISTORY, 0666;
+
+# the next line is a hack because the C programmers who did this
+# didn't understand strlen vs strlen+1.  jwz told me so. :-)
+$add_nulls   = (ord(substr(each %hist_db, -1)) == 0);
+
+# XXX: should now do scalar keys to reset but don't 
+#      want cost of full traverse, required on tied hashes.
+#   better to close and reopen?
+
+$nulled_href = &quot;&quot;;  
+$byte_order  = &quot;V&quot;;         # PC people don't grok &quot;N&quot; (network order)
+    
+if (@ARGV) {
+    foreach $href (@ARGV) {
+        $nulled_href = $href . ($add_nulls &amp;&amp; &quot;\0&quot;);
+        unless ($binary_time = $hist_db{$nulled_href}) {
+            warn &quot;$0: No history entry for HREF $href\n&quot;;
+            next;
+        }
+        $epoch_secs = unpack($byte_order, $binary_time);
+        $stardate   = $opt_epochtime ? $epoch_secs
+                                     : $opt_gmtime ? gmtime    $epoch_secs
+                                                   : localtime $epoch_secs;
+        print &quot;$stardate $href\n&quot;;
+    }
+} else {
+    while ( ($href, $binary_time) = each %hist_db ) {
+        chop $href if $add_nulls;
+        next unless defined $href &amp;&amp; defined $binary_time;
+        # gnat reports some binary times are missing
+        $binary_time = pack($byte_order, 0) unless $binary_time;
+        $epoch_secs = unpack($byte_order, $binary_time);
+        $stardate   = $opt_epochtime ? $epoch_secs
+                                     : $opt_gmtime ? gmtime    $epoch_secs
+                                                   : localtime $epoch_secs;
+        print &quot;$stardate $href\n&quot; unless $pattern &amp;&amp; $href !~ /$pattern/o;
+    }
+}
+
+sub usage {
+    print STDERR &quot;@_\n&quot; if @_;
+    die $USAGE;
+}<a class="indexterm" name="ch14-idx-1000005016-0"></A
+><a class="indexterm" name="ch14-idx-1000005016-1"></A
+><a class="indexterm" name="ch14-idx-1000005016-2"></A
+><a class="indexterm" name="ch14-idx-1000005016-3"></A
+><a class="indexterm" name="ch14-idx-1000005016-4"></A
+></PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch14-pgfId-1620">See Also</A
+></H3
+><p class="para"><a class="xref" href="ch06_18.htm" title="Expressing AND, OR, and NOT in a Single Pattern">Recipe 6.17</A
+><a class="indexterm" name="ch14-idx-1000004909-0"></A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch14_11.htm" title="14.10. Executing an SQL Command Using DBI and DBD"><img src="../gifs/txtpreva.gif" alt="Previous: 14.10. Executing an SQL Command Using DBI and DBD" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="chapter" href="ch15_01.htm" title="15. User Interfaces"><img src="../gifs/txtnexta.gif" alt="Next: 15. User Interfaces" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">14.10. Executing an SQL Command Using DBI and DBD</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">15. User Interfaces</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

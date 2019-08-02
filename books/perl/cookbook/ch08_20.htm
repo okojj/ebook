@@ -1,0 +1,135 @@
+<html><head>
+<title>Recipe 8.19. Program: tctee</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:38:56Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch08_01.htm" title="8. File Contents"><link rel="prev" href="ch08_19.htm" title="8.18. Program: tailwtmp"><link rel="next" href="ch08_21.htm" title="8.20. Program: laston"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch08_19.htm" title="8.18. Program: tailwtmp"><img src="../gifs/txtpreva.gif" alt="Previous: 8.18. Program: tailwtmp" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch08_01.htm" title="8. File Contents">Chapter 8<br>File Contents</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch08_21.htm" title="8.20. Program: laston"><img src="../gifs/txtnexta.gif" alt="Next: 8.20. Program: laston" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch08-12981">8.19. Program: tctee</A
+></H2
+><p class="para"><a class="indexterm" name="ch08-idx-1000005181-0"></A
+><a class="indexterm" name="ch08-idx-1000005181-1"></A
+>Not all systems support the classic <em class="emphasis">tee</EM
+> program for splitting output pipes to multiple destinations. This command sends the output from <em class="emphasis">someprog</EM
+> to <em class="emphasis">/tmp/output</EM
+> and to the mail pipe beyond.</P
+><pre class="programlisting">% someprog | tee /tmp/output | Mail -s 'check this' user@host.org</PRE
+><p class="para">This program helps not only users who aren't on Unix systems and don't have a regular <em class="emphasis">tee</EM
+>. It also helps those who are, because it offers features not found on other version of <em class="emphasis">tee</EM
+>.</P
+><p class="para">The four flag arguments are <b class="emphasis.bold">-i</B
+> to ignore interrupts, <b class="emphasis.bold">-a</B
+> to append to output files, <b class="emphasis.bold">-u</B
+> for unbuffered output, and <b class="emphasis.bold">-n</B
+> to omit copying the output on to standard out.</P
+><p class="para">Because this program uses Perl's <a class="indexterm" name="ch08-idx-1000005224-0"></A
+>magic open, you can specify pipes as well as files.</P
+><pre class="programlisting">% someprog | tctee f1 &quot;|cat -n&quot; f2 &quot;&gt;&gt;f3&quot;</PRE
+><p class="para">That sends the output from <em class="emphasis">someprog</EM
+> to the files <em class="emphasis">f1</EM
+> and <em class="emphasis">f2</EM
+>, appends it to <em class="emphasis">f3</EM
+>, sends a copy to the program <em class="emphasis">cat -n</EM
+>, and also produces the stream on standard output.</P
+><p class="para">The program in <a class="xref" href="#ch08-41455" title="tctee">Example 8.8</A
+> is one of many venerable Perl programs written nearly a decade ago that still runs perfectly well. If written from scratch now, we'd probably <code class="literal">use</CODE
+> <code class="literal">strict</CODE
+>, warnings, and ten to thirty thousand lines of modules. But if it ain't broke . . .</P
+><div class="example"><h4 class="example"><a class="title" name="ch08-41455">Example 8.8: tctee</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl
+# tctee - clone that groks process tees 
+# perl3 compatible, or better.
+
+while ($ARGV[0] =~ /^-(.+)/ &amp;&amp; (shift, ($_ = $1), 1)) {
+    next if /^$/;
+    s/i// &amp;&amp; (++$ignore_ints, redo);
+    s/a// &amp;&amp; (++$append,      redo);
+    s/u// &amp;&amp; (++$unbuffer,    redo);
+    s/n// &amp;&amp; (++$nostdout,    redo);
+    die &quot;usage tee [-aiun] [filenames] ...\n&quot;;
+}
+
+if ($ignore_ints) {
+    for $sig ('INT', 'TERM', 'HUP', 'QUIT') { $SIG{$sig} = 'IGNORE'; }
+}
+
+$SIG{'PIPE'} = 'PLUMBER';
+$mode = $append ? '&gt;&gt;' : '&gt;';
+$fh = 'FH000';
+
+unless ($nostdout) {
+    %fh = ('STDOUT', 'standard output'); # always go to stdout
+    }
+
+$| = 1 if $unbuffer;
+
+for (@ARGV) {
+    if (!open($fh, (/^[^&gt;|]/ &amp;&amp; $mode) . $_)) {
+        warn &quot;$0: cannot open $_: $!\n&quot;; # like sun's; i prefer die
+        $status++;
+        next;
+    }
+    select((select($fh), $| = 1)[0]) if $unbuffer;
+    $fh{$fh++} = $_;
+}
+
+while (&lt;STDIN&gt;) {
+    for $fh (keys %fh) {
+        print $fh $_;
+    }
+}
+
+for $fh (keys %fh) {
+    next if close($fh) || !defined $fh{$fh};
+    warn &quot;$0: couldnt close $fh{$fh}: $!\n&quot;;
+    $status++;
+}
+
+exit $status;
+
+sub PLUMBER {
+    warn &quot;$0: pipe to \&quot;$fh{$fh}\&quot; broke!\n&quot;;
+    $status++;
+    delete $fh{$fh};
+}<a class="indexterm" name="ch08-idx-1000004732-0"></A
+><a class="indexterm" name="ch08-idx-1000004732-1"></A
+></PRE
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch08_19.htm" title="8.18. Program: tailwtmp"><img src="../gifs/txtpreva.gif" alt="Previous: 8.18. Program: tailwtmp" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch08_21.htm" title="8.20. Program: laston"><img src="../gifs/txtnexta.gif" alt="Next: 8.20. Program: laston" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">8.18. Program: tailwtmp</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">8.20. Program: laston</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

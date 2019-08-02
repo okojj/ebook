@@ -1,0 +1,617 @@
+<html>
+<head>
+<title>Implementing a Class Loader (Java Security)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Scott Oaks">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-403-7E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Implementing a Class Loader">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm" alt="Java Security"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_03.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_01.htm">Chapter 3: Java Class Loaders</a></td><td align="right" valign="top" width="172"><a href="ch03_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_05.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">3.4. Implementing a Class Loader</h2>
+
+<p>
+<a name="INDEX-269"></a>Part
+of the security implications of a class loader depend upon its
+internal implementation. When you implement a class loader, you have
+two basic choices: you can extend the
+<tt class="literal">ClassLoader</tt> class, or you can extend the
+<tt class="literal">SecureClassLoader</tt> class. The second choice is
+preferred, but it is not an option for Java 1.1. If you're
+programming in 1.2, you may choose to use the URL class loader rather
+than implementing your own, but the information in this section will
+help you understand the security features of the URL class loader. In
+this section, then, we'll look at how to implement both default
+and secure class loaders.
+</p>
+
+<a name="SEC-CH-3-SECT-4.1"></a>
+<h3 class="sect2">3.4.1. Implementing the ClassLoader Class</h3>
+
+<p>Aside from the primordial class loader, all Java class loaders must
+extend the <tt class="literal">ClassLoader</tt><a name="INDEX-270"></a>class
+(<tt class="literal">java.lang.ClassLoader</tt>). Since the
+<tt class="literal">ClassLoader</tt> class is
+<tt class="literal">abstract</tt>, it is necessary to subclass it to
+create a class loader.
+</p>
+
+<a name="SEC-CH-3-SECT-4.1.1"></a>
+<h3 class="sect3">3.4.1.1. Protected methods in the ClassLoader class</h3>
+
+<p>In order to implement a class loader, we start with this method:</p>
+
+<dl>
+<dt>
+<b>protected abstract Class <a name="INDEX-271"></a>
+loadClass(String name, boolean resolve) <img alt="figure" src="gifs/wstar.gif" webstripperlinkwas="gifs/wstar.gif"></b>
+</dt>
+<dt>
+<b>protected Class loadClass(String name, boolean resolve) <img alt="figure" src="gifs/bstar.gif" webstripperlinkwas="gifs/bstar.gif"></b>
+</dt>
+<dd>
+<p>Using the rules of the class loader, find the class with the given
+<tt class="literal">name</tt> and, if indicated by the
+<tt class="literal">resolve</tt> variable, ensure that the class is
+resolved. If the class is not found, this method should throw a
+<tt class="literal">ClassNotFoundException</tt>. This method is abstract
+in 1.1, but not in 1.2. In 1.2, you typically do not override this
+method.
+</p>
+</dd>
+
+</dl>
+
+<p>The <tt class="literal">loadClass()</tt> method is passed a fully
+qualified class name (e.g., <tt class="literal">java.lang.String</tt> or
+<tt class="literal">com.xyz.XYZPayrollApplet</tt>), and it is expected to
+return a class object that represents the target class. If the class
+is not a system class, the <tt class="literal">loadClass()</tt> method is
+responsible for loading the bytes that define the class (e.g., from
+the network).
+</p>
+
+<p>There are five final methods (listed below) in the
+<tt class="literal">ClassLoader</tt> class that a class loader can use to
+help it achieve its task.
+</p>
+
+<dl>
+<dt>
+<b>protected final Class <a name="INDEX-272"></a>
+defineClass(String name, byte data[], int offset, int length)</b>
+</dt>
+<dt>
+<b>protected final Class defineClass(String name, byte data[], int offset, int length, ProtectionDomain pd) <img alt="figure" src="gifs/bstar.gif" webstripperlinkwas="gifs/bstar.gif"></b>
+</dt>
+<dd>
+<p>Create a <tt class="literal">Class</tt> object from an array of
+bytecodes. The <tt class="literal">defineClass()</tt> method runs the
+data through the bytecode verifier and then creates the
+<tt class="literal">Class</tt> object. This method also ensures that the
+name in the class file is the same as the name of the
+argument--that is, that the bytes actually define the desired
+class. We'll look at protection domains in <a href="ch05_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch05_01.htm">Chapter 5, "The Access Controller"</a>; if you
+use the signature without one, a default (system) domain will be
+provided for the class.
+</p>
+</dd>
+
+<dt>
+<b>protected final Class <a name="INDEX-273"></a>
+findSystemClass(String name)</b>
+</dt>
+<dd>
+<p>Attempt to find the named class by using the internal class loader to
+search the user's <tt class="literal">CLASSPATH</tt>. If the system
+class is not found, a <tt class="literal">ClassNotFoundException</tt> is
+generated. In 1.2, this method searches only the classes in the Java
+API.
+</p>
+</dd>
+
+<dt>
+<b>protected final Class findLoadedClass(String name)</b>
+</dt>
+<dd>
+<p>Find the class object for a class previously loaded by this class
+loader. If the class is not found, a null reference is returned.
+</p>
+</dd>
+
+</dl>
+
+<div class="sidebar">
+<h4 class="objtitle">Finding Previously Loaded Classes</h4>
+
+<p>
+<a name="INDEX-274"></a><a name="INDEX-275"></a><a name="INDEX-276"></a><a name="INDEX-277"></a><a name="INDEX-278"></a><a name="INDEX-279"></a><a name="INDEX-280"></a>According to the Java specification,
+a class loader is required to cache the classes that it has
+previously loaded, so that when it is asked to load a particular
+class, it is not supposed to re-read the class file. Not only is this
+more efficient, it allows a simpler internal implementation of many
+methods, including the <tt class="literal">resolveClass()</tt> method.
+</p>
+
+<p>The Java specification hedges this somewhat by stating that this
+requirement may change in the future, when the classes will be cached
+by the virtual machine itself. Hence, the
+<tt class="literal">ClassLoader</tt> class in JDK 1.0 did not do any
+caching, and it was up to concrete implementations of class loaders
+to perform this caching.
+</p>
+
+<p>Beginning with JDK 1.1, however, caching within the class loader was
+considered important enough that the base
+<tt class="literal">ClassLoader</tt> class now performs this caching
+automatically: a class is put into the cache of the class loader in
+the <tt class="literal">defineClass()</tt> method and may be retrieved
+from the cache with the <tt class="literal">findLoadedClass()</tt>
+method. Since these methods are final, and since the cache itself is
+a private instance variable of the <tt class="literal">ClassLoader</tt>
+class, this permits a class loader to be written without any
+knowledge of whether the class loader or the virtual machine is doing
+the caching.
+</p>
+</div>
+
+<dl>
+<dt>
+<b>protected final void <a name="INDEX-281"></a>
+<a name="INDEX-282"></a>
+<a name="INDEX-283"></a>
+resolveClass(Class c)</b>
+</dt>
+<dd>
+<p>For a given class, resolve all the immediately needed class
+references for the class; this will result in recursively calling the
+class loader to ask it to load the referenced class.
+</p>
+</dd>
+
+</dl>
+
+<p>The <tt class="literal">loadClass()</tt> method is responsible for
+implementing the eight steps of the class definition list given
+above. Typically, implementation of this method looks like this:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">protected Class loadClass(String name, boolean resolve) {
+	Class c;
+	SecurityManager sm = System.getSecurityManager();
+
+	// Step 1 -- Check for a previously loaded class
+	c = findLoadedClass(name);
+	if (c != null)
+		return c;
+		
+	// Step 2 -- Check to make sure that we can access this class
+	if (sm != null) {
+		int i = name.lastIndexOf('.');
+		if (i &gt;= 0)
+			sm.checkPackageAccess(name.substring(0, i));
+	}
+
+	// Step 3 -- Check for system class first
+	try {
+		// In 1.2 only, defer to another class loader if available
+		if (parent != null)
+			c = parent.loadClass(name, resolve);
+		else
+
+		// Call this method in both 1.1 and 1.2
+	    		c = findSystemClass(name);
+
+		if (c != null)
+			return c;
+	} catch (ClassNotFoundException cnfe) {
+	    // Not a system class, simply continue
+	}
+
+	// Step 4 -- Check to make sure that we can define this class
+	if (sm != null) {
+		int i = name.lastIndexOf('.');
+		if (i &gt;= 0)
+			sm.checkPackageDefinition(name.substring(0, i));
+	}
+
+	// Step 5 -- Read in the class file
+	byte data[] = lookupData(name);
+
+	// Step 6 and 7 -- Define the class from the data; this also
+	//		 passes the data through the bytecode verifier
+	c = defineClass(name, data, 0, data.length);
+
+	// Step 8 -- Resolve the internal references of the class
+	if (resolve)
+		resolveClass(c);
+
+	return c;
+}</pre>
+</blockquote>
+
+<p>For most of the class loaders we're interested in, this
+skeleton of a class loader is sufficient, and all we need to change
+is the definition of the <tt class="literal">lookupData()</tt> method (as
+well as the constructor of the class, which might need various
+initialization parameters).
+</p>
+
+<p>This method might be used to implement a 1.1-based class loader,
+where the <tt class="literal">loadClass()</tt> method is abstract. In
+1.2, however, it is easier to use the existing
+<tt class="literal">loadClass()</tt> method and override only the
+existing <tt class="literal">findClass()</tt> method:
+</p>
+
+<dl>
+<dt>
+<b>protected Class <a name="INDEX-284"></a>
+findClass(String name) <img alt="figure" src="gifs/bstar.gif" webstripperlinkwas="gifs/bstar.gif"></b>
+</dt>
+<dd>
+<p>Load the given class according to the internal rules of the class
+loader. This method should assume that it is responsible for
+implementing only steps 5, 6, and 7 in our list: that is, it should
+read the data and call the <tt class="literal">defineClass()</tt> method,
+but it needn't look for an existing implementation of the class
+or check to see if it is a system class. If the class cannot be
+found, this method should return null (which is what the default
+implementation of this method returns in all cases).
+</p>
+</dd>
+
+</dl>
+
+<p>We'll use this method in our example of a secure class loader.
+If you must implement a 1.1-based class loader, you can use the code
+from that example to implement a <tt class="literal">lookupData()</tt>
+method that could be used by the above implementation of the
+<tt class="literal">loadClass()</tt> method.
+</p>
+
+<p>From a security point of view, the <tt class="literal">loadClass()</tt>
+method is important because it codifies several aspects of how Java
+handles security. One example of this is that the order in which the
+<tt class="literal">loadClass()</tt> method looks for classes is
+significant. Much of the security within Java itself depends on
+classes in the Java API doing the correct thing--e.g., the
+<tt class="literal">java.lang.String</tt> class is
+<tt class="literal">final</tt> and holds the array of characters
+representing the string in a private instance variable; this allows
+strings to be considered constants, which is important to several
+aspects of Java security. When a class loader is asked to find the
+<tt class="literal">java.lang.String</tt> class, it is very important
+that it return the class from the Java API rather than returning a
+class (possibly having different and insecure semantics) it loaded
+from a different location.
+</p>
+
+<p>Hence, it is important that the class loader call the
+<tt class="literal">findSystemClass()</tt><a name="INDEX-285"></a> method immediately after it
+attempts (and fails) to find the class in its internal cache (via the
+<tt class="literal">findLoadedClass()</tt><a name="INDEX-286"></a> method). By codifying this
+behavior in the <tt class="literal">loadClass()</tt> method, the
+<tt class="literal">ClassLoader</tt> class ensures that the class loader
+will have the correct behavior to enforce the overall security of the
+virtual machine. This is why the <tt class="literal">loadClass()</tt>
+method is no longer abstract in 1.2. This method really should be
+made <tt class="literal">final</tt> now, but that would break
+compatibility with previously written class loaders.
+</p>
+
+<div class="sidebar">
+<h4 class="objtitle">Secure Class Loaders and the defineClass() Method</h4>
+
+<p>When a class is defined by a secure class loader, one of the
+parameters that it must specify is a <tt class="literal">CodeSource</tt>
+object or a <tt class="literal">ProtectionDomain</tt> object. A
+<tt class="literal">Code-Source</tt> object encapsulates certain
+information about the class--where it was loaded from and
+whether or not it was signed (and if so, by whom); a
+<tt class="literal">ProtectionDomain</tt> object encapsulates information
+about the specific permissions that have been granted to the class.
+</p>
+
+<p>We're deferring discussion of these classes until <a href="ch05_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch05_01.htm">Chapter 5, "The Access Controller"</a>, when we can discuss them in their proper
+context.
+</p>
+</div>
+
+<p>Violating security by returning the incorrect class would have
+required the cooperation of the class loader. This might have
+happened accidentally, if the author of the class loader did not
+provide a correct implementation. It might also have happened
+maliciously, if the author of the class loader intentionally wrote an
+incorrect implementation. The new implementation solves the first
+problem, but not the second: the author of the class loader can still
+override the <tt class="literal">loadClass()</tt> method directly to do
+whatever he wants. In general, you have to trust the author of your
+class loader anyway, so the new implementation enhances security
+mostly by assisting developers in writing more robust
+programs.<a name="INDEX-287"></a><a name="INDEX-288"></a>
+</p>
+
+
+
+<a name="SEC-CH-3-SECT-4.2"></a>
+<h3 class="sect2">3.4.2. Implementing the SecureClassLoader Class</h3>
+
+<p>
+<a name="INDEX-289"></a>
+Starting with JDK 1.2, there is an extension of the
+<tt class="literal">ClassLoader</tt> class that any Java developer can
+use as the superclass of her own class loader: the
+<tt class="literal">SecureClassLoader</tt> class
+(<tt class="literal">java.security.SecureClassLoader</tt>).
+</p>
+
+<p>In terms of security, the benefit of the
+<tt class="literal">SecureClassLoader</tt> class comes because it is
+fully integrated with the notion of protection domains that was
+introduced in 1.2. We'll discuss this integration more fully in
+<a href="ch05_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch05_01.htm">Chapter 5, "The Access Controller"</a>, when we have an understanding of what a
+protection domain is.
+</p>
+
+<a name="SEC-CH-3-SECT-4.2.1"></a>
+<h3 class="sect3">3.4.2.1. Protected methods of the SecureClassLoader class</h3>
+
+<p>The <tt class="literal">SecureClassLoader</tt> class provides this new
+method:
+</p>
+
+<dl>
+<dt>
+<b>protected final Class <a name="INDEX-290"></a>
+defineClass(String name, byte[] buf, int offset, int length,</b>
+</dt>
+<dt>
+<b>	CodeSource cs) <img alt="figure" src="gifs/bstar.gif" webstripperlinkwas="gifs/bstar.gif"></b>
+</dt>
+<dd>
+<p>Define a class that is associated with the given code source. If the
+code source is null, this method is the equivalent of the
+<tt class="literal">defineClass()</tt> method in the base
+<tt class="literal">ClassLoader</tt> class. We'll defer showing an
+example of this method to <a href="ch05_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch05_01.htm">Chapter 5, "The Access Controller"</a>, when we
+discuss code source objects.
+</p>
+</dd>
+
+</dl>
+
+<p>As our first example of a class loader, we'll use the same
+paradigm for loading classes that a Java-enabled browser uses, namely
+an HTTP connection to a web server:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class JavaRunnerLoader extends SecureClassLoader {
+	protected URL urlBase;	
+	public boolean printLoadMessages = true;
+
+	public JavaRunnerLoader(String base, ClassLoader parent) {
+		super(parent);
+		try {
+			if (!(base.endsWith("/")))
+				base = base + "/";
+			urlBase = new URL(base);
+		} catch (Exception e) {
+			throw new IllegalArgumentException(base);
+		}
+	}
+
+	byte[] getClassBytes(InputStream is) {
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		BufferedInputStream bis = new BufferedInputStream(is);
+		boolean eof = false;
+		while (!eof) {
+			try {
+				int i = bis.read();
+				if (i == -1)
+					eof = true;
+				else baos.write(i);
+			} catch (IOException e) {
+				return null;
+			}
+		}
+		return baos.toByteArray();
+	}
+
+	protected Class findClass(String name) {
+		String urlName = name.replace('.', '/');
+		byte buf[];
+		Class cl;
+
+		SecurityManager sm = System.getSecurityManager();
+		if (sm != null) {
+			int i = name.lastIndexOf('.');
+			if (i &gt;= 0)
+				sm.checkPackageDefinition(name.substring(0, i));
+		}
+		try {
+			URL url = new URL(urlBase, urlName + ".class");
+			if (printLoadMessages)
+				System.out.println("Loading " + url);
+			InputStream is = url.openConnection().getInputStream();
+			buf = getClassBytes(is);
+			cl = defineClass(name, buf, 0, buf.length, null);
+			return cl;
+		} catch (Exception e) {
+			System.out.println("Can't load " + name + ": " + e);
+			return null;
+		}
+	}
+}</pre>
+</blockquote>
+
+<p>The key decision in using this class loader is where the classes are
+located--that is, the URL that needs to be passed to the
+constructor. If we were using this class loader in a browser, that
+URL would be the applet's <tt class="literal">CODEBASE</tt>; for an
+application, this location is up to the application to decide, using
+whatever means it deems appropriate (in the
+<tt class="literal">JavaRunner</tt> application, we used a command-line
+argument for that purpose). Note that the URL that is passed to the
+constructor must be a directory; in order to compose that directory
+into a URL later in the <tt class="literal">findClass()</tt> method, the
+name must end with a slash.
+</p>
+
+<p>The logic of the
+<tt class="literal">findClass()</tt><a name="INDEX-291"></a> method itself is simple: we
+need to convert the class name (e.g.,
+<tt class="literal">com.XYZ.HRApplet</tt>) to a URL, which we can do by
+replacing the package-separating periods with slashes. Once the URL
+has been created, we simply obtain an input stream to the URL, read
+the bytes from that stream, and pass the bytes to the
+<tt class="literal">defineClass()</tt> method.
+</p>
+
+<p>Note that the <tt class="literal">findClass()</tt> method encompasses
+most of the logic that is necessary for the
+<tt class="literal">lookupData()</tt> method we'd need if we were
+writing a 1.1-based class loader. The only difference for a 1.1-based
+class loader is that we would not need to call the
+<tt class="literal">defineClass()</tt> method, as that is called in our
+1.1-based implementation of the <tt class="literal">loadClass()</tt>
+method.
+</p>
+
+<p>The implementation we've just shown is the basis for the
+implementation of the <tt class="literal">URLClassLoader</tt> class. The
+basic difference between the two is that our implementation operates
+on a single URL, while the <tt class="literal">URLClassLoader</tt> class
+operates on an array of URLs. The <tt class="literal">URLClassLoader</tt>
+class can also read JAR files while our present implementation can
+only read individual class files; we'll remedy both those
+situations in the next section.<a name="INDEX-292"></a>
+</p>
+
+
+
+<a name="SEC-CH-3-SECT-4.3"></a>
+<h3 class="sect2">3.4.3. Implementing Security Policies in the Class Loader</h3>
+
+<p>
+<a name="INDEX-293"></a><a name="INDEX-294"></a>When we discussed the
+algorithm used to load classes, we mentioned that you could test to
+see if the class loader was allowed to access or define the package
+that the class belonged to. You might, for example, want to test
+whether the program should be allowed to access classes in the
+<tt class="literal">sun</tt> package, or define classes in the
+<tt class="literal">java</tt> package.
+</p>
+
+<p>It is up to the author of the class loader to put these checks into
+the class loader--even in 1.2. In 1.2, if you want to make the
+check for package access, you can do that by calling the
+<tt class="literal">checkPackageAccess()</tt><a name="INDEX-295"></a><a name="INDEX-296"></a> method of the security
+manager in the same way that we called the
+<tt class="literal">checkPackageDefinition()</tt> method, but that will
+only prevent you from accessing classes that aren't found by
+the system class loader. Alternately in 1.2, you can use the
+<tt class="literal">newInstance()</tt> method of the
+<tt class="literal">URLClassLoader</tt> class, which makes such a check; or
+you can override the <tt class="literal">loadClass()</tt> method itself to
+provide such a check, as we showed earlier. In 1.1, of course, you
+have to write the <tt class="literal">loadClass()</tt> method from scratch,
+so you can call the security manager or not, as you deem appropriate.
+</p>
+
+<p>In the case of defining a class in a package, the necessary code in a
+1.2-based class loader must be inserted into the
+<tt class="literal">findClass()</tt> method as we did in our example
+class loader. Note that <a name="INDEX-297"></a><a name="INDEX-298"></a><a name="INDEX-299"></a><a name="INDEX-300"></a>class loaders that are created by
+calling the constructor of the <tt class="literal">URLClassLoader</tt>
+class do not make such a call; they allow you to define a class in
+any package whatsoever.
+</p>
+
+<p>For the <tt class="literal">Launcher</tt> (and any applications built on
+the <tt class="literal">URLClassLoader</tt> class), then, the default
+security model does not perform either of these checks. This is
+unfortunate: if a program is allowed to define a class in the
+<tt class="literal">java</tt> package, then that class will have access
+to all the package-protected classes and variables within that
+package, which carries with it some risk. The reason this model is
+the default has to do with the way in which the access controller
+defines permissions; we'll explore it more in depth when we
+write our own security manager in <a href="ch06_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch06_01.htm">Chapter 6, "Implementing Security Policies"</a>.
+<a name="INDEX-301"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_03.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_03.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch03_05.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_05.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">3.3. Loading Classes</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">3.5. Extensions to the Class Loader</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

@@ -1,0 +1,562 @@
+<html>
+<head>
+<title>Extensions to the Class Loader (Java Security)</title>
+
+<!-- STYLESHEET -->
+
+<link rel="stylesheet" type="text/css" href="../style/style1.css" webstripperlinkwas="../style/style1.css">
+
+<!-- METADATA -->
+
+
+
+<!--Dublin Core Metadata-->
+
+<meta name="DC.Creator" content="Scott Oaks">
+<meta name="DC.Date" content="">
+<meta name="DC.Format" content="text/xml" scheme="MIME">
+<meta name="DC.Generator" content="XSLT stylesheet, xt by James Clark">
+<meta name="DC.Identifier" content="">
+<meta name="DC.Language" content="en-US">
+<meta name="DC.Publisher" content="O'Reilly &amp; Associates, Inc.">
+<meta name="DC.Source" content="1-56592-403-7E" scheme="ISBN">
+<meta name="DC.Subject.Keyword" content="">
+<meta name="DC.Title" content="Extensions to the Class Loader">
+<meta name="DC.Type" content="Text.Monograph">
+
+</head>
+
+<body>
+
+<!-- START OF BODY -->
+
+
+
+<!-- TOP BANNER -->
+
+<a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="gifs/smbanner.gif" webstripperlinkwas="gifs/smbanner.gif" usemap="#banner-map" border="0" alt="Book Home"></a>
+<map name="banner-map"><map name="banner-map"> <area shape="rect" coords="0,0,466,65" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm" alt="Java Security"> <area shape="rect" coords="467,0,514,18" href="jobjects/fsearch.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/jobjects/fsearch.htm" alt="Search this book"> </map>
+</map>
+
+<!-- TOP NAV BAR -->
+
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="ch03_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_01.htm">Chapter 3: Java Class Loaders</a></td><td align="right" valign="top" width="172"><a href="ch03_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_06.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- SECTION BODY -->
+<h2 class="sect1">3.5. Extensions to the Class Loader</h2>
+
+<p>
+<a name="INDEX-302"></a><a name="INDEX-303"></a>When we implemented a class loader
+above, we had a fully operational class loader that paralleled the
+first class loaders that were used by Java's
+<tt class="literal">appletviewer</tt> or by a Java-enabled browser.
+However, there are other extensions to the class loader that are
+often useful.
+</p>
+
+<div class="sidebar">
+<h4 class="objtitle">Class Loaders and Other Protocols</h4>
+
+<p>
+<a name="INDEX-304"></a><a name="INDEX-305"></a>Long before HTTP and the Web became
+popular, IP networks like the Internet had dozens of other protocols
+upon which a class loader could be based--FTP, NFS, RCP, and
+others. It's possible to write a class loader based on any of
+these protocols, although it's not as easy as using HTTP. The
+standard Java URL class will handle all the low-level details of the
+HTTP protocol for us, whereas we'd have to write the low-level
+details of the ftp (or whichever) protocol ourselves. We won't
+show an example of any of these protocols, since the concepts are all
+the same.
+</p>
+
+<p>One advantage these protocols have is that they typically offer some
+level of user authentication: FTP requires a password, NFS requires
+appropriate credentials to be sent, etc. Hence, some of these
+protocols might seem well-suited to an implementation where security
+is a concern--except that this level of authentication is often
+no stronger than simply putting the classes to be downloaded on a web
+server that requires a password to get into a particular directory.
+</p>
+</div>
+
+<a name="SEC-CH-3-SECT-5.1"></a>
+<h3 class="sect2">3.5.1. Loading from Multiple Sites</h3>
+
+<p>
+<a name="INDEX-306"></a><a name="INDEX-307"></a>We
+started with a complete class loader suitable for use in
+<tt class="literal">appletviewer</tt>-type programs where the classes are
+to be loaded from the network. This is good as far as it goes, but
+let's delve a little more into the security issues that
+surround that class loader.
+</p>
+
+<p>In the world of Java-enabled browsers, an applet can retrieve classes
+from only one site--the <a name="INDEX-308"></a><tt class="literal">CODEBASE</tt>
+specified in the applet's HTML tag. There are other reasons why
+an applet can only make a network connection to its
+<tt class="literal">CODEBASE</tt> (which we'll discuss in <a href="ch04_01.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch04_01.htm">Chapter 4, "The Security Manager Class"</a>), but one of the reasons is contained in the
+discussion we outlined above: because classes loaded by the same
+class loader are considered to be in the same package, and an applet
+that loaded classes from multiple sites could run the risk of classes
+from different sites interfering with each other.
+</p>
+
+<p>In an ideal world, however, a Java program may want to load classes
+from several locations on the network. Consider the deployment
+outlined in <a href="#SEC-CH-3-FIG-6">Figure 3-2</a> for XYZ Corporation: XYZ
+Corporation employs a network support group to manage its
+departmental servers, and within each department, there are
+programmers who are responsible for deploying the department's
+applications on those servers.
+</p>
+
+<a name="SEC-CH-3-FIG-6"></a>
+<div class="figure">
+<img alt="figure" src="figs/JSEC_0302.gif" webstripperlinkwas="figs/JSEC_0302.gif"></div>
+<h4 class="objtitle">Figure 3-2. A distributed deployment</h4>
+
+<p>When the corporate network support group develops some useful
+JavaBeans<sup class="superscript">TM</sup> components, everyone in the
+corporation is encouraged to use them in their departmentally
+developed applications. This gives the applications a certain
+consistency between departments as well as promoting reuse of the
+efforts of the network support group. But as it stands now, the
+support group must distribute the Java Bean class files to each
+department so that these beans can be used by programs that are
+hosted on each departmental server.
+</p>
+
+<p>Of course, there are technologies outside of Java that can manage
+distribution, but this is just a variation of the same application
+distribution problem that Java was originally hailed for solving.
+Unfortunately, the single-host-based class loader employed by
+standard Java-enabled browsers doesn't address this situation.
+</p>
+
+<p>One improvement that we might make is to allow our class loader to
+load classes from multiple hosts on the network. There's some
+overhead involved here: when a program running on a machine on the HR
+network needs to load a class, does it check for the class on the HR
+server first or on the support group server first? Either way, there
+will be a number of lookups that check the wrong server first, which
+is somewhat inefficient. Judicious use of package names could help:
+if the support group beans were all placed in a single package, the
+class loader could be smart enough to contact the support group
+server only when asked to load classes from that package.
+</p>
+
+<p>Remember that this intelligence about package names solves a
+logistical problem as well. Say that the support group writes a Java
+bean called <tt class="literal">Check</tt> that provides a nice graphical
+representation of a checkbox; this graphical representation is part
+of the look-and-feel on which XYZ Corporation wants to standardize.
+Now the HR group wants to create a payroll application, so they
+create a <tt class="literal">Check</tt> class representing the financial
+instrument that is used to pay their employees. Now when an HR applet
+wants to instantiate a <tt class="literal">Check</tt> object, what is it
+referring to--a GUI class or a financial instrument?
+</p>
+
+<p>Solving this problem in the intranet world is
+straightforward--it's easy for the support and HR groups
+to coordinate their namespace so that the class loader won't
+see these collisions (e.g., by having the support group use names in
+a particular package, which again could make the class loader more
+efficient). In the case of the freewheeling Internet, this type of
+coordination is not possible: there can be no guarantee that two
+unrelated sites won't use classes that are in the same package.
+So the multiple-site class loader is only appropriate for intranet
+use.
+</p>
+
+<p>There are various ways in which the multiple-site class loader could
+be implemented--for this example, we'll assume that any
+classes that are in the <tt class="literal">com.XYZ.support</tt> package
+should be loaded from the network support group's server (which
+we'll hardcode into the class loader, though we would normally
+configure this to be a property). Any other classes should come from
+the server that initialized the class loader. So our new class loader
+looks like this:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class MultiLoader extends JavaRunnerLoader {
+	private static final String server = "support.xyz.com/";
+
+	public MultiLoader(String url, ClassLoader parent) {
+		super(url, parent);
+	}
+
+	protected Class findClass(String name) {
+		URL codeURL;
+		
+		SecurityManager sm = System.getSecurityManager();
+		if (sm != null) {
+			int i = name.lastIndexOf('.');
+			if (i &gt;= 0)
+				sm.checkPackageDefinition(name.substring(0, i));
+		}
+
+		try {
+			String codeName = name.replace('.', '/') + ".class";
+			if (name.startsWith("com.xyz.support"))
+				codeURL = new URL("http://" + server + codeName);
+			else codeURL = new URL(urlBase, codeName);
+			if (printLoadMessages)
+				System.out.println("Loading " + name);
+			InputStream is = codeURL.openConnection().getInputStream();
+			byte buf[] = getClassBytes(is);
+			return defineClass(name, buf, 0, buf.length, null);
+		} catch (Exception e) {
+			return null;
+		}
+	}
+}</pre>
+</blockquote>
+
+<p>If you're thinking clearly about the security ramifications of
+this code, then you've already spotted a potential error: just
+because we're asked to load a class named
+<tt class="literal">com.xyz.support.Car</tt> doesn't necessarily
+mean that we should contact our internal server to do so--we
+should only contact that internal server if the other classes that we
+are loading are also from our internal network. That is, if we use
+this class loader in a browser that is loading an applet from
+<em class="filename">www.EvilSite.org</em> that requests the class
+<tt class="literal">com.xyz.support.Car</tt>, we should attempt to load
+that class from <em class="filename">EvilSite</em> and not from our
+support group's server; we should only load
+<tt class="literal">com.xyz.support</tt> classes from
+<em class="filename">support.xyz.com</em> when the other classes in the
+program come from another machine in the <em class="filename">xyz.com</em>
+domain.
+</p>
+
+<p>We could have put the logic to deal with that possibility into the
+class loader itself; however, it's equally possible to put that
+logic elsewhere into our application. The
+<tt class="literal">JavaRunner</tt> program, for example, must
+instantiate a new class loader for each program it loads, and
+it's simpler to instantiate a <tt class="literal">MultiLoader</tt>
+class loader when the program is being loaded from a machine within
+the <em class="filename">xyz.com</em> domain, and to instantiate a regular
+<tt class="literal">JavaRunnerLoader</tt> when the program is being
+loaded from a machine outside the <em class="filename">xyz.com</em>
+domain.
+</p>
+
+<p>Note the different approach taken here and in the
+<tt class="literal">URLClassLoader</tt> class: in this case, we contact a
+second machine only when we have classes in a particular package that
+we expect to find on that machine. If we had constructed a
+<tt class="literal">URLClassLoader</tt> as follows:
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">URL urls[] = new URL[2];
+urls[0] = new URL("http://hr.xyz.com/");
+urls[1] = new URL("http://support.xyz.com/");
+URLClassLoader ucl = new URLClassLoader(urls);</pre>
+</blockquote>
+
+<p>then we would have functionally achieved something similar. However,
+with the URL class loader, when we search for a class named
+<tt class="literal">com.xyz.support.Check</tt>, we'll always
+contact the HR server first, which is slightly less efficient. On the
+other hand, the technique used by the URL class loader is clearly
+more flexible than the approach we've outlined above. In
+addition, the present implementation of the
+<tt class="literal">URLClassLoader</tt> will not work with multiple
+HTTP-based URLs, so for the present, you must write your own class
+loader to handle that case.<a name="INDEX-309"></a><a name="INDEX-310"></a>
+</p>
+
+
+<a name="SEC-CH-3-SECT-5.2"></a>
+<h3 class="sect2">3.5.2. A JAR File Class Loader</h3>
+
+<p>
+<a name="INDEX-311"></a><a name="INDEX-312"></a><a name="INDEX-313"></a><a name="INDEX-314"></a>There is one important feature present
+in many class loaders that we haven't yet mentioned, and that
+is the ability to load a single file that contains many classes. JAR
+files have a significant advantage over individual class files:
+loading several classes in a single file can be orders of magnitude
+faster than loading those same classes through individual HTTP
+connections. The reason for this comes from a property of the HTTP
+protocol: it takes a relatively long time to set up an HTTP
+connection. In fact, the time it takes to transfer the data in a Java
+class file over a network is usually much shorter than the time
+required to set up the HTTP connection. Hence, JAR files are often
+preferred because they can greatly speed up the time it takes to
+download an applet.
+</p>
+
+<p>In browsers based on 1.0.2, support for JAR files is
+browser-dependent; those browsers that support them refer to the JAR
+file as an archive. In browsers based on 1.1, support for JAR files
+is present within the JDK itself using classes in the
+<tt class="literal">java.util.zip</tt> package, because a JAR file is
+really just a zip file with some additional information. In Java 1.2,
+there is an additional set of classes in the
+<tt class="literal">java.util.jar</tt> package that can help to process
+these files as well (including the additional information in the JAR
+file).
+</p>
+
+<p>
+<a name="INDEX-315"></a>Of course, there's a flip side to
+using JAR files. If you use a large word-processing program in Java,
+you'll probably want to avoid loading a lot of the classes when
+you download the program: there's no need to spend the time
+downloading all the class files that implement the spellchecker until
+it is actually time to check the document's spelling. With JAR
+files, you don't have that luxury; you must load all the
+classes in a single shot. Even in those browsers in which you can
+specify multiple JAR files, the class loader has no way of knowing
+which particular JAR file contains which particular classes, so it
+still has to load all of them at once.<a href="#FOOTNOTE-5">[5]</a>
+</p>
+<blockquote class="footnote"> <a name="FOOTNOTE-5"></a>
+<p>[5]A Java
+application could be more clever about this: it could know to load
+the archive containing the classes to perform the spellcheck when it
+was time to run the spellchecker. But an applet cannot do that,
+because an applet has no mechanism that it can use to tell the
+browser to load a new archive.</p> </blockquote>
+
+<p>Nevertheless, JAR files are very popular, and they certainly have
+their place for programs where all (or at least most) of the classes
+are likely to be used every time the program is run. So we'll
+look into the additions that must be made to our class loader in
+order for it to support loading a JAR file. This may seem to be
+taking us somewhat far afield of our discussion about application
+security, but there is another reason JAR files are important: they
+provide the necessary support for digitally signed classes. We
+typically speak of a signed class as an entity unto itself; in fact,
+a signed class can only be delivered as part of a JAR file. Hence, a
+class loader that can process JAR files is very important.
+</p>
+
+<p>So, to complete our understanding of the class loader and to prepare
+us for those future examples, we'll show how to add JAR support
+to our custom class loader. In order to support a JAR file,
+we'll create a new class. Although the logic is similar to our
+<tt class="literal">JavaRunnerLoader</tt><a name="INDEX-316"></a> class, we get no benefit from
+extending that class, so we'll show the full implementation
+here. Changes to the <tt class="literal">JavaRunnerLoader</tt> class are
+shown in bold.
+</p>
+
+<h3>Class Definition</h3><blockquote>
+<pre class="programlisting">public class JarLoader extends SecureClassLoader {
+	private URL urlBase;	
+	public boolean printLoadMessages = true;
+<b class="emphasis-bold">	Hashtable classArrays;</b>
+
+	public JarLoader(String base, ClassLoader parent) {
+		super(parent);
+		try {
+			if (!(base.endsWith("/")))
+				base = base + "/";
+			urlBase = new URL(base);
+			classArrays = new Hashtable();
+		} catch (Exception e) {
+			throw new IllegalArgumentException(base);
+		}
+	}
+
+	private byte[] getClassBytes(InputStream is) {
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		BufferedInputStream bis = new BufferedInputStream(is);
+		boolean eof = false;
+		while (!eof) {
+			try {
+				int i = bis.read();
+				if (i == -1)
+					eof = true;
+				else baos.write(i);
+			} catch (IOException e) {
+				return null;
+			}
+		}
+		return baos.toByteArray();
+	}
+
+	protected Class findClass(String name) {
+		String urlName = name.replace('.', '/');
+		byte buf[];
+		Class cl;
+
+		SecurityManager sm = System.getSecurityManager();
+		if (sm != null) {
+			int i = name.lastIndexOf('.');
+			if (i &gt;= 0)
+				sm.checkPackageDefinition(name.substring(0, i));
+		}
+
+	<b class="emphasis-bold">	buf = (byte[]) classArrays.get(urlName);</b>
+<b class="emphasis-bold">		if (buf != null) {</b>
+<b class="emphasis-bold">			cl = defineClass(name, buf, 0, buf.length, null);</b>
+<b class="emphasis-bold">			return cl;</b>
+<b class="emphasis-bold">		}</b>
+
+		try {
+			URL url = new URL(urlBase, urlName + ".class");
+			if (printLoadMessages)
+				System.out.println("Loading " + url);
+			InputStream is = url.openConnection().getInputStream();
+			buf = getClassBytes(is);
+			cl = defineClass(name, buf, 0, buf.length, null);
+			return cl;
+		} catch (Exception e) {
+			System.out.println("Can't load " + name + ": " + e);
+			return null;
+		}
+	}
+
+<b class="emphasis-bold">	public void readJarFile(String name) {</b>
+		URL jarUrl = null;
+		JarInputStream jis;
+		JarEntry je;
+
+		try {
+			jarUrl = new URL(urlBase, name);
+		} catch (MalformedURLException mue) {
+			System.out.println("Unknown jar file " + name);
+			return;
+		}
+		if (printLoadMessages)
+			System.out.println("Loading jar file " + jarUrl);
+
+		try {
+			jis = new JarInputStream(
+							jarUrl.openConnection().getInputStream());
+		} catch (IOException ioe) {
+			System.out.println("Can't open jar file " + jarUrl);
+			return;
+		}
+
+		try {
+			while ((je = jis.getNextJarEntry()) != null) {
+				String jarName = je.getName();
+				if (jarName.endsWith(".class"))
+					loadClassBytes(jis, jarName);
+				// else ignore it; it could be an image or audio file
+				jis.closeEntry();
+			}
+		} catch (IOException ioe) {
+			System.out.println("Badly formatted jar file");
+		}
+	}
+
+<b class="emphasis-bold">	private void loadClassBytes(JarInputStream jis, String jarName) {</b>
+		if (printLoadMessages)
+			System.out.println("\t" + jarName);
+		BufferedInputStream jarBuf = new BufferedInputStream(jis);
+		ByteArrayOutputStream jarOut = new ByteArrayOutputStream();
+		int b;
+		try {
+			while ((b = jarBuf.read()) != -1)
+				jarOut.write(b);
+			classArrays.put(jarName.substring(0, jarName.length() - 6),
+							jarOut.toByteArray());
+		} catch (IOException ioe) {
+			System.out.println("Error reading entry " + jarName);
+		}
+	}
+
+	public void checkPackageAccess(String name) {
+		SecurityManager sm = System.getSecurityManager();
+		if (sm != null)
+			sm.checkPackageAccess(name);
+	}
+}</pre>
+</blockquote>
+
+<p>The bulk of the change in this example is the addition of two new
+methods (the
+<tt class="literal">readJarFile()</tt><a name="INDEX-317"></a> and
+<tt class="literal">loadClassBytes()</tt><a name="INDEX-318"></a> methods). These two new methods are
+used to process the JAR file.
+</p>
+
+<p>The classes in the
+<tt class="literal">java.util.jar</tt><a name="INDEX-319"></a> package
+handle all the details about the JAR file for us, and we're
+left with a simple implementation: we use the
+<tt class="literal">getNextJarEntry()</tt><a name="INDEX-320"></a> method to obtain each file in
+the archive and process each one sequentially. For maximum
+efficiency, we don't actually need to create the class from the
+bytes until necessary: the <tt class="literal">loadClassBytes()</tt>
+method just creates an array of bytes for each class in the JAR file.
+</p>
+
+<p>This necessitates a slight change to the logic in our
+<tt class="literal">findClass()</tt> method: now when we need to provide
+a class that is not a system class, we check first to see if that
+class is in the <tt class="literal">classArrays</tt> hashtable. If it is,
+we obtain the bytes for the class from that hashtable (where they
+were stored in the <tt class="literal">readJarFile()</tt> method) rather
+than opening a URL to obtain the bytes for the class over the
+network.<a name="INDEX-321"></a>
+</p>
+
+<p>If you need to produce a similar class loader under 1.1, you can use
+the <tt class="literal">java.util.zip</tt><a name="INDEX-322"></a><a name="INDEX-323"></a> package instead of the
+<tt class="literal">java.util.jar </tt>package. In this example, the two
+are functionally equivalent, and you may simply substitute
+<tt class="literal">Zip</tt> every time you see <tt class="literal">Jar</tt>
+(and <tt class="literal">zip</tt> for <tt class="literal">jar</tt>) with one
+exception: replace the <tt class="literal">get-NextJarEntry()</tt> method
+with the
+<tt class="literal">getNextEntry()</tt><a name="INDEX-324"></a> method. Later, when we deal
+with signed JAR files, that substitution will not work: the
+difference between the two packages is that the
+<tt class="literal">jar</tt> package understands the signature format and
+manifest of the JAR file.
+</p>
+
+<p>This implementation is similar to the procedure followed by the
+<tt class="literal">URLClassLoader</tt> class; in that case, the JAR
+files occur as elements in the array of URLs passed to the <a name="INDEX-325"></a><a name="INDEX-326"></a><a name="INDEX-327"></a><a name="INDEX-328"></a> class.<a name="INDEX-329"></a><a name="INDEX-330"></a>
+</p>
+
+
+
+
+<!-- BOTTOM NAV BAR -->
+
+<hr width="515" align="left">
+<div class="navbar">
+<table width="515" border="0">
+<tr>
+<td align="left" valign="top" width="172"><a href="ch03_04.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_04.htm"><img src="../gifs/txtpreva.gif" webstripperlinkwas="../gifs/txtpreva.gif" alt="Previous" border="0"></a></td><td align="center" valign="top" width="171"><a href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"><img src="../gifs/txthome.gif" webstripperlinkwas="../gifs/txthome.gif" alt="Home" border="0"></a></td><td align="right" valign="top" width="172"><a href="ch03_06.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/ch03_06.htm"><img src="../gifs/txtnexta.gif" webstripperlinkwas="../gifs/txtnexta.gif" alt="Next" border="0"></a></td>
+</tr>
+<tr>
+<td align="left" valign="top" width="172">3.4. Implementing a Class Loader</td><td align="center" valign="top" width="171"><a href="index/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index/index.htm"><img src="../gifs/index.gif" webstripperlinkwas="../gifs/index.gif" alt="Book Index" border="0"></a></td><td align="right" valign="top" width="172">3.6. Miscellaneous Class Loading Topics</td>
+</tr>
+</table>
+</div>
+<hr width="515" align="left">
+
+<!-- LIBRARY NAV BAR -->
+
+<img src="../gifs/smnavbar.gif" webstripperlinkwas="../gifs/smnavbar.gif" usemap="#library-map" border="0" alt="Library Navigation Links"><p>
+<font size="-1"><a href="copyrght.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/copyrght.htm">Copyright &copy; 2001</a> O'Reilly &amp; Associates. All rights reserved.</font>
+</p>
+<map name="library-map"> <map name="library-map"> <area shape="rect" coords="-8,-5,72,97" href="../index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/index.htm"> <area shape="rect" coords="75,2,150,109" href="../jenut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jenut/index.htm"> <area shape="rect" coords="154,0,225,99" href="../jnut/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jnut/index.htm"> <area shape="rect" coords="228,3,298,112" href="../jfc/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/jfc/index.htm"> <area shape="rect" coords="306,1,373,124" href="../ebeans/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/ebeans/index.htm"> <area shape="rect" coords="380,2,446,115" href="../servlet/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/servlet/index.htm"> <area shape="rect" coords="452,1,524,101" href="index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/security/index.htm"> <area shape="rect" coords="528,2,610,102" href="../dist/index.htm" webstripperlinkwas="http://ext.rlab.cs.nyu.edu/~jsr/oreilly/dist/index.htm"> </map>
+</map>
+
+<!-- END OF BODY -->
+
+</body>
+</html>

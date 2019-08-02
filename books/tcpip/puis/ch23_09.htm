@@ -1,0 +1,173 @@
+<html><head>
+<title>[Chapter 23] 23.9 A Good Random Seed Generator</TITLE>
+<meta name="DC.title" content="Practical UNIX &amp; Internet Security"><meta name="DC.creator" content="Simson Garfinkel &amp; Gene Spafford"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-02-04T00:18:01Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-148-8" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch23_01.htm" title="23. Writing Secure SUID and Network Programs"><link rel="prev" href="ch23_08.htm" title="23.8 Picking a Random Seed"><link rel="next" href="part06.htm" title="VI. Handling Security Incidents"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Practical UNIX &amp; Internet Security" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Practical UNIX &amp; Internet Security"><area shape="RECT" coords="467,0,514,18" href="../search/psrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch23_08.htm" title="23.8 Picking a Random Seed"><img src="../gifs/txtpreva.gif" alt="Previous: 23.8 Picking a Random Seed" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1">Chapter 23<br>Writing Secure SUID and Network Programs</FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="PART" href="part06.htm" title="VI. Handling Security Incidents"><img src="../gifs/txtnexta.gif" alt="Next: VI. Handling Security Incidents" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="SECT1"><h2 class="sect1"><a class="title" name="PUIS-CHP-23-SECT-8">23.9 A Good Random Seed
+Generator</A
+></H2
+><p class="para"><a class="indexterm" name="IDX-643418"></A
+><a class="indexterm" name="AUTOID-33101"></A
+>As we've mentioned, one way of generating a random 
+seed is to use a source message digest algorithm such as MD5 or HAVAL. As input, give it 
+as much data as you can based on temporary state. This data might include the output of ps -
+efl, the environment variables for the current process, its PID and PPID, the current time 
+and date, the output of the random number generator given your seed, the seed itself, the 
+state of network connections, and perhaps a directory listing of the current directory. The 
+output of the function will be a string of bits that an attacker cannot likely duplicate, but 
+which is likely to meet all the other conditions of randomness you
+might desire.</P
+><p class="para">The <a class="indexterm" name="IDX-643419"></A
+>
+Perl program in <a class="xref" href="#PUIS-CHP-23-EX-1" title="Generating a Random Seed String">Example 23.1</A
+> is an example of such a program. It uses several aspects of system state, network status, 
+virtual memory statistics, and process state as input to MD5. These numbers change very 
+quickly on most computers, and cannot be anticipated, even by programs running as supe-
+ruser on the same computer. The entropy (randomness) of these values is spread 
+throughout the result by the hashing function of MD5, resulting in an output that should be 
+sufficiently random for most uses.</P
+><p class="para">Note that this script is an excellent method for generating 
+Xauthority keys (see &quot;X security&quot; in <a class="xref" href="ch17_01.htm" title="TCP/IP Services">Chapter 17</A
+>), if you need them. Simply execute it with 
+an argument of 14 (you need 28 hex characters of key) and use the result as your key.</P
+><div class="example"><h4 class="example"><a class="title" name="PUIS-CHP-23-EX-1">Example 23.1: Generating a Random Seed String</A
+></H4
+><p class="para"><blockquote class="screen"><pre class="screen">#!/usr/bin/perl
+#
+# randbits -- Gene Spafford &lt;spaf@cs.purdue.edu&gt;
+# generate a random seed string based on state of system
+#
+# Inspired by a program from Bennett Todd (bet@std.sbi.com), derived
+# from original by Larry Wall.
+#
+# Uses state of various kernel structures as random &quot;seed&quot;
+# Mashes them together and uses MD5 to spread around
+#
+# Usage:  randbits [-n] [-h | -H ] [keylen]
+#      Where
+#         -n means to emit no trailing linefeed
+#         -h means to give output in hex (default)
+#         -H means hex output, but use uppercase letters
+#         keylen is the number of bytes to the random key (default is 8)
+
+# If you run this on a different kind of system, you will want to adjust the
+# setting in the &quot;noise&quot; string to system-specific strings.  Do it as another
+# case in the &quot;if...else&quot; and e-mail me the modification so I can keep a 
+# merged copy.  (Hint: check in your manual for any programs with &quot;stat&quot; in 
+# the name or description.)
+#
+# You will need to install a version of MD5.  You can find one in the COAST 
+# achive at <a class="systemitem.url" href="../../../WebStripper/protected.html#link=ftp://coast.cs.purdue.edu/pub/tools/unix">ftp://coast.cs.purdue.edu/pub/tools/unix</A
+>
+# Be sure to include its location in the PATH below if it isn't in one of the
+# directories already listed.
+
+$ENV{'PATH'} = &quot;/bin:/usr/bin:/usr/etc:/usr/ucb:/etc:&quot; . $ENV{'PATH'};
+
+# We start with the observation that most machines have either a BSD
+# core command set, or a System V-ish command set.  We'll build from those.
+
+$BSD = &quot;ps -agxlww ; netstat -s ; vmstat -s ;&quot;;
+$SYSV = &quot;ps -eflj ; netstat -s ; nfsstat -nr ;&quot;;
+
+
+if ( -e &quot;/sdmach&quot; ) {
+    $_ = &quot;NeXT&quot;;
+} elsif ( -x &quot;/usr/bin/uname&quot; || -x &quot;/bin/uname&quot;) {
+    $_ = `uname -sr`;
+} elsif ( -x &quot;/etc/version&quot; ) {
+    $_ = `/etc/version`;
+} else {
+    die &quot;How do I tell what OS this is?&quot;;
+}
+
+/^AIX 1/	&amp;&amp;	(                   $noise = $BSD . 'pstat -afipSsT')||
+/^CLIX 3/	&amp;&amp;	(                  $noise = &quot;ps -efl ; nfsstat -nr&quot;)||
+/^DYNIX/	&amp;&amp;	(                   $noise = $BSD . 'pstat -ai')||
+/^FreeBSD 2/	&amp;&amp;	(               $noise = $BSD . 'vmstat -i')||
+/^HP-UX 7/	&amp;&amp;	(                 $noise = $SYSV)||
+/^HP-UX A.09/	&amp;&amp;	(              $noise = $SYSV . &quot;vmstat -s&quot;)||
+/^IRIX(64)? [56]/   &amp;&amp;	(       $noise = $SYSV)||
+/^Linux 1/	&amp;&amp;	(                 $noise = &quot;ps -agxlww ; netstat -i ; vmstat&quot;)||
+/^NeXT/		&amp;&amp; (                  $noise = 'ps agxlww;netstat -s;vm_stat')||
+/^OSF1/		&amp;&amp; (                  $noise = $SYSV . 'vmstat -i')||
+/^SunOS 4/	&amp;&amp;	(                 $noise = $BSD . 'pstat -afipSsT;vmstat -i')||
+/^SunOS 5/	&amp;&amp;	(                 $noise = $SYSV . 'vmstat -i;vmstat -s')||
+/^ULTRIX 4/	&amp;&amp;	(                $noise = $BSD . 'vmstat -s')|||
+    die &quot;No 'noise' commands defined for this OS.  Edit and retry!&quot;;
+  
+
+####  End of things you may need to modify
+
+require 'getopts.pl';
+require 'open2.pl';
+
+($prog = $0) =~ s|.*/||;
+
+$usage = &quot;usage: $prog [-n] [-h | -H] [keylength]\n&quot;;
+&amp;Getopts('nhH') || die $usage;
+
+defined($keylen = shift) || ($keylen = 8);
+die $usage if ($keylen =~ /\D/);
+die $usage if ($opt_H &amp;&amp; $opt_h);
+
+die &quot;Maximum keylength is 16 bytes (32 hex digits)\n&quot; if ($keylen &gt; 16);
+
+
+# Run the noise command and include whatever other state we
+# can conveniently (portably) find.
+
+@junk = times();
+$buf = `$noise` . $$ . getppid() . time . join(`', %ENV) . &quot;@junk&quot; . `ls -lai`;
+
+# Now, run it through the md5 program to mix bits and entropy
+
+&amp;open2('m_out', 'm_in', &quot;md5&quot;) || die &quot;Cannot run md5 command: $!&quot;;
+print m_in $buf;
+close m_in;
+$buf = &lt;m_out&gt;;
+
+($buf =~ y/a-f/A-F/) if $opt_H;
+print substr($buf, 0, 2*$keylen);
+print &quot;\n&quot; unless $opt_n;</PRE
+></BLOCKQUOTE
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="SECT1" href="ch23_08.htm" title="23.8 Picking a Random Seed"><img src="../gifs/txtpreva.gif" alt="Previous: 23.8 Picking a Random Seed" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Practical UNIX &amp; Internet Security"><img src="../gifs/txthome.gif" alt="Practical UNIX &amp; Internet Security" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="PART" href="part06.htm" title="VI. Handling Security Incidents"><img src="../gifs/txtnexta.gif" alt="Next: VI. Handling Security Incidents" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">23.8 Picking a Random Seed</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">VI. Handling Security Incidents</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.htm" title="The Networking CD Bookshelf">Library Home</A
+> | <a href="../dnsbind/index.htm" title="DNS &amp; BIND">DNS &amp; BIND</A
+> | <a href="../tcpip/index.htm" title="TCP/IP Network Administration">TCP/IP</A
+> | <a href="../sendmail/index.htm" title="sendmail">sendmail</A
+> | <a href="../smdref/index.htm" title="sendmail Desktop Reference">sendmail Reference</A
+> | <a href="../firewall/index.htm" title="Building Internet Firewalls">Firewalls</A
+> | <a href="index.htm" title="Practical UNIX &amp; Internet Security">Practical Security</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

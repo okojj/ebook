@@ -1,0 +1,112 @@
+<html><head>
+<title>Recipe 11.7. Using Closures Instead of Objects</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:40:37Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch11_01.htm" title="11. References and Records"><link rel="prev" href="ch11_07.htm" title="11.6. Creating Arrays of Scalar References"><link rel="next" href="ch11_09.htm" title="11.8. Creating References to Methods"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch11_07.htm" title="11.6. Creating Arrays of Scalar References"><img src="../gifs/txtpreva.gif" alt="Previous: 11.6. Creating Arrays of Scalar References" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch11_01.htm" title="11. References and Records">Chapter 11<br>References and Records</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch11_09.htm" title="11.8. Creating References to Methods"><img src="../gifs/txtnexta.gif" alt="Next: 11.8. Creating References to Methods" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch11-26813">11.7. Using Closures Instead of Objects</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-798">Problem</A
+></H3
+><p class="para"><a class="indexterm" name="ch11-idx-1000004831-0"></A
+><a class="indexterm" name="ch11-idx-1000004831-1"></A
+><a class="indexterm" name="ch11-idx-1000004831-2"></A
+><a class="indexterm" name="ch11-idx-1000004831-3"></A
+>You want records with private state, behavior, and identity, but you don't want to learn object-oriented programming to accomplish this.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-804">Solution</A
+></H3
+><p class="para">Write a function that returns (by reference) a hash of code references. These code references are all closures created in the same scope, so when they execute, they'll all share the same set of bindings to private variables.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-810">Discussion</A
+></H3
+><p class="para">Because a closure is a binding of code and data, it can implement what might be thought of as an object.</P
+><p class="para">Here's an example that creates and returns a hash of anonymous functions. <code class="literal">mkcounter</CODE
+> takes an argument of a seed counter and returns a hash reference that you can use to manipulate the counter indirectly.</P
+><pre class="programlisting">$c1 = mkcounter(20); 
+$c2 = mkcounter(77);
+
+printf &quot;next c1: %d\n&quot;, $c1-&gt;{NEXT}-&gt;();  # 21 
+printf &quot;next c2: %d\n&quot;, $c2-&gt;{NEXT}-&gt;();  # 78 
+printf &quot;next c1: %d\n&quot;, $c1-&gt;{NEXT}-&gt;();  # 22 
+printf &quot;last c1: %d\n&quot;, $c1-&gt;{PREV}-&gt;();  # 21 
+printf &quot;old  c2: %d\n&quot;, $c2-&gt;{RESET}-&gt;(); # 77</PRE
+><p class="para">The code values in the hash references in <code class="literal">$c1</CODE
+> and <code class="literal">$c2</CODE
+> maintain their own separate state. Here's how to set that up:</P
+><pre class="programlisting">sub mkcounter {
+    my $count  = shift; 
+    my $start  = $count; 
+    my $bundle = { 
+        &quot;NEXT&quot;   =&gt; sub { return ++$count  }, 
+        &quot;PREV&quot;   =&gt; sub { return --$count  }, 
+        &quot;GET&quot;    =&gt; sub { return $count    },
+        &quot;SET&quot;    =&gt; sub { $count = shift   }, 
+        &quot;BUMP&quot;   =&gt; sub { $count += shift  }, 
+        &quot;RESET&quot;  =&gt; sub { $count = $start  },
+    }; 
+    $bundle-&gt;{&quot;LAST&quot;} = $bundle-&gt;{&quot;PREV&quot;}; 
+    return $bundle;
+}</PRE
+><p class="para">Because the lexical variables used by the closures in the <code class="literal">$bundle</CODE
+> hash reference are returned by the function, they are not deallocated. The next time <code class="literal">mkcounter</CODE
+> is called, the closures get a different set of variable bindings for the same code. Because no one outside of those closures can access these two variables, this assures you of true privacy.</P
+><p class="para">The assignment right before the return makes both the <code class="literal">&quot;PREV&quot;</CODE
+> and <code class="literal">&quot;LAST&quot;</CODE
+> values point to the same closure. Depending on your object-oriented background, you might think of these as being two different messages, both implemented using the same method.</P
+><p class="para">The bundle we return is not an object in that it has no obvious inheritance and polymorphism. (Yet.) But it certainly does have state, behavior, and identity, as well as encapsulation.<a class="indexterm" name="ch11-idx-1000004833-0"></A
+><a class="indexterm" name="ch11-idx-1000004833-1"></A
+><a class="indexterm" name="ch11-idx-1000004833-2"></A
+><a class="indexterm" name="ch11-idx-1000004833-3"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch11-pgfId-870">See Also</A
+></H3
+><p class="para">The section on  <a class="olink" href="../prog/ch04_03.htm#PERL2-CH-4-SECT-3.6">"Closures"</A
+> in <a class="olink" href="../prog/ch04_01.htm">Chapter 4</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+> and the discussion on closures in <i class="filename">perlref </I
+>(1); <a class="xref" href="ch11_05.htm" title="Taking References to Functions">Recipe 11.4</A
+>; <a class="xref" href="ch11_10.htm" title="Constructing Records">Recipe 11.9</A
+>; <a class="xref" href="ch13_01.htm" title="Classes, Objects, and Ties">Chapter 13</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch11_07.htm" title="11.6. Creating Arrays of Scalar References"><img src="../gifs/txtpreva.gif" alt="Previous: 11.6. Creating Arrays of Scalar References" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch11_09.htm" title="11.8. Creating References to Methods"><img src="../gifs/txtnexta.gif" alt="Next: 11.8. Creating References to Methods" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">11.6. Creating Arrays of Scalar References</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">11.8. Creating References to Methods</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

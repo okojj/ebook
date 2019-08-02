@@ -1,0 +1,131 @@
+<html><head>
+<title>Recipe 7.5. Creating Temporary Files</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:36:08Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch07_01.htm" title="7. File Access"><link rel="prev" href="ch07_05.htm" title="7.4. Making Perl Report Filenames in Errors"><link rel="next" href="ch07_07.htm" title="7.6. Storing Files Inside Your Program Text"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_05.htm" title="7.4. Making Perl Report Filenames in Errors"><img src="../gifs/txtpreva.gif" alt="Previous: 7.4. Making Perl Report Filenames in Errors" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch07_01.htm" title="7. File Access">Chapter 7<br>File Access</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch07_07.htm" title="7.6. Storing Files Inside Your Program Text"><img src="../gifs/txtnexta.gif" alt="Next: 7.6. Storing Files Inside Your Program Text" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch07-60155">7.5. Creating Temporary Files</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-550">Problem<a class="indexterm" name="ch07-idx-1000009606-0"></A
+><a class="indexterm" name="ch07-idx-1000009606-1"></A
+><a class="indexterm" name="ch07-idx-1000009606-2"></A
+><a class="indexterm" name="ch07-idx-1000009606-3"></A
+></A
+></H3
+><p class="para">You need to create a temporary file and have it automatically deleted when your program exits. For instance, you want to write a temporary configuration file to feed a program you launch. In this case, you want to know the temporary file's name to tell the utility program. In other cases, you may just want a temporary file to write to and read from, and don't need to know its filename.</P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-556">Solution</A
+></H3
+><p class="para">If you don't need to know the file's name, use the <code class="literal">new_tmpfile</CODE
+><a class="indexterm" name="ch07-idx-1000009607-0"></A
+> class method from the IO::File module to get a filehandle opened for reading and writing:</P
+><pre class="programlisting">use IO::File;
+
+$fh = IO::File-&gt;new_tmpfile
+        or die &quot;Unable to make new temporary file: $!&quot;;</PRE
+><p class="para">If you need to know the file's name, use the <code class="literal">tmpnam</CODE
+><a class="indexterm" name="ch07-idx-1000009608-0"></A
+> function from the POSIX module to get a filename that you then open yourself:</P
+><pre class="programlisting">use IO::File;
+use POSIX qw(tmpnam);
+
+# try new temporary filenames until we get one that didn't already exist
+do { $name = tmpnam() }
+    until $fh = IO::File-&gt;new($name, O_RDWR|O_CREAT|O_EXCL);
+
+# install atexit-style handler so that when we exit or die,
+# we automatically delete this temporary file
+END { unlink($name) or die &quot;Couldn't unlink $name : $!&quot; }
+
+# now go on to use the file ...</PRE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-596">Discussion</A
+></H3
+><p class="para">If you only need scratch space, the IO::File module's <code class="literal">new_tmpfile</CODE
+> class method returns a filehandle connected to a temporary file that's been opened read-write by using the following code:</P
+><pre class="programlisting">for (;;) {
+    $name = tmpnam();
+    sysopen(TMP, $tmpnam, O_RDWR | O_CREAT | O_EXCL) &amp;&amp; last;
+}
+unlink $tmpnam;</PRE
+><p class="para">This file will be automatically deleted when your program finally exits or the file is closed. You cannot find its name to tell another process, because it doesn't have a name. In fact, on systems that support such semantics, the filename was already deleted before the method returned. A child process could inherit the open file descriptor, however.[<a class="footnote" href="#ch07-pgfId-1000001139">2</A
+>]</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch07-pgfId-1000001139">[2]</A
+> But you'd better set <code class="literal">$^F</CODE
+> to at least <code class="literal">fileno($fh)</CODE
+> before you <code class="literal">exec</CODE
+> anything.</P
+></DIV
+></BLOCKQUOTE
+><p class="para">This shows <code class="literal">new_tmpfile</CODE
+> in action. We create a temporary file, write to it, rewind, and print what we wrote:</P
+><pre class="programlisting">use IO::File;
+
+$fh = IO::File-&gt;new_tmpfile             or die &quot;IO::File-&gt;new_tmpfile: $!&quot;;
+$fh-&gt;autoflush(1);
+print $fh &quot;$i\n&quot; while $i++ &lt; 10;
+seek($fh, 0, 0)                         or die &quot;seek: $!&quot;;
+print &quot;Tmp file has: &quot;, &lt;$fh&gt;;</PRE
+><p class="para">The second solution gets a temporary file whose name you can give to another process. We use the <code class="literal">POSIX::tmpnam</CODE
+> function, open the file ourselves, and delete it when we're done. We don't test whether a file of that name exists before opening it because that would introduce a race condition &nbsp;-  someone might create the file between our checking whether it exists and our creating the file.[<a class="footnote" href="#ch07-pgfId-1000006777">3</A
+>] Instead, we wrap <code class="literal">tmpnam</CODE
+> in a loop to make sure we get a new file and don't accidentally clobber someone else's. Two processes shouldn't get the same filename from <code class="literal">new_tmpfile</CODE
+>, in theory.<a class="indexterm" name="ch07-idx-1000009610-0"></A
+><a class="indexterm" name="ch07-idx-1000009610-1"></A
+><a class="indexterm" name="ch07-idx-1000009610-2"></A
+><a class="indexterm" name="ch07-idx-1000009610-3"></A
+><a class="indexterm" name="ch07-idx-1000009610-4"></A
+></P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch07-pgfId-1000006777">[3]</A
+> Race conditions are explained in <a class="xref" href="ch19_05.htm" title="Writing a Safe CGI Program">Recipe 19.4</A
+>.</P
+></DIV
+></BLOCKQUOTE
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch07-pgfId-1000009508">See Also</A
+></H3
+><p class="para">The documentation for the standard IO::File and POSIX modules (also in <a class="olink" href="../prog/ch07_01.htm">Chapter 7</A
+> of <a class="citetitle" href="../prog/index.htm" title="Programming Perl"><cite class="citetitle">Programming Perl</CITE
+></A
+>); <a class="xref" href="ch07_20.htm" title="Opening and Closing File Descriptors by Number">Recipe 7.19</A
+>; your system's <i class="filename">tmpnam</I
+> (3) manpage</P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch07_05.htm" title="7.4. Making Perl Report Filenames in Errors"><img src="../gifs/txtpreva.gif" alt="Previous: 7.4. Making Perl Report Filenames in Errors" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch07_07.htm" title="7.6. Storing Files Inside Your Program Text"><img src="../gifs/txtnexta.gif" alt="Next: 7.6. Storing Files Inside Your Program Text" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">7.4. Making Perl Report Filenames in Errors</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">7.6. Storing Files Inside Your Program Text</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

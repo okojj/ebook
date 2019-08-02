@@ -1,0 +1,155 @@
+<html><head>
+<title>Recipe 4.18. Program: words</TITLE>
+<meta name="DC.title" content="Perl Cookbook"><meta name="DC.creator" content="Tom Christiansen &amp; Nathan Torkington"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:32:15Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-243-3" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch04_01.htm" title="4. Arrays"><link rel="prev" href="ch04_18.htm" title="4.17. Randomizing an Array"><link rel="next" href="ch04_20.htm" title="4.19. Program: permute"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Perl Cookbook" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,65" href="index.htm" alt="Perl Cookbook"><area shape="RECT" coords="467,0,514,18" href="../search/csrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch04_18.htm" title="4.17. Randomizing an Array"><img src="../gifs/txtpreva.gif" alt="Previous: 4.17. Randomizing an Array" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch04_01.htm" title="4. Arrays">Chapter 4<br>Arrays</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch04_20.htm" title="4.19. Program: permute"><img src="../gifs/txtnexta.gif" alt="Next: 4.19. Program: permute" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch04-41630">4.18. Program: words</A
+></H2
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch04-pgfId-1715">Description <a class="indexterm" name="ch04-idx-1000006788-0"></A
+><a class="indexterm" name="ch04-idx-1000006788-1"></A
+><a class="indexterm" name="ch04-idx-1000006788-2"></A
+><a class="indexterm" name="ch04-idx-1000006788-3"></A
+><a class="indexterm" name="ch04-idx-1000006788-4"></A
+><a class="indexterm" name="ch04-idx-1000006788-5"></A
+><a class="indexterm" name="ch04-idx-1000006788-6"></A
+></A
+></H3
+><p class="para">Have you ever wondered how programs like <em class="emphasis">ls</EM
+> generate columns of sorted output that you read down the columns instead of across the rows? For example:</P
+><pre class="programlisting">awk      cp       ed       login    mount    rmdir    sum
+basename csh      egrep    ls       mt       sed      sync
+cat      date     fgrep    mail     mv       sh       tar
+chgrp    dd       grep     mkdir    ps       sort     touch
+chmod    df       kill     mknod    pwd      stty     vi
+chown    echo     ln       more     rm       su</PRE
+><p class="para"><a class="xref" href="#ch04-10807" title="words">Example 4.2</A
+> does this.</P
+><div class="example"><h4 class="example"><a class="title" name="ch04-10807">Example 4.2: words</A
+></H4
+><pre class="programlisting">#!/usr/bin/perl -w
+# words - gather lines, present in columns
+
+use strict;
+
+my ($item, $cols, $rows, $maxlen);
+my ($xpixel, $ypixel, $mask, @data);
+
+<code class="literal">getwinsize();</CODE
+>
+
+# first gather up every line of input,
+# remembering the longest line length seen
+$maxlen = 1;        
+while (&lt;&gt;) {
+    my $mylen;
+    s/\s+$//;
+    $maxlen = $mylen if (($mylen = length) &gt; $maxlen);
+    push(@data, $_);
+}
+
+$maxlen += 1;               # to make extra space
+
+# determine boundaries of screen
+$cols = int($cols / $maxlen) || 1;
+$rows = int(($#data+$cols) / $cols);
+
+# pre-create mask for faster computation
+$mask = sprintf(&quot;%%-%ds &quot;, $maxlen-1);
+
+# subroutine to check whether at last item on line
+sub EOL { ($item+1) % $cols == 0 }  
+
+# now process each item, picking out proper piece for this position
+for ($item = 0; $item &lt; $rows * $cols; $item++) {
+    my $target =  ($item % $cols) * $rows + int($item/$cols);
+    my $piece = sprintf($mask, $target &lt; @data ? $data[$target] : &quot;&quot;);
+    $piece =~ s/\s+$// if EOL();  # don't blank-pad to EOL
+    print $piece;
+    print &quot;\n&quot; if EOL();
+}
+
+# finish up if needed
+print &quot;\n&quot; if EOL();
+
+# not portable -- linux only
+sub getwinsize {
+    my $winsize = &quot;\0&quot; x 8;
+    my $TIOCGWINSZ = 0x40087468;
+    if (ioctl(STDOUT, $TIOCGWINSZ, $winsize)) {
+        ($rows, $cols, $xpixel, $ypixel) = unpack('S4', $winsize);
+    } else {
+        $cols = 80;
+    }
+}</PRE
+></DIV
+><p class="para">The most obvious way to print out a sorted list in columns is to print each element of the list, one at a time, padded out to a particular width. When you're about to hit the end of the line, generate a newline. But that only works if you're planning on reading each row left to right. If you instead expect to read it down each column, this approach won't do.</P
+><p class="para">The <em class="emphasis">words</EM
+> program is a filter that generates output going down the columns. It reads all input, keeping track of the length of the longest line seen. Once everything has been read in, it divides the screen width by the length of the longest input record seen, yielding the expected number of columns.</P
+><p class="para">Then the program goes into a loop that executes once per input record, but the output order isn't in the obvious order. Imagine you had a list of nine items:</P
+><pre class="programlisting">Wrong       Right
+-----       -----
+1 2 3       1 4 7
+4 5 6       2 5 8
+7 8 9       3 6 9</PRE
+><p class="para">The <em class="emphasis">words</EM
+> program does the necessary calculations to print out elements <code class="literal">(1,4,7)</CODE
+> on one line, <code class="literal">(2,5,8)</CODE
+> on the next, and <code class="literal">(3,6,9)</CODE
+> on the last.</P
+><p class="para">To figure out the current window size, this program does an <code class="literal">ioctl</CODE
+> call. This works fine&nbsp;- on the system it was written for. On any other system, it won't work. If that's good enough for you, then good for you. <a class="xref" href="ch12_15.htm" title="Using h2ph to Translate C #include Files">Recipe 12.14</A
+> shows how to find this on your system using the <em class="emphasis">ioctl.ph</EM
+> file, or with a C program. <a class="xref" href="ch15_05.htm" title="Determining Terminal or Window Size">Recipe 15.4</A
+> shows a more portable solution, but that requires installing a CPAN module.<a class="indexterm" name="ch04-idx-1000006790-0"></A
+><a class="indexterm" name="ch04-idx-1000006790-1"></A
+><a class="indexterm" name="ch04-idx-1000006790-2"></A
+><a class="indexterm" name="ch04-idx-1000006790-3"></A
+><a class="indexterm" name="ch04-idx-1000006790-4"></A
+><a class="indexterm" name="ch04-idx-1000006790-5"></A
+><a class="indexterm" name="ch04-idx-1000006790-6"></A
+></P
+></DIV
+><div class="sect2"><h3 class="sect2"><a class="title" name="ch04-pgfId-1000007207">See Also</A
+></H3
+><p class="para"><a class="xref" href="ch15_05.htm" title="Determining Terminal or Window Size">Recipe 15.4</A
+></P
+></DIV
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch04_18.htm" title="4.17. Randomizing an Array"><img src="../gifs/txtpreva.gif" alt="Previous: 4.17. Randomizing an Array" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Perl Cookbook"><img src="../gifs/txthome.gif" alt="Perl Cookbook" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch04_20.htm" title="4.19. Program: permute"><img src="../gifs/txtnexta.gif" alt="Next: 4.19. Program: permute" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">4.17. Randomizing an Array</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">4.19. Program: permute</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="../advprog/index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>

@@ -1,0 +1,313 @@
+<html><head>
+<title>[Chapter 9] 9.5 Example: Monitoring Variables</TITLE>
+<meta name="DC.title" content="Advanced Perl Programming"><meta name="DC.creator" content="Sriram Srinivasan"><meta name="DC.publisher" content="O'Reilly &amp; Associates, Inc."><meta name="DC.date" content="1999-07-02T01:35:05Z"><meta name="DC.type" content="Text.Monograph"><meta name="DC.format" content="text/html" scheme="MIME"><meta name="DC.source" content="1-56592-220-4" scheme="ISBN"><meta name="DC.language" content="en-US"><meta name="generator" content="Jade 1.1/O'Reilly DocBook 3.0 to HTML 4.0"><link rev="made" href="mailto:online-books@oreilly.com" title="Online Books Comments"><link rel="up" href="ch09_01.htm" title="9. Tie"><link rel="prev" href="ch09_04.htm" title="9.4 Tying Filehandles"><link rel="next" href="ch09_06.htm" title="9.6 Comparisons with Other Languages"></HEAD
+><body bgcolor="#FFFFFF" text="#000000"><div class="htmlnav"><h1><img src="gifs/smbanner.gif" alt="Advanced Perl Programming" usemap="#srchmap" border="0"></H1
+><map name="srchmap"><area shape="RECT" coords="0,0,466,54" href="index.htm" alt="Advanced Perl Programming"><area shape="RECT" coords="467,0,514,18" href="../search/asrch.htm" alt="Search this book"></MAP
+><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch09_04.htm" title="9.4 Tying Filehandles"><img src="../gifs/txtpreva.gif" alt="Previous: 9.4 Tying Filehandles" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><b><font face="ARIEL,HELVETICA,HELV,SANSERIF" size="-1"><a class="chapter" rel="up" href="ch09_01.htm" title="9. Tie">Chapter 9<br>Tie</A
+></FONT
+></B
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch09_06.htm" title="9.6 Comparisons with Other Languages"><img src="../gifs/txtnexta.gif" alt="Next: 9.6 Comparisons with Other Languages" border="0"></A
+></TD
+></TR
+></TABLE
+>&nbsp;<hr align="LEFT" width="515" title="footer"></DIV
+><div class="sect1"><h2 class="sect1"><a class="title" name="ch09-11511">9.5 Example: Monitoring Variables</A
+></H2
+><p class="para"><kbd class="command">tie</KBD
+><a class="indexterm" name="ch09-idx-955161-0"></A
+><a class="indexterm" name="ch09-idx-955161-1"></A
+><a class="indexterm" name="ch09-idx-955161-2"></A
+><a class="indexterm" name="ch09-idx-955161-3"></A
+> makes it really convenient to monitor a variable. In this section, we will develop a module called <i class="filename">Monitor.pm</I
+> that prints out a message on <code class="literal">STDERR</CODE
+> whenever a variable of your choice is accessed. [<a class="footnote" href="#ch09-pgfId-948110">2</A
+>]</P
+><blockquote class="footnote"><div class="footnote"><p class="para"><a class="footnote" name="ch09-pgfId-948110">[2]</A
+> This is a lightweight version of a CPAN module called Tie::Watch, written by Stephen Lidie. Tie::Watch is used to invoke user-defined callbacks when certain variables are accessed.</P
+></DIV
+></BLOCKQUOTE
+><pre class="programlisting">use Monitor;
+monitor(\$x, 'x');
+monitor(\%y, 'y');</PRE
+><p class="para">Whenever <kbd class="command">$x</KBD
+> or <kbd class="command">%y</KBD
+> is changed, this module prints out something like this on <kbd class="command">STDERR</KBD
+>:</P
+><pre class="programlisting">Wrote   : $x ... 10
+Read    : $x ... 10
+Died    : $x
+Wrote   : $y{a} ... 1
+Cleared : %y
+</PRE
+><p class="para">This module is useful while debugging, where it is not clear at what point a certain variable is changing, especially when it changes indirectly through a reference. This module can be enhanced to support watch expressions such as <kbd class="command">print</KBD
+> <kbd class="command">'ahhh'</KBD
+> <kbd class="command">when</KBD
+> <kbd class="command">$array[5]</KBD
+> <kbd class="command">&gt;</KBD
+> <kbd class="command">10</KBD
+>. Given Perl's support for <kbd class="command">eval</KBD
+>, this is a reasonably simple task.</P
+><p class="para"><code class="literal">monitor</CODE
+> takes a variable by reference and a name to be used when it prints out its messages. The first parameter is used to do a <kbd class="command">tie</KBD
+> on the variable. <kbd class="command">tie</KBD
+> has the unfortunate property that it hides the original value held by the variable. (The value is restored upon <kbd class="command">untie</KBD
+>.) Clearly, we don't want Heisenberg's Uncertainty Principle to creep in here&nbsp;- our act of monitoring should not affect the user's view of that variable. For this reason, we store away the original value as an attribute of the tied object and have <kbd class="command">FETCH</KBD
+> and <kbd class="command">STORE</KBD
+> use this copy. Finally, when we are not interested in the variable any more, we use <kbd class="command">unmonitor</KBD
+>, which calls <kbd class="command">untie</KBD
+> internally. </P
+><p class="para">Monitor, shown in <a class="xref" href="#ch09-40135" title="Monitor.pm">Example 9.3</A
+>, delegates responsibility to a nested module dedicated to each type of value (scalar, array, hash). The <kbd class="command">tie</KBD
+> constructors in these modules return a blessed anonymous array (the tied object), which stores the name supplied by the user (the second parameter of <kbd class="command">monitor</KBD
+>) and the current value of the variable. </P
+><div class="example"><h4 class="example"><a class="title" name="ch09-40135">Example 9.3: Monitor.pm</A
+></H4
+><pre class="programlisting">#----------------------------------------------------------------------
+<b class="emphasis.bold">package Monitor</B
+>;
+require Exporter;
+@ISA = (&quot;Exporter&quot;);
+@EXPORT = qw(monitor unmonitor);
+use strict;
+
+sub <b class="emphasis.bold">monitor</B
+> {
+   my ($r_var, $name) = @_;
+   my ($type) = ref($r_var);
+   if ($type =~ /SCALAR/) {
+       return tie $$r_var, 'Monitor::Scalar', $r_var, $name;
+   } elsif ($type =~ /ARRAY/) {
+       return tie @$r_var, 'Monitor::Array', $r_var, $name;
+   } elsif ($type =~ /HASH/) {
+       return tie %$r_var, 'Monitor::Hash', $r_var, $name;
+   } else {
+       print STDERR &quot;require ref. to scalar, array or hash&quot; unless $type;
+   }
+}
+sub <b class="emphasis.bold">unmonitor</B
+> {
+   my ($r_var) = @_;
+   my ($type) = ref($r_var);
+   my $obj;
+   if ($type =~ /SCALAR/) {
+       Monitor::Scalar-&gt;unmonitor($r_var);
+   } elsif ($type =~ /ARRAY/) {
+       Monitor::Array-&gt;unmonitor($r_var);
+   } elsif ($type =~ /HASH/) {
+       Monitor::Hash-&gt;unmonitor($r_var);
+   } else {
+       print STDERR &quot;require ref. to scalar, array or hash&quot; unless $type;
+   } 
+}
+#------------------------------------------------------------------------
+package <b class="emphasis.bold">Monitor::Scalar</B
+>;
+
+sub <b class="emphasis.bold">TIESCALAR</B
+> {
+   my ($pkg, $rval, $name) = @_;
+   my $obj = [$name, $$rval];
+   bless $obj, $pkg;
+   return $obj;
+}
+
+sub <b class="emphasis.bold">FETCH</B
+> {
+   my ($obj) = @_;
+   my $val = $obj-&gt;[1];
+   print STDERR 'Read    $', $obj-&gt;[0], &quot; ... $val \n&quot;;
+   return $val;
+}
+sub <b class="emphasis.bold">STORE</B
+> {
+   my ($obj, $val) = @_;
+   print STDERR 'Wrote   $', $obj-&gt;[0], &quot; ... $val \n&quot;;
+   $obj-&gt;[1] = $val;
+   return $val;
+}
+
+sub <b class="emphasis.bold">unmonitor</B
+> {
+   my ($pkg, $r_var) = @_;
+   my $val;
+   {
+      my $obj = tied $$r_var;
+      $val = $obj-&gt;[1];
+      $obj-&gt;[0] = &quot;_UNMONITORED_&quot;;
+   }
+   untie $$r_var;
+   $$r_var = $val;
+}
+
+sub <b class="emphasis.bold">DESTROY</B
+> {
+   my ($obj) = @_;
+   if ($obj-&gt;[0] ne '_UNMONITORED_') {
+      print STDERR 'Died    $', $obj-&gt;[0];
+   }
+}
+#------------------------------------------------------------------------
+package <b class="emphasis.bold">Monitor::Array</B
+>;
+
+sub <b class="emphasis.bold">TIEARRAY</B
+> {
+   my ($pkg, $rarray, $name) = @_;
+   my $obj = [$name, [@$rarray]];
+   bless $obj, $pkg;
+   return $obj;
+}
+
+sub <b class="emphasis.bold">FETCH</B
+> {
+   my ($obj, $index) = @_;
+   my $val = $obj-&gt;[1]-&gt;[$index];
+   print STDERR 'Read    $', $obj-&gt;[0], &quot;[$index] ... $val\n&quot;;
+   return $val;
+}
+
+sub <b class="emphasis.bold">STORE</B
+> {
+   my ($obj, $index, $val) = @_;
+   print STDERR 'Wrote   $', $obj-&gt;[0], &quot;[$index] ... $val\n&quot;;
+   $obj-&gt;[1]-&gt;[$index] = $val;
+   return $val;
+}
+
+
+sub <b class="emphasis.bold">DESTROY</B
+> {
+   my ($obj) = @_;
+   if ($obj-&gt;[0] ne '_UNMONITORED_') {
+      print STDERR 'Died    %', $obj-&gt;[0];
+   }
+}
+
+sub <b class="emphasis.bold">unmonitor</B
+> {
+   my ($pkg, $r_var) = @_;
+   my $r_array;
+   {
+      my $obj = tied @$r_var;
+      $r_array = $obj-&gt;[1];
+      $obj-&gt;[0] = &quot;_UNMONITORED_&quot;;
+   }
+   untie @$r_var;
+   @$r_var = @$r_array;
+}
+#------------------------------------------------------------------------
+package <b class="emphasis.bold">Monitor::Hash</B
+>;
+sub <b class="emphasis.bold">TIEHASH</B
+> {
+   my ($pkg, $rhash, $name) = @_;
+   my $obj = [$name, {%$rhash}];
+   return (bless $obj, $pkg);
+}
+
+sub <b class="emphasis.bold">CLEAR</B
+> {
+   my ($obj) = @_;
+   print STDERR 'Cleared %', $obj-&gt;[0], &quot;\n&quot;;
+}
+
+sub <b class="emphasis.bold">FETCH</B
+> {
+   my ($obj, $index) = @_;
+   my $val = $obj-&gt;[1]-&gt;{$index};
+   print STDERR 'Read    $', $obj-&gt;[0], &quot;{$index} ... $val\n&quot;;
+   return $val;
+}
+
+sub <b class="emphasis.bold">STORE</B
+> {
+   my ($obj, $index, $val) = @_;
+   print STDERR 'Wrote   $', $obj-&gt;[0], &quot;{$index} ... $val\n&quot;;
+   $obj-&gt;[1]-&gt;{$index} = $val;
+   return $val;
+}
+
+sub <b class="emphasis.bold">DESTROY</B
+> {
+   my ($obj) = @_;
+   if ($obj-&gt;[0] ne '_UNMONITORED_') {
+      print STDERR 'Died    %', $obj-&gt;[0];
+   }
+}
+sub <b class="emphasis.bold">unmonitor</B
+> {
+   my ($pkg, $r_var) = @_;
+   my $r_hash;
+   {
+      my $obj = tied %$r_var;
+      $r_hash = $obj-&gt;[1];
+      $obj-&gt;[0] = &quot;_UNMONITORED_&quot;;
+   }
+   untie %$r_var;
+   %$r_var = %$r_hash;
+}
+1;</PRE
+></DIV
+><p class="para"><kbd class="command">unmonitor</KBD
+> is slightly tricky. We want to do an <kbd class="command">untie</KBD
+>, but Perl restores the variable's value to that held by it just before <kbd class="command">tie</KBD
+> was invoked. Clearly, this is undesirable. We want this operation to go on without the variable's user being affected in any way. Since we have the variable's current value as an attribute of the tied object, we can attempt to restore the value after the untie. Unfortunately, the following code doesn't quite work:</P
+><pre class="programlisting"># For a tied scalar 
+my $obj = tied $$r_var;         # Get the object tied to the variable
+$latest_value = $obj-&gt;[1];      # Extract the latest value
+untie $$r_var;                  # untie 
+$$r_var = $latest_value;        # Restore the variable to the latest 
+                                # value</PRE
+><p class="para">Perl complains, "Can't untie: 1 inner references still exist ..." if the <a class="indexterm" name="ch09-idx-955157-0"></A
+><em class="emphasis">-w</EM
+> flag is turned on. The problem is that the local variable <kbd class="command">$obj</KBD
+> bumps up the reference count of the tied object, so an <kbd class="command">untie</KBD
+> is not able to <kbd class="command">DESTROY</KBD
+> the tied object. The solution is fairly straightforward: extract the value in an inner block and let <kbd class="command">$obj</KBD
+> go out of scope, like this:</P
+><pre class="programlisting">my $latest_value;
+{
+    my $obj = tied $$r_var;
+    $latest_value = $obj-&gt;[1]; # Extract the latest value.
+                               # Note that $latest_value is defined
+                               # outside this inner block
+}
+# $obj is no longer in scope, so we can peacefully untie.
+untie $$r_var;
+$$r_var = $latest_value; <kbd class="command"></KBD
+><a class="indexterm" name="ch09-idx-955122-0"></A
+><a class="indexterm" name="ch09-idx-955122-1"></A
+><a class="indexterm" name="ch09-idx-955122-2"></A
+><a class="indexterm" name="ch09-idx-955122-3"></A
+></PRE
+></DIV
+><div class="htmlnav"><p></P
+><hr align="LEFT" width="515" title="footer"><table width="515" border="0" cellspacing="0" cellpadding="0"><tr><td align="LEFT" valign="TOP" width="172"><a class="sect1" href="ch09_04.htm" title="9.4 Tying Filehandles"><img src="../gifs/txtpreva.gif" alt="Previous: 9.4 Tying Filehandles" border="0"></A
+></TD
+><td align="CENTER" valign="TOP" width="171"><a class="book" href="index.htm" title="Advanced Perl Programming"><img src="../gifs/txthome.gif" alt="Advanced Perl Programming" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172"><a class="sect1" href="ch09_06.htm" title="9.6 Comparisons with Other Languages"><img src="../gifs/txtnexta.gif" alt="Next: 9.6 Comparisons with Other Languages" border="0"></A
+></TD
+></TR
+><tr><td align="LEFT" valign="TOP" width="172">9.4 Tying Filehandles</TD
+><td align="CENTER" valign="TOP" width="171"><a class="index" href="index/idx_0.htm" title="Book Index"><img src="../gifs/index.gif" alt="Book Index" border="0"></A
+></TD
+><td align="RIGHT" valign="TOP" width="172">9.6 Comparisons with Other Languages</TD
+></TR
+></TABLE
+><hr align="LEFT" width="515" title="footer"><p class="nav"><font size="-1">[ <a href="../index.html" title="The Perl CD Bookshelf">Library Home</A
+> | <a href="../perlnut/index.htm" title="Perl in a Nutshell">Perl in a Nutshell</A
+> | <a href="../learn/index.htm" title="Learning Perl">Learning Perl</A
+> | <a href="../learn32/index.htm" title="Learning Perl on Win32 Systems">Learning Perl on Win32</A
+> | <a href="../prog/index.htm" title="Programming Perl">Programming Perl</A
+> | <a href="index.htm" title="Advanced Perl Programming">Advanced Perl Programming</A
+> | <a href="../cookbook/index.htm" title="Perl Cookbook">Perl Cookbook</A
+> ]</FONT
+></P
+></DIV
+></BODY
+></HTML
+>
